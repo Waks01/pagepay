@@ -12,7 +12,6 @@ import {
   ShimmerLoader,
   BarChart,
   DateRangePicker,
-  getDateRangeFromPreset,
 } from "@/shared/components";
 import type { DateRangePreset } from "@/shared/components";
 import { TopHeader } from "@/shared/components/TopHeader";
@@ -28,21 +27,27 @@ export function AnalyticsPage() {
     endDate?: string;
   }>({ preset: "30d" });
 
-  // TODO: Update backend endpoints to accept start_date and end_date parameters
-  // For now, using hardcoded days parameter
-  const { start, end } = getDateRangeFromPreset(
-    dateRange.preset,
-    dateRange.startDate,
-    dateRange.endDate,
-  );
+  // Derive the number of days from the selected preset/custom range and
+  // pass it to the day-based analytics endpoints.
+  const daysCount =
+    dateRange.preset === "custom" && dateRange.startDate && dateRange.endDate
+      ? Math.max(
+          1,
+          Math.ceil(
+            (new Date(dateRange.endDate).getTime() -
+              new Date(dateRange.startDate).getTime()) /
+              (1000 * 60 * 60 * 24),
+          ),
+        )
+      : parseInt(dateRange.preset.replace("d", ""));
 
   const { data: dau = [], isLoading: dauLoading } = useQuery({
-    queryKey: ["admin", "analytics", "dau"],
+    queryKey: ["admin", "analytics", "dau", daysCount],
     queryFn: async () => {
       const { data } = await adminApi.get<DailyActiveUsers[]>(
         "/admin/analytics/dau",
         {
-          params: { days: 30 },
+          params: { days: daysCount },
         },
       );
       return data;
@@ -51,12 +56,12 @@ export function AnalyticsPage() {
   });
 
   const { data: retention = [], isLoading: retentionLoading } = useQuery({
-    queryKey: ["admin", "analytics", "retention"],
+    queryKey: ["admin", "analytics", "retention", daysCount],
     queryFn: async () => {
       const { data } = await adminApi.get<RetentionCohort[]>(
         "/admin/analytics/retention",
         {
-          params: { days: 30 },
+          params: { days: daysCount },
         },
       );
       return data;
@@ -92,7 +97,7 @@ export function AnalyticsPage() {
             <div className="p-4 sm:p-6">
               <DateRangePicker value={dateRange} onChange={setDateRange} />
               <p className="mt-2 text-xs text-text-muted">
-                Note: Date range filtering requires backend endpoint updates
+                Filters DAU and retention for the selected window
               </p>
             </div>
           </Card>
@@ -103,7 +108,7 @@ export function AnalyticsPage() {
               <h3 className="text-sm font-semibold text-text-main">
                 Daily Active Users
               </h3>
-              <p className="mt-0.5 text-sm text-text-muted">Last 30 days</p>
+                <p className="mt-0.5 text-sm text-text-muted">Last {daysCount} days</p>
             </div>
             <div className="p-4 sm:p-6">
               {dauLoading && <ShimmerLoader lines={4} />}

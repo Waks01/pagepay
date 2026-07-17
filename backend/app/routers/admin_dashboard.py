@@ -29,19 +29,42 @@ async def dashboard_stats(
     current_admin: AdminUser = Depends(require_permission("dashboard.view")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get high-level dashboard statistics for today."""
-    from app.services import fx
+    """Get high-level dashboard statistics for a date window.
 
-    today_start = datetime.combine(
-        date.today(), datetime.min.time()
-    )
+    Defaults to "today". Pass `days` (e.g. 7/30/90) or explicit
+    `start_date`/`end_date` (ISO date) to scope the time-bounded
+    aggregations (active users, ad revenue, task & premium revenue).
+    Global counts (total users, pending payouts/notes, high fraud) are
+    always returned irrespective of the window.
+    """
+    from app.services import fx
+    from datetime import timezone, timedelta
+
+    days: int | None = Query(None, ge=1, le=366)
+    start_date: str | None = Query(None)
+    end_date: str | None = Query(None)
+
+    if start_date and end_date:
+        window_start = datetime.fromisoformat(start_date).replace(
+            tzinfo=timezone.utc
+        )
+        window_end = datetime.fromisoformat(end_date).replace(
+            tzinfo=timezone.utc
+        ) + timedelta(days=1)
+    elif days:
+        window_end = datetime.utcnow()
+        window_start = window_end - timedelta(days=days)
+    else:
+        window_start = datetime.combine(date.today(), datetime.min.time())
+        window_end = datetime.utcnow()
 
     # Basic stats
     total_users = (await db.execute(select(func.count(User.id)))).scalar_one()
     active_today = (
         await db.execute(
             select(func.count(func.distinct(ReadingSession.user_id))).where(
-                ReadingSession.start_time >= today_start
+                ReadingSession.start_time >= window_start,
+                ReadingSession.start_time <= window_end,
             )
         )
     ).scalar_one()
@@ -77,7 +100,8 @@ async def dashboard_stats(
                 AdEvent.fx_rate_used,
                 AdEvent.user_points_credited,
             )
-            .where(AdEvent.created_at >= today_start)
+            .where(AdEvent.created_at >= window_start)
+            .where(AdEvent.created_at <= window_end)
             .where(AdEvent.credit_status == "credited")
         )
     ).all()
@@ -119,7 +143,8 @@ async def dashboard_stats(
             select(TaskSubmission)
             .join(Task, Task.id == TaskSubmission.task_id)
             .where(TaskSubmission.payment_status == "paid")
-            .where(TaskSubmission.paid_at >= today_start)
+            .where(TaskSubmission.paid_at >= window_start)
+            .where(TaskSubmission.paid_at <= window_end)
         )
     ).scalars().all()
 
@@ -136,7 +161,8 @@ async def dashboard_stats(
         await db.execute(
             select(func.sum(Payment.amount_kobo)).where(
                 Payment.status == "success",
-                Payment.created_at >= today_start,
+                Payment.created_at >= window_start,
+                Payment.created_at <= window_end,
             )
         )
     ).scalar_one() or 0

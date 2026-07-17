@@ -30,22 +30,38 @@ export function DashboardPage() {
     endDate?: string;
   }>({ preset: "30d" });
 
-  // TODO: Update backend endpoints to accept start_date and end_date parameters
-  const { start, end } = getDateRangeFromPreset(
-    dateRange.preset,
-    dateRange.startDate,
-    dateRange.endDate,
-  );
+  // Derive the date window to send to the backend. For custom ranges we
+  // pass explicit start/end dates; for presets we pass a `days` count.
+  const useCustom =
+    dateRange.preset === "custom" && dateRange.startDate && dateRange.endDate;
+  const { startDate, endDate } = useCustom
+    ? { startDate: dateRange.startDate!, endDate: dateRange.endDate! }
+    : getDateRangeFromPreset(dateRange.preset);
+  const daysCount =
+    dateRange.preset === "custom"
+      ? Math.max(
+          1,
+          Math.ceil(
+            (new Date(endDate).getTime() - new Date(startDate).getTime()) /
+              (1000 * 60 * 60 * 24),
+          ),
+        )
+      : parseInt(dateRange.preset.replace("d", ""));
 
   const {
     data: stats,
     isLoading: statsLoading,
     error: statsError,
   } = useQuery({
-    queryKey: ["admin", "dashboard", "stats"],
+    queryKey: ["admin", "dashboard", "stats", dateRange],
     queryFn: async () => {
       const { data } = await adminApi.get<DashboardStats>(
         "/admin/dashboard/stats",
+        {
+          params: useCustom
+            ? { start_date: startDate, end_date: endDate }
+            : { days: daysCount },
+        },
       );
       return data;
     },
@@ -61,12 +77,12 @@ export function DashboardPage() {
   );
 
   const { data: dau = [], isLoading: dauLoading } = useQuery({
-    queryKey: ["admin", "analytics", "dau"],
+    queryKey: ["admin", "analytics", "dau", daysCount],
     queryFn: async () => {
       const { data } = await adminApi.get<DailyActiveUsers[]>(
         "/admin/analytics/dau",
         {
-          params: { days: 7 },
+          params: { days: daysCount },
         },
       );
       return data;
@@ -88,7 +104,7 @@ export function DashboardPage() {
             <div className="p-4 sm:p-6">
               <DateRangePicker value={dateRange} onChange={setDateRange} />
               <p className="mt-2 text-xs text-text-muted">
-                Note: Date range filtering requires backend endpoint updates
+                Filters revenue, ad, task & premium metrics for the selected window
               </p>
             </div>
           </Card>

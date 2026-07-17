@@ -51,11 +51,20 @@ export function FinancePage() {
 
   const queryClient = useQueryClient();
 
+  const useCustom =
+    dateRange.preset === "custom" && dateRange.startDate && dateRange.endDate;
+  const { startDate, endDate } = useCustom
+    ? { startDate: dateRange.startDate!, endDate: dateRange.endDate! }
+    : getDateRangeFromPreset(dateRange.preset);
+
   const { data: revenue, isLoading: revenueLoading } = useQuery({
-    queryKey: ["admin", "finance", "revenue"],
+    queryKey: ["admin", "finance", "revenue", dateRange],
     queryFn: async () => {
       const { data } = await adminApi.get<RevenueSummary>(
         "/admin/revenue/summary",
+        {
+          params: { start_date: startDate, end_date: endDate },
+        },
       );
       return data;
     },

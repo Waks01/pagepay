@@ -104,12 +104,12 @@ admin/src/shared/components/Sidebar.tsx (nav added)
 
 ### 3. **Add Date Range Filters**
 
-**Status**: 🟡 PARTIAL (verified 2026-07-17) — DateRangePicker built & wired into AdDashboardPage (drives daysCount -> ad endpoints). NOT yet on Dashboard/Finance/Analytics pages.  
+**Status**: ✅ DONE (verified 2026-07-17) — DateRangePicker wired into Ad Dashboard, Dashboard, Finance & Analytics pages. Backend `/admin/dashboard/stats` now accepts `days`/`start_date`/`end_date`; Finance summary already supported dates; Analytics DAU/retention accept `days`.  
 **Priority**: P0 - Critical  
 **Effort**: 4 hours  
 **Impact**: Very High
 
-**Problem**: Ad Analytics has date filtering; other analytics pages still use fixed 7/30d windows.
+**Problem**: (Resolved) Date range filtering now scopes revenue/ad/task/premium/DAU/retention metrics.
 
 **Pages Affected**:
 

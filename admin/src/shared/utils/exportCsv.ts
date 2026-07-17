@@ -18,9 +18,7 @@ export function exportToCsv<T extends Record<string, any>>(
   const cols = columns || Object.keys(data[0]).map((key) => ({ key, label: key }));
 
   // Create CSV headers
-  const headers = cols.map((col) => escap
-
-eCsvValue(col.label)).join(",");
+  const headers = cols.map((col) => escapeCsvValue(col.label)).join(",");
 
   // Create CSV rows
   const rows = data.map((row) => {
