@@ -3,7 +3,7 @@
     "name": "pagepay",
     "slug": "pagepay",
     "version": "1.0.0",
-    "owner": "zhaoluci89",
+    "owner": "kenzola_money",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "client",

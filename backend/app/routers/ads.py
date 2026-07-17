@@ -808,6 +808,17 @@ async def admob_ssv_callback(
     )
     db.add(event)
     
+    # AD WATCHED + CLEANUP complete: the AdRequest row is now marked
+    # 'credited' (consumed, cannot be reused), the wallet/session got
+    # `points`, and an AdEvent audit row was written. This single line
+    # is the definitive "ad finished and was cleaned up" signal.
+    logger.info(
+        "AD WATCHED + CLEANUP user=%s tx=%s unit=%s pts=%d target=%s (session=%s)",
+        user_id, transaction_id, req.ad_unit, points,
+        "session_pending" if req.session_id and not session_claimed else ("wallet_late" if req.session_id else "wallet"),
+        req.session_id,
+    )
+
     # Log successful SSV callback
     await log_ssv_attempt(
         user_id=user_id,
