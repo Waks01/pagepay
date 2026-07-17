@@ -506,7 +506,7 @@ See full list in detailed sections below.
 | Bulk actions                   | ❌     | P1       | 4h     | Yes            |
 | User wallet history (detailed) | ✅     | P1       | 3h     | Yes            |
 | User ad watch history          | ✅     | P1       | 3h     | No             |
-| User notes                     | ❌     | P2       | 3h     | Yes            |
+| User notes                     | ✅     | P2       | 3h     | Yes            |
 | Ban history                    | ✅     | P2       | 2h     | Yes            |
 | Device information             | ❌     | P2       | 3h     | No             |
 | User impersonation             | ❌     | P2       | 6h     | Yes            |

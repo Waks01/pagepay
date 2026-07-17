@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
-import type { UserDetail, UserSessionsResponse, UserTransactionsResponse, UserActivityResponse, UserAdWatchResponse, UserWalletResponse } from '@/lib/types';
+import type { UserDetail, UserSessionsResponse, UserTransactionsResponse, UserActivityResponse, UserAdWatchResponse, UserWalletResponse, UserNotesResponse } from '@/lib/types';
 import { Modal, Badge, Button, ShimmerLoader, ConfirmModal, Input } from '@/shared/components';
 import { useAuthStore } from '@/store/auth';
 import { DollarSign, Activity, Receipt, Calendar, User as UserIcon, Shield, Ban } from 'lucide-react';
@@ -14,7 +14,7 @@ interface UserDetailModalProps {
 export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
   const queryClient = useQueryClient();
   const hasPermission = useAuthStore((s) => s.hasPermission);
-  const [activeTab, setActiveTab] = React.useState<'details' | 'sessions' | 'transactions' | 'activity' | 'ads' | 'wallet'>('details');
+  const [activeTab, setActiveTab] = React.useState<'details' | 'sessions' | 'transactions' | 'activity' | 'ads' | 'wallet' | 'notes'>('details');
   const [adjustBalanceModalOpen, setAdjustBalanceModalOpen] = React.useState(false);
   const [banModalOpen, setBanModalOpen] = React.useState(false);
   const [unbanModalOpen, setUnbanModalOpen] = React.useState(false);
@@ -96,6 +96,43 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
     enabled: !!userId && activeTab === 'wallet',
     staleTime: 30_000,
   });
+
+  const { data: notes, isLoading: notesLoading } = useQuery({
+    queryKey: ['admin', 'users', userId, 'notes'],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data } = await adminApi.get<UserNotesResponse>(`/admin/users/${userId}/notes`);
+      return data;
+    },
+    enabled: !!userId && activeTab === 'notes',
+    staleTime: 30_000,
+  });
+
+  const addNoteMutation = useMutation({
+    mutationFn: async ({ userId, note }: { userId: number; note: string }) => {
+      await adminApi.post(`/admin/users/${userId}/notes`, null, { params: { note } });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', userId, 'notes'] });
+    },
+  });
+
+  const deleteNoteMutation = useMutation({
+    mutationFn: async (noteId: number) => {
+      await adminApi.delete(`/admin/users/notes/${noteId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', userId, 'notes'] });
+    },
+  });
+
+  const [newNote, setNewNote] = React.useState('');
+
+  const handleAddNote = () => {
+    if (!userId || !newNote.trim()) return;
+    addNoteMutation.mutate({ userId, note: newNote.trim() });
+    setNewNote('');
+  };
 
   const adjustBalanceMutation = useMutation({
     mutationFn: async ({ userId, amount, reason }: { userId: number; amount: number; reason: string }) => {
@@ -224,6 +261,17 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
           >
             <Receipt size={16} className="mr-1.5 inline" />
             Wallet
+          </button>
+          <button
+            onClick={() => setActiveTab('notes')}
+            className={`cursor-pointer px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'notes'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-text-muted hover:text-text-main'
+            }`}
+          >
+            <Activity size={16} className="mr-1.5 inline" />
+            Notes
           </button>
         </div>
 
@@ -531,6 +579,60 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
             {wallet && wallet.items.length === 0 && (
               <p className="text-center text-text-muted">No wallet history</p>
             )}
+          </>
+        )}
+
+        {activeTab === 'notes' && (
+          <>
+            {notesLoading && <ShimmerLoader lines={4} />}
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <Input
+                  label="New note"
+                  placeholder="Add a note about this user..."
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  variant="primary"
+                  className="mt-6"
+                  onClick={handleAddNote}
+                  disabled={addNoteMutation.isPending || !newNote.trim()}
+                  loading={addNoteMutation.isPending}
+                >
+                  Add
+                </Button>
+              </div>
+              {notes && notes.items.length > 0 && (
+                <div className="space-y-2">
+                  {notes.items.map((n) => (
+                    <div
+                      key={n.id}
+                      className="flex items-start justify-between gap-3 rounded-md border border-border bg-bg-muted p-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm text-text-main whitespace-pre-wrap">{n.note}</p>
+                        <p className="mt-1 text-xs text-text-muted">
+                          {n.admin_email || 'admin'} · {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => deleteNoteMutation.mutate(n.id)}
+                        disabled={deleteNoteMutation.isPending}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {notes && notes.items.length === 0 && !notesLoading && (
+                <p className="text-center text-text-muted">No notes yet</p>
+              )}
+            </div>
           </>
         )}
       </div>

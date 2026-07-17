@@ -157,6 +157,19 @@ export interface UserWalletResponse {
   current_balance: number;
 }
 
+export interface UserNote {
+  id: number;
+  note: string;
+  admin_email: string | null;
+  created_at: string | null;
+}
+
+export interface UserNotesResponse {
+  items: UserNote[];
+  total: number;
+  user_id: number;
+}
+
 export interface UserSegments {
   total_users: number;
   high_value_users: number;

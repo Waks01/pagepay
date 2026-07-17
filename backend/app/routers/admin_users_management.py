@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import (
     User, ReadingSession, PayoutTransaction, Payment, AdminUser,
-    AdminAuditLog, AdEvent, FraudFlag,
+    AdminAuditLog, AdEvent, FraudFlag, AdminUserNote,
 )
 from app.schemas import UserListResponse
 from app.services.admin_auth import require_permission
@@ -716,3 +716,85 @@ async def get_user_segments(
         "at_risk_users_7_30d": int(at_risk),
     }
 
+
+
+# ── User Admin Notes ────────────────────────────────────────────────
+
+
+@router.get("/{user_id}/notes")
+async def list_user_notes(
+    user_id: int,
+    current_admin: AdminUser = Depends(require_permission("users.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List admin notes attached to a user (most recent first)."""
+    user = (
+        await db.execute(select(User).where(User.id == user_id))
+    ).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    rows = await db.execute(
+        select(AdminUserNote)
+        .where(AdminUserNote.user_id == user_id)
+        .order_by(AdminUserNote.created_at.desc())
+    )
+    items = [
+        {
+            "id": n.id,
+            "note": n.note,
+            "admin_email": n.admin_email,
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+        }
+        for n in rows.scalars().all()
+    ]
+    return {"items": items, "total": len(items), "user_id": user_id}
+
+
+@router.post("/{user_id}/notes")
+async def create_user_note(
+    request: Request,
+    user_id: int,
+    note: str = Query(..., min_length=1, max_length=2000),
+    current_admin: AdminUser = Depends(require_permission("users.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add an admin note to a user."""
+    user = (
+        await db.execute(select(User).where(User.id == user_id))
+    ).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    row = AdminUserNote(
+        user_id=user_id,
+        admin_id=current_admin.id,
+        admin_email=current_admin.email,
+        note=note,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return {
+        "id": row.id,
+        "note": row.note,
+        "admin_email": row.admin_email,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.delete("/notes/{note_id}")
+async def delete_user_note(
+    note_id: int,
+    current_admin: AdminUser = Depends(require_permission("users.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an admin note."""
+    row = (
+        await db.execute(select(AdminUserNote).where(AdminUserNote.id == note_id))
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Note not found")
+    await db.delete(row)
+    await db.commit()
+    return {"success": True}

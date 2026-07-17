@@ -891,6 +891,21 @@ class AdminAuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
+class AdminUserNote(Base):
+    """Free-form admin notes attached to a platform user (support context,
+    watchlist rationale, etc.). Distinct from the fraud review notes.
+    """
+
+    __tablename__ = "admin_user_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    admin_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    admin_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    note: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 class FraudFlag(Base):
     """Fraud detection flags for users or sessions."""
 
