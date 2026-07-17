@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { label: "Analytics", icon: BarChart3, path: "/analytics" },
   { label: "Ad Analytics", icon: TrendingUp, path: "/ads" },
   { label: "Users", icon: Users, path: "/users" },
+  { label: "Segments", icon: Users, path: "/segments" },
   { label: "Admin Users", icon: UserCog, path: "/admins" },
   { label: "Finance", icon: DollarSign, path: "/finance" },
   { label: "Content", icon: FileText, path: "/content" },

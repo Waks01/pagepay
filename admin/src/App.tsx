@@ -3,6 +3,7 @@ import { Layout } from "@/shared/components/Layout";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
 import { UsersPage } from "@/features/users/UsersPage";
+import { SegmentsPage } from "@/features/users/SegmentsPage";
 import { FinancePage } from "@/features/finance/FinancePage";
 import { ContentPage } from "@/features/content/ContentPage";
 import { FraudPage } from "@/features/fraud/FraudPage";
@@ -23,6 +24,7 @@ export default function AppRoutes() {
         <Route index element={<DashboardPage />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="users" element={<UsersPage />} />
+        <Route path="segments" element={<SegmentsPage />} />
         <Route path="admins" element={<AdminsPage />} />
         <Route path="finance" element={<FinancePage />} />
         <Route path="content" element={<ContentPage />} />

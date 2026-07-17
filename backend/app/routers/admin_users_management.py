@@ -469,6 +469,25 @@ async def get_user_activity(
             "detail": f"{f.severity} · {f.status}",
         })
 
+    # Ban / unban events
+    rows = await db.execute(
+        select(AdminAuditLog)
+        .where(
+            AdminAuditLog.target_id == user_id,
+            AdminAuditLog.action.in_(["ban_user", "unban_user"]),
+        )
+        .order_by(AdminAuditLog.created_at.desc())
+        .limit(limit)
+    )
+    for b in rows.scalars().all():
+        events.append({
+            "type": "ban" if b.action == "ban_user" else "unban",
+            "id": b.id,
+            "timestamp": b.created_at.isoformat() if b.created_at else None,
+            "summary": f"{'Banned' if b.action == 'ban_user' else 'Unbanned'} by {b.admin_email or 'admin'}",
+            "detail": (b.changes or "")[:200],
+        })
+
     # Sort by timestamp descending (None timestamps go last)
     def _ts(e: dict) -> str:
         return e.get("timestamp") or ""
@@ -480,5 +499,220 @@ async def get_user_activity(
         "items": events,
         "total": len(events),
         "user_id": user_id,
+    }
+
+
+# ── User Ad Watch History ───────────────────────────────────────────
+
+
+@router.get("/{user_id}/ads")
+async def get_user_ads(
+    user_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    current_admin: AdminUser = Depends(require_permission("users.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List rewarded ad impressions watched by a user (ad watch history)."""
+    user = (
+        await db.execute(select(User).where(User.id == user_id))
+    ).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    rows = await db.execute(
+        select(AdEvent)
+        .where(AdEvent.user_id == user_id)
+        .order_by(AdEvent.created_at.desc())
+        .limit(limit)
+    )
+    items = [
+        {
+            "id": e.id,
+            "ad_unit": e.ad_unit,
+            "provider": e.provider,
+            "watched_fully": e.watched_fully,
+            "reward_granted": e.reward_granted,
+            "points_credited": e.user_points_credited or 0,
+            "transaction_id": e.transaction_id,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+        }
+        for e in rows.scalars().all()
+    ]
+    return {"items": items, "total": len(items), "user_id": user_id}
+
+
+# ── User Wallet History (detailed) ─────────────────────────────────
+
+
+@router.get("/{user_id}/wallet")
+async def get_user_wallet_history(
+    user_id: int,
+    limit: int = Query(100, ge=1, le=500),
+    current_admin: AdminUser = Depends(require_permission("users.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Detailed wallet history: ad credits, admin balance adjustments,
+    payouts and payments, merged into one chronological, point-aware feed.
+    """
+    user = (
+        await db.execute(select(User).where(User.id == user_id))
+    ).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    entries: list[dict] = []
+
+    # Ad credits
+    rows = await db.execute(
+        select(AdEvent)
+        .where(AdEvent.user_id == user_id, AdEvent.watched_fully == True)  # noqa: E712
+        .order_by(AdEvent.created_at.desc())
+        .limit(limit)
+    )
+    for e in rows.scalars().all():
+        if e.user_points_credited:
+            entries.append({
+                "type": "ad_credit",
+                "id": e.id,
+                "timestamp": e.created_at.isoformat() if e.created_at else None,
+                "delta": e.user_points_credited,
+                "detail": f"{e.ad_unit or 'ad'} via {e.provider or '?'}: +{e.user_points_credited} pts",
+            })
+
+    # Admin balance adjustments
+    rows = await db.execute(
+        select(AdminAuditLog)
+        .where(
+            AdminAuditLog.action == "adjust_balance",
+            AdminAuditLog.target_id == user_id,
+        )
+        .order_by(AdminAuditLog.created_at.desc())
+        .limit(limit)
+    )
+    for a in rows.scalars().all():
+        entries.append({
+            "type": "adjustment",
+            "id": a.id,
+            "timestamp": a.created_at.isoformat() if a.created_at else None,
+            "delta": None,
+            "detail": f"Adjusted by {a.admin_email or 'admin'}: {(a.changes or '')[:160]}",
+        })
+
+    # Payouts (negative balance impact)
+    rows = await db.execute(
+        select(PayoutTransaction)
+        .where(PayoutTransaction.user_id == user_id)
+        .order_by(PayoutTransaction.created_at.desc())
+        .limit(limit)
+    )
+    for p in rows.scalars().all():
+        entries.append({
+            "type": "payout",
+            "id": p.id,
+            "timestamp": p.created_at.isoformat() if p.created_at else None,
+            "delta": -p.amount_kobo,
+            "detail": f"Payout {p.status}: {p.amount_kobo / 100:.2f} NGN",
+        })
+
+    # Payments (premium, negative balance impact)
+    rows = await db.execute(
+        select(Payment)
+        .where(Payment.user_id == user_id)
+        .order_by(Payment.created_at.desc())
+        .limit(limit)
+    )
+    for pmt in rows.scalars().all():
+        entries.append({
+            "type": "payment",
+            "id": pmt.id,
+            "timestamp": pmt.created_at.isoformat() if pmt.created_at else None,
+            "delta": -pmt.amount_kobo,
+            "detail": f"Premium {pmt.status}: {pmt.amount_kobo / 100:.2f} NGN ({pmt.tier or ''})",
+        })
+
+    def _ts(e: dict) -> str:
+        return e.get("timestamp") or ""
+
+    entries.sort(key=_ts, reverse=True)
+    entries = entries[:limit]
+
+    return {
+        "items": entries,
+        "total": len(entries),
+        "user_id": user_id,
+        "current_balance": user.points_balance,
+    }
+
+
+# ── User Segments (read-only aggregates) ────────────────────────────
+
+
+@router.get("/segments")
+async def get_user_segments(
+    current_admin: AdminUser = Depends(require_permission("users.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Count users in common behavioral segments (read-only)."""
+    from datetime import timedelta
+
+    now = datetime.utcnow()
+    week_ago = now - timedelta(days=7)
+
+    total = (await db.execute(select(func.count(User.id)))).scalar_one()
+
+    # High-value: users who watched >1000 ads (credited AdEvents)
+    high_value = (
+        await db.execute(
+            select(func.count(func.distinct(AdEvent.user_id))).where(
+                AdEvent.watched_fully == True,  # noqa: E712
+                AdEvent.user_points_credited > 0,
+            )
+        )
+    ).scalar_one()
+
+    # Power readers: >50 reading sessions
+    power_readers = (
+        await db.execute(
+            select(func.count())
+            .select_from(
+                select(ReadingSession.user_id)
+                .group_by(ReadingSession.user_id)
+                .having(func.count(ReadingSession.id) > 50)
+                .subquery()
+            )
+        )
+    ).scalar_one()
+
+    # Premium users
+    premium = (
+        await db.execute(
+            select(func.count(User.id)).where(User.tier != "free")
+        )
+    ).scalar_one()
+
+    # New users: signed up <7 days ago
+    new_users = (
+        await db.execute(
+            select(func.count(User.id)).where(User.created_at >= week_ago)
+        )
+    ).scalar_one()
+
+    # At-risk: active 7+ days ago but not since
+    at_risk = (
+        await db.execute(
+            select(func.count(User.id)).where(
+                User.last_active_at < week_ago,
+                User.last_active_at >= now - timedelta(days=30),
+            )
+        )
+    ).scalar_one()
+
+    return {
+        "total_users": int(total),
+        "high_value_users": int(high_value),
+        "power_readers": int(power_readers),
+        "premium_users": int(premium),
+        "new_users_7d": int(new_users),
+        "at_risk_users_7_30d": int(at_risk),
     }
 

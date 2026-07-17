@@ -414,9 +414,7 @@ See full list in detailed sections below.
 
 ### 21. **User Segments**
 
-**Priority**: P2 - Medium  
-**Effort**: 6 hours  
-**Impact**: Medium
+**Status**: ✅ DONE (verified 2026-07-17) — read-only Segments page (`/segments`) backed by `GET /admin/users/segments`: total, high-value (>1000 ads), power readers (>50 sessions), premium, new (7d), at-risk (7–30d).
 
 Create custom user groups based on behavior.
 
@@ -506,14 +504,14 @@ See full list in detailed sections below.
 | Points adjustment              | ❌     | P0       | 3h     | Yes            |
 | User activity timeline         | ❌     | P1       | 5h     | Yes            |
 | Bulk actions                   | ❌     | P1       | 4h     | Yes            |
-| User wallet history (detailed) | ❌     | P1       | 3h     | Yes            |
-| User ad watch history          | ❌     | P1       | 3h     | No             |
+| User wallet history (detailed) | ✅     | P1       | 3h     | Yes            |
+| User ad watch history          | ✅     | P1       | 3h     | No             |
 | User notes                     | ❌     | P2       | 3h     | Yes            |
-| Ban history                    | ❌     | P2       | 2h     | Yes            |
+| Ban history                    | ✅     | P2       | 2h     | Yes            |
 | Device information             | ❌     | P2       | 3h     | No             |
 | User impersonation             | ❌     | P2       | 6h     | Yes            |
 | Email/Push to user             | ❌     | P2       | 5h     | Yes            |
-| User segments                  | ❌     | P2       | 6h     | Yes            |
+| User segments                  | ✅     | P2       | 6h     | Yes            |
 
 ---
 

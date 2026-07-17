@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
-import type { UserDetail, UserSessionsResponse, UserTransactionsResponse, UserActivityResponse } from '@/lib/types';
+import type { UserDetail, UserSessionsResponse, UserTransactionsResponse, UserActivityResponse, UserAdWatchResponse, UserWalletResponse } from '@/lib/types';
 import { Modal, Badge, Button, ShimmerLoader, ConfirmModal, Input } from '@/shared/components';
 import { useAuthStore } from '@/store/auth';
 import { DollarSign, Activity, Receipt, Calendar, User as UserIcon, Shield, Ban } from 'lucide-react';
@@ -14,7 +14,7 @@ interface UserDetailModalProps {
 export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
   const queryClient = useQueryClient();
   const hasPermission = useAuthStore((s) => s.hasPermission);
-  const [activeTab, setActiveTab] = React.useState<'details' | 'sessions' | 'transactions' | 'activity'>('details');
+  const [activeTab, setActiveTab] = React.useState<'details' | 'sessions' | 'transactions' | 'activity' | 'ads' | 'wallet'>('details');
   const [adjustBalanceModalOpen, setAdjustBalanceModalOpen] = React.useState(false);
   const [banModalOpen, setBanModalOpen] = React.useState(false);
   const [unbanModalOpen, setUnbanModalOpen] = React.useState(false);
@@ -68,6 +68,32 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
       return data;
     },
     enabled: !!userId && activeTab === 'activity',
+    staleTime: 30_000,
+  });
+
+  const { data: ads, isLoading: adsLoading } = useQuery({
+    queryKey: ['admin', 'users', userId, 'ads'],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data } = await adminApi.get<UserAdWatchResponse>(`/admin/users/${userId}/ads`, {
+        params: { limit: 50 },
+      });
+      return data;
+    },
+    enabled: !!userId && activeTab === 'ads',
+    staleTime: 30_000,
+  });
+
+  const { data: wallet, isLoading: walletLoading } = useQuery({
+    queryKey: ['admin', 'users', userId, 'wallet'],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data } = await adminApi.get<UserWalletResponse>(`/admin/users/${userId}/wallet`, {
+        params: { limit: 100 },
+      });
+      return data;
+    },
+    enabled: !!userId && activeTab === 'wallet',
     staleTime: 30_000,
   });
 
@@ -176,6 +202,28 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
           >
             <Calendar size={16} className="mr-1.5 inline" />
             Activity
+          </button>
+          <button
+            onClick={() => setActiveTab('ads')}
+            className={`cursor-pointer px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'ads'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-text-muted hover:text-text-main'
+            }`}
+          >
+            <DollarSign size={16} className="mr-1.5 inline" />
+            Ads
+          </button>
+          <button
+            onClick={() => setActiveTab('wallet')}
+            className={`cursor-pointer px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'wallet'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-text-muted hover:text-text-main'
+            }`}
+          >
+            <Receipt size={16} className="mr-1.5 inline" />
+            Wallet
           </button>
         </div>
 
@@ -390,6 +438,98 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
             )}
             {activity && activity.items.length === 0 && (
               <p className="text-center text-text-muted">No activity found</p>
+            )}
+          </>
+        )}
+
+        {activeTab === 'ads' && (
+          <>
+            {adsLoading && <ShimmerLoader lines={5} />}
+            {ads && ads.items.length > 0 && (
+              <div className="max-h-96 overflow-y-auto">
+                <table className="min-w-full divide-y divide-border text-sm">
+                  <thead className="bg-bg-muted sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-text-muted">Ad Unit</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-text-muted">Provider</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-text-muted">Watched</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-text-muted">Points</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-text-muted">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {ads.items.map((ad) => (
+                      <tr key={ad.id} className="hover:bg-bg-hover">
+                        <td className="px-3 py-2">{ad.ad_unit || '-'}</td>
+                        <td className="px-3 py-2">{ad.provider || '-'}</td>
+                        <td className="px-3 py-2">
+                          <Badge variant={ad.watched_fully ? 'success' : 'warning'}>
+                            {ad.watched_fully ? 'Yes' : 'No'}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2">{ad.points_credited}</td>
+                        <td className="px-3 py-2">
+                          {ad.created_at ? new Date(ad.created_at).toLocaleString() : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {ads && ads.items.length === 0 && (
+              <p className="text-center text-text-muted">No ads watched</p>
+            )}
+          </>
+        )}
+
+        {activeTab === 'wallet' && (
+          <>
+            {walletLoading && <ShimmerLoader lines={6} />}
+            {wallet && (
+              <>
+                <p className="mb-2 text-sm text-text-muted">
+                  Current balance: <span className="font-semibold text-text-main">{wallet.current_balance.toLocaleString()}</span> pts
+                </p>
+                <div className="max-h-96 space-y-2 overflow-y-auto">
+                  {wallet.items.map((entry) => (
+                    <div
+                      key={`${entry.type}-${entry.id}`}
+                      className="flex items-start gap-3 rounded-md border border-border bg-bg-muted p-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-text-main">{entry.detail}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <Badge
+                          variant={
+                            entry.type === 'ad_credit'
+                              ? 'success'
+                              : entry.type === 'payout' || entry.type === 'payment'
+                                ? 'error'
+                                : 'neutral'
+                          }
+                        >
+                          {entry.type.replace('_', ' ')}
+                        </Badge>
+                        {entry.delta !== null && (
+                          <p className={`mt-1 text-xs ${entry.delta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {entry.delta >= 0 ? '+' : ''}{entry.delta.toLocaleString()}
+                          </p>
+                        )}
+                        {entry.timestamp && (
+                          <p className="mt-1 text-xs text-text-muted">
+                            {new Date(entry.timestamp).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {wallet && wallet.items.length === 0 && (
+              <p className="text-center text-text-muted">No wallet history</p>
             )}
           </>
         )}

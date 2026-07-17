@@ -125,6 +125,47 @@ export interface UserActivityResponse {
   user_id: number;
 }
 
+export interface UserAdWatch {
+  id: number;
+  ad_unit: string | null;
+  provider: string | null;
+  watched_fully: boolean;
+  reward_granted: boolean;
+  points_credited: number;
+  transaction_id: string | null;
+  created_at: string | null;
+}
+
+export interface UserAdWatchResponse {
+  items: UserAdWatch[];
+  total: number;
+  user_id: number;
+}
+
+export interface UserWalletEntry {
+  type: 'ad_credit' | 'adjustment' | 'payout' | 'payment';
+  id: number;
+  timestamp: string | null;
+  delta: number | null;
+  detail: string;
+}
+
+export interface UserWalletResponse {
+  items: UserWalletEntry[];
+  total: number;
+  user_id: number;
+  current_balance: number;
+}
+
+export interface UserSegments {
+  total_users: number;
+  high_value_users: number;
+  power_readers: number;
+  premium_users: number;
+  new_users_7d: number;
+  at_risk_users_7_30d: number;
+}
+
 export interface RevenueSummary {
   // Ad Revenue breakdown
   ad_revenue_usd: number;
