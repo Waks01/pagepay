@@ -169,7 +169,7 @@
 - Rate limiting + exception handlers + logging
 
 **Production Deployment (Render.app):**
-- Backend deployed at: `https://pagepay-backend.onrender.com`
+- Backend deployed at: `https://pagepay-fff6.onrender.com`
 - Start command: `gunicorn app.main:app -w 2 -k uvicorn.workers.UvicornWorker`
 - Database linked from Render PostgreSQL 15 instance
 - SSL context configured for Render's internal self-signed certificates
@@ -348,7 +348,7 @@ src/
 - JWT token issued on login to `/api/v1/admin/auth/login`
 - Stored in localStorage (admin-only app, no sensitive user data)
 - Required on all endpoints
-- **Production API**: `https://pagepay-backend.onrender.com/api/v1`
+- **Production API**: `https://pagepay-fff6.onrender.com/api/v1`
 
 **Authorization:**
 - Every endpoint checks admin role + specific permission

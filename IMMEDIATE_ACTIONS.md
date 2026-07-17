@@ -45,14 +45,14 @@ Copy these from `backend/.env` into Render dashboard:
 
 Also set these new ones:
 - `ADMIN_TOKEN` = `dev-admin-token`
-- `PUBLIC_BASE_URL` = `https://pagepay-backend.onrender.com`
-- `CORS_ORIGINS` = `https://pagepay-admin.onrender.com,http://localhost:3000`
+- `PUBLIC_BASE_URL` = `https://pagepay-fff6.onrender.com`
+- `CORS_ORIGINS` = `https://pagepay-fff6.onrender.com,http://localhost:3000`
 
 ## After Deployment
 
 Once Render shows "Your service is live":
 
-1. **Copy the backend URL** (looks like `https://pagepay-backend.onrender.com`)
+1. **Copy the backend URL** (looks like `https://pagepay-fff6.onrender.com`)
 2. **Update admin panel** - Change all `/api/v1` calls to use the Render URL
 3. **Update client app** - Do the same
 4. **Test login** - Should work with PostgreSQL backend now

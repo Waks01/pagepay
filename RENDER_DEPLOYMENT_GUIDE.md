@@ -23,7 +23,7 @@ Set these in your Render service environment:
 - `DATABASE_URL` — automatically linked to your PostgreSQL instance
 - `SECRET_KEY` — generated automatically (do not check in)
 - `CORS_ORIGINS` — updated to include your Render URLs
-- `PUBLIC_BASE_URL` — set to `https://pagepay-backend.onrender.com`
+- `PUBLIC_BASE_URL` — set to `https://pagepay-fff6.onrender.com`
 - `PAYSTACK_SECRET_KEY`, `PAYSTACK_PUBLIC_KEY`, `PAYSTACK_WEBHOOK_SECRET` — copy from `.env`
 - `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY` — copy from `.env`
 - `CLOUDINARY_*` — copy from `.env`
@@ -69,23 +69,23 @@ In the Web Service **Environment** section, add:
 - `CLOUDINARY_API_KEY` = (from your `.env`)
 - `CLOUDINARY_API_SECRET` = (from your `.env`)
 - `ADMIN_TOKEN` = `dev-admin-token` (or generate new one)
-- `CORS_ORIGINS` = `https://pagepay-admin.onrender.com,http://localhost:3000`
-- `PUBLIC_BASE_URL` = `https://pagepay-backend.onrender.com`
+- `CORS_ORIGINS` = `https://pagepay-fff6.onrender.com,http://localhost:3000`
+- `PUBLIC_BASE_URL` = `https://pagepay-fff6.onrender.com`
 
 ### Step 5: Deploy
 1. Click **Deploy** in Render dashboard
 2. Watch the build logs (should take 5-10 minutes on first deploy)
-3. Once "Your service is live" appears, copy the URL: `https://pagepay-backend.onrender.com`
+3. Once "Your service is live" appears, copy the URL: `https://pagepay-fff6.onrender.com`
 
 ### Step 6: Update Frontend API URLs
 **Admin Panel** (`admin/src/lib/api.ts`):
 ```typescript
-const API_BASE = 'https://pagepay-backend.onrender.com/api/v1'
+const API_BASE = 'https://pagepay-fff6.onrender.com/api/v1'
 ```
 
 **Client App** (`client/app/config.ts` or similar):
 ```typescript
-const API_BASE = 'https://pagepay-backend.onrender.com/api/v1'
+const API_BASE = 'https://pagepay-fff6.onrender.com/api/v1'
 ```
 
 ### Step 7: Test the Deployment
