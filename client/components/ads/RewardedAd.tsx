@@ -132,9 +132,17 @@ export function RewardedAd(props: RewardedAdProps) {
   }, [onClose, onClaimed, onSkipped]);
 
   // Load ad when modal opens, or when preload is requested.
-  // We do NOT gate on hasLoadedRef here because that flag can
-  // block reloading between pre-read and post-read. Instead,
-  // we always clean up the previous ad and load a fresh one.
+  //
+  // IMPORTANT: a loaded AdMob RewardedAd instance is ONE-SHOT — once it
+  // has been shown and closed, that object is consumed and can never be
+  // shown again. So on every `visible`/`preload` transition we MUST
+  // tear down any prior instance and create a brand-new one. The old
+  // guard that skipped reloading when `rewardedRef.current` was set
+  // caused the 2nd ad (and every ad after an app reopen) to never load:
+  // `adState` stayed stuck and `show()` was called on a dead instance.
+  //
+  // We now always destroy + recreate, and reset `adState` to 'loading'
+  // at the top so the UI can't get wedged in a stale 'ready'/'error'.
   useEffect(() => {
     const shouldLoad = visible || preload;
     if (!shouldLoad) {
@@ -145,17 +153,23 @@ export function RewardedAd(props: RewardedAdProps) {
       return;
     }
 
-    // If we already have a loaded ad for this slot, don't
-    // recreate it just because `visible` toggled.
-    if (rewardedRef.current && (rewardedRef.current as any)._adUnit === adUnit) {
-      return;
-    }
-
     let isActive = true;
     let unsubLoaded: (() => void) | null = null;
     let unsubEarned: (() => void) | null = null;
     let unsubClosed: (() => void) | null = null;
 
+    // Tear down any ad from a previous show before loading a fresh one.
+    if (rewardedRef.current) {
+      try {
+        rewardedRef.current.destroy?.();
+      } catch {
+        // ignore — instance may already be spent
+      }
+      rewardedRef.current = null;
+    }
+
+    // Reset UI state so a prior 'ready'/'error' (from the previous ad)
+    // can't block the new load or the show button.
     setAdState('loading');
     setErrorMessage(null);
     rewardDataRef.current = null;
@@ -259,9 +273,16 @@ export function RewardedAd(props: RewardedAdProps) {
       if (unsubLoaded) unsubLoaded();
       if (unsubEarned) unsubEarned();
       if (unsubClosed) unsubClosed();
-      rewardedRef.current = null;
+      if (rewardedRef.current) {
+        try {
+          rewardedRef.current.destroy?.();
+        } catch {
+          // ignore
+        }
+        rewardedRef.current = null;
+      }
     };
-  }, [preload, adUnit, userId, sessionId, adUnitName, onClaimed, onSkipped, onClose]);
+  }, [preload, visible, adUnit, userId, sessionId, adUnitName]);
 
   // Step 4-6: poll for the credit. This is the core of the
   // server-authoritative flow — the AdMob SDK has already

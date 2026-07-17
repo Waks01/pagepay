@@ -46,40 +46,47 @@ export function NativeAdBanner({ adUnit, sessionId }: NativeAdBannerProps) {
 
     let isActive = true;
     let unsubClicked: (() => void) | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { NativeAd, NativeAdEventType, NativeAdView, NativeAsset, NativeMediaView, NativeAssetType } = require('react-native-google-mobile-ads');
+    const { NativeAd, NativeAdEventType } = require('react-native-google-mobile-ads');
 
-    NativeAd.createForAdRequest(adUnit)
-      .then((ad) => {
-        if (!isActive) {
-          ad.destroy();
-          return;
-        }
-        adRef.current = ad;
-        setNativeAd(ad);
-        setError(false);
+    const load = () => {
+      if (!isActive) return;
+      NativeAd.createForAdRequest(adUnit)
+        .then((ad: any) => {
+          if (!isActive) {
+            ad.destroy();
+            return;
+          }
+          adRef.current = ad;
+          setNativeAd(ad);
+          setError(false);
 
-        unsubClicked = ad.addAdEventListener(
-          NativeAdEventType.CLICKED,
-          () => {
+          unsubClicked = ad.addAdEventListener(NativeAdEventType.CLICKED, () => {
             if (__DEV__) {
               console.log('[NativeAdBanner] Ad clicked');
             }
+          });
+        })
+        .catch((err: any) => {
+          if (__DEV__) {
+            console.warn('[NativeAdBanner] Failed to load ad:', err);
           }
-        );
-      })
-      .catch((err) => {
-        if (__DEV__) {
-          console.warn('[NativeAdBanner] Failed to load ad:', err);
-        }
-        if (isActive) {
-          setError(true);
-        }
-      });
+          if (isActive) {
+            // Retry once after a short delay — native fill can be flaky,
+            // especially on a fresh account. Permanent null-on-first-failure
+            // was the reason native ads "never showed".
+            retryTimer = setTimeout(load, 3000);
+          }
+        });
+    };
+
+    load();
 
     return () => {
       isActive = false;
+      if (retryTimer) clearTimeout(retryTimer);
       if (unsubClicked) unsubClicked();
       if (adRef.current) {
         adRef.current.destroy();

@@ -760,6 +760,7 @@ export default function ReaderScreen() {
       />
 
       <RewardedAd
+        key="pre-read"
         visible={preReadOpen}
         adUnit={adUnit}
         adUnitName={Platform.OS === 'android' ? 'rewarded_android' : 'rewarded_ios'}
@@ -784,6 +785,7 @@ export default function ReaderScreen() {
           pointer) but no credit is filed, so the user forfeits the
           pending points. Either path returns them to the book detail. */}
       <RewardedAd
+        key="post-read"
         visible={postReadAdOpen}
         adUnit={adUnit}
         adUnitName={Platform.OS === 'android' ? 'rewarded_android' : 'rewarded_ios'}
