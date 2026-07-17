@@ -258,6 +258,26 @@ async def fetch_ads_config(
             resolved[out_key] = test_value or raw.get(db_key, "")
         else:
             resolved[out_key] = raw.get(db_key, "")
+
+    # DIAGNOSTIC: log the full resolved config so we can see at a
+    # glance whether any prod slot came back empty (the #1 cause of
+    # "ads don't show" — an empty unit ID disables that slot on the
+    # client). Also log how many app_config rows exist for the env.
+    empty_slots = [k for k, v in resolved.items() if not v]
+    logger.info(
+        "fetch_ads_config env=%s rows_in_app_config=%d resolved=%s empty_slots=%s",
+        environment,
+        len(raw),
+        {k: (v[:18] + "…" if v and len(v) > 18 else v) for k, v in resolved.items()},
+        empty_slots,
+    )
+    if empty_slots:
+        logger.warning(
+            "fetch_ads_config: %d slot(s) EMPTY for env=%s — client will disable them: %s",
+            len(empty_slots),
+            environment,
+            empty_slots,
+        )
     return resolved
 
 
@@ -332,8 +352,19 @@ async def create_ad_request(
         expires_at=now + timedelta(seconds=settings.ad_request_token_ttl_seconds),
     )
     db.add(req)
-    await db.commit()
-    await db.refresh(req)
+    try:
+        await db.commit()
+        await db.refresh(req)
+    except Exception as exc:
+        logger.error(
+            "create_ad_request FAILED user=%s unit=%s session=%s: %s",
+            user_id, ad_unit, session_id, exc,
+        )
+        raise
+    logger.info(
+        "create_ad_request OK user=%s unit=%s session=%s id=%s expires_at=%s",
+        user_id, ad_unit, session_id, req.id, req.expires_at,
+    )
     return req
 
 
@@ -341,11 +372,19 @@ async def lookup_ad_request_by_token(
     db: AsyncSession, token: str
 ) -> AdRequest | None:
     """Look up an AdRequest by its token. Returns None if not found."""
-    return (
+    row = (
         await db.execute(
             select(AdRequest).where(AdRequest.token == token)
         )
     ).scalar_one_or_none()
+    if row is None:
+        logger.warning("lookup_ad_request_by_token: NO row for token (len=%d)", len(token or ""))
+    else:
+        logger.info(
+            "lookup_ad_request_by_token: found id=%s user=%s unit=%s status=%s",
+            row.id, row.user_id, row.ad_unit, row.status,
+        )
+    return row
 
 
 async def mark_ad_request_credited(

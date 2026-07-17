@@ -154,10 +154,19 @@ async def issue_ad_request_token(
     This caps attacker token-stuffing without blocking a heavy
     legit user (heavy users watch 10-20 ads/day, well under 30/min).
     """
+    logger.info(
+        "POST /ads/request-token user=%s ad_unit=%s session=%s",
+        current_user.id, payload.ad_unit, payload.session_id,
+    )
+
     if not payload.ad_unit.startswith("rewarded_"):
         # The SSV handler will also reject non-rewarded units, but
         # fail fast here so the client gets a clear 400 instead of
         # a token that will never be honored.
+        logger.warning(
+            "POST /ads/request-token REJECTED non-rewarded unit=%s user=%s",
+            payload.ad_unit, current_user.id,
+        )
         raise HTTPException(
             status_code=400,
             detail=(
@@ -166,9 +175,16 @@ async def issue_ad_request_token(
             ),
         )
 
-    req = await ads_service.create_ad_request(
-        db=db, user_id=current_user.id, ad_unit=payload.ad_unit, session_id=payload.session_id
-    )
+    try:
+        req = await ads_service.create_ad_request(
+            db=db, user_id=current_user.id, ad_unit=payload.ad_unit, session_id=payload.session_id
+        )
+    except Exception as exc:
+        logger.error(
+            "POST /ads/request-token FAILED user=%s unit=%s: %s",
+            current_user.id, payload.ad_unit, exc,
+        )
+        raise
 
     # `custom_data` is the single piece of state the client carries
     # into the AdMob SDK. AdMob signs it as part of the SSV payload,
@@ -222,11 +238,16 @@ async def list_recent_credits(
     meantime). The client should treat the LAST row's `new_balance`
     as the freshest value and re-render the wallet.
     """
+    logger.info(
+        "GET /ads/recent-credits user=%s since=%s limit=%d",
+        current_user.id, since, limit,
+    )
     rows = await ads_service.list_recent_credits_for_user(
         db, current_user.id, since=since, limit=limit
     )
 
     if not rows:
+        logger.info("GET /ads/recent-credits user=%s -> 0 credits (still pending or none)", current_user.id)
         return []
 
     # Fetch the user's CURRENT balance once, not per row. The
@@ -541,7 +562,17 @@ async def admob_ssv_callback(
     query_params = {k: v for k, v in request.query_params.items()}
 
     if not query_params:
+        logger.info("GET /ads/google/callback: empty query (AdMob connectivity test)")
         return {"status": "verification_success"}
+
+    logger.info(
+        "GET /ads/google/callback: received ad_unit=%s reward_amount=%s tx=%s key_id=%s custom_data_len=%d",
+        query_params.get("ad_unit"),
+        query_params.get("reward_amount"),
+        query_params.get("transaction_id"),
+        query_params.get("key_id"),
+        len(query_params.get("custom_data", "") or ""),
+    )
 
     # Helper to log SSV attempts to database
     async def log_ssv_attempt(

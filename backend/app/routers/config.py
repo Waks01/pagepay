@@ -19,7 +19,7 @@ fallback: if the env param is omitted, the response is `prod`
 from __future__ import annotations
 
 import logging
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -34,6 +34,7 @@ router = APIRouter(prefix="/config", tags=["config"])
 
 @router.get("/ads")
 async def get_ads_config(
+    request: Request,
     env: str = Query(
         "prod",
         description="dev|prod. Dev returns Google's documented test unit IDs; "
@@ -63,7 +64,10 @@ async def get_ads_config(
     no-op for the others.
     """
     config = await fetch_ads_config(db, environment=env)
-    logger.info("Served ads config for env=%s (%d keys)", env, len(config))
+    logger.info(
+        "GET /config/ads env=%s keys=%d client=%s",
+        env, len(config), request.client.host if request.client else "?",
+    )
     return config
 
 
