@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
-import type { UserDetail, UserSessionsResponse, UserTransactionsResponse } from '@/lib/types';
+import type { UserDetail, UserSessionsResponse, UserTransactionsResponse, UserActivityResponse } from '@/lib/types';
 import { Modal, Badge, Button, ShimmerLoader, ConfirmModal, Input } from '@/shared/components';
 import { useAuthStore } from '@/store/auth';
 import { DollarSign, Activity, Receipt, Calendar, User as UserIcon, Shield, Ban } from 'lucide-react';
@@ -14,7 +14,7 @@ interface UserDetailModalProps {
 export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
   const queryClient = useQueryClient();
   const hasPermission = useAuthStore((s) => s.hasPermission);
-  const [activeTab, setActiveTab] = React.useState<'details' | 'sessions' | 'transactions'>('details');
+  const [activeTab, setActiveTab] = React.useState<'details' | 'sessions' | 'transactions' | 'activity'>('details');
   const [adjustBalanceModalOpen, setAdjustBalanceModalOpen] = React.useState(false);
   const [banModalOpen, setBanModalOpen] = React.useState(false);
   const [unbanModalOpen, setUnbanModalOpen] = React.useState(false);
@@ -55,6 +55,19 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
       return data;
     },
     enabled: !!userId && activeTab === 'transactions',
+    staleTime: 30_000,
+  });
+
+  const { data: activity, isLoading: activityLoading } = useQuery({
+    queryKey: ['admin', 'users', userId, 'activity'],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data } = await adminApi.get<UserActivityResponse>(`/admin/users/${userId}/activity`, {
+        params: { limit: 50 },
+      });
+      return data;
+    },
+    enabled: !!userId && activeTab === 'activity',
     staleTime: 30_000,
   });
 
@@ -152,6 +165,17 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
           >
             <Receipt size={16} className="mr-1.5 inline" />
             Transactions
+          </button>
+          <button
+            onClick={() => setActiveTab('activity')}
+            className={`cursor-pointer px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'activity'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-text-muted hover:text-text-main'
+            }`}
+          >
+            <Calendar size={16} className="mr-1.5 inline" />
+            Activity
           </button>
         </div>
 
@@ -332,6 +356,40 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
             )}
             {transactions && transactions.items.length === 0 && (
               <p className="text-center text-text-muted">No transactions found</p>
+            )}
+          </>
+        )}
+
+        {activeTab === 'activity' && (
+          <>
+            {activityLoading && <ShimmerLoader lines={6} />}
+            {activity && activity.items.length > 0 && (
+              <div className="max-h-96 space-y-3 overflow-y-auto">
+                {activity.items.map((ev) => (
+                  <div
+                    key={`${ev.type}-${ev.id}`}
+                    className="flex items-start gap-3 rounded-md border border-border bg-bg-muted p-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-text-main">{ev.summary}</p>
+                      {ev.detail && (
+                        <p className="mt-0.5 text-xs text-text-muted">{ev.detail}</p>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <Badge variant="neutral">{ev.type.replace('_', ' ')}</Badge>
+                      {ev.timestamp && (
+                        <p className="mt-1 text-xs text-text-muted">
+                          {new Date(ev.timestamp).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {activity && activity.items.length === 0 && (
+              <p className="text-center text-text-muted">No activity found</p>
             )}
           </>
         )}

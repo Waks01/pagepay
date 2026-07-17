@@ -1,9 +1,13 @@
 import { useRef, useEffect, useState } from 'react';
 import * as d3 from 'd3';
-import type { DailyActiveUsers } from '@/lib/types';
+
+export interface BarChartDatum {
+  date: string;
+  count: number;
+}
 
 interface BarChartProps {
-  data: DailyActiveUsers[];
+  data: BarChartDatum[];
   /**
    * Fallback width used when the container has not been measured yet
    * (e.g. on the very first render before the ResizeObserver fires).
@@ -12,9 +16,16 @@ interface BarChartProps {
   width?: number;
   height?: number;
   className?: string;
+  valueFormatter?: (v: number) => string;
 }
 
-export function BarChart({ data, width = 700, height = 300, className = '' }: BarChartProps) {
+export function BarChart({
+  data,
+  width = 700,
+  height = 300,
+  className = '',
+  valueFormatter,
+}: BarChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [measuredWidth, setMeasuredWidth] = useState(0);
@@ -105,7 +116,7 @@ export function BarChart({ data, width = 700, height = 300, className = '' }: Ba
       .attr('fill', '#0E1116')
       .style('font-size', '12px')
       .style('font-weight', '500')
-      .text((d) => d.count);
+        .text((d) => (valueFormatter ? valueFormatter(d.count) : String(d.count)));
   }, [data, measuredWidth, width, height]);
 
   return (

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/lib/api";
 import type { UserListResponse } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
-import { Shield, Eye, Download } from "lucide-react";
+import { Shield, Eye, Download, Ban, CheckCircle2 } from "lucide-react";
 import React from "react";
 import {
   Card,
@@ -34,6 +34,11 @@ export function UsersPage() {
   const [unbanModalOpen, setUnbanModalOpen] = React.useState(false);
   const [userToBan, setUserToBan] = React.useState<number | null>(null);
   const [userToUnban, setUserToUnban] = React.useState<number | null>(null);
+  const [selected, setSelected] = React.useState<Set<number>>(new Set());
+  const [bulkAction, setBulkAction] = React.useState<null | "ban" | "unban">(
+    null,
+  );
+  const [bulkReason, setBulkReason] = React.useState("");
   const hasPermission = useAuthStore((s) => s.hasPermission);
 
   const { data, isLoading, error } = useQuery({
@@ -100,6 +105,53 @@ export function UsersPage() {
       unbanMutation.mutate(userToUnban);
     }
   };
+
+  const bulkBanMutation = useMutation({
+    mutationFn: async ({ ids, reason }: { ids: number[]; reason: string }) => {
+      await Promise.all(
+        ids.map((id) =>
+          adminApi.post(`/admin/users/${id}/ban`, null, { params: { reason } }),
+        ),
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      setBulkAction(null);
+      setSelected(new Set());
+      setBulkReason("");
+    },
+  });
+
+  const bulkUnbanMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(
+        ids.map((id) => adminApi.post(`/admin/users/${id}/unban`)),
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      setBulkAction(null);
+      setSelected(new Set());
+    },
+  });
+
+  const toggleSelect = (id: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      if (data?.items && prev.size === data.items.length) return new Set();
+      return new Set(data?.items.map((u) => u.id) ?? []);
+    });
+  };
+
+  const selectedIds = Array.from(selected);
 
   const totalPages = data ? Math.ceil(data.total / data.limit) : 0;
 
@@ -181,6 +233,35 @@ export function UsersPage() {
             </div>
           </div>
 
+          {selectedIds.length > 0 && hasPermission("users.ban") && (
+            <div className="flex flex-wrap items-center gap-3 border-t border-border px-4 py-3 sm:px-6">
+              <span className="text-sm font-medium text-text-main">
+                {selectedIds.length} selected
+              </span>
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => setBulkAction("ban")}
+              >
+                <Ban size={14} className="mr-1" /> Bulk Ban
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setBulkAction("unban")}
+              >
+                <CheckCircle2 size={14} className="mr-1" /> Bulk Unban
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelected(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+
           {isLoading && (
             <div className="p-4 sm:p-6">
               <ShimmerLoader lines={5} />
@@ -196,6 +277,15 @@ export function UsersPage() {
                 <table className="min-w-full divide-y divide-border">
                   <thead className="bg-bg-muted">
                     <tr>
+                      <th className="w-10 px-4 py-3 text-left">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary"
+                          checked={!!data?.items && selected.size === data.items.length && data.items.length > 0}
+                          onChange={toggleSelectAll}
+                          aria-label="Select all"
+                        />
+                      </th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">
                         ID
                       </th>
@@ -222,6 +312,15 @@ export function UsersPage() {
                   <tbody className="divide-y divide-border">
                     {data.items.map((user) => (
                       <tr key={user.id} className="hover:bg-bg-hover">
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-primary"
+                            checked={selected.has(user.id)}
+                            onChange={() => toggleSelect(user.id)}
+                            aria-label={`Select user ${user.id}`}
+                          />
+                        </td>
                         <td className="px-4 py-3 text-sm text-text-main">
                           {user.id}
                         </td>
@@ -346,6 +445,35 @@ export function UsersPage() {
         cancelText="Cancel"
         variant="primary"
         isLoading={unbanMutation.isPending}
+      />
+
+      {/* Bulk Action Modal */}
+      <ConfirmModal
+        isOpen={bulkAction !== null}
+        onClose={() => {
+          setBulkAction(null);
+          setBulkReason("");
+        }}
+        onConfirm={(reason?: string) => {
+          if (bulkAction === "ban") {
+            if (reason) bulkBanMutation.mutate({ ids: selectedIds, reason });
+          } else if (bulkAction === "unban") {
+            bulkUnbanMutation.mutate(selectedIds);
+          }
+        }}
+        title={bulkAction === "unban" ? "Bulk Unban Users" : "Bulk Ban Users"}
+        message={
+          bulkAction === "unban"
+            ? `Are you sure you want to unban ${selectedIds.length} selected users?`
+            : `Please provide a reason for banning ${selectedIds.length} selected users.`
+        }
+        confirmText={bulkAction === "unban" ? "Unban All" : "Ban All"}
+        cancelText="Cancel"
+        variant={bulkAction === "unban" ? "primary" : "danger"}
+        requireInput={bulkAction === "ban"}
+        inputLabel="Ban Reason"
+        inputPlaceholder="Enter reason for ban..."
+        isLoading={bulkBanMutation.isPending || bulkUnbanMutation.isPending}
       />
     </>
   );

@@ -219,6 +219,33 @@ async def delete_content(
     return {"success": True}
 
 
+@router.get("/{content_id}")
+async def get_content(
+    content_id: int,
+    current_admin: AdminUser = Depends(require_permission("content.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get full content record (including body_text) for the edit modal."""
+    content = (
+        await db.execute(
+            select(ContentCatalog).where(ContentCatalog.id == content_id)
+        )
+    ).scalar_one_or_none()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+    return {
+        "id": content.id,
+        "title": content.title,
+        "content_type": content.content_type,
+        "category": content.category,
+        "author": content.author,
+        "body_text": content.body_text,
+        "cover_image_url": content.cover_image_url,
+        "estimated_read_minutes": content.estimated_read_minutes,
+        "created_at": content.created_at.isoformat() if content.created_at else None,
+    }
+
+
 # ── v3 TTS Audio Generation ─────────────────────────────────────────
 
 
@@ -318,3 +345,88 @@ async def admin_generate_tts_for_all_works(
         raise HTTPException(
             status_code=500, detail=f"TTS generation failed: {exc}"
         ) from exc
+
+
+@router.put("/{content_id}")
+async def update_content(
+    request: Request,
+    content_id: int,
+    title: str | None = Query(None),
+    author: str | None = Query(None),
+    category: str | None = Query(None),
+    body_text: str | None = Query(None),
+    cover_image_url: str | None = Query(None),
+    estimated_read_minutes: int | None = Query(None, ge=1, le=600),
+    current_admin: AdminUser = Depends(require_permission("content.edit")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Edit content metadata and body without re-importing.
+
+    Only the provided (non-None) fields are updated. An audit log entry
+    records the change. `content.edit` permission required.
+    """
+    content = (
+        await db.execute(
+            select(ContentCatalog).where(ContentCatalog.id == content_id)
+        )
+    ).scalar_one_or_none()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    changes: dict = {}
+    if title is not None and title != content.title:
+        changes["title"] = {"from": content.title, "to": title}
+        content.title = title
+    if author is not None and author != (content.author or ""):
+        changes["author"] = {"from": content.author, "to": author}
+        content.author = author
+    if category is not None and category != content.category:
+        changes["category"] = {"from": content.category, "to": category}
+        content.category = category
+    if body_text is not None and body_text != (content.body_text or ""):
+        changes["body_text"] = {"from_len": len(content.body_text or ""), "to_len": len(body_text)}
+        content.body_text = body_text
+    if cover_image_url is not None and cover_image_url != (content.cover_image_url or ""):
+        changes["cover_image_url"] = {"from": content.cover_image_url, "to": cover_image_url}
+        content.cover_image_url = cover_image_url
+    if estimated_read_minutes is not None and estimated_read_minutes != content.estimated_read_minutes:
+        changes["estimated_read_minutes"] = {
+            "from": content.estimated_read_minutes,
+            "to": estimated_read_minutes,
+        }
+        content.estimated_read_minutes = estimated_read_minutes
+
+    if not changes:
+        return {
+            "id": content.id,
+            "title": content.title,
+            "author": content.author,
+            "category": content.category,
+            "cover_image_url": content.cover_image_url,
+            "estimated_read_minutes": content.estimated_read_minutes,
+            "updated": False,
+        }
+
+    db.add(
+        _log_admin_action(
+            current_admin.id,
+            current_admin.email,
+            "edit_content",
+            "content",
+            content_id,
+            changes,
+            request.client.host,
+        )
+    )
+    await db.commit()
+    await db.refresh(content)
+
+    return {
+        "id": content.id,
+        "title": content.title,
+        "author": content.author,
+        "category": content.category,
+        "cover_image_url": content.cover_image_url,
+        "estimated_read_minutes": content.estimated_read_minutes,
+        "updated": True,
+    }

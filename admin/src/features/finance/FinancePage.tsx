@@ -14,12 +14,14 @@ import {
   Tooltip,
   DateRangePicker,
   getDateRangeFromPreset,
+  Select,
+  BarChart,
 } from "@/shared/components";
 import type { DateRangePreset } from "@/shared/components";
 import { TopHeader } from "@/shared/components/TopHeader";
 import { useLayoutContext } from "@/shared/components/Layout";
 import { useAuthStore } from "@/store/auth";
-import { CheckCircle, XCircle, Download } from "lucide-react";
+import { CheckCircle, XCircle, Download, RefreshCw } from "lucide-react";
 import { usePlatformConfig } from "@/shared/hooks/use-platform-config";
 import { exportToCsv } from "@/shared/utils/exportCsv";
 
@@ -50,6 +52,31 @@ export function FinancePage() {
   }>({ preset: "30d" });
 
   const queryClient = useQueryClient();
+
+  const daysCount =
+    dateRange.preset === "custom" && dateRange.startDate && dateRange.endDate
+      ? Math.max(
+          1,
+          Math.ceil(
+            (new Date(dateRange.endDate).getTime() -
+              new Date(dateRange.startDate).getTime()) /
+              (1000 * 60 * 60 * 24),
+          ),
+        )
+      : parseInt(dateRange.preset.replace("d", ""));
+
+  const { data: revenueDaily, isLoading: revenueDailyLoading } = useQuery({
+    queryKey: ["admin", "finance", "revenue-daily", daysCount],
+    queryFn: async () => {
+      const { data } = await adminApi.get<{
+        items: { date: string; total_revenue_kobo: number }[];
+      }>("/admin/revenue/daily", {
+        params: { days: daysCount },
+      });
+      return data;
+    },
+    staleTime: 60_000,
+  });
 
   const useCustom =
     dateRange.preset === "custom" && dateRange.startDate && dateRange.endDate;
@@ -244,7 +271,35 @@ export function FinancePage() {
                   </div>
                 </Card>
 
-                {/* Ad Revenue Breakdown */}
+                {/* Revenue Trend Chart */}
+              <Card>
+                <div className="border-b border-border px-4 py-4 sm:px-6">
+                  <h3 className="text-sm font-semibold text-text-main">
+                    Revenue Trend (Last {daysCount} Days)
+                  </h3>
+                  <p className="mt-0.5 text-sm text-text-muted">
+                    Daily total revenue (ad + premium) in NGN
+                  </p>
+                </div>
+                <div className="p-4 sm:p-6">
+                  {revenueDailyLoading && <ShimmerLoader lines={4} />}
+                  {!revenueDailyLoading && revenueDaily && revenueDaily.items.length > 0 && (
+                    <BarChart
+                      data={revenueDaily.items.map((d) => ({
+                        date: d.date.slice(5),
+                        count: d.total_revenue_kobo / 100,
+                      }))}
+                      height={300}
+                      valueFormatter={(v: number) => `₦${v.toLocaleString()}`}
+                    />
+                  )}
+                  {!revenueDailyLoading && revenueDaily && revenueDaily.items.length === 0 && (
+                    <p className="text-text-muted">No revenue data for this period</p>
+                  )}
+                </div>
+              </Card>
+
+              {/* Ad Revenue Breakdown */}
                 <Card>
                   <div className="border-b border-border px-4 py-4 sm:px-6">
                     <h3 className="text-sm font-semibold text-text-main">
@@ -392,7 +447,7 @@ export function FinancePage() {
             {payoutsLoading && <ShimmerLoader lines={5} />}
             {payouts && (
               <Card>
-                <div className="border-b border-border px-4 py-4 sm:px-6 flex justify-between items-center">
+                <div className="border-b border-border px-4 py-4 sm:px-6 flex flex-wrap justify-between items-center gap-3">
                   <div>
                     <h3 className="text-sm font-semibold text-text-main">
                       Payout Requests
@@ -401,8 +456,25 @@ export function FinancePage() {
                       Review and manage payout requests
                     </p>
                   </div>
-                  <Button
-                    variant="secondary"
+                  <div className="flex items-end gap-2 flex-wrap">
+                    <Select
+                      label="Status"
+                      value={payoutStatus}
+                      onChange={(value) => {
+                        setPayoutStatus(value);
+                        setPayoutPage(1);
+                      }}
+                      options={[
+                        { value: "", label: "All Status" },
+                        { value: "pending", label: "Pending" },
+                        { value: "success", label: "Success" },
+                        { value: "failed", label: "Failed" },
+                        { value: "rejected", label: "Rejected" },
+                      ]}
+                      className="w-40"
+                    />
+                    <Button
+                      variant="secondary"
                     size="sm"
                     onClick={() => {
                       if (payouts.items && payouts.items.length > 0) {
@@ -425,6 +497,7 @@ export function FinancePage() {
                     Export CSV
                   </Button>
                 </div>
+              </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-border">
                     <thead className="bg-bg-muted">
@@ -513,7 +586,18 @@ export function FinancePage() {
                                   </Tooltip>
                                 </div>
                               )}
-                            {p.status !== "pending" && (
+                            {p.status === "failed" && (
+                              <Tooltip content="Retry this failed payout" position="top">
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => handleRetryClick(p.id)}
+                                >
+                                  <RefreshCw size={14} /> Retry
+                                </Button>
+                              </Tooltip>
+                            )}
+                            {p.status !== "pending" && p.status !== "failed" && (
                               <span className="text-text-muted">-</span>
                             )}
                           </td>

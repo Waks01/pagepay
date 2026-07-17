@@ -165,3 +165,72 @@ async def revenue_summary(
         period_start=start.isoformat(),
         period_end=end.isoformat(),
     )
+
+
+@router.get("/daily")
+async def revenue_daily(
+    days: int = Query(30, ge=1, le=366),
+    current_admin: AdminUser = Depends(require_permission("finance.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Daily revenue breakdown (ad + premium, in NGN kobo) for the last
+    `days` days. Powers the revenue trend chart on the admin Finance page.
+    """
+    from app.services import fx
+
+    end = datetime.utcnow()
+    start = end - timedelta(days=days)
+
+    # Ad revenue per day (micro-units -> kobo)
+    ad_rows = await db.execute(
+        select(
+            func.date(AdEvent.created_at).label("day"),
+            func.sum(AdEvent.revenue_usd).label("rev_usd"),
+            func.sum(AdEvent.fx_rate_used).label("fx"),
+        )
+        .where(AdEvent.created_at >= start)
+        .where(AdEvent.created_at <= end)
+        .where(AdEvent.credit_status == "credited")
+        .group_by(func.date(AdEvent.created_at))
+    )
+
+    ad_by_day: dict[str, float] = {}
+    for row in ad_rows.mappings().all():
+        day = str(row["day"])
+        rev_usd = float(row["rev_usd"] or 0) / 1_000_000
+        fx_rate = float(row["fx"] or 0) / 1_000_000
+        kobo = int(rev_usd * fx_rate * 100) if fx_rate else 0
+        ad_by_day[day] = kobo
+
+    # Premium revenue per day (kobo)
+    prem_rows = await db.execute(
+        select(
+            func.date(Payment.created_at).label("day"),
+            func.sum(Payment.amount_kobo).label("amt"),
+        )
+        .where(Payment.created_at >= start)
+        .where(Payment.created_at <= end)
+        .where(Payment.status == "success")
+        .group_by(func.date(Payment.created_at))
+    )
+
+    prem_by_day: dict[str, int] = {}
+    for row in prem_rows.mappings().all():
+        prem_by_day[str(row["day"])] = int(row["amt"] or 0)
+
+    # Build a contiguous day series
+    items = []
+    cursor = start.date()
+    while cursor <= end.date():
+        day_str = cursor.isoformat()
+        ad_kobo = ad_by_day.get(day_str, 0)
+        prem_kobo = prem_by_day.get(day_str, 0)
+        items.append({
+            "date": day_str,
+            "ad_revenue_kobo": ad_kobo,
+            "premium_revenue_kobo": prem_kobo,
+            "total_revenue_kobo": ad_kobo + prem_kobo,
+        })
+        cursor += timedelta(days=1)
+
+    return {"items": items, "days": days}

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import (
     User, ReadingSession, PayoutTransaction, Payment, AdminUser,
-    AdminAuditLog,
+    AdminAuditLog, AdEvent, FraudFlag,
 )
 from app.schemas import UserListResponse
 from app.services.admin_auth import require_permission
@@ -344,4 +344,141 @@ async def get_user_transactions(
         })
     
     return {"items": items, "total": len(items), "page": page, "limit": limit}
+
+
+# ── User Activity Timeline ──────────────────────────────────────────
+
+
+@router.get("/{user_id}/activity")
+async def get_user_activity(
+    user_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    current_admin: AdminUser = Depends(require_permission("users.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Chronological activity timeline for a user, used by the admin
+    'Activity' tab. Aggregates reading sessions, rewarded ad watches,
+    balance adjustments (admin audit log), payouts, payments, fraud
+    flags, and ban/unban events into a single sorted feed.
+    """
+    user = (
+        await db.execute(select(User).where(User.id == user_id))
+    ).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    events: list[dict] = []
+
+    # Reading sessions
+    rows = await db.execute(
+        select(ReadingSession)
+        .where(ReadingSession.user_id == user_id)
+        .order_by(ReadingSession.start_time.desc())
+        .limit(limit)
+    )
+    for s in rows.scalars().all():
+        events.append({
+            "type": "session",
+            "id": s.id,
+            "timestamp": s.start_time.isoformat() if s.start_time else None,
+            "summary": f"Read content #{s.content_id}",
+            "detail": f"{'verified' if s.verified else 'unverified'} · {s.points_earned or 0} pts",
+        })
+
+    # Rewarded ad watches (credited AdEvents)
+    rows = await db.execute(
+        select(AdEvent)
+        .where(AdEvent.user_id == user_id, AdEvent.watched_fully == True)  # noqa: E712
+        .order_by(AdEvent.created_at.desc())
+        .limit(limit)
+    )
+    for e in rows.scalars().all():
+        events.append({
+            "type": "ad_watch",
+            "id": e.id,
+            "timestamp": e.created_at.isoformat() if e.created_at else None,
+            "summary": f"Watched ad: {e.ad_unit or 'unknown'}",
+            "detail": f"+{e.user_points_credited or 0} pts"
+            if e.user_points_credited else "no credit",
+        })
+
+    # Balance adjustments (admin audit log)
+    rows = await db.execute(
+        select(AdminAuditLog)
+        .where(
+            AdminAuditLog.action == "adjust_balance",
+            AdminAuditLog.target_id == user_id,
+        )
+        .order_by(AdminAuditLog.created_at.desc())
+        .limit(limit)
+    )
+    for a in rows.scalars().all():
+        events.append({
+            "type": "balance_adjustment",
+            "id": a.id,
+            "timestamp": a.created_at.isoformat() if a.created_at else None,
+            "summary": f"Balance adjusted by {a.admin_email or 'admin'}",
+            "detail": (a.changes or "")[:200],
+        })
+
+    # Payouts
+    rows = await db.execute(
+        select(PayoutTransaction)
+        .where(PayoutTransaction.user_id == user_id)
+        .order_by(PayoutTransaction.created_at.desc())
+        .limit(limit)
+    )
+    for p in rows.scalars().all():
+        events.append({
+            "type": "payout",
+            "id": p.id,
+            "timestamp": p.created_at.isoformat() if p.created_at else None,
+            "summary": f"Payout request · {p.status}",
+            "detail": f"{p.amount_kobo / 100:.2f} NGN",
+        })
+
+    # Payments (premium)
+    rows = await db.execute(
+        select(Payment)
+        .where(Payment.user_id == user_id)
+        .order_by(Payment.created_at.desc())
+        .limit(limit)
+    )
+    for pmt in rows.scalars().all():
+        events.append({
+            "type": "payment",
+            "id": pmt.id,
+            "timestamp": pmt.created_at.isoformat() if pmt.created_at else None,
+            "summary": f"Premium payment · {pmt.status}",
+            "detail": f"{pmt.amount_kobo / 100:.2f} NGN · {pmt.tier or ''}",
+        })
+
+    # Fraud flags
+    rows = await db.execute(
+        select(FraudFlag)
+        .where(FraudFlag.user_id == user_id)
+        .order_by(FraudFlag.created_at.desc())
+        .limit(limit)
+    )
+    for f in rows.scalars().all():
+        events.append({
+            "type": "fraud_flag",
+            "id": f.id,
+            "timestamp": f.created_at.isoformat() if f.created_at else None,
+            "summary": f"Fraud flag: {f.flag_type}",
+            "detail": f"{f.severity} · {f.status}",
+        })
+
+    # Sort by timestamp descending (None timestamps go last)
+    def _ts(e: dict) -> str:
+        return e.get("timestamp") or ""
+
+    events.sort(key=_ts, reverse=True)
+    events = events[:limit]
+
+    return {
+        "items": events,
+        "total": len(events),
+        "user_id": user_id,
+    }
 

@@ -111,6 +111,20 @@ export interface UserTransactionsResponse {
   limit: number;
 }
 
+export interface UserActivityEvent {
+  type: 'session' | 'ad_watch' | 'balance_adjustment' | 'payout' | 'payment' | 'fraud_flag';
+  id: number;
+  timestamp: string | null;
+  summary: string;
+  detail: string;
+}
+
+export interface UserActivityResponse {
+  items: UserActivityEvent[];
+  total: number;
+  user_id: number;
+}
+
 export interface RevenueSummary {
   // Ad Revenue breakdown
   ad_revenue_usd: number;

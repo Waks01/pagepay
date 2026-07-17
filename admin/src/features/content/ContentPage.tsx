@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/lib/api";
 import type { ContentListResponse } from "@/lib/types";
-import { Trash2, RefreshCw, BookOpen, Download } from "lucide-react";
+import { Trash2, RefreshCw, BookOpen, Download, Pencil } from "lucide-react";
 import React, { useState } from "react";
 import {
   Card,
@@ -12,6 +12,7 @@ import {
   Container,
   Tooltip,
   ConfirmModal,
+  Modal,
 } from "@/shared/components";
 import { TopHeader } from "@/shared/components/TopHeader";
 import { useLayoutContext } from "@/shared/components/Layout";
@@ -27,6 +28,15 @@ export function ContentPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    author: "",
+    category: "",
+    body_text: "",
+    cover_image_url: "",
+    estimated_read_minutes: "",
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "content", { page, search, typeFilter }],
@@ -90,6 +100,44 @@ export function ContentPage() {
   });
 
   const queryClient = useQueryClient();
+
+  const editMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const params: Record<string, string> = {};
+      if (editForm.title.trim()) params.title = editForm.title.trim();
+      if (editForm.author.trim()) params.author = editForm.author.trim();
+      if (editForm.category.trim()) params.category = editForm.category.trim();
+      if (editForm.body_text !== "") params.body_text = editForm.body_text;
+      if (editForm.cover_image_url.trim())
+        params.cover_image_url = editForm.cover_image_url.trim();
+      if (editForm.estimated_read_minutes.trim())
+        params.estimated_read_minutes = editForm.estimated_read_minutes.trim();
+      await adminApi.put(`/admin/content/${id}`, null, { params });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "content"] });
+      setEditId(null);
+      toast.success("Content updated successfully");
+    },
+    onError: () => {
+      toast.error("Failed to update content. Please try again.");
+    },
+  });
+
+  const openEdit = async (id: number) => {
+    const { data } = await adminApi.get<Record<string, any>>(
+      `/admin/content/${id}`,
+    );
+    setEditForm({
+      title: data.title ?? "",
+      author: data.author ?? "",
+      category: data.category ?? "",
+      body_text: data.body_text ?? "",
+      cover_image_url: data.cover_image_url ?? "",
+      estimated_read_minutes: String(data.estimated_read_minutes ?? ""),
+    });
+    setEditId(id);
+  };
   const totalPages = data ? Math.ceil(data.total / data.limit) : 0;
 
   return (
@@ -247,17 +295,29 @@ export function ContentPage() {
                         <td className="px-4 py-3 text-sm text-text-main">
                           {new Date(item.created_at).toLocaleDateString()}
                         </td>
-                        <td className="px-4 py-3 text-sm text-text-main">
-                          <Tooltip content="Delete this content" position="top">
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={() => setDeleteId(item.id)}
-                            >
-                              <Trash2 size={14} /> Delete
-                            </Button>
-                          </Tooltip>
-                        </td>
+                         <td className="px-4 py-3 text-sm text-text-main">
+                           <div className="flex gap-2">
+                             <Tooltip content="Edit this content" position="top">
+                               <Button
+                                 size="sm"
+                                 variant="secondary"
+                                 onClick={() => openEdit(item.id)}
+                                 disabled={editMutation.isPending}
+                               >
+                                 <Pencil size={14} /> Edit
+                               </Button>
+                             </Tooltip>
+                             <Tooltip content="Delete this content" position="top">
+                               <Button
+                                 size="sm"
+                                 variant="danger"
+                                 onClick={() => setDeleteId(item.id)}
+                               >
+                                 <Trash2 size={14} /> Delete
+                               </Button>
+                             </Tooltip>
+                           </div>
+                         </td>
                       </tr>
                     ))}
                   </tbody>
@@ -290,6 +350,75 @@ export function ContentPage() {
         confirmVariant="error"
         isLoading={deleteMutation.isPending}
       />
+
+      <Modal
+        isOpen={editId !== null}
+        onClose={() => setEditId(null)}
+        title="Edit Content"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Title"
+            value={editForm.title}
+            onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+          />
+          <Input
+            label="Author"
+            value={editForm.author}
+            onChange={(e) => setEditForm({ ...editForm, author: e.target.value })}
+          />
+          <Input
+            label="Category"
+            value={editForm.category}
+            onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+          />
+          <Input
+            label="Cover Image URL"
+            value={editForm.cover_image_url}
+            onChange={(e) =>
+              setEditForm({ ...editForm, cover_image_url: e.target.value })
+            }
+          />
+          <Input
+            label="Estimated Read Minutes"
+            type="number"
+            value={editForm.estimated_read_minutes}
+            onChange={(e) =>
+              setEditForm({ ...editForm, estimated_read_minutes: e.target.value })
+            }
+          />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-main">
+              Body Text
+            </label>
+            <textarea
+              className="w-full rounded-md border border-border bg-bg-main px-3 py-2 text-sm text-text-main focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              rows={8}
+              value={editForm.body_text}
+              onChange={(e) =>
+                setEditForm({ ...editForm, body_text: e.target.value })
+              }
+            />
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="secondary"
+              onClick={() => setEditId(null)}
+              disabled={editMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => editId !== null && editMutation.mutate(editId)}
+              disabled={editMutation.isPending}
+              loading={editMutation.isPending}
+            >
+              Save Changes
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }

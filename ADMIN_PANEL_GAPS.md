@@ -297,9 +297,7 @@ class PointsAdjustmentRequest(BaseModel):
 
 ### 6. **User Activity Timeline**
 
-**Priority**: P1 - High  
-**Effort**: 5 hours  
-**Impact**: High
+**Status**: ✅ DONE (verified 2026-07-17) — new "Activity" tab in UserDetailModal backed by `GET /admin/users/{id}/activity` (admin_users_management.py). Aggregates sessions, ad watches, balance adjustments (audit log), payouts, payments, fraud flags into a sorted feed.
 
 **Description**: Chronological view of all user actions (logins, ad watches, purchases, bans, etc.)
 
@@ -327,9 +325,7 @@ class PointsAdjustmentRequest(BaseModel):
 
 ### 7. **Bulk User Actions**
 
-**Priority**: P1 - High  
-**Effort**: 4 hours  
-**Impact**: Medium
+**Status**: ✅ DONE (verified 2026-07-17) — row + header checkboxes on UsersPage, bulk action bar (Ban/Unban/Clear) with confirmation modal; bulk ops call existing per-user ban/unban endpoints via Promise.all. Export CSV already present.
 
 **Description**: Select multiple users and perform actions on all at once.
 
@@ -351,9 +347,7 @@ class PointsAdjustmentRequest(BaseModel):
 
 ### 8. **Revenue Trend Charts**
 
-**Priority**: P1 - High  
-**Effort**: 3 hours  
-**Impact**: High
+**Status**: ✅ DONE (verified 2026-07-17) — added `GET /admin/revenue/daily` (admin_finance.py) and a Revenue Trend BarChart card on the Finance revenue tab, driven by the date-range picker.
 
 **Description**: Visual charts for revenue over time.
 
@@ -374,9 +368,7 @@ class PointsAdjustmentRequest(BaseModel):
 
 ### 9. **Failed Payouts Report**
 
-**Priority**: P1 - High  
-**Effort**: 2 hours  
-**Impact**: Medium
+**Status**: ✅ DONE (verified 2026-07-17) — payouts tab now has a Status filter (Pending/Success/Failed/Rejected) hitting the existing backend `status` filter, plus a "Retry" button on failed payouts calling `POST /admin/payouts/{id}/retry`.
 
 **Description**: Detailed view of failed payouts with failure reasons.
 
@@ -391,9 +383,7 @@ class PointsAdjustmentRequest(BaseModel):
 
 ### 10. **Content Edit Capability**
 
-**Priority**: P1 - High  
-**Effort**: 4 hours  
-**Impact**: Medium
+**Status**: ✅ DONE (verified 2026-07-17) — `GET /admin/content/{id}` + `PUT /admin/content/{id}` (admin_content.py, perm `content.edit`) edit title/author/category/body/cover/read-time with audit log. ContentPage has an Edit button + modal.
 
 **Description**: Edit content metadata and body text without re-importing.
 
