@@ -25,7 +25,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     # ── ad_ssv_logs ───────────────────────────────────────────────────
     op.execute("""
-        CREATE TABLE ad_ssv_logs (
+        CREATE TABLE IF NOT EXISTS ad_ssv_logs (
             id SERIAL PRIMARY KEY,
             user_id BIGINT,
             token VARCHAR(64),
@@ -39,14 +39,14 @@ def upgrade() -> None:
         )
     """)
     
-    op.execute("CREATE INDEX ix_ad_ssv_logs_user_id ON ad_ssv_logs (user_id)")
-    op.execute("CREATE INDEX ix_ad_ssv_logs_token ON ad_ssv_logs (token)")
-    op.execute("CREATE INDEX ix_ad_ssv_logs_status ON ad_ssv_logs (status)")
-    op.execute("CREATE INDEX ix_ad_ssv_logs_created_at ON ad_ssv_logs (created_at)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ad_ssv_logs_user_id ON ad_ssv_logs (user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ad_ssv_logs_token ON ad_ssv_logs (token)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ad_ssv_logs_status ON ad_ssv_logs (status)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ad_ssv_logs_created_at ON ad_ssv_logs (created_at)")
     
     # ── ad_fill_rate_events ───────────────────────────────────────────
     op.execute("""
-        CREATE TABLE ad_fill_rate_events (
+        CREATE TABLE IF NOT EXISTS ad_fill_rate_events (
             id SERIAL PRIMARY KEY,
             user_id BIGINT NOT NULL,
             session_id BIGINT,
@@ -59,11 +59,11 @@ def upgrade() -> None:
         )
     """)
     
-    op.execute("CREATE INDEX ix_ad_fill_rate_events_user_id ON ad_fill_rate_events (user_id)")
-    op.execute("CREATE INDEX ix_ad_fill_rate_events_ad_request_id ON ad_fill_rate_events (ad_request_id)")
-    op.execute("CREATE INDEX ix_ad_fill_rate_events_ad_unit ON ad_fill_rate_events (ad_unit)")
-    op.execute("CREATE INDEX ix_ad_fill_rate_events_stage ON ad_fill_rate_events (stage)")
-    op.execute("CREATE INDEX ix_ad_fill_rate_events_created_at ON ad_fill_rate_events (created_at)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ad_fill_rate_events_user_id ON ad_fill_rate_events (user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ad_fill_rate_events_ad_request_id ON ad_fill_rate_events (ad_request_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ad_fill_rate_events_ad_unit ON ad_fill_rate_events (ad_unit)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ad_fill_rate_events_stage ON ad_fill_rate_events (stage)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ad_fill_rate_events_created_at ON ad_fill_rate_events (created_at)")
     
     # ── Add index on ad_events.created_at ─────────────────────────────
     op.execute("CREATE INDEX IF NOT EXISTS ix_ad_events_created_at ON ad_events (created_at)")

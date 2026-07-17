@@ -20,10 +20,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add session_id column
-    op.execute("ALTER TABLE ad_requests ADD COLUMN session_id BIGINT")
+    # Add session_id column (idempotent: skip if it already exists)
+    op.execute(
+        "ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS session_id BIGINT"
+    )
     # Add index for fast lookup during SSV callbacks
-    op.execute("CREATE INDEX ix_ad_requests_session_id ON ad_requests (session_id)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_ad_requests_session_id "
+        "ON ad_requests (session_id)"
+    )
 
 
 def downgrade() -> None:
