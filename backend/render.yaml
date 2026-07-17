@@ -3,13 +3,9 @@ services:
     name: pagepay-backend
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: export CARGO_HOME=/tmp/cargo XDG_CACHE_HOME=/tmp/cargo-cache && pip install -r requirements.txt
     startCommand: gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
     envVars:
-      - key: CARGO_HOME
-        value: /tmp/cargo
-      - key: XDG_CACHE_HOME
-        value: /tmp/cargo-cache
       - key: DATABASE_URL
         fromDatabase: pagepay_db
       - key: SECRET_KEY
