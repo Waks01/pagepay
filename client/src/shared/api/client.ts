@@ -5,7 +5,7 @@ import { getToken, saveToken, getRefreshToken, saveRefreshToken, clearToken } fr
 const API_URL =
   Constants.expoConfig?.extra?.apiUrl ||
   process.env.EXPO_PUBLIC_API_URL ||
-  'https://pagepay-2e6i.onrender.com';
+  'https://pagepay-fff6.onrender.com';
 export { API_URL };
 
 /** Global callback the layout registers so apiFetch can redirect

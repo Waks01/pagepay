@@ -95,7 +95,7 @@
    - Check iOS App Store listing status
 
 5. **SSV Webhook Configuration**
-   - Verify webhook URL registered in AdMob: `https://pagepay-2e6i.onrender.com/api/v1/ads/google/callback`
+   - Verify webhook URL registered in AdMob: `https://pagepay-fff6.onrender.com/api/v1/ads/google/callback`
    - Test webhook endpoint accessibility
    - Monitor SSV callback logs
 

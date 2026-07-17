@@ -11,7 +11,7 @@ module.exports = ({ config }) => {
       extra: {
         ...baseConfig.extra,
         // Dynamic environment-specific values
-        apiUrl: process.env.EXPO_PUBLIC_API_URL || "https://pagepay-2e6i.onrender.com",
+        apiUrl: process.env.EXPO_PUBLIC_API_URL || "https://pagepay-fff6.onrender.com",
         adsEnv: process.env.EXPO_PUBLIC_ADS_ENV || "dev"
       }
     }

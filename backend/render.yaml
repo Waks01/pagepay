@@ -11,7 +11,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        value: http://localhost:3000,https://pagepay-2e6i.onrender.com
+        value: http://localhost:3000,https://pagepay-fff6.onrender.com
       - key: ADMIN_TOKEN
         value: dev-admin-token
       - key: PAYSTACK_SECRET_KEY
@@ -21,7 +21,7 @@ services:
       - key: PAYSTACK_WEBHOOK_SECRET
         sync: false
       - key: PUBLIC_BASE_URL
-        value: https://pagepay-2e6i.onrender.com
+        value: https://pagepay-fff6.onrender.com
       - key: ADMOB_APP_ID_ANDROID
         value: ca-app-pub-3898064484524772~6521009021
       - key: ADMOB_APP_ID_IOS

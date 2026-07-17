@@ -8,7 +8,7 @@ import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosRespon
 //
 // Render free tier cold-starts can take 30–60s; the timeout below
 // is generous so the first request after idle doesn't get cut off.
-const FALLBACK_API_URL = 'https://pagepay-2e6i.onrender.com/api/v1';
+const FALLBACK_API_URL = 'https://pagepay-fff6.onrender.com/api/v1';
 export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || FALLBACK_API_URL;
 
 export const adminApi: AxiosInstance = axios.create({

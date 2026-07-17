@@ -22,7 +22,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://pagepay:pagepass@db:5432/pagepay
       SECRET_KEY: ${SECRET_KEY}
-      CORS_ORIGINS: http://localhost:8081,https://pagepay-2e6i.onrender.com
+      CORS_ORIGINS: http://localhost:8081,https://pagepay-fff6.onrender.com
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       ENVIRONMENT: production
     depends_on:
