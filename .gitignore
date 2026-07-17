@@ -1,0 +1,53 @@
+# Dependencies
+backend/.venv/
+frontend/node_modules/
+
+# Build outputs
+frontend/.expo/
+frontend/dist/
+
+# Environment
+backend/.env
+frontend/.env
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+backend/mysql_data/
+
+# Secrets & Credentials
+credentials.json
+**/credentials.json
+!package*.json
+!tsconfig*.json
+!*config*.json
+!app.json
+!.vscode/*.json
+!client/src/lib/locales/*.json
+
+# Submission / temp files
+pagepay-submit-*.json
+*-submit-*
+
+# Firebase config files (contain API keys)
+# google-services.json is committed to git so EAS Build can access it
+GoogleService-Info.plist
+firebase-service-account.json
+firebase-service-account.js
+
+# Kilo agent worktrees
+.kilo/worktrees/
+
+# Local debug / temp files
+*.log
+push_trace.log
+git_token_helper.sh

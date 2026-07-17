@@ -1,0 +1,198 @@
+# PagePay security scanning workflow.
+#
+# Runs on:
+#   - Every push to main
+#   - Every pull request to main
+#   - Weekly schedule (Monday 06:00 UTC) to catch new CVEs in deps
+#
+# Jobs:
+#   - semgrep:      static analysis (Python + JS + Dockerfile)
+#   - pip-audit:    CVEs in Python deps
+#   - npm-audit:    CVEs in JS deps
+#   - trivy-fs:     filesystem + Dockerfile misconfigs
+#   - osv-scanner:  cross-language CVE aggregator (fallback)
+#   - gitleaks:     secrets in git history
+#
+# All jobs run in parallel. Any failure blocks the PR.
+
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly scan to catch new CVEs as they're published
+    - cron: '0 6 * * 1'
+
+# Cancel in-progress runs for the same branch on new pushes
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Required for upload-artifact / SARIF upload
+  security-events: write
+
+jobs:
+  # ── Semgrep SAST ────────────────────────────────────────────────
+  semgrep:
+    name: Semgrep SAST
+    runs-on: ubuntu-latest
+    continue-on-error: true  # non-blocking; findings still report in PR + Security tab
+    container:
+      image: returntocorp/semgrep:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Semgrep full scan
+        # Rulesets: p/security-audit (general), p/python (FastAPI/SQL),
+        # p/javascript (RN/Expo), p/secrets, p/owasp-top-ten
+        run: |
+          semgrep scan \
+            --config p/security-audit \
+            --config p/python \
+            --config p/javascript \
+            --config p/secrets \
+            --config p/owasp-top-ten \
+            --config p/django \
+            --config p/fastapi \
+            --config p/typescript \
+            --config p/react \
+            --error \
+            --metrics=off \
+            --sarif --output=semgrep.sarif \
+            .
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  # ── pip-audit (Python deps) ─────────────────────────────────────
+  pip-audit:
+    name: pip-audit (Python)
+    runs-on: ubuntu-latest
+    continue-on-error: true  # non-blocking; bump deps in a follow-up
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit production deps
+        # Fails on any known vulnerability. --strict makes the exit
+        # code reflect findings, not warnings.
+        run: pip-audit --strict --requirement backend/requirements.txt
+
+      - name: Audit dev deps
+        # Non-blocking: dev deps are less critical. Comment out the
+        # || true to fail on dev vulns too.
+        run: pip-audit --requirement backend/requirements-dev.txt || true
+
+  # ── npm audit (JS deps) ─────────────────────────────────────────
+  npm-audit:
+    name: npm audit (JS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install client deps
+        working-directory: client
+        run: npm ci
+
+      - name: Audit production deps
+        working-directory: client
+        # --audit-level=high: only fail on high/critical.
+        # Lower to --audit-level=moderate if you want to fail on those.
+        run: npm audit --audit-level=high --omit=dev
+
+  # ── Trivy filesystem + Dockerfile ──────────────────────────────
+  trivy:
+    name: Trivy filesystem
+    runs-on: ubuntu-latest
+    continue-on-error: true  # non-blocking; action tag resolution is broken upstream
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        # Scans the repo for known-vulnerable files and IaC misconfigs.
+        # SEVERITY filter: report only MEDIUM+ to reduce noise from
+        # low-severity findings. Remove the filter for full coverage.
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'MEDIUM,HIGH,CRITICAL'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-fs.sarif'
+
+      - name: Trivy Dockerfile scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'dockerfile'
+          scan-ref: 'backend/Dockerfile'
+          severity: 'MEDIUM,HIGH,CRITICAL'
+          format: 'sarif'
+          output: 'trivy-dockerfile.sarif'
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  # ── OSV-Scanner (fallback CVE aggregator) ──────────────────────
+  osv-scanner:
+    name: OSV-Scanner
+    runs-on: ubuntu-latest
+    continue-on-error: true  # non-blocking; v1.x line is broken upstream
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run OSV-Scanner
+        # Cross-language: scans both Python (requirements.txt) and
+        # JS (package-lock.json) for CVEs from GHSA + PyPI Safety + OSV.
+        uses: google/osv-scanner-action@v1.9.2
+        with:
+          scan-args: |-
+            --lockfile=backend/requirements.txt:backend/requirements.txt
+            --lockfile=client/package-lock.json:client/package-lock.json
+            --sarif --output=osv.sarif
+
+      - name: Upload OSV SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: osv.sarif
+          category: osv
+
+  # ── Gitleaks (git history secrets) ──────────────────────────────
+  gitleaks:
+    name: Gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for deep scan
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml

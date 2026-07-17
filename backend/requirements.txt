@@ -1,0 +1,40 @@
+# Dependencies for backend container
+# Installed in Dockerfile builder stage
+fastapi==0.111.0
+uvicorn[standard]==0.30.0
+gunicorn==22.0.0
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+psycopg2-binary==2.9.9
+pydantic==2.9.2
+pydantic-settings==2.6.1
+# CVE fixes (2026-07-08): bumped past pip-audit findings
+python-jose[cryptography]==3.4.0
+bcrypt>=4.0
+python-multipart==0.0.31
+aiofiles==24.1.0
+alembic==1.13.3
+httpx==0.27.2
+tenacity==8.5.0
+slowapi==0.1.9
+cloudinary==1.41.0
+cryptography==48.0.1
+# Replaced PyPDF2 (unmaintained) with the maintained pypdf fork.
+# pypdf 3.9.0+ fixes CVE-2024-PYSEC-1835. API is source-compatible
+# with PyPDF2 for everything we use (PdfReader, page.extract_text()).
+pypdf==3.9.0
+python-docx==1.1.2
+firebase-admin==6.5.0
+python-socketio==5.16.2
+resend==2.4.0
+# starlette 0.37.2 has multiple CVEs (PYSEC-2026-161, -1941, -1943,
+# CVE-2026-48817, CVE-2026-48818, etc.). The fixed version is
+# starlette 1.1.0+, but that requires fastapi >= 0.113 (we're on
+# 0.111, which pins starlette<0.38). Bumping fastapi is a separate
+# project — it changes how the OpenAPI schema is generated and
+# could break client-side type generation. For now we accept the
+# pinned starlette 0.37.2 and revisit in the fastapi upgrade.
+# When you bump fastapi, also bump starlette in the same PR.
+
+# v3 §3.3 Listen mode — TTS audio generation
+edge-tts==6.1.18

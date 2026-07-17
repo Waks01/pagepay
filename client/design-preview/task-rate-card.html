@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PagePay — YouTube Task Rate Card</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f8f9fc;
+    color: #1a1a2e;
+    padding: 20px;
+  }
+  .container { max-width: 420px; margin: 0 auto; }
+  .phone-frame {
+    background: #fff;
+    border-radius: 24px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .screen-header {
+    background: #FF0000;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .screen-header h2 { color: #fff; font-size: 18px; font-weight: 600; }
+  .back-btn { color: #fff; font-size: 22px; cursor: pointer; }
+  .screen-body { padding: 20px; }
+
+  .notice-box {
+    background: #fff3e0;
+    border: 1px solid #ffe0b2;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #e65100;
+    line-height: 1.5;
+  }
+
+  .rate-card {
+    background: #fff;
+    border: 1px solid #e8e8f0;
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .rate-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .platform-badge {
+    background: #ffebee;
+    color: #FF0000;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+    text-transform: uppercase;
+  }
+  .base-rate {
+    font-size: 22px;
+    font-weight: 700;
+    color: #00B894;
+  }
+  .rate-card-body { display: flex; flex-direction: column; gap: 8px; }
+  .rate-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f5;
+  }
+  .rate-row:last-child { border-bottom: none; }
+  .rate-label { font-size: 14px; color: #666; }
+  .rate-value { font-size: 14px; font-weight: 600; }
+  .rate-note { font-size: 11px; color: #999; margin-top: 2px; }
+
+  .skipped-box {
+    background: #f5f5f5;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .skipped-title { font-size: 14px; font-weight: 600; color: #999; margin-bottom: 4px; }
+  .skipped-reason { font-size: 12px; color: #bbb; }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 20px 0 10px;
+  }
+
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    font-size: 12px;
+  }
+  .comparison-table th {
+    background: #f5f5f5;
+    padding: 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #666;
+  }
+  .comparison-table td {
+    padding: 8px;
+    border-bottom: 1px solid #f0f0f5;
+  }
+  .comparison-table .highlight { color: #00B894; font-weight: 600; }
+  .comparison-table .strike { text-decoration: line-through; color: #ccc; }
+
+  .cta-box {
+    background: linear-gradient(135deg, #FF0000 0%, #cc0000 100%);
+    border-radius: 16px;
+    padding: 20px;
+    text-align: center;
+    color: #fff;
+  }
+  .cta-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .cta-subtitle { font-size: 13px; opacity: 0.9; margin-bottom: 14px; }
+  .cta-btn {
+    background: #fff;
+    color: #FF0000;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 16px 0;
+    color: #aaa;
+    font-size: 12px;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e8e8f0;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- SCREEN 1: Rate Card -->
+  <div class="phone-frame">
+    <div class="screen-header">
+      <span class="back-btn">←</span>
+      <h2>YouTube Task Rates</h2>
+    </div>
+    <div class="screen-body">
+      <div class="notice-box">
+        ⚠️ <strong>Real humans only.</strong> These rates are for real Nigerian workers completing real YouTube tasks. We do NOT use bots or fake engagement. Likes are included because they boost account credibility and ranking.
+      </div>
+
+      <div class="rate-card">
+        <div class="rate-card-header">
+          <span class="platform-badge">▶️ YouTube</span>
+          <span class="base-rate">From ₦150</span>
+        </div>
+        <div class="rate-card-body">
+          <div class="rate-row">
+            <div>
+              <div class="rate-label">Subscribe to channel</div>
+              <div class="rate-note">Real human subscription</div>
+            </div>
+            <span class="rate-value">₦150</span>
+          </div>
+          <div class="rate-row">
+            <div>
+              <div class="rate-label">Like video</div>
+              <div class="rate-note">Genuine like — boosts channel credibility & ranking</div>
+            </div>
+            <span class="rate-value">₦50</span>
+          </div>
+          <div class="rate-row">
+            <div>
+              <div class="rate-label">Watch 2-minute video</div>
+              <div class="rate-note">Must watch at least 2 minutes</div>
+            </div>
+            <span class="rate-value">₦100</span>
+          </div>
+          <div class="rate-row">
+            <div>
+              <div class="rate-label">Post comment</div>
+              <div class="rate-note">Quality comment, minimum 50 characters</div>
+            </div>
+            <span class="rate-value">₦300</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="skipped-box">
+        <div class="skipped-title">❌ Views (per view)</div>
+        <div class="skipped-reason">Not offered — bot prices are too low for real-human wages</div>
+      </div>
+
+      <div class="section-title">Worker Earnings Breakdown</div>
+      <table class="comparison-table">
+        <tr>
+          <th>Task</th>
+          <th>Sponsor pays</th>
+          <th>Worker gets (70%)</th>
+          <th>Platform (30%)</th>
+        </tr>
+        <tr>
+          <td>Subscribe</td>
+          <td>₦150</td>
+          <td class="highlight">₦105</td>
+          <td>₦45</td>
+        </tr>
+        <tr>
+          <td>Like</td>
+          <td>₦50</td>
+          <td class="highlight">₦35</td>
+          <td>₦15</td>
+        </tr>
+        <tr>
+          <td>Watch 2-min</td>
+          <td>₦100</td>
+          <td class="highlight">₦70</td>
+          <td>₦30</td>
+        </tr>
+        <tr>
+          <td>Comment</td>
+          <td>₦300</td>
+          <td class="highlight">₦210</td>
+          <td>₦90</td>
+        </tr>
+      </table>
+
+      <div class="divider">vs Bot SMM Panel Prices</div>
+      <table class="comparison-table">
+        <tr>
+          <th>Task</th>
+          <th>Bot SMM price</th>
+          <th>PagePay price</th>
+        </tr>
+        <tr>
+          <td>Subscribe</td>
+          <td class="strike">₦28–₦45</td>
+          <td class="highlight">₦150 <span style="font-size:10px;color:#999;">(3-5x)</span></td>
+        </tr>
+        <tr>
+          <td>Like</td>
+          <td class="strike">₦1.6–₦9.7</td>
+          <td class="highlight">₦50 <span style="font-size:10px;color:#999;">(5-30x)</span></td>
+        </tr>
+        <tr>
+          <td>Watch 2-min</td>
+          <td class="strike">₦0.002–₦0.004</td>
+          <td class="highlight">₦100 <span style="font-size:10px;color:#999;">(25,000x)</span></td>
+        </tr>
+        <tr>
+          <td>Comment</td>
+          <td class="strike">₦6–₦40</td>
+          <td class="highlight">₦300 <span style="font-size:10px;color:#999;">(7-50x)</span></td>
+        </tr>
+      </table>
+
+      <div class="cta-box">
+        <div class="cta-title">Real Humans. Real Results.</div>
+        <div class="cta-subtitle">No bots. No fake engagement. Just real Nigerians helping creators grow.</div>
+        <button class="cta-btn">Start YouTube Task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 2: Sponsor Create Task -->
+  <div class="phone-frame">
+    <div class="screen-header">
+      <span class="back-btn">←</span>
+      <h2>Create YouTube Task</h2>
+    </div>
+    <div class="screen-body">
+      <div class="section-title">Step 1: Choose Task Type</div>
+      <div class="task-type-grid">
+        <div class="task-type-btn selected">
+          <div class="icon">⭐</div>
+          <div class="label">Subscribe</div>
+          <div class="price">₦150/task</div>
+        </div>
+        <div class="task-type-btn">
+          <div class="icon">👍</div>
+          <div class="label">Like</div>
+          <div class="price">₦50/task</div>
+        </div>
+        <div class="task-type-btn">
+          <div class="icon">⏱️</div>
+          <div class="label">Watch 2-min</div>
+          <div class="price">₦100/task</div>
+        </div>
+        <div class="task-type-btn">
+          <div class="icon">💬</div>
+          <div class="label">Comment</div>
+          <div class="price">₦300/task</div>
+        </div>
+      </div>
+
+      <div class="section-title">Step 2: Video / Channel Details</div>
+      <div style="background:#f5f5f5;border-radius:12px;padding:14px;margin-bottom:16px;">
+        <div style="font-size:13px;color:#666;margin-bottom:4px;">YouTube URL</div>
+        <div style="font-size:14px;font-weight:600;color:#333;">https://youtube.com/watch?v=...</div>
+      </div>
+
+      <div class="section-title">Step 3: Number of Tasks</div>
+      <div style="background:#f5f5f5;border-radius:12px;padding:14px;margin-bottom:16px;text-align:center;">
+        <div style="font-size:28px;font-weight:700;color:#6C5CE7;">500</div>
+        <div style="font-size:12px;color:#888;">Minimum 500 tasks · No maximum</div>
+      </div>
+
+      <div class="section-title">Cost Summary</div>
+      <div class="cost-summary">
+        <div class="cost-row">
+          <span class="label">Base reward × 500 tasks</span>
+          <span class="value">₦75,000</span>
+        </div>
+        <div class="cost-row">
+          <span class="label">Platform fee (30%)</span>
+          <span class="value">₦22,500</span>
+        </div>
+        <div class="cost-row total">
+          <span class="label">Total Escrow</span>
+          <span class="value">₦97,500</span>
+        </div>
+      </div>
+
+      <button class="submit-btn">Create Task — ₦97,500 escrow</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: Worker Task Detail -->
+  <div class="phone-frame">
+    <div class="screen-header">
+      <span class="back-btn">←</span>
+      <h2>Task Details</h2>
+    </div>
+    <div class="screen-body">
+      <div class="worker-reward-box">
+        <div class="worker-reward-label">You'll Earn</div>
+        <div class="worker-reward-amount">₦105</div>
+        <div class="worker-reward-note">After 30% platform fee · ₦150 gross</div>
+      </div>
+
+      <h3 class="screen-title">Subscribe to YouTube Channel</h3>
+      <p style="font-size:14px;color:#555;margin-bottom:12px;">
+        Subscribe to the PagePay YouTube channel and stay subscribed for 7 days.
+      </p>
+
+      <div class="info-box">
+        <div class="info-box-title">📋 Instructions</div>
+        <div class="info-box-text">
+          1. Open YouTube and search for the channel<br>
+          2. Click "Subscribe"<br>
+          3. Take a screenshot showing you're subscribed<br>
+          4. Upload proof here
+        </div>
+      </div>
+
+      <div class="info-box">
+        <div class="info-box-title">⚠️ Requirements</div>
+        <div class="info-box-text">
+          • Must have a valid YouTube account<br>
+          • Must stay subscribed for 7 days<br>
+          • No unsubscribing before task completes
+        </div>
+      </div>
+
+      <div class="divider">Task Details</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;font-size:14px;">
+          <span style="color:#666;">Reward per task</span>
+          <span style="font-weight:600;">₦150</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;">
+          <span style="color:#666;">Your earnings (70%)</span>
+          <span style="font-weight:600;color:#00B894;">₦105</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;">
+          <span style="color:#666;">Platform fee (30%)</span>
+          <span style="font-weight:600;">₦45</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;">
+          <span style="color:#666;">Time limit</span>
+          <span style="font-weight:600;">10 minutes</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;">
+          <span style="color:#666;">Slots remaining</span>
+          <span style="font-weight:600;color:#00B894;">487 / 500</span>
+        </div>
+      </div>
+
+      <button class="submit-btn">Start Task — Earn ₦105</button>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

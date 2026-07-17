@@ -1,0 +1,58 @@
+# PASTE YOUR RENDER CA CERTIFICATE HERE
+# You can get it from:
+# 1. Go to https://dashboard.render.com
+# 2. Click PostgreSQL database (pagepay)
+# 3. Look for "SSL Certificate" or "Download Certificate" button
+# 4. Download the .pem file
+# 5. Paste its entire content below (starting with -----BEGIN CERTIFICATE-----)
+# 6. Save and commit
+
+# Example format:
+# -----BEGIN CERTIFICATE-----
+# MIIDXTCCAkWgAwIBAgIJAJ... (many lines)...
+# -----END CERTIFICATE-----
+
+Render **does not provide a downloadable `.crt` or `.pem` file** for its PostgreSQL instances.
+
+Instead, Render databases use publicly trusted certificates issued by a standard Certificate Authority (like **Let's Encrypt** or **DigiCert**). Because these CAs are globally recognized, the certificate is already built directly into the operating system and language runtimes (Node.js, Python, Java, etc.) that you are using.
+
+Depending on where you are connecting from, here is how you configure the connection:
+
+---
+
+### 1. Connecting from an app hosted *inside* Render
+
+If your app is also hosted on Render, you do not need a CA file or any complex SSL parameters.
+
+* Simply copy the **Internal Database URL** from your Render Database Dashboard.
+* Use it directly as your environment variable (e.g., `DATABASE_URL`).
+* Render handles the internal secure routing automatically.
+
+### 2. Connecting from *outside* Render (e.g., your local machine or another host)
+
+If you are writing a script (like a backend server in Node.js/TypeScript), you just need to tell your database client driver to expect an SSL connection. You don't pass a specific file; you just turn the option on.
+
+#### Example for Node.js (`pg` / `Sequelize` / `TypeORM`):
+
+```javascript
+const { Client } = require('pg');
+
+const client = new Client({
+  connectionString: process.env.DATABASE_URL, // Your External Database URL from Render
+  ssl: {
+    rejectUnauthorized: true // Tells the driver to use the machine's native root CA bundle
+  }
+});
+
+```
+
+#### Example using a raw Connection String:
+
+If your connection wizard or framework allows query parameters, append `sslmode=no-verify` or `sslmode=require` to your **External Connection String**:
+
+```text
+postgresql://user:password@hostname:port/dbname?sslmode=require
+
+```
+
+> **Note:** If a specific software framework *strictly forces* you to upload a physical `.pem` or `.crt` file to function, you can safely download the universal **Let's Encrypt ISRG Root X1** pem file directly from the official [Let's Encrypt Chain of Trust page](https://letsencrypt.org/certificates/), as that is what Render utilizes to sign its database endpoints.

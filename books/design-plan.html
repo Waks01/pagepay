@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PagePay — Educational Content & Social Features Design Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0E1116;
+    --inkMuted: #6B7280;
+    --paper: #FBFAF6;
+    --card: #FFFFFF;
+    --border: #E5E2DA;
+    --mint: #0E7C66;
+    --mintSoft: #E6F1ED;
+    --mintText: #FFFFFF;
+    --signal: #C2410C;
+    --signalSoft: #FDEFE7;
+    --error: #DC2626;
+    --dark-ink: #FBFAF6;
+    --dark-paper: #0E1116;
+    --dark-card: #171A21;
+    --dark-border: #2A2F38;
+    --dark-mint: #34C39B;
+    --dark-mintSoft: #1F3D34;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.6;
+    padding: 0 0 80px 0;
+  }
+
+  .display { font-family: 'Space Grotesk', 'Inter', sans-serif; }
+
+  /* ─── Hero ─── */
+  .hero {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 80px 24px 64px;
+    text-align: center;
+  }
+  .hero .eyebrow {
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dark-mint);
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 42px;
+    font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 16px;
+  }
+  .hero p {
+    font-size: 17px;
+    color: #9BA1A6;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .hero .pagemark {
+    width: 32px; height: 2px;
+    background: var(--dark-mint);
+    margin: 32px auto 0;
+  }
+
+  /* ─── Section ─── */
+  .section {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 64px 24px;
+  }
+  .section-label {
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--mint);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .section h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .section > p {
+    color: var(--inkMuted);
+    font-size: 15px;
+    max-width: 700px;
+    margin-bottom: 32px;
+  }
+
+  /* ─── Step Number ─── */
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .step-num {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: var(--mint);
+    color: var(--mintText);
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-header h3 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .step-header .step-sub {
+    font-size: 13px;
+    color: var(--inkMuted);
+  }
+
+  /* ─── Phone Mockup ─── */
+  .phone {
+    width: 340px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(14,17,22,0.08);
+    flex-shrink: 0;
+  }
+  .phone-screen {
+    padding: 0;
+    min-height: 600px;
+  }
+  .phone-statusbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .phone-statusbar .icons { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+  .phone-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px 16px;
+  }
+  .phone-header .greeting { font-size: 13px; color: var(--inkMuted); }
+  .phone-header .name { font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 700; }
+  .balance-chip {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 12px;
+  }
+  .balance-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mint); }
+  .balance-chip .pts { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px; }
+  .balance-chip .label { font-size: 9px; color: var(--inkMuted); text-transform: uppercase; letter-spacing: 1px; }
+
+  /* ─── Phone Content Cards ─── */
+  .content-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    margin: 0 16px 12px;
+  }
+  .content-card .cover {
+    width: 100%; height: 80px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+  }
+  .content-card .title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 2px;
+  }
+  .content-card .meta {
+    font-size: 12px;
+    color: var(--inkMuted);
+    margin-bottom: 8px;
+  }
+  .content-card .badges {
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .badge {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .badge-mint { background: var(--mintSoft); color: var(--mint); }
+  .badge-signal { background: var(--signalSoft); color: var(--signal); }
+  .badge-level { background: #F3F4F6; color: #374151; }
+  .badge-pts { background: var(--mintSoft); color: var(--mint); display: flex; align-items: center; gap: 4px; }
+
+  /* ─── Social Bar ─── */
+  .social-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 10px 0 0;
+    margin-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .social-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--inkMuted);
+    font-weight: 500;
+    flex: 1;
+    justify-content: center;
+    padding: 4px 0;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .social-btn:hover { color: var(--mint); }
+  .social-btn.liked { color: var(--signal); }
+  .social-btn .icon { font-size: 16px; }
+  .social-divider { width: 1px; height: 20px; background: var(--border); }
+
+  /* ─── Category Chips ─── */
+  .chips {
+    display: flex;
+    gap: 8px;
+    padding: 0 16px 16px;
+    overflow-x: auto;
+  }
+  .chip {
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--inkMuted);
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .chip.active {
+    background: var(--mint);
+    color: var(--mintText);
+    border-color: var(--mint);
+  }
+
+  /* ─── Level Filter ─── */
+  .level-section {
+    padding: 16px;
+  }
+  .level-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .level-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 8px;
+    text-align: center;
+    cursor: pointer;
+  }
+  .level-card.active {
+    background: var(--mintSoft);
+    border-color: var(--mint);
+  }
+  .level-card .emoji { font-size: 20px; margin-bottom: 4px; }
+  .level-card .label { font-size: 10px; font-weight: 600; color: var(--ink); }
+  .level-card.active .label { color: var(--mint); }
+
+  /* ─── Reader Screen ─── */
+  .reader-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .reader-back { font-size: 20px; color: var(--ink); }
+  .reader-title-row { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 8px; }
+  .reader-title { font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; }
+  .reader-meta { font-size: 11px; color: var(--inkMuted); }
+  .reader-timer {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--mintSoft);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--mint);
+  }
+  .reader-body {
+    padding: 20px 16px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--ink);
+  }
+  .reader-body p { margin-bottom: 12px; }
+  .reader-claim-btn {
+    margin: 16px;
+    background: var(--mint);
+    color: var(--mintText);
+    border-radius: 999px;
+    padding: 14px;
+    text-align: center;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .reader-social {
+    margin: 0 16px 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+  }
+  .reader-social .social-bar { border-top: none; padding-top: 0; margin-top: 0; }
+
+  /* ─── Comments Section ─── */
+  .comments-section {
+    margin: 0 16px 16px;
+  }
+  .comments-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .comments-header .title { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px; }
+  .comments-header .count { font-size: 12px; color: var(--inkMuted); }
+  .comment-item {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .comment-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--mintSoft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--mint);
+    flex-shrink: 0;
+  }
+  .comment-body {
+    flex: 1;
+  }
+  .comment-name { font-size: 12px; font-weight: 600; }
+  .comment-text { font-size: 13px; color: var(--ink); margin: 2px 0 4px; }
+  .comment-meta { font-size: 11px; color: var(--inkMuted); display: flex; gap: 12px; }
+  .comment-meta span { cursor: pointer; }
+  .comment-meta .like-count { color: var(--signal); }
+  .comment-input {
+    display: flex;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 14px;
+    margin-top: 8px;
+  }
+  .comment-input input {
+    border: none;
+    outline: none;
+    flex: 1;
+    font-size: 13px;
+    background: transparent;
+    font-family: 'Inter', sans-serif;
+  }
+  .comment-input button {
+    background: var(--mint);
+    color: var(--mintText);
+    border: none;
+    border-radius: 50%;
+    width: 28px; height: 28px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  /* ─── Share Sheet ─── */
+  .share-sheet {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px 20px 0 0;
+    padding: 20px 16px 24px;
+    margin: 0 16px;
+  }
+  .share-sheet .handle {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: var(--border);
+    margin: 0 auto 16px;
+  }
+  .share-sheet .title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .share-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .share-option {
+    text-align: center;
+    cursor: pointer;
+  }
+  .share-option .circle {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    margin: 0 auto 6px;
+  }
+  .share-option .label { font-size: 10px; color: var(--inkMuted); font-weight: 500; }
+  .share-link-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--inkMuted);
+  }
+  .share-link-box .copy-btn {
+    background: var(--mintSoft);
+    color: var(--mint);
+    border: none;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ─── Flow Diagram ─── */
+  .flow-diagram {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    margin-bottom: 24px;
+  }
+  .flow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .flow-box {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 120px;
+  }
+  .flow-box.source { background: var(--signalSoft); border-color: var(--signal); color: var(--signal); }
+  .flow-box.process { background: var(--mintSoft); border-color: var(--mint); color: var(--mint); }
+  .flow-box.storage { background: #F3F4F6; border-color: #D1D5DB; color: #374151; }
+  .flow-box.client { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .flow-arrow { font-size: 20px; color: var(--inkMuted); }
+  .flow-label { font-size: 11px; color: var(--inkMuted); margin-top: 4px; }
+
+  /* ─── Mockup Row ─── */
+  .mockup-row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    margin-bottom: 24px;
+  }
+  .mockup-caption {
+    text-align: center;
+    font-size: 13px;
+    color: var(--inkMuted);
+    margin-top: 12px;
+    max-width: 340px;
+  }
+  .mockup-wrapper { display: flex; flex-direction: column; align-items: center; }
+
+  /* ─── Info Box ─── */
+  .info-box {
+    background: var(--mintSoft);
+    border: 1px solid var(--mint);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  .info-box .label {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    color: var(--mint);
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  .info-box ul { list-style: none; padding: 0; }
+  .info-box li { padding: 4px 0; color: var(--ink); }
+  .info-box li::before { content: "→ "; color: var(--mint); font-weight: 700; }
+
+  .warn-box {
+    background: var(--signalSoft);
+    border: 1px solid var(--signal);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  .warn-box .label {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    color: var(--signal);
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  /* ─── Schema Visual ─── */
+  .schema-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+  .schema-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .schema-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .schema-table .new { background: var(--mintSoft); font-weight: 600; }
+  .schema-table .field-name { font-family: 'SF Mono', monospace; font-size: 12px; color: var(--mint); }
+  .schema-table .new .field-name { color: var(--mint); }
+
+  /* ─── Tab Bar ─── */
+  .tabbar {
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 0 20px;
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+  }
+  .tab-item { text-align: center; font-size: 10px; color: var(--inkMuted); }
+  .tab-item.active { color: var(--mint); }
+  .tab-item .icon { font-size: 22px; margin-bottom: 2px; }
+  .tab-item .label { font-family: 'Space Grotesk', sans-serif; font-weight: 500; }
+
+  /* ─── Divider ─── */
+  .divider {
+    max-width: 1100px;
+    margin: 0 auto;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ─── Summary ─── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .summary-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+  }
+  .summary-card .num {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 32px;
+    color: var(--mint);
+    margin-bottom: 4px;
+  }
+  .summary-card .title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 6px;
+  }
+  .summary-card .desc { font-size: 13px; color: var(--inkMuted); }
+
+  /* ─── Attribution Box ─── */
+  .attribution-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 0 16px 12px;
+  }
+  .attribution-card .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--inkMuted);
+    margin-bottom: 4px;
+  }
+  .attribution-card .text {
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .attribution-card .license {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+    margin-top: 6px;
+  }
+  .license-cc-by { background: #E0F2FE; color: #0C4A6E; }
+
+  /* ─── Ad Placeholder ─── */
+  .ad-placeholder {
+    margin: 0 16px 12px;
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    text-align: center;
+    background: var(--paper);
+  }
+  .ad-placeholder .label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--inkMuted);
+  }
+  .ad-placeholder .text { font-size: 12px; color: var(--inkMuted); margin-top: 4px; }
+
+  /* ─── Footer ─── */
+  .footer {
+    text-align: center;
+    padding: 48px 24px;
+    border-top: 1px solid var(--border);
+  }
+  .footer .pagemark { width: 32px; height: 2px; background: var(--mint); margin: 0 auto 16px; }
+  .footer p { font-size: 13px; color: var(--inkMuted); }
+
+  @media (max-width: 768px) {
+    .hero h1 { font-size: 28px; }
+    .phone { width: 100%; max-width: 340px; }
+    .flow-row { gap: 8px; }
+    .flow-box { min-width: 100px; font-size: 11px; padding: 10px 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═════════ HERO ═════════ -->
+<div class="hero">
+  <div class="eyebrow">Design Plan · Visual Mockup</div>
+  <h1 class="display">Educational Content Pipeline<br>& Social Features</h1>
+  <p>How PagePay will source open-source educational books (creche → university), slice them into 1-minute reads, and add like / comment / share social interactions — visualized step by step.</p>
+  <div class="pagemark"></div>
+</div>
+
+<!-- ═════════ STEP 1: THE PROBLEM ═════════ -->
+<div class="section">
+  <div class="section-label">Step 1 — The Problem Today</div>
+  <h2 class="display">Gutendex only gives you novels</h2>
+  <p>Right now your content pipeline pulls exclusively from Gutendex (Project Gutenberg). That means your catalog is 90% fiction, romance, and fantasy. Your app reads like a literature app — not the "Read & Earn + Educate" platform you envisioned. Here's what the current Home screen looks like:</p>
+
+  <div class="mockup-row">
+    <div class="mockup-wrapper">
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="phone-statusbar">
+            <span>9:41</span>
+            <span class="icons">●●● 5G 🔋</span>
+          </div>
+          <div class="phone-header">
+            <div>
+              <div class="greeting">Good morning</div>
+              <div class="name">Prince</div>
+            </div>
+            <div class="balance-chip">
+              <div class="dot"></div>
+              <div class="pts">1,240</div>
+              <div class="label">pts</div>
+            </div>
+          </div>
+          <div class="chips">
+            <div class="chip active">All</div>
+            <div class="chip">Fiction</div>
+            <div class="chip">Classics</div>
+            <div class="chip">News</div>
+          </div>
+
+          <div class="content-card">
+            <div class="cover" style="background: linear-gradient(135deg, #E6F1ED, #0E7C66);">📖</div>
+            <div class="title">Pride and Prejudice</div>
+            <div class="meta">Jane Austen · 12 slices · 12 min</div>
+            <div class="badges">
+              <span class="badge badge-mint">Fiction</span>
+              <span class="badge badge-pts">⚡ Earn ~6 pts</span>
+            </div>
+          </div>
+
+          <div class="content-card">
+            <div class="cover" style="background: linear-gradient(135deg, #FDEFE7, #C2410C);">💕</div>
+            <div class="title">Wuthering Heights</div>
+            <div class="meta">Emily Brontë · 18 slices · 18 min</div>
+            <div class="badges">
+              <span class="badge badge-mint">Romance</span>
+              <span class="badge badge-pts">⚡ Earn ~9 pts</span>
+            </div>
+          </div>
+
+          <div class="ad-placeholder">
+            <div class="label">📢 Ad</div>
+            <div class="text">Native ad — every 4th card</div>
+          </div>
+
+          <div class="tabbar">
+            <div class="tab-item active"><div class="icon">🏠</div><div class="label">Home</div></div>
+            <div class="tab-item"><div class="icon">📚</div><div class="label">Catalog</div></div>
+            <div class="tab-item"><div class="icon">🎓</div><div class="label">Study</div></div>
+            <div class="tab-item"><div class="icon">👛</div><div class="label">Wallet</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="mockup-caption"><strong>Current Home</strong> — Fiction-heavy feed. No educational categories, no level filters, no social interactions on cards.</div>
+    </div>
+  </div>
+
+  <div class="warn-box">
+    <div class="label">⚠ What's Missing</div>
+    <ul style="list-style:none; padding:0;">
+      <li>• No educational content (math, science, programming, primary school)</li>
+      <li>• No way to filter by education level (creche → university)</li>
+      <li>• No like / comment / share on content cards or reader</li>
+      <li>• No license tracking for third-party content compliance</li>
+      <li>• No attribution display for open-source books</li>
+    </ul>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═════════ STEP 2: THE SOLUTION — NEW SOURCES ═════════ -->
+<div class="section">
+  <div class="section-label">Step 2 — New Content Sources</div>
+  <h2 class="display">Where the educational books come from</h2>
+  <p>Instead of only Gutendex, the backend will pull from multiple OER (Open Educational Resources) APIs. Each source feeds into the same existing <code>ContentCatalog → slice_and_persist()</code> pipeline. No new slicing logic needed — just new ingestion modules.</p>
+
+  <div class="flow-diagram">
+    <div class="flow-row">
+      <div class="flow-box source">OpenStax API<br><span class="flow-label">University textbooks<br>CC BY license</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">Python Ingestion<br><span class="flow-label">httpx + parser<br>strips HTML</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">Slicing Engine<br><span class="flow-label">~3,000 char<br>sentence-snap</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box storage">ContentCatalog<br><span class="flow-label">PostgreSQL<br>parent + slices</span></div>
+    </div>
+    <div class="flow-row" style="margin-top:20px;">
+      <div class="flow-box source">CORE API<br><span class="flow-label">Research papers<br>Mixed licenses</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">PDF Extractor<br><span class="flow-label">pymupdf<br>layout-aware</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">Same Slicer<br><span class="flow-label">reuses existing<br>slicer.py</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box storage">Same Table<br><span class="flow-label">same schema<br>+ new fields</span></div>
+    </div>
+    <div class="flow-row" style="margin-top:20px;">
+      <div class="flow-box source">CK-12 API<br><span class="flow-label">K-12 STEM<br>CC BY-NC</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">Text Extractor<br><span class="flow-label">HTML → raw text<br>strip images</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">Same Slicer<br><span class="flow-label">3,000 char<br>1-min reads</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box storage">Same Table<br><span class="flow-label">category = "Math"<br>level = "Primary"</span></div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <div class="label">Key Insight — Reuse What Exists</div>
+    <ul>
+      <li>Your <code>services/content/slicing/slicer.py</code> already handles 3,000-char sentence-boundary slicing</li>
+      <li>Your <code>ContentCatalog</code> model already has <code>parent_work_id</code>, <code>read_order</code>, <code>total_slices</code></li>
+      <li>Your cron job already runs every 6 hours and imports + slices idempotently</li>
+      <li>We just add new ingestion modules (like <code>gutendex.py</code>) for each OER source</li>
+    </ul>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═════════ STEP 3: SCHEMA CHANGES ═════════ -->
+<div class="section">
+  <div class="step-header">
+    <div class="step-num">3</div>
+    <div>
+      <h3 class="display">Database Schema — New Fields on ContentCatalog</h3>
+      <div class="step-sub">What changes in the existing table</div>
+    </div>
+  </div>
+  <p>Three new fields are added to the existing <code>content_catalog</code> table. No new tables needed — just columns + a migration.</p>
+
+  <table class="schema-table">
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Type</th>
+        <th>Purpose</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="field-name">education_level</span></td>
+        <td>String(50)</td>
+        <td>creche, primary, secondary, tertiary, research</td>
+        <td class="new">NEW</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">subject</span></td>
+        <td>String(100)</td>
+        <td>mathematics, physics, english, programming, etc.</td>
+        <td class="new">NEW</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">license_type</span></td>
+        <td>String(50)</td>
+        <td>CC BY, CC BY-NC, public_domain, etc.</td>
+        <td class="new">NEW</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">attribution_text</span></td>
+        <td>Text</td>
+        <td>"Source: OpenStax, Rice University. CC BY 4.0."</td>
+        <td class="new">NEW</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">source_url</span></td>
+        <td>String (unique)</td>
+        <td>Idempotency key — already exists</td>
+        <td>EXISTING</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">category</span></td>
+        <td>String(100)</td>
+        <td>Free-text category — already exists</td>
+        <td>EXISTING</td>
+      </tr>
+      <tr>
+        <td><span class="field-name">parent_work_id</span></td>
+        <td>FK → content_catalog</td>
+        <td>Links slices to parent book — already exists</td>
+        <td>EXISTING</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="info-box">
+    <div class="label">Why These Fields Matter</div>
+    <ul>
+      <li><strong>education_level + subject</strong> → lets users filter "Show me Primary 1 Mathematics" or "University Physics"</li>
+      <li><strong>license_type</strong> → legal compliance. CC BY allows commercial use with attribution. CC BY-NC does NOT. You must track this per book.</li>
+      <li><strong>attribution_text</strong> → displayed in the reader so users see where the book came from (required by CC BY license)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═════════ STEP 4: NEW HOME SCREEN ═════════ -->
+<div class="section">
+  <div class="step-header">
+    <div class="step-num">4</div>
+    <div>
+      <h3 class="display">Redesigned Home Screen — Education Levels + Social</h3>
+      <div class="step-sub">How the user discovers educational content</div>
+    </div>
+  </div>
+  <p>The Home screen gets two new additions: (1) an education-level selector so users can jump to their tier, and (2) like / comment / share buttons on every content card.</p>
+
+  <div class="mockup-row">
+    <!-- NEW HOME -->
+    <div class="mockup-wrapper">
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="phone-statusbar">
+            <span>9:41</span>
+            <span class="icons">●●● 5G 🔋</span>
+          </div>
+          <div class="phone-header">
+            <div>
+              <div class="greeting">Good morning</div>
+              <div class="name">Prince</div>
+            </div>
+            <div class="balance-chip">
+              <div class="dot"></div>
+              <div class="pts">1,240</div>
+              <div class="label">pts</div>
+            </div>
+          </div>
+
+          <!-- Education Level Selector -->
+          <div class="level-section" style="padding-top:0; padding-bottom:12px;">
+            <div class="level-grid">
+              <div class="level-card"><div class="emoji">🧸</div><div class="label">Creche</div></div>
+              <div class="level-card active"><div class="emoji">📐</div><div class="label">Primary</div></div>
+              <div class="level-card"><div class="emoji">🔬</div><div class="label">Secondary</div></div>
+              <div class="level-card"><div class="emoji">🎓</div><div class="label">University</div></div>
+              <div class="level-card"><div class="emoji">📄</div><div class="label">Research</div></div>
+              <div class="level-card"><div class="emoji">💻</div><div class="label">Tech</div></div>
+            </div>
+          </div>
+
+          <!-- Subject Chips -->
+          <div class="chips" style="padding-top:0;">
+            <div class="chip active">All</div>
+            <div class="chip">Mathematics</div>
+            <div class="chip">English</div>
+            <div class="chip">Science</div>
+            <div class="chip">Social Studies</div>
+          </div>
+
+          <!-- Educational Content Card WITH SOCIAL -->
+          <div class="content-card">
+            <div class="cover" style="background: linear-gradient(135deg, #E6F1ED, #0E7C66);">📐</div>
+            <div class="title">Primary 1 Mathematics: Counting</div>
+            <div class="meta">OpenStax · 8 slices · 8 min</div>
+            <div class="badges">
+              <span class="badge badge-level">Primary</span>
+              <span class="badge badge-mint">Mathematics</span>
+              <span class="badge badge-pts">⚡ Earn ~4 pts</span>
+            </div>
+            <!-- SOCIAL BAR -->
+            <div class="social-bar">
+              <div class="social-btn liked">
+                <span class="icon">❤️</span>
+                <span>24</span>
+              </div>
+              <div class="social-divider"></div>
+              <div class="social-btn">
+                <span class="icon">💬</span>
+                <span>5</span>
+              </div>
+              <div class="social-divider"></div>
+              <div class="social-btn">
+                <span class="icon">↗️</span>
+                <span>Share</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="content-card">
+            <div class="cover" style="background: linear-gradient(135deg, #FDEFE7, #C2410C);">📖</div>
+            <div class="title">Primary 2 English: Simple Sentences</div>
+            <div class="meta">OpenStax · 6 slices · 6 min</div>
+            <div class="badges">
+              <span class="badge badge-level">Primary</span>
+              <span class="badge badge-mint">English</span>
+              <span class="badge badge-pts">⚡ Earn ~3 pts</span>
+            </div>
+            <div class="social-bar">
+              <div class="social-btn"><span class="icon">🤍</span><span>12</span></div>
+              <div class="social-divider"></div>
+              <div class="social-btn"><span class="icon">💬</span><span>2</span></div>
+              <div class="social-divider"></div>
+              <div class="social-btn"><span class="icon">↗️</span><span>Share</span></div>
+            </div>
+          </div>
+
+          <div class="ad-placeholder">
+            <div class="label">📢 Ad</div>
+            <div class="text">Native ad — every 4th card</div>
+          </div>
+
+          <div class="tabbar">
+            <div class="tab-item active"><div class="icon">🏠</div><div class="label">Home</div></div>
+            <div class="tab-item"><div class="icon">📚</div><div class="label">Catalog</div></div>
+            <div class="tab-item"><div class="icon">🎓</div><div class="label">Study</div></div>
+            <div class="tab-item"><div class="icon">👛</div><div class="label">Wallet</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="mockup-caption"><strong>New Home</strong> — Education level grid at top, subject chips, educational content cards with ❤️ like / 💬 comment / ↗️ share bar.</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═════════ STEP 5: CATALOG WITH FILTERS ═════════ -->
+<div class="section">
+  <div class="step-header">
+    <div class="step-num">5</div>
+    <div>
+      <h3 class="display">Catalog Screen — Level + Subject Filters</h3>
+      <div class="step-sub">Browsing all educational content</div>
+    </div>
+  </div>
+  <p>The Catalog screen gets the same level + subject filter system. Users can combine "University" + "Physics" to see only university-level physics books.</p>
+
+  <div class="mockup-row">
+    <div class="mockup-wrapper">
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="phone-statusbar">
+            <span>9:41</span>
+            <span class="icons">●●● 5G 🔋</span>
+          </div>
+          <div class="phone-header">
+            <div>
+              <div class="name" style="font-size:18px;">Catalog</div>
+              <div class="greeting">Browse educational books</div>
+            </div>
+          </div>
+
+          <div class="level-section" style="padding-bottom:8px;">
+            <div class="level-grid">
+              <div class="level-card"><div class="emoji">🧸</div><div class="label">Creche</div></div>
+              <div class="level-card"><div class="emoji">📐</div><div class="label">Primary</div></div>
+              <div class="level-card"><div class="emoji">🔬</div><div class="label">Secondary</div></div>
+              <div class="level-card active"><div class="emoji">🎓</div><div class="label">University</div></div>
+              <div class="level-card"><div class="emoji">📄</div><div class="label">Research</div></div>
+              <div class="level-card"><div class="emoji">💻</div><div class="label">Tech</div></div>
+            </div>
+          </div>
+
+          <div class="chips" style="padding-top:0;">
+            <div class="chip active">All</div>
+            <div class="chip">Physics</div>
+            <div class="chip">Calculus</div>
+            <div class="chip">Economics</div>
+            <div class="chip">CS</div>
+            <div class="chip">Biology</div>
+          </div>
+
+          <div class="content-card">
+            <div class="cover" style="background: linear-gradient(135deg, #1F3D34, #34C39B);">⚛️</div>
+            <div class="title">University Physics Vol. 1</div>
+            <div class="meta">OpenStax · 142 slices · 142 min</div>
+            <div class="badges">
+              <span class="badge badge-level">University</span>
+              <span class="badge badge-mint">Physics</span>
+              <span class="badge badge-pts">⚡ Earn ~71 pts</span>
+            </div>
+            <div class="social-bar">
+              <div class="social-btn liked"><span class="icon">❤️</span><span>156</span></div>
+              <div class="social-divider"></div>
+              <div class="social-btn"><span class="icon">💬</span><span>23</span></div>
+              <div class="social-divider"></div>
+              <div class="social-btn"><span class="icon">↗️</span><span>Share</span></div>
+            </div>
+          </div>
+
+          <div class="content-card">
+            <div class="cover" style="background: linear-gradient(135deg, #E6F1ED, #0E7C66);">∫</div>
+            <div class="title">Calculus Volume 1</div>
+            <div class="meta">OpenStax · 98 slices · 98 min</div>
+            <div class="badges">
+              <span class="badge badge-level">University</span>
+              <span class="badge badge-mint">Mathematics</span>
+              <span class="badge badge-pts">⚡ Earn ~49 pts</span>
+            </div>
+            <div class="social-bar">
+              <div class="social-btn"><span class="icon">🤍</span><span>89</span></div>
+              <div class="social-divider"></div>
+              <div class="social-btn"><span class="icon">💬</span><span>12</span></div>
+              <div class="social-divider"></div>
+              <div class="social-btn"><span class="icon">↗️</span><span>Share</span></div>
+            </div>
+          </div>
+
+          <div class="ad-placeholder">
+            <div class="label">📢 Ad</div>
+            <div class="text">Native ad</div>
+          </div>
+
+          <div class="tabbar">
+            <div class="tab-item"><div class="icon">🏠</div><div class="label">Home</div></div>
+            <div class="tab-item active"><div class="icon">📚</div><div class="label">Catalog</div></div>
+            <div class="tab-item"><div class="icon">🎓</div><div class="label">Study</div></div>
+            <div class="tab-item"><div class="icon">👛</div><div class="label">Wallet</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="mockup-caption"><strong>Catalog</strong> — Same level grid + subject chips. Combined filter: University + Physics shows only physics textbooks.</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═════════ STEP 6: READER WITH SOCIAL + ATTRIBUTION ═════════ -->
+<div class="section">
+  <div class="step-header">
+    <div class="step-num">6</div>
+    <div>
+      <h3 class="display">Reader Screen — Social Bar + Attribution + Comments</h3>
+      <div class="step-sub">The core reading experience, enhanced</div>
+    </div>
+  </div>
+  <p>The reader screen gets three new additions: (1) an attribution line showing the book's source and license, (2) a like / comment / share bar below the text, and (3) a comments section where readers discuss the slice.</p>
+
+  <div class="mockup-row">
+    <div class="mockup-wrapper">
+      <div class="phone">
+        <div class="phone-screen" style="min-height: 700px;">
+          <div class="phone-statusbar">
+            <span>9:41</span>
+            <span class="icons">●●● 5G 🔋</span>
+          </div>
+
+          <!-- Reader Header -->
+          <div class="reader-header">
+            <div class="reader-back">←</div>
+            <div class="reader-title-row">
+              <div>
+                <div class="reader-title">University Physics Vol. 1</div>
+                <div class="reader-meta">Slice 3 of 142 · OpenStax</div>
+              </div>
+              <div class="reader-timer">⏱ 0:42</div>
+            </div>
+          </div>
+
+          <!-- Attribution Card -->
+          <div class="attribution-card" style="margin-top:12px;">
+            <div class="label">Source</div>
+            <div class="text">OpenStax, Rice University</div>
+            <span class="license license-cc-by">CC BY 4.0 — Free to share & adapt</span>
+          </div>
+
+          <!-- Reader Body -->
+          <div class="reader-body">
+            <p><strong>1.1 Introduction to Physics</strong></p>
+            <p>Physics is the study of matter, energy, and the fundamental forces of nature. It seeks to understand how the universe behaves — from the smallest particles to the largest galaxies.</p>
+            <p>In this chapter, we will explore the basic concepts that form the foundation of physics: measurement, units, and the scientific method. These tools allow physicists to describe and predict natural phenomena with precision...</p>
+          </div>
+
+          <!-- Claim Button -->
+          <div class="reader-claim-btn">Finish & Claim Points</div>
+
+          <!-- Social Bar -->
+          <div class="reader-social">
+            <div class="social-bar" style="border-top:none; padding-top:0; margin-top:0;">
+              <div class="social-btn liked"><span class="icon">❤️</span><span>Liked · 156</span></div>
+              <div class="social-divider"></div>
+              <div class="social-btn"><span class="icon">💬</span><span>23 comments</span></div>
+              <div class="social-divider"></div>
+              <div class="social-btn"><span class="icon">↗️</span><span>Share</span></div>
+            </div>
+          </div>
+
+          <!-- Comments Section -->
+          <div class="comments-section">
+            <div class="comments-header">
+              <div class="title">Comments</div>
+              <div class="count">23</div>
+            </div>
+
+            <div class="comment-item">
+              <div class="comment-avatar">AB</div>
+              <div class="comment-body">
+                <div class="comment-name">Aisha Bello</div>
+                <div class="comment-text">This explanation of units is so clear! Finally understand SI vs imperial.</div>
+                <div class="comment-meta">
+                  <span>2h ago</span>
+                  <span>❤️ 8 likes</span>
+                  <span>Reply</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="comment-item">
+              <div class="comment-avatar">KO</div>
+              <div class="comment-body">
+                <div class="comment-name">Kenik Okafor</div>
+                <div class="comment-text">Can someone explain the difference between scalar and vector quantities? I'm confused.</div>
+                <div class="comment-meta">
+                  <span>1h ago</span>
+                  <span>❤️ 3 likes</span>
+                  <span>Reply</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="comment-input">
+              <input type="text" placeholder="Add a comment...">
+              <button>↑</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mockup-caption"><strong>Reader</strong> — Attribution card (CC BY 4.0), social bar (like/comment/share), and inline comments section below the reading content.</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═════════ STEP 7: SHARE SHEET ═════════ -->
+<div class="section">
+  <div class="step-header">
+    <div class="step-num">7</div>
+    <div>
+      <h3 class="display">Share Sheet — How Sharing Works</h3>
+      <div class="step-sub">When a user taps "Share" on any content card or reader</div>
+    </div>
+  </div>
+  <p>Tapping the share button opens a bottom sheet with native share options + a copyable deep link. The deep link routes other users directly to the book or slice.</p>
+
+  <div class="mockup-row">
+    <div class="mockup-wrapper">
+      <div class="phone">
+        <div class="phone-screen" style="min-height:400px; background: rgba(0,0,0,0.3);">
+          <div style="padding: 40px 16px; text-align:center; color: #fff; font-size:13px; opacity:0.6;">
+            (dimmed background — reader or home behind the sheet)
+          </div>
+
+          <!-- Share Sheet -->
+          <div class="share-sheet" style="margin-top: auto;">
+            <div class="handle"></div>
+            <div class="title">Share "University Physics Vol. 1"</div>
+
+            <div class="share-grid">
+              <div class="share-option">
+                <div class="circle" style="background:#25D366; color:#fff;">💬</div>
+                <div class="label">WhatsApp</div>
+              </div>
+              <div class="share-option">
+                <div class="circle" style="background:#0095F6; color:#fff;">📷</div>
+                <div class="label">Instagram</div>
+              </div>
+              <div class="share-option">
+                <div class="circle" style="background:#1DA1F2; color:#fff;">🐦</div>
+                <div class="label">X</div>
+              </div>
+              <div class="share-option">
+                <div class="circle" style="background:#1877F2; color:#fff;">f</div>
+                <div class="label">Facebook</div>
+              </div>
+              <div class="share-option">
+                <div class="circle" style="background:#0E7C66; color:#fff;">📋</div>
+                <div class="label">Copy Link</div>
+              </div>
+              <div class="share-option">
+                <div class="circle" style="background:#F3F4F6; color:#374151;">✉️</div>
+                <div class="label">Email</div>
+              </div>
+              <div class="share-option">
+                <div class="circle" style="background:#F3F4F6; color:#374151;">📤</div>
+                <div class="label">More</div>
+              </div>
+              <div class="share-option">
+                <div class="circle" style="background:#FDEFE7; color:#C2410C;">✕</div>
+                <div class="label">Cancel</div>
+              </div>
+            </div>
+
+            <div class="share-link-box">
+              <span>pagepay.app/read/physics-vol1-slice3</span>
+              <button class="copy-btn">Copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mockup-caption"><strong>Share Sheet</strong> — Native share options (WhatsApp, Instagram, X, Facebook) + copyable deep link. Uses React Native <code>Share.share()</code> — same pattern as your existing referral share.</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═════════ STEP 8: ATTRIBUTION EXPLAINED ═════════ -->
+<div class="section">
+  <div class="step-header">
+    <div class="step-num">8</div>
+    <div>
+      <h3 class="display">What Attribution Does & How It Works</h3>
+      <div class="step-sub">Legal compliance for open-source content</div>
+    </div>
+  </div>
+
+  <div class="info-box" style="margin-bottom: 24px;">
+    <div class="label">What Attribution Is</div>
+    <p style="font-size:14px; color:var(--ink); margin-top:8px;">
+      Attribution is the legal requirement of open-source licenses like Creative Commons (CC BY). When you use someone else's openly licensed content, you <strong>must</strong> credit the original creator. It's like citing a source in an academic paper — but it's a legal requirement, not just good manners.
+    </p>
+  </div>
+
+  <div class="flow-diagram">
+    <div style="margin-bottom: 20px;">
+      <h4 style="font-family:'Space Grotesk',sans-serif; font-size:16px; margin-bottom:12px;">How Attribution Flows Through Your System</h4>
+    </div>
+
+    <div class="flow-row">
+      <div class="flow-box source">OpenStax API<br><span class="flow-label">Returns metadata:<br>title, author, license</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">Ingestion Module<br><span class="flow-label">Saves to DB:<br>license_type = "CC BY"<br>attribution_text = "..."</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box storage">ContentCatalog<br><span class="flow-label">Row stores<br>attribution data</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box client">Reader Screen<br><span class="flow-label">Displays:<br>"Source: OpenStax"<br>"CC BY 4.0"</span></div>
+    </div>
+  </div>
+
+  <table class="schema-table" style="margin-top:24px;">
+    <thead>
+      <tr>
+        <th>License</th>
+        <th>Commercial Use?</th>
+        <th>Attribution Required?</th>
+        <th>Can You Use It?</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>CC BY 4.0</strong> (OpenStax)</td>
+        <td style="color:var(--mint); font-weight:600;">✓ Yes</td>
+        <td style="color:var(--mint); font-weight:600;">✓ Yes</td>
+        <td style="color:var(--mint); font-weight:700;">✓ YES — with attribution</td>
+      </tr>
+      <tr>
+        <td><strong>CC BY-NC</strong> (CK-12)</td>
+        <td style="color:var(--error); font-weight:600;">✗ No</td>
+        <td style="color:var(--mint); font-weight:600;">✓ Yes</td>
+        <td style="color:var(--signal); font-weight:700;">⚠ RISKY — ad revenue = commercial</td>
+      </tr>
+      <tr>
+        <td><strong>Public Domain</strong> (Gutenberg)</td>
+        <td style="color:var(--mint); font-weight:600;">✓ Yes</td>
+        <td style="color:var(--inkMuted);">Optional</td>
+        <td style="color:var(--mint); font-weight:700;">✓ YES — no restrictions</td>
+      </tr>
+      <tr>
+        <td><strong>CC BY-SA</strong> (some OER)</td>
+        <td style="color:var(--mint); font-weight:600;">✓ Yes</td>
+        <td style="color:var(--mint); font-weight:600;">✓ Yes</td>
+        <td style="color:var(--mint); font-weight:700;">✓ YES — must share-alike</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="warn-box" style="margin-top:24px;">
+    <div class="label">⚠ Critical Compliance Note</div>
+    <p style="font-size:14px; margin-top:6px;">
+      Your app shares ad revenue with users — that's <strong>commercial use</strong>. CC BY-NC (Non-Commercial) licensed content <strong>cannot</strong> be used in your app without explicit permission. The <code>license_type</code> field in the database lets your ingestion pipeline automatically reject or flag NC-licensed content before it goes live.
+    </p>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═════════ STEP 9: SOCIAL FEATURES — BACKEND FLOW ═════════ -->
+<div class="section">
+  <div class="step-header">
+    <div class="step-num">9</div>
+    <div>
+      <h3 class="display">Social Features — How Like / Comment / Share Work</h3>
+      <div class="step-sub">Backend data flow for each social action</div>
+    </div>
+  </div>
+
+  <div class="flow-diagram" style="margin-bottom:24px;">
+    <h4 style="font-family:'Space Grotesk',sans-serif; font-size:16px; margin-bottom:16px;">❤️ Like Flow</h4>
+    <div class="flow-row">
+      <div class="flow-box client">User taps ❤️<br><span class="flow-label">on content card<br>or reader</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">POST /content/{id}/like<br><span class="flow-label">toggle endpoint<br>(like community notes)</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box storage">ContentLike table<br><span class="flow-label">user_id + content_id<br>unique constraint</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box client">UI updates<br><span class="flow-label">optimistic toggle<br>count +1 / -1</span></div>
+    </div>
+  </div>
+
+  <div class="flow-diagram" style="margin-bottom:24px;">
+    <h4 style="font-family:'Space Grotesk',sans-serif; font-size:16px; margin-bottom:16px;">💬 Comment Flow</h4>
+    <div class="flow-row">
+      <div class="flow-box client">User types comment<br><span class="flow-label">in reader<br>comments section</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">POST /content/{id}/comments<br><span class="flow-label">sanitize input<br>(XSS prevention)</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box storage">ContentComment table<br><span class="flow-label">user_id, content_id<br>body, created_at</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box client">Comment appears<br><span class="flow-label">in list<br>with avatar + name</span></div>
+    </div>
+  </div>
+
+  <div class="flow-diagram" style="margin-bottom:24px;">
+    <h4 style="font-family:'Space Grotesk',sans-serif; font-size:16px; margin-bottom:16px;">↗️ Share Flow</h4>
+    <div class="flow-row">
+      <div class="flow-box client">User taps Share<br><span class="flow-label">bottom sheet opens</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">Share.share()<br><span class="flow-label">native OS sheet<br>WhatsApp, IG, X...</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box storage">Deep link<br><span class="flow-label">pagepay.app/read/{id}<br>routes to reader</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box client">Recipient opens<br><span class="flow-label">app → reader<br>→ reads → earns</span></div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <div class="label">What Already Exists (Reuse)</div>
+    <ul>
+      <li><strong>Like system:</strong> Your community notes already have full like/unlike toggle — <code>POST /community/{id}/like</code>. Same pattern, new table.</li>
+      <li><strong>Share system:</strong> Your referral screen already uses <code>Share.share()</code> + <code>expo-clipboard</code>. Same native sheet, different content.</li>
+      <li><strong>Sanitization:</strong> <code>services/sanitize.py</code> already has XSS prevention — comments go through the same pipeline.</li>
+      <li><strong>Comment system:</strong> <strong>Does NOT exist yet</strong> — this is the only fully new backend feature. New table + new endpoints needed.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═════════ STEP 10: NEW DB TABLES FOR SOCIAL ═════════ -->
+<div class="section">
+  <div class="step-header">
+    <div class="step-num">10</div>
+    <div>
+      <h3 class="display">New Database Tables for Social Features</h3>
+      <div class="step-sub">What gets added to the schema</div>
+    </div>
+  </div>
+
+  <table class="schema-table">
+    <thead>
+      <tr>
+        <th>Table</th>
+        <th>Fields</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="new">
+        <td><strong>content_likes</strong></td>
+        <td>id, user_id (FK), content_id (FK), created_at</td>
+        <td>One row per like. Unique(user_id, content_id) prevents double-likes. Same pattern as <code>community_likes</code>.</td>
+      </tr>
+      <tr class="new">
+        <td><strong>content_comments</strong></td>
+        <td>id, user_id (FK), content_id (FK), body (Text), parent_comment_id (FK nullable), created_at, updated_at</td>
+        <td>Comments on content slices. <code>parent_comment_id</code> enables replies (threaded comments).</td>
+      </tr>
+      <tr class="new">
+        <td><strong>content_comment_likes</strong></td>
+        <td>id, user_id (FK), comment_id (FK), created_at</td>
+        <td>Likes on individual comments. Unique(user_id, comment_id).</td>
+      </tr>
+      <tr class="new">
+        <td><strong>content_shares</strong></td>
+        <td>id, user_id (FK), content_id (FK), platform (String), created_at</td>
+        <td>Tracks shares for analytics (which content gets shared most, which platform). Optional but useful for engagement metrics.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="info-box">
+    <div class="label">New API Endpoints</div>
+    <ul>
+      <li><code>POST /content/{id}/like</code> — toggle like (same pattern as community)</li>
+      <li><code>GET /content/{id}/comments</code> — paginated comment list</li>
+      <li><code>POST /content/{id}/comments</code> — post comment (sanitized)</li>
+      <li><code>POST /content/comments/{id}/like</code> — like a comment</li>
+      <li><code>POST /content/{id}/share</code> — log share event (analytics)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═════════ STEP 11: FULL USER FLOW ═════════ -->
+<div class="section">
+  <div class="step-header">
+    <div class="step-num">11</div>
+    <div>
+      <h3 class="display">Complete User Flow — End to End</h3>
+      <div class="step-sub">From discovery to earning to social interaction</div>
+    </div>
+  </div>
+
+  <div class="flow-diagram">
+    <div class="flow-row">
+      <div class="flow-box client">1. Open Home<br><span class="flow-label">see level grid<br>pick "Primary"</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box client">2. Browse Feed<br><span class="flow-label">subject chips<br>educational cards</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box client">3. Tap Card<br><span class="flow-label">→ book detail<br>see slice list</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box client">4. Open Slice<br><span class="flow-label">→ reader screen<br>attribution shown</span></div>
+    </div>
+    <div class="flow-row" style="margin-top:16px;">
+      <div class="flow-box process">5. Watch Pre-Ad<br><span class="flow-label">rewarded video<br>SSV callback</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">6. Read 1 Min<br><span class="flow-label">3,000 chars<br>timer counts</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box process">7. Finish & Claim<br><span class="flow-label">post-read ad<br>points credited</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box client">8. Social Actions<br><span class="flow-label">like ❤️<br>comment 💬<br>share ↗️</span></div>
+    </div>
+    <div class="flow-row" style="margin-top:16px;">
+      <div class="flow-box storage">9. Points in Wallet<br><span class="flow-label">balance updated<br>withdraw or buy bills</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box storage">10. Next Slice<br><span class="flow-label">progress saved<br>unlock frontier advances</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box client">11. Streak Continues<br><span class="flow-label">daily reading<br>streak bonus</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box client">12. Share with Friend<br><span class="flow-label">deep link<br>friend joins → earns</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═════════ SUMMARY ═════════ -->
+<div class="section">
+  <div class="section-label">Summary</div>
+  <h2 class="display">What Gets Built — At a Glance</h2>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="num">4</div>
+      <div class="title">New DB Fields</div>
+      <div class="desc">education_level, subject, license_type, attribution_text on ContentCatalog</div>
+    </div>
+    <div class="summary-card">
+      <div class="num">4</div>
+      <div class="title">New DB Tables</div>
+      <div class="desc">content_likes, content_comments, content_comment_likes, content_shares</div>
+    </div>
+    <div class="summary-card">
+      <div class="num">5</div>
+      <div class="title">New API Endpoints</div>
+      <div class="desc">Like toggle, comment CRUD, comment likes, share log</div>
+    </div>
+    <div class="summary-card">
+      <div class="num">3</div>
+      <div class="title">New Ingestion Modules</div>
+      <div class="desc">OpenStax (API), CORE (API+PDF), CK-12 (API) — feed into existing slicer</div>
+    </div>
+    <div class="summary-card">
+      <div class="num">3</div>
+      <div class="title">Updated Screens</div>
+      <div class="desc">Home (level grid), Catalog (filters), Reader (social + attribution)</div>
+    </div>
+    <div class="summary-card">
+      <div class="num">1</div>
+      <div class="title">New Component</div>
+      <div class="desc">SocialBar (like/comment/share) — reusable on cards + reader</div>
+    </div>
+  </div>
+
+  <div class="info-box" style="margin-top:24px;">
+    <div class="label">Implementation Order</div>
+    <ul>
+      <li><strong>Phase A:</strong> Schema changes (4 new fields + 4 new tables) + Alembic migration</li>
+      <li><strong>Phase B:</strong> OpenStax ingestion module → seed first educational books</li>
+      <li><strong>Phase C:</strong> Social backend (like/comment/share endpoints)</li>
+      <li><strong>Phase D:</strong> Frontend — SocialBar component + Home/Catalog/Reader UI updates</li>
+      <li><strong>Phase E:</strong> CORE + CK-12 ingestion modules (broader content coverage)</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═════════ FOOTER ═════════ -->
+<div class="footer">
+  <div class="pagemark"></div>
+  <p>PagePay · Read & Earn · Educate</p>
+  <p style="margin-top:4px;">Visual Design Plan — Educational Content Pipeline + Social Features</p>
+</div>
+
+</body>
+</html>

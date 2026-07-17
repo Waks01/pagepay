@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: pagepay
+      POSTGRES_PASSWORD: pagepass
+      POSTGRES_DB: pagepay
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pagepay -d pagepay"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://pagepay:pagepass@db:5432/pagepay
+      SECRET_KEY: ${SECRET_KEY}
+      CORS_ORIGINS: http://localhost:8081,https://pagepay-2e6i.onrender.com
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      ENVIRONMENT: production
+    depends_on:
+      db:
+        condition: service_healthy
+  cron:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    environment:
+      DATABASE_URL: postgresql+asyncpg://pagepay:pagepass@db:5432/pagepay
+      SECRET_KEY: ${SECRET_KEY}
+      GNEWS_API_KEY: ${GNEWS_API_KEY:-}
+      ENVIRONMENT: production
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do python -m app.services.cron || true; sleep 21600; done"]
+  
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: http api:8000
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040"
+    depends_on:
+      - api
+    networks:
+      - default
+
+volumes:
+  pg_data:
+
+networks:
+  default:
+    driver: bridge

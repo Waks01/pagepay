@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #0E7C66;
+  --color-primary-50: #E6F1ED;
+  --color-primary-100: #C8E0D6;
+  --color-primary-500: #0E7C66;
+  --color-primary-600: #0A6B58;
+  --color-primary-700: #075A4A;
+  --color-mint: #0E7C66;
+  --color-mint-soft: #E6F1ED;
+  --color-mint-text: #FFFFFF;
+  --color-signal: #C2410C;
+  --color-signal-soft: #FDEFE7;
+  --color-success: #0E7C66;
+  --color-success-50: #E6F1ED;
+  --color-success-600: #075A4A;
+  --color-warning: #F59E0B;
+  --color-warning-50: #FEF3C7;
+  --color-warning-600: #92400E;
+  --color-error: #DC2626;
+  --color-error-50: #FEE2E2;
+  --color-error-600: #991B1B;
+  --color-info: #0A7EA4;
+  --color-info-50: #E0F2FE;
+  --color-info-600: #075985;
+  --color-ink: #0E1116;
+  --color-bg-body: #FBFAF6;
+  --color-bg-card: #FFFFFF;
+  --color-bg-muted: #F3F4F6;
+  --color-bg-hover: #F9FAFB;
+  --color-text-main: #0E1116;
+  --color-text-muted: #6B7280;
+  --color-border: #E5E2DA;
+}
+
+.dark {
+  --color-bg-body: #0E1116;
+  --color-bg-card: #1A1D24;
+  --color-bg-muted: #161B22;
+  --color-bg-hover: #1F2937;
+  --color-text-main: #FBFAF6;
+  --color-text-muted: #9BA1A6;
+  --color-border: #2A2F38;
+}
+
+@layer base {
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--color-bg-body);
+    color: var(--color-text-main);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+/* Thin, subtle scrollbar for sidebar nav */
+.sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 99px;
+}
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}

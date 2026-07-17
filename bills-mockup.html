@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390, user-scalable=no">
+<title>PagePay Bills & Earn — Visual Mockup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #2A2F38;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: system-ui, -apple-system, sans-serif;
+    gap: 40px;
+    flex-wrap: wrap;
+    padding: 40px 20px;
+  }
+
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: #FBFAF6;
+    border-radius: 44px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 20px 60px rgba(0,0,0,0.3);
+  }
+
+  .screen {
+    flex: 1;
+    padding: 20px 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+  }
+
+  .screen::-webkit-scrollbar { display: none; }
+
+  .header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #E5E2DA;
+    display: flex;
+  }
+  .header h1 { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; color: #0E1116; }
+  .pts-badge {
+    background: #E6F1ED;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 14px; font-weight: 600; color: #0E7C66;
+  }
+
+  .balance-card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 18px 20px;
+    border: 1px solid #E5E2DA;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    display: flex;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .balance-label { font-size: 13px; color: #6B7280; font-weight: 500; }
+  .balance-value { font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700; color: #0E1116; margin-top: 2px; }
+  .earn-pill { background: #E6F1ED; padding: 6px 14px; border-radius: 20px; flex-direction: row; align-items: center; gap: 6px; display: flex; }
+  .earn-pill span { font-size: 12px; font-weight: 600; color: #0E7C66; }
+
+  .section-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px; font-weight: 700; color: #0E1116;
+    margin-top: 4px;
+  }
+
+  .services-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 10px;
+  }
+  .service-btn {
+    background: #fff;
+    border: 1px solid #E5E2DA;
+    border-radius: 14px;
+    padding: 14px 8px;
+    align-items: center;
+    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    cursor: default;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+  }
+  .service-btn.active { border-color: #0E7C66; background: #E6F1ED; }
+  .service-btn svg { width: 26px; height: 26px; color: #0E7C66; }
+  .service-btn span { font-size: 11px; font-weight: 600; color: #0E1116; text-align: center; }
+  .service-btn .earn-tag { font-size: 9px; color: #0E7C66; font-weight: 600; background: #E6F1ED; padding: 1px 6px; border-radius: 6px; }
+  .service-btn.active .earn-tag { background: #fff; }
+
+  .recent-card {
+    background: #fff;
+    border: 1px solid #E5E2DA;
+    border-radius: 12px;
+    padding: 14px 16px;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    display: flex;
+  }
+  .recent-card .icon { width: 40px; height: 40px; border-radius: 20px; background: #E6F1ED; align-items: center; justify-content: center; display: flex; }
+  .recent-card .icon svg { width: 20px; height: 20px; color: #0E7C66; }
+  .recent-card .info { flex: 1; }
+  .recent-card .info .name { font-size: 14px; font-weight: 600; color: #0E1116; }
+  .recent-card .info .meta { font-size: 12px; color: #6B7280; margin-top: 2px; }
+  .recent-card .pts { font-size: 13px; font-weight: 700; color: #0E7C66; }
+
+  /* ─── Tab Bar ─── */
+  .tab-bar {
+    display: flex;
+    background: #FBFAF6;
+    border-top: 0.5px solid #E5E2DA;
+    padding: 4px 8px 22px;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.04);
+  }
+  .tab-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; position: relative; cursor: default; }
+  .tab-item svg { width: 24px; height: 24px; color: #6B7280; }
+  .tab-item.active svg { color: #0E7C66; }
+  .tab-item span { font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.15px; color: #6B7280; }
+  .tab-item.active span { color: #0E7C66; }
+  .tab-item .dot { position: absolute; bottom: -2px; width: 14px; height: 2px; border-radius: 1px; background: #0E7C66; display: none; }
+  .tab-item.active .dot { display: block; }
+
+  /* ─── PHONE 2: Airtime Purchase Screen ─── */
+  .back-row { flex-direction: row; align-items: center; gap: 12px; display: flex; margin-bottom: 4px; }
+  .back-row svg { width: 24px; height: 24px; color: #0E1116; }
+  .back-row h2 { font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700; color: #0E1116; }
+
+  .amount-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .amt-btn {
+    background: #fff;
+    border: 1px solid #E5E2DA;
+    border-radius: 12px;
+    padding: 14px;
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    cursor: default;
+  }
+  .amt-btn .naira { font-size: 16px; font-weight: 700; color: #0E1116; font-family: 'Space Grotesk', sans-serif; }
+  .amt-btn .earn { font-size: 10px; color: #0E7C66; margin-top: 4px; font-weight: 600; }
+  .amt-btn.selected { border-color: #0E7C66; background: #E6F1ED; }
+
+  .phone-input {
+    background: #fff;
+    border: 1px solid #E5E2DA;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #0E1116;
+    margin-bottom: 8px;
+  }
+  .phone-input::placeholder { color: #D1D5DB; }
+
+  .earnings-breakdown {
+    background: #E6F1ED;
+    border-radius: 12px;
+    padding: 14px 16px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    display: flex;
+    margin-bottom: 16px;
+  }
+  .earnings-breakdown .label { font-size: 13px; color: #0E7C66; font-weight: 500; }
+  .earnings-breakdown .value { font-size: 16px; font-weight: 700; color: #0E7C66; font-family: 'Space Grotesk', sans-serif; }
+
+  .pay-btn {
+    background: #0E7C66;
+    border-radius: 14px;
+    padding: 16px;
+    align-items: center;
+    justify-content: center;
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    cursor: default;
+    margin-top: auto;
+    margin-bottom: 8px;
+  }
+  .pay-btn span { color: #fff; font-size: 16px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; }
+  .pay-btn .sub { font-size: 12px; color: rgba(255,255,255,0.7); font-weight: 400; }
+
+  /* Legend */
+  .legend { max-width: 390px; color: #FBFAF6; font-size: 14px; line-height: 1.6; }
+  .legend h2 { font-size: 20px; font-weight: 700; margin-bottom: 12px; font-family: 'Space Grotesk', sans-serif; }
+  .legend ul { list-style: none; padding: 0; }
+  .legend li { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .legend .tag { display: inline-block; background: #0E7C66; color: #fff; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 4px; margin-right: 6px; }
+
+  .note { color: #9BA1A6; font-size: 13px; margin-top: 16px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<!-- ─── PHONE 1: Wallet Screen (Shows Services entry) ─── -->
+<div class="phone" style="position:relative;">
+  <div class="screen">
+    <div class="header">
+      <h1>Wallet</h1>
+      <span class="pts-badge">12,450 pts</span>
+    </div>
+
+    <!-- Balance card -->
+    <div class="balance-card">
+      <div>
+        <div class="balance-label">Points Balance</div>
+        <div class="balance-value">12,450</div>
+      </div>
+      <div class="earn-pill">
+        <svg viewBox="0 0 20 20" fill="none" stroke="#0E7C66" stroke-width="2"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/></svg>
+        <span>≈ ₦124.50</span>
+      </div>
+    </div>
+
+    <!-- Pay Bills & Earn Section -->
+    <div class="section-title">Pay Bills & Earn Points</div>
+    <div class="services-grid">
+      <div class="service-btn active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M8 12h8"/></svg>
+        <span>Airtime</span>
+        <span class="earn-tag">3%</span>
+      </div>
+      <div class="service-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path d="M12 6v6l4 2"/></svg>
+        <span>Data</span>
+        <span class="earn-tag">4%</span>
+      </div>
+      <div class="service-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Electricity</span>
+        <span class="earn-tag">1%</span>
+      </div>
+      <div class="service-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 6V4h12v2"/></svg>
+        <span>TV</span>
+        <span class="earn-tag">1.5%</span>
+      </div>
+    </div>
+
+    <!-- Recent transactions -->
+    <div class="section-title">Recent</div>
+    <div class="recent-card">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M8 12h8"/></svg></div>
+      <div class="info">
+        <div class="name">MTN Airtime — ₦500</div>
+        <div class="meta">Today, 2:30pm • 234803XXXXX</div>
+      </div>
+      <div class="pts">+15 pts</div>
+    </div>
+    <div class="recent-card">
+      <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path d="M12 6v6l4 2"/></svg></div>
+      <div class="info">
+        <div class="name">GLO Data — 1GB</div>
+        <div class="meta">Yesterday • 234805XXXXX</div>
+      </div>
+      <div class="pts">+40 pts</div>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <div class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span>Home</span></div>
+    <div class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg><span>Catalog</span></div>
+    <div class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg><span>Study</span></div>
+    <div class="tab-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path d="M12 6v6l4 2"/></svg><span>Wallet</span><div class="dot"></div></div>
+    <div class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg><span>More</span></div>
+  </div>
+</div>
+
+<!-- ─── PHONE 2: Airtime Purchase Flow ─── -->
+<div class="phone" style="position:relative;">
+  <div class="screen">
+    <div class="back-row">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      <h2>Buy Airtime</h2>
+    </div>
+
+    <div style="font-size: 13px; color: #6B7280;">Phone Number</div>
+    <div class="phone-input">0803 123 4567</div>
+
+    <div style="font-size: 13px; color: #6B7280; margin-top: 8px;">Select Amount</div>
+    <div class="amount-grid">
+      <div class="amt-btn">
+        <span class="naira">₦100</span>
+        <span class="earn">+2 pts</span>
+      </div>
+      <div class="amt-btn selected">
+        <span class="naira">₦200</span>
+        <span class="earn">+5 pts</span>
+      </div>
+      <div class="amt-btn">
+        <span class="naira">₦500</span>
+        <span class="earn">+15 pts</span>
+      </div>
+      <div class="amt-btn">
+        <span class="naira">₦1,000</span>
+        <span class="earn">+30 pts</span>
+      </div>
+      <div class="amt-btn">
+        <span class="naira">₦2,000</span>
+        <span class="earn">+60 pts</span>
+      </div>
+      <div class="amt-btn">
+        <span class="naira">₦5,000</span>
+        <span class="earn">+150 pts</span>
+      </div>
+    </div>
+
+    <div class="earnings-breakdown">
+      <div class="label">You'll earn</div>
+      <div class="value">+5 points</div>
+    </div>
+
+    <div style="font-size:12px;color:#6B7280;line-height:1.5;margin-bottom:8px;padding:12px;background:#F3F2EE;border-radius:10px;">
+      <strong style="color:#0E1116;">How it works:</strong> You pay ₦200 via your wallet balance. We buy airtime at wholesale and split the 3% commission. You get points, we keep a small fee to keep the platform running.
+    </div>
+
+    <div class="pay-btn">
+      <svg viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="2"><rect x="2" y="4" width="16" height="12" rx="2"/><path d="M14 10h-4"/></svg>
+      <span>Pay ₦200</span>
+      <span class="sub">• wallet balance</span>
+    </div>
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <h2>Bills & Earn — Visual Proposal</h2>
+  <ul>
+    <li><span class="tag">New</span> <strong>"Pay Bills & Earn"</strong> section on the Wallet screen</li>
+    <li><span class="tag">4 Services</span> Airtime · Data · Electricity · TV</li>
+    <li><span class="tag">Commission</span> User earns points from VTpass commission — you keep a cut</li>
+    <li><span class="tag">Zero cost</span> VTpass pays the commission, not you</li>
+  </ul>
+  <p style="margin-top:16px;font-size:14px;"><strong>Example (₦200 MTN airtime):</strong></p>
+  <ul>
+    <li>VTpass pays 3% = ₦6 commission</li>
+    <li>User gets a portion back as points</li>
+    <li>User also gets the ₦200 airtime they paid for</li>
+  </ul>
+</div>
+
+</body>
+</html>
+</body>
+</html>

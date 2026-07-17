@@ -1,0 +1,20 @@
+# Bandit config for the PagePay backend.
+# Docs: https://bandit.readthedocs.io/en/latest/config.html
+#
+# We run with medium+ severity by default. Add `# nosec` comments
+# to silence individual findings (e.g. where md5 is used for
+# non-security hashing like content deduplication).
+
+[bandit]
+# Tests directory: skip most security rules — pytests use assert
+# statements legitimately (B101) and may seed fake secrets (B105).
+exclude_dirs = ['tests', 'alembic', 'scripts']
+
+# B101 (assert_used): relaxed. Asserts in production code are flagged,
+# but in pytests they're idiomatic. We exclude tests above, so leave on.
+skips = []
+
+# Per-test-id config — uncomment to opt out of specific checks
+# B105 (hardcoded_password_string): we want this on
+# B311 (random): flagged but we use `secrets` for crypto, `random` for non-security
+skips = ['B311']

@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=390, user-scalable=no">
+<title>PagePay Bills & Earn v2 — Full Visual Mockup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #2A2F38;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    font-family: system-ui, -apple-system, sans-serif;
+    gap: 32px;
+    flex-wrap: wrap;
+    padding: 40px 20px;
+  }
+
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: #FBFAF6;
+    border-radius: 44px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 20px 60px rgba(0,0,0,0.3);
+  }
+
+  .phone.dark {
+    background: #0E1116;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  .screen {
+    flex: 1;
+    padding: 20px 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+  }
+
+  .screen::-webkit-scrollbar { display: none; }
+
+  /* ─── Shared ─── */
+  .header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #E5E2DA;
+    display: flex;
+  }
+  .dark .header { border-color: #2A2F38; }
+  .header h1 { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; color: #0E1116; }
+  .dark .header h1 { color: #FBFAF6; }
+  .pts-badge {
+    background: #E6F1ED;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 14px; font-weight: 600; color: #0E7C66;
+  }
+  .dark .pts-badge { background: #1F3D34; color: #34C39B; }
+
+  .back-row { flex-direction: row; align-items: center; gap: 12px; display: flex; margin-bottom: 4px; }
+  .back-row svg { width: 24px; height: 24px; color: #0E1116; }
+  .dark .back-row svg { color: #FBFAF6; }
+  .back-row h2 { font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700; color: #0E1116; }
+  .dark .back-row h2 { color: #FBFAF6; }
+
+  .section-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px; font-weight: 700; color: #0E1116;
+    margin-top: 4px;
+  }
+  .dark .section-title { color: #FBFAF6; }
+  .section-sub {
+    font-size: 12px; color: #6B7280; margin-top: 2px; margin-bottom: 12px;
+  }
+  .dark .section-sub { color: #9BA1A6; }
+
+  .label { font-size: 13px; color: #6B7280; font-weight: 500; margin-bottom: 6px; }
+  .dark .label { color: #9BA1A6; }
+
+  .input {
+    background: #fff;
+    border: 1px solid #E5E2DA;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #0E1116;
+    width: 100%;
+  }
+  .dark .input { background: #171A21; border-color: #2A2F38; color: #FBFAF6; }
+  .input::placeholder { color: #D1D5DB; }
+  .dark .input::placeholder { color: #6B7280; }
+
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+
+  .chip {
+    background: #fff; border: 1px solid #E5E2DA; border-radius: 20px;
+    padding: 10px 18px; font-size: 14px; font-weight: 600; color: #0E1116;
+    text-align: center; cursor: default;
+  }
+  .dark .chip { background: #171A21; border-color: #2A2F38; color: #FBFAF6; }
+  .chip.active { background: #E6F1ED; border-color: #0E7C66; color: #0E7C66; }
+  .dark .chip.active { background: #1F3D34; border-color: #34C39B; color: #34C39B; }
+
+  .amt-btn {
+    background: #fff; border: 1px solid #E5E2DA; border-radius: 12px;
+    padding: 14px; align-items: center; display: flex; flex-direction: column; cursor: default;
+  }
+  .dark .amt-btn { background: #171A21; border-color: #2A2F38; }
+  .amt-btn .naira { font-size: 16px; font-weight: 700; color: #0E1116; font-family: 'Space Grotesk', sans-serif; }
+  .dark .amt-btn .naira { color: #FBFAF6; }
+  .amt-btn .earn { font-size: 10px; color: #0E7C66; margin-top: 4px; font-weight: 600; }
+  .dark .amt-btn .earn { color: #34C39B; }
+  .amt-btn.selected { border-color: #0E7C66; background: #E6F1ED; }
+  .dark .amt-btn.selected { border-color: #34C39B; background: #1F3D34; }
+
+  .services-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 10px;
+  }
+  .service-btn {
+    background: #fff; border: 1px solid #E5E2DA; border-radius: 14px;
+    padding: 14px 8px; align-items: center; gap: 8px; display: flex; flex-direction: column; cursor: default;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+  }
+  .dark .service-btn { background: #171A21; border-color: #2A2F38; }
+  .service-btn.active { border-color: #0E7C66; background: #E6F1ED; }
+  .dark .service-btn.active { border-color: #34C39B; background: #1F3D34; }
+  .service-btn svg { width: 26px; height: 26px; color: #0E7C66; }
+  .dark .service-btn svg { color: #34C39B; }
+  .service-btn span { font-size: 11px; font-weight: 600; color: #0E1116; text-align: center; }
+  .dark .service-btn span { color: #FBFAF6; }
+  .service-btn .earn-tag { font-size: 9px; color: #0E7C66; font-weight: 600; background: #E6F1ED; padding: 1px 6px; border-radius: 6px; }
+  .dark .service-btn .earn-tag { color: #34C39B; background: #1F3D34; }
+  .service-btn.active .earn-tag { background: #fff; }
+  .dark .service-btn.active .earn-tag { background: #0E1116; }
+
+  .balance-card {
+    background: #fff; border-radius: 14px; padding: 18px 20px;
+    border: 1px solid #E5E2DA; flex-direction: row; justify-content: space-between;
+    align-items: center; display: flex; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .dark .balance-card { background: #171A21; border-color: #2A2F38; }
+  .balance-label { font-size: 13px; color: #6B7280; font-weight: 500; }
+  .dark .balance-label { color: #9BA1A6; }
+  .balance-value { font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700; color: #0E1116; margin-top: 2px; }
+  .dark .balance-value { color: #FBFAF6; }
+  .earn-pill { background: #E6F1ED; padding: 6px 14px; border-radius: 20px; flex-direction: row; align-items: center; gap: 6px; display: flex; }
+  .dark .earn-pill { background: #1F3D34; }
+  .earn-pill span { font-size: 12px; font-weight: 600; color: #0E7C66; }
+  .dark .earn-pill span { color: #34C39B; }
+
+  .earn-card {
+    background: #E6F1ED; border-radius: 12px; padding: 14px 16px;
+    flex-direction: row; align-items: center; gap: 12px; display: flex;
+    border: 1px solid #0E7C66;
+  }
+  .dark .earn-card { background: #1F3D34; border-color: #34C39B; }
+  .earn-card .label { font-size: 13px; color: #0E7C66; font-weight: 600; }
+  .dark .earn-card .label { color: #34C39B; }
+  .earn-card .value { font-size: 20px; font-weight: 700; color: #0E7C66; font-family: 'Space Grotesk', sans-serif; }
+  .dark .earn-card .value { color: #34C39B; }
+
+  .info-card {
+    background: #F3F2EE; border-radius: 10px; padding: 12px;
+    font-size: 12px; color: #6B7280; line-height: 1.5;
+  }
+  .dark .info-card { background: #171A21; color: #9BA1A6; }
+  .info-card strong { color: #0E1116; }
+  .dark .info-card strong { color: #FBFAF6; }
+
+  .pay-btn {
+    background: #0E7C66; border-radius: 14px; padding: 16px;
+    align-items: center; justify-content: center; display: flex;
+    flex-direction: row; gap: 8px; cursor: default;
+    margin-top: auto; margin-bottom: 8px;
+  }
+  .dark .pay-btn { background: #34C39B; }
+  .pay-btn span { color: #fff; font-size: 16px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; }
+  .dark .pay-btn span { color: #0E1116; }
+  .pay-btn .sub { font-size: 12px; color: rgba(255,255,255,0.7); font-weight: 400; }
+  .dark .pay-btn .sub { color: rgba(0,0,0,0.5); }
+
+  /* ─── Data bundle picker ─── */
+  .bundle-card {
+    background: #fff; border: 1px solid #E5E2DA; border-radius: 12px;
+    padding: 12px 14px; display: flex; flex-direction: row;
+    align-items: center; gap: 12px; cursor: default;
+  }
+  .dark .bundle-card { background: #171A21; border-color: #2A2F38; }
+  .bundle-card.active { border-color: #0E7C66; background: #E6F1ED; }
+  .dark .bundle-card.active { border-color: #34C39B; background: #1F3D34; }
+  .bundle-card .info { flex: 1; }
+  .bundle-card .name { font-size: 14px; font-weight: 600; color: #0E1116; }
+  .dark .bundle-card .name { color: #FBFAF6; }
+  .bundle-card .meta { font-size: 11px; color: #6B7280; margin-top: 2px; }
+  .dark .bundle-card .meta { color: #9BA1A6; }
+  .bundle-card .price { font-size: 15px; font-weight: 700; color: #0E7C66; font-family: 'Space Grotesk', sans-serif; }
+  .dark .bundle-card .price { color: #34C39B; }
+
+  /* ─── DISCO / Meter ─── */
+  .disco-row {
+    flex-direction: row; gap: 8px; flex-wrap: wrap; display: flex;
+  }
+  .disco-chip {
+    background: #fff; border: 1px solid #E5E2DA; border-radius: 10px;
+    padding: 10px 14px; font-size: 12px; font-weight: 600; color: #0E1116;
+    cursor: default;
+  }
+  .dark .disco-chip { background: #171A21; border-color: #2A2F38; color: #FBFAF6; }
+  .disco-chip.active { background: #E6F1ED; border-color: #0E7C66; color: #0E7C66; }
+  .dark .disco-chip.active { background: #1F3D34; border-color: #34C39B; color: #34C39B; }
+
+  .meter-type-row { flex-direction: row; gap: 10px; display: flex; }
+  .meter-opt {
+    flex: 1; padding: 10px; border-radius: 10px; border: 1px solid #E5E2DA;
+    align-items: center; display: flex; flex-direction: column; gap: 4px; cursor: default; background: #fff;
+  }
+  .dark .meter-opt { background: #171A21; border-color: #2A2F38; }
+  .meter-opt.active { border-color: #0E7C66; background: #E6F1ED; }
+  .dark .meter-opt.active { border-color: #34C39B; background: #1F3D34; }
+  .meter-opt svg { width: 22px; height: 22px; color: #0E7C66; }
+  .dark .meter-opt svg { color: #34C39B; }
+  .meter-opt span { font-size: 11px; font-weight: 600; color: #0E1116; }
+  .dark .meter-opt span { color: #FBFAF6; }
+
+  /* ─── TV provider ─── */
+  .tv-row { flex-direction: row; gap: 10px; display: flex; }
+  .tv-card {
+    flex: 1; padding: 14px 8px; border-radius: 12px; border: 1px solid #E5E2DA;
+    align-items: center; display: flex; flex-direction: column; gap: 6px; cursor: default; background: #fff;
+  }
+  .dark .tv-card { background: #171A21; border-color: #2A2F38; }
+  .tv-card.active { border-color: #0E7C66; background: #E6F1ED; }
+  .dark .tv-card.active { border-color: #34C39B; background: #1F3D34; }
+  .tv-card svg { width: 28px; height: 28px; color: #0E7C66; }
+  .dark .tv-card svg { color: #34C39B; }
+  .tv-card span { font-size: 12px; font-weight: 600; color: #0E1116; }
+  .dark .tv-card span { color: #FBFAF6; }
+
+  /* ─── Tab Bar ─── */
+  .tab-bar {
+    display: flex; background: #FBFAF6; border-top: 0.5px solid #E5E2DA;
+    padding: 4px 8px 22px; box-shadow: 0 -2px 12px rgba(0,0,0,0.04);
+  }
+  .dark .tab-bar { background: #0E1116; border-top-color: #2A2F38; }
+  .tab-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; position: relative; cursor: default; }
+  .tab-item svg { width: 24px; height: 24px; color: #6B7280; }
+  .tab-item.active svg { color: #0E7C66; }
+  .dark .tab-item.active svg { color: #34C39B; }
+  .tab-item span { font-family: 'Space Grotesk', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.15px; color: #6B7280; }
+  .tab-item.active span { color: #0E7C66; }
+  .dark .tab-item.active span { color: #34C39B; }
+  .tab-item .dot { position: absolute; bottom: -2px; width: 14px; height: 2px; border-radius: 1px; background: #0E7C66; display: none; }
+  .dark .tab-item .dot { background: #34C39B; }
+  .tab-item.active .dot { display: block; }
+
+  /* ─── Legend ─── */
+  .legend { max-width: 840px; color: #FBFAF6; font-size: 14px; line-height: 1.6; }
+  .legend h2 { font-size: 20px; font-weight: 700; margin-bottom: 12px; font-family: 'Space Grotesk', sans-serif; }
+  .legend h3 { font-size: 16px; font-weight: 700; margin-top: 20px; margin-bottom: 8px; font-family: 'Space Grotesk', sans-serif; }
+  .legend ul { list-style: none; padding: 0; }
+  .legend li { padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .legend .tag { display: inline-block; background: #0E7C66; color: #fff; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 4px; margin-right: 6px; }
+  .legend .tag.orange { background: #C2410C; }
+  .legend .tag.blue { background: #3B82F6; }
+  .note { color: #9BA1A6; font-size: 13px; margin-top: 16px; line-height: 1.5; }
+
+  .phone-label {
+    position: absolute; top: -24px; left: 0; right: 0;
+    text-align: center; color: #9BA1A6; font-size: 13px; font-weight: 600;
+  }
+  .phone-wrap { position: relative; padding-top: 28px; }
+</style>
+</head>
+<body>
+
+<!-- ================================================================ -->
+<!-- PHONE 1: Wallet Screen (updated with full services)             -->
+<!-- ================================================================ -->
+<div class="phone-wrap">
+  <div class="phone-label">Wallet — Entry Point</div>
+  <div class="phone">
+    <div class="screen">
+      <div class="header">
+        <h1>Wallet</h1>
+        <span class="pts-badge">12,450 pts</span>
+      </div>
+
+      <div class="balance-card">
+        <div>
+          <div class="balance-label">Points Balance</div>
+          <div class="balance-value">12,450</div>
+        </div>
+        <div class="earn-pill">
+          <svg viewBox="0 0 20 20" fill="none" stroke="#0E7C66" stroke-width="2"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/></svg>
+          <span>≈ ₦124.50</span>
+        </div>
+      </div>
+
+      <div class="section-title">Pay Bills & Earn Points</div>
+      <div class="section-sub">Buy what you need, earn points from every transaction</div>
+      <div class="services-grid">
+        <div class="service-btn active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M8 12h8"/></svg>
+          <span>Airtime</span>
+          <span class="earn-tag">3%</span>
+        </div>
+        <div class="service-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path d="M12 6v6l4 2"/></svg>
+          <span>Data</span>
+          <span class="earn-tag">4%</span>
+        </div>
+        <div class="service-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Electricity</span>
+          <span class="earn-tag">1%</span>
+        </div>
+        <div class="service-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 6V4h12v2"/></svg>
+          <span>TV</span>
+          <span class="earn-tag">1.5%</span>
+        </div>
+      </div>
+
+      <div class="section-title">Recent Bills</div>
+      <div class="recent-card" style="background:#fff;border:1px solid #E5E2DA;border-radius:12px;padding:14px 16px;flex-direction:row;align-items:center;gap:12px;display:flex;">
+        <div style="width:40px;height:40px;border-radius:20px;background:#E6F1ED;align-items:center;justify-content:center;display:flex;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#0E7C66" stroke-width="2" style="width:20px;height:20px;"><path d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M8 12h8"/></svg>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:600;color:#0E1116;">MTN Airtime — ₦500</div>
+          <div style="font-size:12px;color:#6B7280;margin-top:2px;">Today, 2:30pm • 234803XXXXX</div>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#0E7C66;">+15 pts</div>
+      </div>
+      <div class="recent-card" style="background:#fff;border:1px solid #E5E2DA;border-radius:12px;padding:14px 16px;flex-direction:row;align-items:center;gap:12px;display:flex;">
+        <div style="width:40px;height:40px;border-radius:20px;background:#E6F1ED;align-items:center;justify-content:center;display:flex;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#0E7C66" stroke-width="2" style="width:20px;height:20px;"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:600;color:#0E1116;">IKEDC Electricity</div>
+          <div style="font-size:12px;color:#6B7280;margin-top:2px;">Yesterday • 2345678XXXX</div>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#0E7C66;">+25 pts</div>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span>Home</span></div>
+      <div class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg><span>Catalog</span></div>
+      <div class="tab-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path d="M12 6v6l4 2"/></svg><span>Wallet</span><div class="dot"></div></div>
+      <div class="tab-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg><span>More</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- PHONE 2: Buy Data (bundle picker)                                -->
+<!-- ================================================================ -->
+<div class="phone-wrap">
+  <div class="phone-label">Buy Data — Bundle Selection</div>
+  <div class="phone">
+    <div class="screen">
+      <div class="back-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        <h2>Buy Data</h2>
+      </div>
+
+      <div class="label">Phone Number</div>
+      <div class="input">0803 123 4567</div>
+
+      <div class="label">Network</div>
+      <div style="flex-direction:row;gap:8px;flex-wrap:wrap;display:flex;">
+        <div class="chip active">MTN</div>
+        <div class="chip">Airtel</div>
+        <div class="chip">GLO</div>
+        <div class="chip">9mobile</div>
+      </div>
+
+      <div class="label">Select Bundle</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="bundle-card active">
+          <div class="info">
+            <div class="name">1GB — 30 days</div>
+            <div class="meta">MTN SME Data</div>
+          </div>
+          <div class="price">₦300</div>
+        </div>
+        <div class="bundle-card">
+          <div class="info">
+            <div class="name">2GB — 30 days</div>
+            <div class="meta">MTN SME Data</div>
+          </div>
+          <div class="price">₦550</div>
+        </div>
+        <div class="bundle-card">
+          <div class="info">
+            <div class="name">5GB — 30 days</div>
+            <div class="meta">MTN SME Data</div>
+          </div>
+          <div class="price">₦1,200</div>
+        </div>
+        <div class="bundle-card">
+          <div class="info">
+            <div class="name">10GB — 30 days</div>
+            <div class="meta">MTN SME Data</div>
+          </div>
+          <div class="price">₦2,200</div>
+        </div>
+      </div>
+
+      <div class="earn-card" style="margin-top:4px;">
+        <svg viewBox="0 0 20 20" fill="none" stroke="#0E7C66" stroke-width="2" style="width:20px;height:20px;"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/></svg>
+        <div style="flex:1;">
+          <div class="label">You'll earn</div>
+          <div class="value">+12 points</div>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <strong>How it works:</strong> You pay ₦300 from your wallet. We buy data bundles at wholesale and split the commission. You get points, we keep a small platform fee.
+      </div>
+
+      <div class="pay-btn">
+        <svg viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="2" style="width:18px;height:18px;"><rect x="2" y="4" width="16" height="12" rx="2"/><path d="M14 10h-4"/></svg>
+        <span>Pay ₦300</span>
+        <span class="sub">• wallet balance</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- PHONE 3: Buy Electricity (meter + disco + amount)                -->
+<!-- ================================================================ -->
+<div class="phone-wrap">
+  <div class="phone-label">Buy Electricity — Meter Entry</div>
+  <div class="phone">
+    <div class="screen">
+      <div class="back-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        <h2>Buy Electricity</h2>
+      </div>
+
+      <div class="label">Distribution Company (DISCO)</div>
+      <div class="disco-row">
+        <div class="disco-chip active">IKEDC</div>
+        <div class="disco-chip">EKEDC</div>
+        <div class="disco-chip">AEDC</div>
+        <div class="disco-chip">PHED</div>
+        <div class="disco-chip">IBEDC</div>
+        <div class="disco-chip">KEDCO</div>
+      </div>
+
+      <div class="label">Meter Type</div>
+      <div class="meter-type-row">
+        <div class="meter-opt active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 12h8"/></svg>
+          <span>Prepaid</span>
+        </div>
+        <div class="meter-opt">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 12h8"/><path d="M16 8l4 4-4 4"/></svg>
+          <span>Postpaid</span>
+        </div>
+      </div>
+
+      <div class="label">Meter Number</div>
+      <div class="input">1234 5678 9012 3456</div>
+
+      <div class="label">Amount (₦)</div>
+      <div class="grid-3" style="margin-bottom:4px;">
+        <div class="amt-btn"><span class="naira">₦1,000</span><span class="earn">+10 pts</span></div>
+        <div class="amt-btn selected"><span class="naira">₦2,000</span><span class="earn">+20 pts</span></div>
+        <div class="amt-btn"><span class="naira">₦5,000</span><span class="earn">+50 pts</span></div>
+        <div class="amt-btn"><span class="naira">₦10,000</span><span class="earn">+100 pts</span></div>
+        <div class="amt-btn"><span class="naira">₦20,000</span><span class="earn">+200 pts</span></div>
+        <div class="amt-btn"><span class="naira">Custom</span><span class="earn">varies</span></div>
+      </div>
+
+      <div class="earn-card">
+        <svg viewBox="0 0 20 20" fill="none" stroke="#0E7C66" stroke-width="2" style="width:20px;height:20px;"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/></svg>
+        <div style="flex:1;">
+          <div class="label">You'll earn</div>
+          <div class="value">+20 points</div>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <strong>How it works:</strong> Enter your meter number, select your DISCO and amount. We buy electricity tokens at wholesale and split the commission. Tokens are sent to your meter instantly.
+      </div>
+
+      <div class="pay-btn">
+        <svg viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="2" style="width:18px;height:18px;"><rect x="2" y="4" width="16" height="12" rx="2"/><path d="M14 10h-4"/></svg>
+        <span>Pay ₦2,000</span>
+        <span class="sub">• wallet balance</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- PHONE 4: Buy TV / Cable (smartcard + provider + plan)            -->
+<!-- ================================================================ -->
+<div class="phone-wrap">
+  <div class="phone-label">Buy TV — Smartcard Entry</div>
+  <div class="phone">
+    <div class="screen">
+      <div class="back-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        <h2>Buy TV Subscription</h2>
+      </div>
+
+      <div class="label">Provider</div>
+      <div class="tv-row">
+        <div class="tv-card active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 6V4h12v2"/><path d="M12 18v2"/></svg>
+          <span>DStv</span>
+        </div>
+        <div class="tv-card">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 6V4h12v2"/><path d="M12 18v2"/></svg>
+          <span>GOtv</span>
+        </div>
+        <div class="tv-card">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 6V4h12v2"/><path d="M12 18v2"/></svg>
+          <span>Startimes</span>
+        </div>
+      </div>
+
+      <div class="label">Select Bouquet</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="bundle-card active">
+          <div class="info">
+            <div class="name">Compact Plus</div>
+            <div class="meta">DStv • 95+ channels</div>
+          </div>
+          <div class="price">₦15,400</div>
+        </div>
+        <div class="bundle-card">
+          <div class="info">
+            <div class="name">Compact</div>
+            <div class="meta">DStv • 75+ channels</div>
+          </div>
+          <div class="price">₦10,500</div>
+        </div>
+        <div class="bundle-card">
+          <div class="info">
+            <div class="name">Confam</div>
+            <div class="meta">DStv • 50+ channels</div>
+          </div>
+          <div class="price">₦6,300</div>
+        </div>
+        <div class="bundle-card">
+          <div class="info">
+            <div class="name">Yang</div>
+            <div class="meta">DStv • 30+ channels</div>
+          </div>
+          <div class="price">₦3,600</div>
+        </div>
+      </div>
+
+      <div class="label">Smartcard Number</div>
+      <div class="input">1234 5678 9012</div>
+
+      <div class="earn-card">
+        <svg viewBox="0 0 20 20" fill="none" stroke="#0E7C66" stroke-width="2" style="width:20px;height:20px;"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/></svg>
+        <div style="flex:1;">
+          <div class="label">You'll earn</div>
+          <div class="value">+231 points</div>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <strong>How it works:</strong> Enter your smartcard number, pick your provider and bouquet. We subscribe your TV at wholesale and split the commission. You get points instantly.
+      </div>
+
+      <div class="pay-btn">
+        <svg viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="2" style="width:18px;height:18px;"><rect x="2" y="4" width="16" height="12" rx="2"/><path d="M14 10h-4"/></svg>
+        <span>Pay ₦15,400</span>
+        <span class="sub">• wallet balance</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- Legend / Spec                                                    -->
+<!-- ================================================================ -->
+<div class="legend">
+  <h2>Bills & Earn v2 — Full Visual Proposal</h2>
+
+  <h3>📱 4 Purchase Screens</h3>
+  <ul>
+    <li><span class="tag">Airtime</span> Already built — phone → network → amount → pay</li>
+    <li><span class="tag blue">Data</span> <strong>Needs frontend</strong> — phone → network → bundle picker (MTN SME data / Airtel / GLO / 9mobile bundles with prices)</li>
+    <li><span class="tag blue">Electricity</span> <strong>Needs everything</strong> — DISCO selector (9 options), meter type (prepaid/postpaid), meter number, amount (₦1k–₦20k)</li>
+    <li><span class="tag blue">TV</span> <strong>Needs everything</strong> — Provider (DStv/GOtv/Startimes), bouquet picker with prices, smartcard number</li>
+  </ul>
+
+  <h3>🏗 Backend Work</h3>
+  <ul>
+    <li><strong>POST /api/v1/bills/electricity</strong> — meter number, disco, meter type, amount → call Peyflex → split commission → return tokens</li>
+    <li><strong>POST /api/v1/bills/tv</strong> — smartcard, provider, bouquet code → call Peyflex → split commission → return subscription details</li>
+    <li><strong>GET /api/v1/bills/bundles?network=mtn</strong> — return available data bundles with prices (from config/env or a DB table)</li>
+    <li><strong>GET /api/v1/bills/discos</strong> — return list of DISCOs with meter type support</li>
+    <li><strong>GET /api/v1/bills/tv-bouquets?provider=dstv</strong> — return available bouquets with prices</li>
+    <li><strong>Update PeyflexClient</strong> — add <code>buy_electricity()</code> and <code>buy_tv()</code> methods</li>
+    <li><strong>Schemas</strong> — ElectricityPurchaseRequest, TelevisionPurchaseRequest, BundleResponse, DiscoResponse, BouquetResponse</li>
+  </ul>
+
+  <h3>💵 Revenue Model (no platform money spent)</h3>
+  <ul>
+    <li><span class="tag">Airtime</span> 3% commission → user 67% → platform 33%</li>
+    <li><span class="tag">Data</span> 3-5% commission → same split</li>
+    <li><span class="tag">Electricity</span> ~1-1.5% commission → same split</li>
+    <li><span class="tag">TV</span> ~1.5-2% commission → same split</li>
+    <li><strong>Total:</strong> Platform earns from the aggregator's commission — <em>zero cost to you</em></li>
+  </ul>
+
+  <h3>🔐 API Key Security</h3>
+  <ul>
+    <li>Peyflex API key stored in <code>.env</code> as <code>PEYFLEX_API_KEY</code> — <strong>never exposed to the client</strong></li>
+    <li>The backend calls Peyflex server-to-server — users never see the key</li>
+    <li>Your key: <code>013a12a0...3a24b8</code> (set in .env, used by <code>app/services/peyflex.py</code>)</li>
+  </ul>
+
+  <h3>📋 Phase 8 Implementation Order</h3>
+  <ul>
+    <li><strong>1.</strong> Update <code>PeyflexClient</code> with electricity + TV methods</li>
+    <li><strong>2.</strong> Add bundle/Disco/bouquet list schemas + endpoints</li>
+    <li><strong>3.</strong> Build electricity backend endpoint</li>
+    <li><strong>4.</strong> Build TV backend endpoint</li>
+    <li><strong>5.</strong> Build Data purchase screen (frontend)</li>
+    <li><strong>6.</strong> Build Electricity purchase screen (frontend)</li>
+    <li><strong>7.</strong> Build TV purchase screen (frontend)</li>
+    <li><strong>8.</strong> Wire all service buttons in Wallet screen</li>
+    <li><strong>9.</strong> Test end-to-end with real Peyflex API key</li>
+  </ul>
+
+  <div class="note">
+    ⚠️ All amounts and commission rates are placeholders until you confirm them from your Peyflex dashboard. The actual rates depend on your reseller tier with Peyflex. Let me know what tier you're on and I'll adjust the numbers.
+  </div>
+
+  <div class="note" style="margin-top:8px;">
+    ✅ <strong>Open bills-mockup-v2.html in your browser</strong> to see all 4 screens side by side. Review and tell me what to adjust before I write a single line of code.
+  </div>
+</div>
+
+</body>
+</html>
