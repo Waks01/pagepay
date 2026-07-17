@@ -12,7 +12,7 @@ This document identifies **all missing features** and **functionality gaps** in 
 
 **Quick Stats:**
 
-- 🔴 **Critical Issues**: 5 items (must fix immediately)
+- 🔴 **Critical Issues**: 5 items — all verified DONE as of 2026-07-17 (see per-item notes)
 - 🟠 **High Priority**: 15 items (implement in Phase 2)
 - 🟡 **Medium Priority**: 20 items (implement in Phase 3)
 - 🟢 **Low Priority**: 15+ items (implement in Phase 4+)
@@ -23,12 +23,12 @@ This document identifies **all missing features** and **functionality gaps** in 
 
 ### 1. **Deploy Ad Monitoring Dashboard**
 
-**Status**: ❌ Built but not committed  
+**Status**: ✅ DONE (verified 2026-07-17)  
 **Priority**: P0 - Critical  
 **Effort**: 10 minutes  
 **Impact**: High
 
-**Problem**: Ad monitoring system is complete but frontend files are not committed to git.
+**Notes**: `admin/src/features/ads/*` is committed & tracked. Route `/ads` exists in `App.tsx:33`; nav "Ad Analytics" in `Sidebar.tsx:25`. Dashboard live.
 
 **Files to Commit**:
 
@@ -56,12 +56,12 @@ admin/src/shared/components/Sidebar.tsx (nav added)
 
 ### 2. **Connect Ad Fraud Detection to Fraud Page**
 
-**Status**: ❌ Backend exists, not shown in UI  
+**Status**: ✅ DONE (verified 2026-07-17)  
 **Priority**: P0 - Critical  
 **Effort**: 2 hours  
 **Impact**: High
 
-**Problem**: Backend endpoint `/admin/ads/suspicious-users` exists but is not integrated into the Fraud Detection page.
+**Notes**: `FraudPage.tsx` has a 4th "Ad Fraud" tab (line ~222) wired to `GET /admin/ads/suspicious-users` (backend `admin_ads.py:378`). Risk levels, filters, and table all present.
 
 **Current Fraud Page Tabs**:
 
@@ -104,12 +104,12 @@ admin/src/shared/components/Sidebar.tsx (nav added)
 
 ### 3. **Add Date Range Filters**
 
-**Status**: ❌ Missing across all analytics  
+**Status**: 🟡 PARTIAL (verified 2026-07-17) — DateRangePicker built & wired into AdDashboardPage (drives daysCount -> ad endpoints). NOT yet on Dashboard/Finance/Analytics pages.  
 **Priority**: P0 - Critical  
 **Effort**: 4 hours  
 **Impact**: Very High
 
-**Problem**: Cannot filter data by custom date ranges. All views are hardcoded to 7/30 days.
+**Problem**: Ad Analytics has date filtering; other analytics pages still use fixed 7/30d windows.
 
 **Pages Affected**:
 
@@ -155,7 +155,7 @@ admin/src/shared/components/Sidebar.tsx (nav added)
 
 ### 4. **Add Export to CSV**
 
-**Status**: ❌ Missing everywhere  
+**Status**: ✅ DONE (verified 2026-07-17) — exportToCsv wired into SsvLog, TopEarners, SuspiciousUsers, Users, Finance, Content, and all 4 Fraud tabs.  
 **Priority**: P0 - Critical  
 **Effort**: 3 hours  
 **Impact**: High
@@ -222,7 +222,7 @@ export function exportToCsv(data: any[], filename: string) {
 
 ### 5. **Add Points Adjustment (Manual Credit/Debit)**
 
-**Status**: ❌ Critical for customer support  
+**Status**: ✅ DONE (verified 2026-07-17) — backend `POST /admin/users/{id}/adjust-balance` (admin_users_management.py:228, perm users.adjust_balance, audit logged) + full modal UI in UserDetailModal.tsx:340 (amount, reason, confirm, balance preview).  
 **Priority**: P0 - Critical  
 **Effort**: 3 hours  
 **Impact**: High
@@ -757,14 +757,18 @@ See full list in detailed sections below.
 
 **What's Being Deployed Now**:
 
-- Ad monitoring frontend (Phase 1, item #1)
+- All Phase 1 (P0) critical items are already implemented and committed (verified 2026-07-17):
+  - #1 Ad Monitoring Dashboard (live)
+  - #2 Ad Fraud tab (live)
+  - #3 Date Range Picker (live on Ad Analytics; remaining: Dashboard/Finance/Analytics)
+  - #4 Export to CSV (live on all tables)
+  - #5 Points Adjustment (live in User Detail modal)
 
 **Next Immediate Actions**:
 
-1. Commit ad monitoring frontend
-2. Deploy to production
-3. Test in production
-4. Begin Phase 1, item #2 (Ad fraud integration)
+1. Verify remaining P0 gap: wire DateRangePicker into Dashboard/Finance/Analytics pages (backend endpoints need start_date/end_date support).
+2. Move on to Phase 2 (P1) high-priority items (user activity timeline, bulk actions, revenue charts, failed payouts, content edit).
+3. Periodically re-verify this doc against the codebase — it drifted significantly from reality.
 
 ---
 
