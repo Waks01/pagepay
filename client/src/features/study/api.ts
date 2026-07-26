@@ -33,8 +33,36 @@ export type SowUploadResponse = {
 
 export type GenerateAssetRequest = {
   material_id: number;
-  asset_type: 'mcq' | 'flashcard' | 'essay';
+  asset_type: 'mcq' | 'flashcard' | 'essay' | 'diagram' | 'video' | 'example';
   count?: number;
+  topic?: string | null;
+  mode?: 'topic' | 'all';
+  difficulty?: 'easy' | 'medium' | 'hard';
+  education_level?: 'primary' | 'secondary' | 'tertiary' | 'research';
+};
+
+export type ExampleGenerateRequest = {
+  material_id: number;
+  topic?: string | null;
+  mode?: 'topic' | 'all';
+  education_level?: 'primary' | 'secondary' | 'tertiary' | 'research';
+  subject_hints?: string;
+};
+
+export type ExampleCheckRequest = {
+  material_id: number;
+  example_id: number;
+  step_index?: number | null;
+  user_answer: string;
+  user_attempt?: string | null;
+};
+
+export type ExampleCheckResponse = {
+  correct: boolean;
+  feedback: string;
+  hint: string | null;
+  next_step_instruction: string | null;
+  show_answer: boolean;
 };
 
 export type GenerateAssetResponse = {
@@ -150,6 +178,32 @@ export async function unlockAsset(payload: UnlockRequest): Promise<UnlockRespons
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || 'Unlock failed');
+  }
+  return res.json();
+}
+
+export async function generateExample(payload: ExampleGenerateRequest): Promise<GenerateAssetResponse> {
+  const res = await apiFetch('/api/v1/study/examples/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Example generation failed');
+  }
+  return res.json();
+}
+
+export async function checkExampleAnswer(payload: ExampleCheckRequest): Promise<ExampleCheckResponse> {
+  const res = await apiFetch('/api/v1/study/examples/check', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Answer check failed');
   }
   return res.json();
 }

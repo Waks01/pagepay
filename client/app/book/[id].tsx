@@ -19,6 +19,8 @@ import { PLATFORM_ENV } from '@/src/shared/lib/ads';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
 import { AttributionCard } from '@/components/AttributionCard';
 import { SocialBar } from '@/components/SocialBar';
+import { ShareSheet, type ShareTarget } from '@/components/ShareSheet';
+import { CommentsSection } from '@/components/CommentsSection';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { SkeletonDetailPage } from '@/components/skeletons';
@@ -121,6 +123,27 @@ export default function BookDetailScreen() {
     retry: false, // 401 for anonymous users — handle in render
   });
 
+  // Work-level social aggregates (likes / comments / shares / is_liked)
+  // power the SocialBar on this screen (design-plan Step 4 + 6).
+  const socialQuery = useWorkSocial(workId);
+  const logShare = useLogWorkShare(workId);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+
+  const onSharePress = useCallback(() => {
+    setShareSheetOpen(true);
+  }, []);
+
+  const onShareTarget = useCallback(
+    (target: ShareTarget) => {
+      // The ShareSheet fires the OS share sheet for the chosen target;
+      // we still record a generic 'other' event here because the OS
+      // sheet doesn't report back which app the user actually picked.
+      logShare.mutate('other', { onError: () => undefined });
+      void target;
+    },
+    [logShare],
+  );
+
   // Re-fetch progress when the user returns from the reader (router.back()).
   // Without this, the stale resumeQuery would keep the next slice locked.
   useFocusEffect(
@@ -203,6 +226,7 @@ export default function BookDetailScreen() {
           </TouchableOpacity>
         </View>
       ) : bookQuery.data ? (
+        <View>
         <ScrollView
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
@@ -354,8 +378,39 @@ export default function BookDetailScreen() {
             );
           })}
 
+          {/* Attribution + social bar (design-plan Step 4 + 6). The
+              SocialBar attaches to the parent work; comments live in the
+              CommentsSection below. Share opens the ShareSheet. */}
+          {bookQuery.data.attribution_text ? (
+            <AttributionCard
+              attributionText={bookQuery.data.attribution_text}
+              licenseType={bookQuery.data.license_type}
+            />
+          ) : null}
+
+          <View style={[styles.socialCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <SocialBar
+              workId={workId}
+              initialLikes={socialQuery.data?.likes_count ?? 0}
+              initialComments={socialQuery.data?.comments_count ?? 0}
+              isInitiallyLiked={socialQuery.data?.is_liked ?? false}
+              onSharePress={onSharePress}
+            />
+          </View>
+
+          <CommentsSection workId={workId} />
+
           <View style={{ height: 24 }} />
         </ScrollView>
+
+        <ShareSheet
+          visible={shareSheetOpen}
+          workId={workId}
+          title={bookQuery.data?.title ?? ''}
+          onShare={onShareTarget}
+          onClose={() => setShareSheetOpen(false)}
+        />
+        </View>
       ) : null}
     </SafeAreaView>
   );
@@ -383,6 +438,12 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   headerRight: { width: 36 },
+  socialCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingBottom: 4,
+  },
   scroll: {
     paddingHorizontal: 16,
     paddingTop: 4,

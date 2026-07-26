@@ -636,12 +636,87 @@ class MaterialDetail(BaseModel):
 
 class GenerateAssetRequest(BaseModel):
     material_id: int
-    asset_type: Literal["mcq", "flashcard", "essay"] = "mcq"
-    count: int = Field(default=5, ge=1, le=20)
+    asset_type: Literal["mcq", "flashcard", "essay", "diagram", "video"] = "mcq"
+    count: int = Field(default=15, ge=1, le=50)
+    topic: str | None = Field(default=None, description="Specific topic name to generate questions for. If omitted, generates across all topics.")
+    mode: Literal["topic", "all"] = Field(default="all", description="'topic' generates questions for a single topic. 'all' generates questions across all topics.")
+    difficulty: Literal["easy", "medium", "hard"] = Field(default="medium", description="Difficulty level for generated content.")
+    education_level: Literal["primary", "secondary", "tertiary", "research"] | None = Field(default=None, description="Education level for adaptive explanations.")
 
 
 class GenerateAssetResponse(BaseModel):
     assets: list[dict]
+
+
+class StudyProgressUpdate(BaseModel):
+    material_id: int
+    topic_index: int
+    topic_name: str
+    status: Literal["not_started", "reviewing", "mastered"] = "not_started"
+    mastery_score: int | None = Field(default=None, ge=0, le=100)
+
+
+class StudyProgressResponse(BaseModel):
+    id: int
+    material_id: int
+    topic_index: int
+    topic_name: str
+    status: str
+    mastery_score: int | None
+    last_reviewed_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
+class StudyProgressListResponse(BaseModel):
+    material_id: int
+    total_topics: int
+    mastered: int
+    reviewing: int
+    not_started: int
+    progress: list[StudyProgressResponse]
+
+
+class ExampleGenerateRequest(BaseModel):
+    material_id: int
+    topic: str | None = None
+    mode: Literal["topic", "all"] = "all"
+    education_level: Literal["primary", "secondary", "tertiary", "research"] | None = None
+    subject_hints: str = "general"
+
+
+class ExampleCheckRequest(BaseModel):
+    material_id: int
+    example_id: int
+    step_index: int | None = None
+    user_answer: str = Field(min_length=1, max_length=2000)
+    user_attempt: str | None = None
+
+
+class ExampleCheckResponse(BaseModel):
+    correct: bool
+    feedback: str
+    hint: str | None
+    next_step_instruction: str | None
+    show_answer: bool
+
+
+class NotificationResponse(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    body: str
+    category: str | None
+    data: dict | None
+    read: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class NotificationsListResponse(BaseModel):
+    notifications: list[NotificationResponse]
+    unread_count: int
 
 
 class ChatRequest(BaseModel):

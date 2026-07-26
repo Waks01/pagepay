@@ -97,6 +97,7 @@
     "wallet_access": "Duba walat, kana da maki {{points}}",
     "keep_reading": "Ci gaba da karantawa",
     "browse": "Bincika",
+    "browse_by_level": "Bincika ta mataki",
     "trending": "Abin da ke yau",
     "see_all": "Duba duka",
     "feed_error": "Ba mu iya ɗaukar ciyarwar ku ba.",
@@ -531,7 +532,9 @@
     "error_connection": "Ba za mu iya kaiwa ga sabar ba. Duba haɗin ku.",
     "error_generic": "Tabbatarwa ta kasa. Sake gwadawa.",
     "verifying": "Ana tabbatarwa...",
-    "verify": "Tabbatar"
+    "verify": "Tabbatar",
+    "submit": "Tabbatar da Email",
+    "resending": "Ana sake aikawa..."
   },
   "billing_history": {
     "title": "Tarihin Biyan Kuɗi",

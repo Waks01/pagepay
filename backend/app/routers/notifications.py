@@ -2,15 +2,16 @@
 Notification preferences and FCM token management.
 Phase 3 feature: Push notifications with Firebase Cloud Messaging.
 """
+import json as _json
 from datetime import datetime, time
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select, insert, update, delete as sqla_delete
+from sqlalchemy import select, insert, update, delete as sqla_delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import User, UserNotificationPreference, FCMToken
+from app.models import User, UserNotificationPreference, FCMToken, Notification
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -252,3 +253,86 @@ async def list_fcm_tokens(
     )
     tokens = result.scalars().all()
     return list(tokens)
+
+
+@router.get("", response_model=NotificationsListResponse)
+async def list_notifications(
+    limit: int = 50,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List notifications for the current user, newest first."""
+    user_id = current_user.id
+
+    stmt = (
+        select(Notification)
+        .where(Notification.user_id == user_id)
+        .order_by(Notification.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await db.execute(stmt)
+    notifications = result.scalars().all()
+
+    unread_result = await db.execute(
+        select(func.count(Notification.id)).where(
+            Notification.user_id == user_id,
+            Notification.read == False,
+        )
+    )
+    unread_count = unread_result.scalar_one() or 0
+
+    return NotificationsListResponse(
+        notifications=[
+            NotificationResponse(
+                id=n.id,
+                user_id=n.user_id,
+                title=n.title,
+                body=n.body,
+                category=n.category,
+                data=_json.loads(n.data) if n.data else None,
+                read=n.read,
+                created_at=n.created_at,
+            )
+            for n in notifications
+        ],
+        unread_count=unread_count,
+    )
+
+
+@router.post("/{notification_id}/read", status_code=status.HTTP_204_NO_CONTENT)
+async def mark_notification_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark a single notification as read."""
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+    )
+    notification = result.scalar_one_or_none()
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    notification.read = True
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/read-all", status_code=status.HTTP_204_NO_CONTENT)
+async def mark_all_notifications_read(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark all notifications for the current user as read."""
+    await db.execute(
+        update(Notification)
+        .where(Notification.user_id == current_user.id, Notification.read == False)
+        .values(read=True)
+    )
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

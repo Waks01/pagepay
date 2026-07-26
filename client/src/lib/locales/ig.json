@@ -97,6 +97,7 @@
     "wallet_access": "Lee obere akpa, ị nwere {{points}} isi ihe",
     "keep_reading": "Gaa n'ihu na-agụ",
     "browse": "Chọgharịa",
+    "browse_by_level": "Chọgharịa site na ọkwa",
     "trending": "Ihe na-ewu ewu taa",
     "see_all": "Lee ha niile",
     "feed_error": "Enweghị ike ibubata nri gị.",
@@ -531,7 +532,9 @@
     "error_connection": "Enweghị ike iru seva ahụ. Lelee njikọ gị.",
     "error_generic": "Nnyocha dara. Gbalịa ọzọ.",
     "verifying": "Na-enyocha...",
-    "verify": "Nyochaa"
+    "verify": "Nyochaa",
+    "submit": "Nyochaa Email",
+    "resending": "Na-eziga ọzọ..."
   },
   "billing_history": {
     "title": "Akụkọ Ịkwụ Ụgwọ",

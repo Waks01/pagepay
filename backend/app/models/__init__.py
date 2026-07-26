@@ -613,6 +613,7 @@ class StudyMaterial(Base):
     exam_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     raw_input: Mapped[str] = mapped_column(Text)
     parsed_structure: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -644,19 +645,20 @@ class StudyAsset(Base):
     """One generated asset tied to a StudyMaterial.
 
     `content_json` is the full AI-generated payload (MCQ array, flashcard
-    array, or essay prompt array). `points_to_unlock` is how many points
-    the user must spend (or an ad watch must confirm) before the server
-    will return `content_json` to the client. Assets default to 50 pts.
+    array, essay prompt array, diagram SVG/description, or video metadata).
+    `points_to_unlock` is how many points the user must spend (or an ad
+    watch must confirm) before the server will return `content_json` to
+    the client. Assets default to 50 pts; videos default to 200 pts.
 
     Unlocking is tracked in `StudyTransaction` so the wallet history
-    shows "Spent 50 pts to unlock MCQs".
+    shows "Spent 50 pts to unlock MCQs" or "Watched 2 ads to unlock video".
     """
 
     __tablename__ = "study_assets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     material_id: Mapped[int] = mapped_column(BigInteger, index=True)
-    asset_type: Mapped[str] = mapped_column(String(50))  # mcq|flashcard|essay
+    asset_type: Mapped[str] = mapped_column(String(50))  # mcq|flashcard|essay|diagram|video
     content_json: Mapped[str] = mapped_column(Text)
     points_to_unlock: Mapped[int] = mapped_column(Integer, default=50)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -682,6 +684,28 @@ class StudyTransaction(Base):
     reward_granted: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
+class StudyProgress(Base):
+    """Per-user, per-topic progress tracking within a study material.
+
+    `status` tracks the student's mastery level of each topic:
+    - not_started: Topic hasn't been reviewed yet
+    - reviewing: Student is currently studying this topic
+    - mastered: Student has demonstrated understanding (quiz score >= 80%)
+    """
+
+    __tablename__ = "study_progress"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    material_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    topic_index: Mapped[int] = mapped_column(Integer)
+    topic_name: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(20), default="not_started")  # not_started|reviewing|mastered
+    mastery_score: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-100
+    last_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
 # ── Phase 4: Payments (Premium Subscription) ─────────────────────────────
 
 
@@ -697,12 +721,13 @@ class Payment(Base):
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
-    tier: Mapped[str] = mapped_column(String(50))  # premium_monthly | premium_yearly
-    amount_kobo: Mapped[int] = mapped_column(BigInteger)  # ₦500 = 50000 kobo
+    tier: Mapped[str] = mapped_column(String(50))  # premium_monthly | premium_yearly | wallet_deposit
+    amount_kobo: Mapped[int] = mapped_column(BigInteger)  # ₦500 = 50000 kobo (total for deposits, price for subs)
     provider: Mapped[str] = mapped_column(String(50))  # paystack | flutterwave
     provider_tx_ref: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(50), default="pending")  # pending | success | failed
     webhook_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -804,6 +829,9 @@ class Task(Base):
     task_type: Mapped[str] = mapped_column(String(50), index=True)
     platform: Mapped[str] = mapped_column(String(50), index=True)
     category: Mapped[str] = mapped_column(String(50), default="social_media", index=True)
+    
+    task_source: Mapped[str] = mapped_column(String(20), default="sponsored", index=True)
+    reward_type: Mapped[str] = mapped_column(String(20), default="cash", index=True)
     
     target_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     
@@ -1335,6 +1363,25 @@ class FCMToken(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Notification(Base):
+    """One notification stored for inbox history.
+
+    Created by backend business logic AND by the Socket.IO emit helper
+    so the inbox and live events stay in sync.
+    """
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    data: Mapped[str | None] = mapped_column(Text, nullable=True)
+    read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
 # ════════════════════════════════════════════════════════════════════════

@@ -24,7 +24,7 @@ type AttributionCardProps = {
   licenseType: string | null | undefined;
 };
 
-function getTokens(scheme: 'light' | 'dark') {
+function getTokens(scheme: 'light' | 'dark' | 'sepia') {
   return PagePay[scheme];
 }
 

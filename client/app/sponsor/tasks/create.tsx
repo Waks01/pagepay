@@ -15,14 +15,14 @@ export default function CreateTaskScreen() {
   const { t } = useTranslation();
   const { data: platformConfig } = usePlatformConfig();
   const taskPlatformFeePercent = Math.round((platformConfig?.task_revenue_platform_percent ?? 0.30) * 100);
+  const [platform, setPlatform] = useState('twitter');
+  const [taskType, setTaskType] = useState<string | null>(null);
   const rateCard = useTaskRateCard(platform);
   const activeRate = rateCard.find((rate) => rate.taskType === taskType);
   const hasRates = rateCard.length > 0;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [instructions, setInstructions] = useState('');
-  const [platform, setPlatform] = useState('twitter');
-  const [taskType, setTaskType] = useState<string | null>(null);
   const [targetUrl, setTargetUrl] = useState('');
   const [rewardKobo, setRewardKobo] = useState('5000');
   const [rewardMultiplier, setRewardMultiplier] = useState(1.0);
@@ -106,6 +106,10 @@ export default function CreateTaskScreen() {
       expires_in_days: 7,
       ai_verification_enabled: true,
     });
+  };
+
+  const handleSelectRate = (rate: TaskRateEntry) => {
+    setTaskType(rate.taskType);
   };
 
   return (

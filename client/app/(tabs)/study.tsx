@@ -7,11 +7,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
-import { useMaterials, useUploadSow, useUploadSowImage, useUploadSowDocument, useClaimQuizBonus } from '@/src/features/study/hooks/use-study';
+import { useMaterials, useUploadSow, useUploadSowImage, useUploadSowDocument, useClaimQuizBonus, useGenerateExample } from '@/src/features/study/hooks/use-study';
 import { useImagePicker } from '@/src/shared/hooks/use-image-picker';
 import { useDocumentPicker } from '@/src/shared/hooks/use-document-picker';
 import { SowUploadCard } from '@/components/study/SowUploadCard';
 import { AssetBrowser } from '@/components/study/AssetBrowser';
+import { ProgressDashboard } from '@/components/study/ProgressDashboard';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -45,18 +46,41 @@ function categorizeError(message: string, operation: string, t: (key: string, pa
   return t('study.errors.generic', { operation, message });
 }
 
+type TopicInfo = {
+  name: string;
+  subtopics: string[];
+  key_concepts: string[];
+};
+
 type AssetInfo = {
   id: number;
+  material_id: number;
   type: string;
   points_to_unlock: number;
-  created_at: string;
 };
+
+function getTopicNames(parsed: Record<string, unknown> | null): string[] {
+  if (!parsed) return [];
+  const topics = parsed.topics as TopicInfo[] | undefined;
+  if (!topics) return [];
+  return topics.map((t) => t.name);
+}
+
+function getTopicCount(parsed: Record<string, unknown> | null, topicName: string): number {
+  if (!parsed) return 0;
+  const topics = parsed.topics as TopicInfo[] | undefined;
+  if (!topics) return 0;
+  const topic = topics.find((t) => t.name === topicName);
+  if (!topic) return 0;
+  return topic.subtopics.length + topic.key_concepts.length;
+}
 
 type MaterialDetail = {
   id: number;
   title: string;
   exam_type: string | null;
   parsed_structure: Record<string, unknown> | null;
+  content: string | null;
   assets: AssetInfo[];
   created_at: string;
 };
@@ -80,6 +104,10 @@ export default function StudyScreen() {
   const [studySessionId, setStudySessionId] = useState<number | null>(null);
   const [studyDuration, setStudyDuration] = useState<number>(0);
   const [examType, setExamType] = useState<string | null>(null);
+  const [generateMode, setGenerateMode] = useState<'topic' | 'all'>('all');
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [generateCount, setGenerateCount] = useState<number>(15);
+  const [showReader, setShowReader] = useState(false);
 
   // Load cached assets on mount
   useEffect(() => {
@@ -194,6 +222,7 @@ export default function StudyScreen() {
   const { pickImage, takePhoto } = useImagePicker();
   const { pickDocument } = useDocumentPicker();
   const claimBonusMutation = useClaimQuizBonus();
+  const generateExampleMutation = useGenerateExample();
 
   const handleUploadText = async (text: string, examType: string | null) => {
     setError(null);
@@ -344,7 +373,7 @@ export default function StudyScreen() {
     }
   };
 
-  const handleGenerateAsset = async (materialId: number, assetType: string, count = 5) => {
+  const handleGenerateAsset = async (materialId: number, assetType: string, count?: number, topic?: string | null, mode?: 'topic' | 'all') => {
     setGeneratingType(assetType);
     setError(null);
     setRetryAction(null);
@@ -352,7 +381,13 @@ export default function StudyScreen() {
       const res = await apiFetch('/api/v1/study/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ material_id: materialId, asset_type: assetType, count }),
+        body: JSON.stringify({
+          material_id: materialId,
+          asset_type: assetType,
+          count: count ?? (mode === 'topic' ? 15 : 20),
+          topic: topic ?? null,
+          mode: mode ?? 'all',
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -366,7 +401,7 @@ export default function StudyScreen() {
       const message = e instanceof Error ? e.message : 'Generation failed';
       const specificError = categorizeError(message, `${assetType} generation`, t);
       setError(specificError);
-      setRetryAction(() => () => handleGenerateAsset(materialId, assetType, count));
+      setRetryAction(() => () => handleGenerateAsset(materialId, assetType, count, topic, mode));
     } finally {
       setGeneratingType(null);
     }
@@ -559,6 +594,46 @@ export default function StudyScreen() {
               </View>
             )}
 
+            {selectedMaterial.content && (
+              <Pressable
+                onPress={() => setShowReader(true)}
+                style={({ pressed }) => [
+                  styles.readBtn,
+                  {
+                    backgroundColor: tokens.mint,
+                    opacity: pressed ? 0.8 : 1,
+                  },
+                ]}
+              >
+                <Ionicons name="book-outline" size={20} color={tokens.mintText} />
+                <Text style={[styles.readBtnText, { color: tokens.mintText }]}>
+                  Read Material
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={tokens.mintText} />
+              </Pressable>
+            )}
+
+            {showReader && selectedMaterial.content && (
+              <View style={[styles.readerOverlay, { backgroundColor: tokens.paper }]}>
+                <View style={[styles.readerHeader, { borderBottomColor: tokens.border }]}>
+                  <Text style={[styles.readerTitle, { color: tokens.ink }]}>
+                    {selectedMaterial.title}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowReader(false)}
+                    style={styles.readerCloseBtn}
+                  >
+                    <Ionicons name="close" size={22} color={tokens.ink} />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView style={styles.readerContent}>
+                  <Text style={[styles.readerText, { color: tokens.ink }]}>
+                    {selectedMaterial.content}
+                  </Text>
+                </ScrollView>
+              </View>
+            )}
+
             <AssetBrowser
               assets={selectedMaterial.assets}
               userBalance={balance}
@@ -567,12 +642,26 @@ export default function StudyScreen() {
               onQuizComplete={handleQuizComplete}
             />
 
+            {selectedMaterial.id && (
+              <ProgressDashboard
+                materialId={selectedMaterial.id}
+                totalTopics={getTopicNames(selectedMaterial?.parsed_structure ?? null).length}
+                mastered={0}
+                reviewing={0}
+                notStarted={getTopicNames(selectedMaterial?.parsed_structure ?? null).length}
+                progress={[]}
+              />
+            )}
+
             <View style={styles.generateRow}>
               <GenerateButton
                 label={t('study.generate.mcqs')}
                 icon="help-circle-outline"
                 assetType="mcq"
-                onPress={() => handleGenerateAsset(selectedMaterial.id, 'mcq', 5)}
+                onPress={() => {
+                  const count = generateMode === 'topic' ? 15 : 20;
+                  handleGenerateAsset(selectedMaterial.id, 'mcq', count, selectedTopic, generateMode);
+                }}
                 loading={generatingType === 'mcq'}
                 tokens={tokens}
               />
@@ -580,7 +669,10 @@ export default function StudyScreen() {
                 label={t('study.generate.flashcards')}
                 icon="albums-outline"
                 assetType="flashcard"
-                onPress={() => handleGenerateAsset(selectedMaterial.id, 'flashcard', 8)}
+                onPress={() => {
+                  const count = generateMode === 'topic' ? 15 : 20;
+                  handleGenerateAsset(selectedMaterial.id, 'flashcard', count, selectedTopic, generateMode);
+                }}
                 loading={generatingType === 'flashcard'}
                 tokens={tokens}
               />
@@ -588,10 +680,117 @@ export default function StudyScreen() {
                 label={t('study.generate.essays')}
                 icon="document-text-outline"
                 assetType="essay"
-                onPress={() => handleGenerateAsset(selectedMaterial.id, 'essay', 3)}
+                onPress={() => {
+                  const count = generateMode === 'topic' ? 15 : 20;
+                  handleGenerateAsset(selectedMaterial.id, 'essay', count, selectedTopic, generateMode);
+                }}
                 loading={generatingType === 'essay'}
                 tokens={tokens}
               />
+            </View>
+
+            <View style={styles.generateRow}>
+              <GenerateButton
+                label="Diagram"
+                icon="git-branch-outline"
+                assetType="diagram"
+                onPress={() => handleGenerateAsset(selectedMaterial.id, 'diagram', 1, selectedTopic, generateMode)}
+                loading={generatingType === 'diagram'}
+                tokens={tokens}
+              />
+              <GenerateButton
+                label="Video (200 pts)"
+                icon="play-circle-outline"
+                assetType="video"
+                onPress={() => handleGenerateAsset(selectedMaterial.id, 'video', 1, selectedTopic, generateMode)}
+                loading={generatingType === 'video'}
+                tokens={tokens}
+              />
+            </View>
+
+            <View style={styles.generateRow}>
+              <GenerateButton
+                label="Try It Yourself"
+                icon="create-outline"
+                assetType="example"
+                onPress={() => {
+                  generateExampleMutation.mutate({
+                    material_id: selectedMaterial.id,
+                    topic: selectedTopic,
+                    mode: generateMode,
+                    education_level: 'secondary',
+                    subject_hints: 'general',
+                  });
+                }}
+                loading={generateExampleMutation.isPending}
+                tokens={tokens}
+              />
+            </View>
+
+            <View style={[styles.generateOptions, { borderTopColor: tokens.border }]}>
+              <Text style={[styles.generateOptionsLabel, { color: tokens.ink }]}>
+                Generation Mode:
+              </Text>
+              <View style={styles.modeSelector}>
+                <TouchableOpacity
+                  onPress={() => { setGenerateMode('all'); setSelectedTopic(null); }}
+                  style={[
+                    styles.modeBtn,
+                    {
+                      backgroundColor: generateMode === 'all' ? tokens.mint : tokens.card,
+                      borderColor: tokens.border,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.modeBtnText, { color: generateMode === 'all' ? tokens.mintText : tokens.ink }]}>
+                    All Topics (20 questions)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setGenerateMode('topic')}
+                  style={[
+                    styles.modeBtn,
+                    {
+                      backgroundColor: generateMode === 'topic' ? tokens.mint : tokens.card,
+                      borderColor: tokens.border,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.modeBtnText, { color: generateMode === 'topic' ? tokens.mintText : tokens.ink }]}>
+                    By Topic (15 questions)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {generateMode === 'topic' && (
+                <View style={styles.topicSelector}>
+                  <Text style={[styles.topicSelectorLabel, { color: tokens.inkMuted }]}>
+                    Select Topic:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.topicChips}>
+                    {getTopicNames(selectedMaterial?.parsed_structure ?? null).map((topicName) => (
+                      <TouchableOpacity
+                        key={topicName}
+                        onPress={() => setSelectedTopic(topicName)}
+                        style={[
+                          styles.topicChip,
+                          {
+                            backgroundColor: selectedTopic === topicName ? tokens.mint : tokens.card,
+                            borderColor: tokens.border,
+                          },
+                        ]}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.topicChipText, { color: selectedTopic === topicName ? tokens.mintText : tokens.ink }]}>
+                          {topicName}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
           </View>
         ) : (
@@ -838,6 +1037,100 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: -0.2,
     textAlign: 'center',
+  },
+  generateOptions: {
+    gap: 10,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  generateOptionsLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modeSelector: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  modeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  modeBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  topicSelector: {
+    gap: 6,
+  },
+  topicSelectorLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  topicChips: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  topicChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  topicChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  readBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  readBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  readerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+  },
+  readerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  readerTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  readerCloseBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  readerContent: {
+    flex: 1,
+    padding: 16,
+  },
+  readerText: {
+    fontSize: 15,
+    lineHeight: 24,
   },
   materialList: {
     gap: 10,

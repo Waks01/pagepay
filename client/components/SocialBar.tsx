@@ -44,7 +44,7 @@ type SocialBarProps = {
   compact?: boolean;
 };
 
-function getTokens(scheme: 'light' | 'dark') {
+function getTokens(scheme: 'light' | 'dark' | 'sepia') {
   return PagePay[scheme];
 }
 

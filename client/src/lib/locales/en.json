@@ -133,6 +133,7 @@
     "wallet_access": "View wallet, current balance {{points}} points",
     "keep_reading": "Keep reading",
     "browse": "Browse",
+    "browse_by_level": "Browse by level",
     "trending": "Trending today",
     "see_all": "See all",
     "feed_error": "Couldn't load your feed.",
@@ -580,7 +581,9 @@
     "error_connection": "Can't reach the server. Check your connection.",
     "error_generic": "Verification failed. Try again.",
     "verifying": "Verifying...",
-    "verify": "Verify"
+    "verify": "Verify",
+    "submit": "Verify Email",
+    "resending": "Resending..."
   },
   "billing_history": {
     "title": "Billing History",

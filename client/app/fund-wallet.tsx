@@ -17,6 +17,7 @@ type DepositResponse = {
   payment_url: string;
   reference: string;
   amount_kobo: number;
+  deposit_amount_kobo: number;
 };
 
 const AMOUNTS = [500, 1000, 2000, 5000, 10000, 20000];
@@ -36,14 +37,12 @@ export default function FundWalletScreen() {
       const finalAmount = amount ?? (parseInt(customAmount) || 0);
       if (finalAmount < 500) throw new Error(t('fund_wallet.errors.amount_min'));
 
-      // Calculate processing fee (1.5% of deposit amount, capped at ₦2,000)
-      const processingFee = Math.min(Math.ceil(finalAmount * 0.015), 2000);
-      const totalPayment = finalAmount + processingFee;
-
       const res = await apiFetch('/api/v1/wallet/deposit', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount_kobo: totalPayment * 100, // User pays total (deposit + fee)
+          deposit_amount_kobo: finalAmount * 100,
+          custom_amount: !AMOUNTS.includes(finalAmount),
         }),
       });
 
@@ -55,33 +54,27 @@ export default function FundWalletScreen() {
       return (await res.json()) as DepositResponse;
     },
     onSuccess: async (data) => {
-      // Open Paystack checkout URL
       const canOpen = await Linking.canOpenURL(data.payment_url);
-      if (canOpen) {
-        await Linking.openURL(data.payment_url);
-        
-        // Calculate actual deposit amount (total - fee)
-        const actualDeposit = data.amount_kobo / 100;
-        const processingFee = Math.min(Math.ceil(actualDeposit * 0.015), 2000);
-        const depositAmount = actualDeposit - processingFee;
-        
-        // Show success message
-        Alert.alert(
-          'Payment Initiated',
-          `Complete payment of ₦${actualDeposit.toLocaleString()}. You'll receive ₦${depositAmount.toLocaleString()} in your wallet.`,
-          [
-            { 
-              text: 'Done', 
-              onPress: () => {
-                qc.invalidateQueries({ queryKey: ['me'] });
-                router.back();
-              }
-            }
-          ],
-        );
-      } else {
+      if (!canOpen) {
         throw new Error('Could not open payment link');
       }
+      
+      await Linking.openURL(data.payment_url);
+      
+      // Show success message
+      Alert.alert(
+        'Payment Initiated',
+        `Complete payment of ₦${(data.amount_kobo / 100).toLocaleString()}. You'll receive ₦${(data.deposit_amount_kobo / 100).toLocaleString()} in your wallet.`,
+        [
+          { 
+            text: 'Done', 
+            onPress: () => {
+              qc.invalidateQueries({ queryKey: ['me'] });
+              router.back();
+            }
+          }
+        ],
+      );
     },
     onError: (error: Error) => {
       Alert.alert(t('fund_wallet.errors.deposit_failed'), error.message);

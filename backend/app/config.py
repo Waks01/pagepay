@@ -39,8 +39,11 @@ class Settings(BaseSettings):
     # `https://api.pagepay.ng`).
     # NOTE: Paystack uses your SECRET KEY to sign webhooks (no separate webhook secret).
     public_base_url: str = "http://localhost:8000"
-    # Frontend URL for redirects after payment (wallet funding, subscriptions)
-    frontend_url: str = "exp://localhost:8081"  # Expo dev default
+    # Frontend URL for redirects after payment (wallet funding, subscriptions).
+    # Development: exp://localhost:8081 (Expo dev client)
+    # Production: client:// (app custom scheme, opens the app directly)
+    # This is overridden by FRONTEND_URL env var in production.
+    frontend_url: str = "client://"
 
     # ── Withdrawal fee tiers ────────────────────────────────────────
     # Mirrors Paystack's flat-fee transfer schedule (₦10 / ₦25 / ₦50) with

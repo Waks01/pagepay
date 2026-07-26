@@ -46,7 +46,7 @@ function coverBand(category: string, isSponsored: boolean, tokens: ReturnType<ty
   return tokens.border;
 }
 
-function getTokens(scheme: 'light' | 'dark') {
+function getTokens(scheme: 'light' | 'dark' | 'sepia') {
   return PagePay[scheme];
 }
 

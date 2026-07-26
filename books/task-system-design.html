@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PagePay — Task System Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #FBFAF6;
+    color: #0E1116;
+    padding: 24px;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; font-family: 'Space Grotesk', sans-serif; }
+  .subtitle { color: #6B7280; font-size: 13px; margin-bottom: 24px; }
+  .section { margin-bottom: 40px; }
+  .section-title {
+    font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #6B7280; margin-bottom: 12px; border-bottom: 1px solid #E5E2DA; padding-bottom: 6px;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 320px; }
+  .state-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #0E7C66; margin-top: 8px; margin-bottom: 6px; font-family: 'Space Grotesk', sans-serif;
+  }
+  .phone {
+    width: 320px; height: 640px; background: #fff; border-radius: 36px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.12); padding: 0; overflow: hidden; border: 6px solid #0E1116;
+  }
+  .phone-content { padding: 16px; height: 100%; overflow-y: auto; }
+  .task-card {
+    background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 16px;
+    border: 1px solid #E5E2DA; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .btn {
+    width: 100%; padding: 14px; border-radius: 12px; border: none;
+    font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 10px;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .btn-primary { background: #0E7C66; color: #fff; }
+  .btn-secondary { background: #FBFAF6; color: #0E7C66; border: 1px solid #E5E2DA; }
+  .btn-success { background: #0E7C66; color: #fff; }
+  .btn-danger { background: #fff; color: #C2410C; border: 1px solid #FDEFE7; }
+  .btn-sm {
+    padding: 6px 12px; border-radius: 8px; border: none; font-size: 12px;
+    font-weight: 600; cursor: pointer; margin-right: 6px; font-family: 'Space Grotesk', sans-serif;
+  }
+  .btn-approve { background: #0E7C66; color: #fff; }
+  .btn-reject { background: #fff; color: #C2410C; border: 1px solid #FDEFE7; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+    border-radius: 20px; font-size: 11px; font-weight: 600;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .chip-pending { background: #FDEFE7; color: #C2410C; }
+  .chip-approved { background: #E6F1ED; color: #0E7C66; }
+  .chip-rejected { background: #FDEFE7; color: #C2410C; }
+  .filter-pill {
+    padding: 8px 16px; border-radius: 20px; background: #FBFAF6;
+    border: 1px solid #E5E2DA; margin-right: 8px; display: inline-block;
+  }
+  .filter-pill-active { background: #0E7C66; border-color: #0E7C66; color: #fff; }
+  .stat-card {
+    background: #fff; border: 1px solid #E5E2DA; border-radius: 12px;
+    padding: 12px; text-align: center; flex: 1;
+  }
+  .stat-card .num { font-size: 20px; font-weight: 700; color: #0E7C66; font-family: 'Space Grotesk', sans-serif; }
+  .stat-card .lbl { font-size: 11px; color: #6B7280; text-transform: uppercase; margin-top: 2px; }
+  .admin-table {
+    width: 100%; border-collapse: collapse; background: #fff; border-radius: 14px;
+    overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05); font-size: 13px;
+    border: 1px solid #E5E2DA;
+  }
+  .admin-table th {
+    background: #FBFAF6; text-align: left; padding: 10px 12px; font-weight: 600;
+    color: #6B7280; font-size: 11px; text-transform: uppercase;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .admin-table td { padding: 12px; border-top: 1px solid #E5E2DA; vertical-align: middle; }
+  .admin-table tr:hover { background: #FBFAF6; }
+  .section-card {
+    background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 16px;
+    border: 1px solid #E5E2DA;
+  }
+  .section-title-inner {
+    font-size: 16px; font-weight: 600; color: #0E1116; margin-bottom: 12px;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .section-text { font-size: 14px; color: #6B7280; line-height: 22px; }
+  .reward-card {
+    background: #0E7C66; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px;
+  }
+  .reward-label { color: #fff; font-size: 14px; opacity: 0.9; margin-bottom: 8px; }
+  .reward-amount { color: #fff; font-size: 48px; font-weight: bold; margin-bottom: 4px; font-family: 'Space Grotesk', sans-serif; }
+  .reward-note { color: #fff; font-size: 12px; opacity: 0.8; }
+  .start-button {
+    background: #0E7C66; border-radius: 12px; padding: 18px; flex-direction: row;
+    align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 4px 12px rgba(14,124,102,0.3);
+  }
+  .start-button-text { color: #fff; font-size: 18px; font-weight: bold; font-family: 'Space Grotesk', sans-serif; }
+  .badge {
+    padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    display: inline-block; font-family: 'Space Grotesk', sans-serif;
+  }
+  .badge-admin { background: #FDEFE7; color: #C2410C; }
+  .badge-sponsored { background: #E6F1ED; color: #0E7C66; }
+  .reuse-box {
+    background: #E6F1ED; border-radius: 14px; padding: 16px; border: 1px solid #0E7C66; margin-bottom: 16px;
+  }
+  .extend-box {
+    background: #FDEFE7; border-radius: 14px; padding: 16px; border: 1px solid #C2410C; margin-bottom: 16px;
+  }
+  .box-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; font-family: 'Space Grotesk', sans-serif; }
+  .box-title-green { color: #0E7C66; }
+  .box-title-orange { color: #C2410C; }
+  .box-list { font-size: 13px; color: #0E1116; line-height: 1.8; }
+  .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .admin-header-title { font-size: 16px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; }
+  .admin-header-action {
+    background: #0E7C66; color: #fff; padding: 8px 14px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; font-family: 'Space Grotesk', sans-serif; border: none;
+  }
+  .form-group { margin-bottom: 12px; }
+  .form-label {
+    font-size: 12px; font-weight: 600; color: #6B7280; display: block;
+    margin-bottom: 4px; font-family: 'Space Grotesk', sans-serif;
+  }
+  .form-input, .form-select, .form-textarea {
+    width: 100%; padding: 10px; border: 1px solid #E5E2DA; border-radius: 10px;
+    font-size: 14px; font-family: 'Space Grotesk', sans-serif;
+  }
+  .form-textarea { resize: vertical; }
+  .new-tag {
+    display: inline-block; background: #FDEFE7; color: #C2410C;
+    padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .existing-tag {
+    display: inline-block; background: #E6F1ED; color: #0E7C66;
+    padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<h1>PagePay — Task System Design</h1>
+<p class="subtitle">Aligned with existing task infrastructure and brand identity</p>
+
+<!-- ============================================================ -->
+<div class="section">
+  <div class="section-title">1. Task List (existing tab)</div>
+  <div class="row">
+    <div class="col">
+      <div class="phone">
+        <div class="phone-content">
+          <div style="font-size:24px;font-weight:700;font-family:'Space Grotesk',sans-serif;margin-bottom:16px;">Tasks</div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+            <span class="filter-pill-active" style="padding:8px 16px;border-radius:20px;background:#0E7C66;color:#fff;font-size:12px;font-weight:600;">All</span>
+            <span class="filter-pill" style="padding:8px 16px;border-radius:20px;background:#FBFAF6;border:1px solid #E5E2DA;font-size:12px;font-weight:600;color:#6B7280;">Social</span>
+            <span class="filter-pill" style="padding:8px 16px;border-radius:20px;background:#FBFAF6;border:1px solid #E5E2DA;font-size:12px;font-weight:600;color:#6B7280;">Survey</span>
+          </div>
+          <div class="task-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <div style="display:flex;gap:8px;">
+                <span class="badge badge-admin">ENGAGEMENT</span>
+                <span class="badge badge-sponsored">POINTS</span>
+              </div>
+              <span style="color:#0E7C66;font-size:14px;font-weight:bold;font-family:'Space Grotesk',sans-serif;">100 pts</span>
+            </div>
+            <div style="font-size:16px;font-weight:600;color:#0E1116;margin-bottom:6px;font-family:'Space Grotesk',sans-serif;">Subscribe to PagePay on YouTube</div>
+            <div style="font-size:14px;color:#6B7280;margin-bottom:12px;">Follow our channel for daily book summaries.</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:#6B7280;">▶ YouTube</span></div>
+              <div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:#6B7280;">500 left</span></div>
+              <div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:#6B7280;">Jul 25</span></div>
+            </div>
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid #E5E2DA;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:11px;color:#C2410C;font-weight:600;">Limited availability</span>
+              <span style="font-size:11px;color:#6B7280;">Screenshot proof</span>
+            </div>
+          </div>
+          <div class="task-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <div style="display:flex;gap:8px;">
+                <span class="badge badge-sponsored">SURVEY</span>
+              </div>
+              <span style="color:#0E7C66;font-size:14px;font-weight:bold;font-family:'Space Grotesk',sans-serif;">250 pts</span>
+            </div>
+            <div style="font-size:16px;font-weight:600;color:#0E1116;margin-bottom:6px;font-family:'Space Grotesk',sans-serif;">Product Feedback Survey</div>
+            <div style="font-size:14px;color:#6B7280;margin-bottom:12px;">Share your opinion about our new features.</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:#6B7280;">🌐 Website</span></div>
+              <div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:#6B7280;">120 left</span></div>
+              <div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:#6B7280;">10 min</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="state-label">State A — Task List</div>
+    </div>
+    <div class="col">
+      <div class="phone">
+        <div class="phone-content">
+          <div style="display:flex;align-items:center;margin-bottom:16px;">
+            <div style="width:40px;height:40px;border-radius:20px;background:#FBFAF6;border:1px solid #E5E2DA;display:flex;align-items:center;justify-content:center;margin-right:16px;">←</div>
+            <div style="font-size:20px;font-weight:bold;color:#0E1116;font-family:'Space Grotesk',sans-serif;">Task Detail</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <span class="badge badge-admin">ENGAGEMENT</span>
+            <span class="badge badge-sponsored">POINTS</span>
+          </div>
+          <div style="font-size:28px;font-weight:bold;color:#0E1116;margin-bottom:24px;line-height:36px;font-family:'Space Grotesk',sans-serif;">Subscribe to PagePay on YouTube</div>
+          <div class="reward-card">
+            <div class="reward-label">You earn</div>
+            <div class="reward-amount">100</div>
+            <div class="reward-note">points</div>
+          </div>
+          <div class="section-card">
+            <div class="section-title-inner">Description</div>
+            <div class="section-text">Follow our YouTube channel for daily book summaries and reading tips.</div>
+          </div>
+          <div class="section-card">
+            <div class="section-title-inner">Instructions</div>
+            <div class="section-text">
+              1. Tap "Open YouTube" below<br/>
+              2. Subscribe to the PagePay channel<br/>
+              3. Take a screenshot of your subscription<br/>
+              4. Upload the screenshot here
+            </div>
+          </div>
+          <div class="section-card">
+            <div class="section-title-inner">Proof Required</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <span style="font-size:20px;color:#0E7C66;">📷</span>
+              <span style="font-size:14px;font-weight:600;color:#0E7C66;text-transform:capitalize;">Screenshot</span>
+            </div>
+            <div class="section-text">Upload a screenshot showing your YouTube subscription.</div>
+          </div>
+          <button class="btn btn-primary">
+            <span style="display:flex;align-items:center;justify-content:center;gap:8px;">
+              <span style="font-size:24px;">▶</span>
+              <span>Start Task</span>
+            </span>
+          </button>
+        </div>
+      </div>
+      <div class="state-label">State B — Task Detail</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="section">
+  <div class="section-title">2. Submission History & Profile (existing)</div>
+  <div class="row">
+    <div class="col">
+      <div class="phone">
+        <div class="phone-content">
+          <div style="display:flex;align-items:center;margin-bottom:16px;">
+            <div style="width:40px;height:40px;border-radius:20px;background:#FBFAF6;border:1px solid #E5E2DA;display:flex;align-items:center;justify-content:center;margin-right:16px;">←</div>
+            <div style="font-size:20px;font-weight:bold;color:#0E1116;font-family:'Space Grotesk',sans-serif;">My Submissions</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+            <span class="filter-pill-active" style="padding:8px 16px;border-radius:20px;background:#0E7C66;color:#fff;font-size:12px;font-weight:600;">All</span>
+            <span class="filter-pill" style="padding:8px 16px;border-radius:20px;background:#FBFAF6;border:1px solid #E5E2DA;font-size:12px;font-weight:600;color:#6B7280;">Pending</span>
+            <span class="filter-pill" style="padding:8px 16px;border-radius:20px;background:#FBFAF6;border:1px solid #E5E2DA;font-size:12px;font-weight:600;color:#6B7280;">Approved</span>
+            <span class="filter-pill" style="padding:8px 16px;border-radius:20px;background:#FBFAF6;border:1px solid #E5E2DA;font-size:12px;font-weight:600;color:#6B7280;">Rejected</span>
+          </div>
+          <div class="task-card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+              <div style="flex:1;">
+                <div style="font-size:16px;font-weight:600;color:#0E1116;margin-bottom:4px;font-family:'Space Grotesk',sans-serif;">Subscribe YouTube</div>
+                <div style="font-size:12px;color:#6B7280;">ENGAGEMENT · YouTube</div>
+              </div>
+              <span class="chip chip-pending">⏳ Pending</span>
+            </div>
+            <div style="border-top:1px solid #E5E2DA;padding-top:12px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="font-size:20px;color:#0E7C66;">💰</span>
+                <span style="font-size:18px;font-weight:bold;color:#0E7C66;font-family:'Space Grotesk',sans-serif;">100 pts</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                <span style="font-size:16px;color:#6B7280;">📅</span>
+                <span style="font-size:12px;color:#6B7280;">Submitted: Jul 18, 2026 — 2:34 PM</span>
+              </div>
+            </div>
+            <div style="border-top:1px solid #E5E2DA;padding-top:12px;margin-top:12px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:16px;color:#6B7280;">📷</span>
+                <span style="font-size:12px;color:#6B7280;">Screenshot provided</span>
+              </div>
+            </div>
+          </div>
+          <div class="task-card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+              <div style="flex:1;">
+                <div style="font-size:16px;font-weight:600;color:#0E1116;margin-bottom:4px;font-family:'Space Grotesk',sans-serif;">Follow Instagram</div>
+                <div style="font-size:12px;color:#6B7280;">ENGAGEMENT · Instagram</div>
+              </div>
+              <span class="chip chip-approved">✓ Approved</span>
+            </div>
+            <div style="border-top:1px solid #E5E2DA;padding-top:12px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="font-size:20px;color:#0E7C66;">💰</span>
+                <span style="font-size:18px;font-weight:bold;color:#0E7C66;font-family:'Space Grotesk',sans-serif;">50 pts</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                <span style="font-size:16px;color:#6B7280;">📅</span>
+                <span style="font-size:12px;color:#6B7280;">Submitted: Jul 15, 2026</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:16px;color:#0E7C66;">✓</span>
+                <span style="font-size:12px;color:#0E7C66;">Verified: Jul 15, 2026 — 3:22 PM</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="state-label">State C — Submission History</div>
+    </div>
+    <div class="col">
+      <div class="phone">
+        <div class="phone-content">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <div style="font-size:20px;font-weight:bold;color:#0E1116;font-family:'Space Grotesk',sans-serif;">Profile</div>
+            <span style="font-size:24px;color:#6B7280;">⚙️</span>
+          </div>
+          <div style="align-items:center;margin-bottom:24px;">
+            <div style="width:80px;height:80px;border-radius:40px;background:#E5E2DA;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;">
+              <span style="font-size:40px;color:#6B7280;">👤</span>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:18px;font-weight:700;color:#0E1116;font-family:'Space Grotesk',sans-serif;">John Reader</div>
+              <div style="font-size:13px;color:#6B7280;margin-top:4px;">Level 5 · 250 XP</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <div class="stat-card">
+              <div class="num">12</div>
+              <div class="lbl">Completed</div>
+            </div>
+            <div class="stat-card">
+              <div class="num">2</div>
+              <div class="lbl">Rejected</div>
+            </div>
+            <div class="stat-card">
+              <div class="num">₦85</div>
+              <div class="lbl">Earned</div>
+            </div>
+          </div>
+          <div style="background:#FBFAF6;border-radius:12px;padding:16px;border:1px solid #E5E2DA;margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+              <span style="font-size:13px;color:#6B7280;">Approval Rate</span>
+              <span style="font-size:13px;font-weight:700;color:#0E7C66;font-family:'Space Grotesk',sans-serif;">85%</span>
+            </div>
+            <div style="height:6px;background:#E5E2DA;border-radius:3px;overflow:hidden;">
+              <div style="width:85%;height:100%;background:#0E7C66;border-radius:3px;"></div>
+            </div>
+          </div>
+          <div style="background:#E6F1ED;border-radius:12px;padding:16px;border:1px solid #0E7C66;margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <span style="font-size:20px;color:#0E7C66;">🔥</span>
+              <span style="font-size:14px;font-weight:700;color:#0E7C66;font-family:'Space Grotesk',sans-serif;">7 Day Streak</span>
+            </div>
+            <div style="font-size:12px;color:#0E7C66;">Keep completing tasks to maintain your streak!</div>
+          </div>
+          <button class="btn btn-primary">
+            <span style="display:flex;align-items:center;justify-content:center;gap:8px;">
+              <span style="font-size:20px;">📊</span>
+              <span>View Full Stats</span>
+            </span>
+          </button>
+        </div>
+      </div>
+      <div class="state-label">State D — Worker Profile</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="section">
+  <div class="section-title">3. Admin Review Queue (new screen)</div>
+  <div style="background:#fff;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.05);padding:16px;border:1px solid #E5E2DA;max-width:820px;">
+    <div class="admin-header">
+      <div class="admin-header-title">📋 Review Queue</div>
+      <div style="background:#FDEFE7;padding:6px 12px;border-radius:8px;display:flex;align-items:center;gap:6px;">
+        <span style="font-size:14px;color:#C2410C;">⏳</span>
+        <span style="font-size:13px;font-weight:600;color:#C2410C;font-family:'Space Grotesk',sans-serif;">3 Pending</span>
+      </div>
+    </div>
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Task</th>
+          <th>Proof</th>
+          <th>Submitted</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div style="font-weight:600;">John Reader</div>
+            <div style="font-size:11px;color:#6B7280;">john@example.com</div>
+            <div style="font-size:10px;color:#6B7280;">ID: #4821 · Level 5 · 85%</div>
+          </td>
+          <td>
+            <div style="font-weight:600;">Subscribe YouTube</div>
+            <span class="badge badge-admin" style="margin-top:4px;">ENGAGEMENT</span>
+          </td>
+          <td>
+            <div style="width:48px;height:36px;background:#E5E2DA;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#6B7280;cursor:pointer;">IMG</div>
+          </td>
+          <td style="font-size:11px;color:#6B7280;">2 minutes ago</td>
+          <td>
+            <button class="btn-sm btn-approve">✓ Approve + 100 pts</button>
+            <button class="btn-sm btn-reject">✗ Reject</button>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight:600;">Jane Smith</div>
+            <div style="font-size:11px;color:#6B7280;">jane@example.com</div>
+            <div style="font-size:10px;color:#6B7280;">ID: #7291 · Level 3 · 92%</div>
+          </td>
+          <td>
+            <div style="font-weight:600;">Follow Instagram</div>
+            <span class="badge badge-admin" style="margin-top:4px;">ENGAGEMENT</span>
+          </td>
+          <td>
+            <div style="width:48px;height:36px;background:#E5E2DA;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#6B7280;cursor:pointer;">IMG</div>
+          </td>
+          <td style="font-size:11px;color:#6B7280;">1 hour ago</td>
+          <td>
+            <button class="btn-sm btn-approve">✓ Approve + 50 pts</button>
+            <button class="btn-sm btn-reject">✗ Reject</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="section">
+  <div class="section-title">4. Create Task (admin)</div>
+  <div style="background:#fff;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.05);padding:16px;border:1px solid #E5E2DA;max-width:520px;">
+    <div style="font-size:16px;font-weight:700;margin-bottom:14px;font-family:'Space Grotesk',sans-serif;">+ Create Task</div>
+    <div class="form-group">
+      <label class="form-label">Task Title</label>
+      <input class="form-input" value="Subscribe to PagePay on YouTube" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea class="form-textarea" rows="2">Follow our YouTube channel for daily book summaries and reading tips.</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Platform</label>
+      <select class="form-select">
+        <option>YouTube</option>
+        <option>Instagram</option>
+        <option>Twitter / X</option>
+        <option>TikTok</option>
+        <option>Facebook</option>
+        <option>Website</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Task URL</label>
+      <input class="form-input" type="url" value="https://youtube.com/@pagepay" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Points Reward</label>
+      <input class="form-input" type="number" value="100" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Instructions</label>
+      <textarea class="form-textarea" rows="3">1. Tap "Open YouTube"
+2. Subscribe to the channel
+3. Take a screenshot
+4. Upload it here</textarea>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" style="flex:1;">Create Task</button>
+      <button class="btn btn-secondary" style="flex:1;">Save Draft</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="section">
+  <div class="section-title">5. What Reuses vs What Is New</div>
+  <div class="row">
+    <div class="col">
+      <div class="reuse-box">
+        <div class="box-title box-title-green">✅ Reuse As-Is</div>
+        <div class="box-list">
+          • Task list tab <code>/(tabs)/tasks.tsx</code><br/>
+          • Task detail <code>/tasks/[id].tsx</code><br/>
+          • Proof submission <code>/tasks/[id]/complete.tsx</code><br/>
+          • Submission history <code>/tasks/history.tsx</code><br/>
+          • Worker profile <code>/tasks/profile.tsx</code><br/>
+          • Navigation structure<br/>
+          • Backend <code>/api/v1/tasks/*</code><br/>
+          • API types in <code>src/features/tasks/api.ts</code>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="extend-box">
+        <div class="box-title box-title-orange">🔧 Extend / Add</div>
+        <div class="box-list">
+          • Add task category: "social" vs "survey"<br/>
+          • Add reward display: points for all tasks<br/>
+          • Admin task creation flow<br/>
+          • Admin review dashboard<br/>
+          • Task list category filter<br/>
+          • Visual treatment for engagement tasks<br/>
+          • Points credit logic
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="section">
+  <div class="section-title">6. Data Model Changes</div>
+  <div style="background:#fff;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.05);padding:16px;border:1px solid #E5E2DA;max-width:820px;">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Field</th>
+          <th>Existing</th>
+          <th>New / Extended</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>task_type</strong></td>
+          <td><span class="existing-tag">survey, video, app_install</span></td>
+          <td><span class="new-tag">+ engagement</span></td>
+          <td>New type for admin tasks</td>
+        </tr>
+        <tr>
+          <td><strong>category</strong></td>
+          <td><span class="existing-tag">—</span></td>
+          <td><span class="new-tag">"social" | "survey"</span></td>
+          <td>NEW FIELD — user-facing filter</td>
+        </tr>
+        <tr>
+          <td><strong>reward_amount</strong></td>
+          <td>In naira (cents)</td>
+          <td><span class="new-tag">Points for all tasks</span></td>
+          <td>Unified display</td>
+        </tr>
+        <tr>
+          <td><strong>time_limit_minutes</strong></td>
+          <td>10, 30, 60...</td>
+          <td><span class="new-tag">NULL for engagement</span></td>
+          <td>No time limit for social tasks</td>
+        </tr>
+        <tr>
+          <td><strong>min_worker_level</strong></td>
+          <td>1, 2, 3...</td>
+          <td><span class="new-tag">0 or NULL for engagement</span></td>
+          <td>Open to all users</td>
+        </tr>
+        <tr>
+          <td><strong>status (submission)</strong></td>
+          <td>pending, validating, approved, rejected</td>
+          <td><span class="new-tag">Same — skip validating</span></td>
+          <td>Engagement tasks go straight to pending</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="margin-top:16px;padding:12px;background:#E6F1ED;border-radius:8px;font-size:12px;color:#0E7C66;border:1px solid #0E7C66;">
+      <strong>Note:</strong> Admin-created tasks reuse the same tables. No new tables required.
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="section">
+  <div class="section-title">7. Missing Screens to Build</div>
+  <div style="background:#fff;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.05);padding:16px;border:1px solid #E5E2DA;max-width:820px;">
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+      <div><strong style="color:#0E7C66;font-family:'Space Grotesk',sans-serif;">1. Admin task creation:</strong> Extend existing sponsor form or create new admin form. Same fields, different defaults.</div>
+      <div><strong style="color:#0E7C66;font-family:'Space Grotesk',sans-serif;">2. Admin review queue:</strong> New screen at <code>/admin/tasks/submissions</code>. Table of pending submissions with screenshot preview, user info, approve/reject actions.</div>
+      <div><strong style="color:#0E7C66;font-family:'Space Grotesk',sans-serif;">3. Admin submission detail:</strong> Click a submission to view full-size screenshot, user details, task details, rejection reason input.</div>
+      <div><strong style="color:#0E7C66;font-family:'Space Grotesk',sans-serif;">4. Task list filter:</strong> Add category filter pills to <code>/(tabs)/tasks.tsx</code>: All / Social / Survey / Video.</div>
+      <div><strong style="color:#0E7C66;font-family:'Space Grotesk',sans-serif;">5. Points notification:</strong> Toast/in-app notification when points are credited after admin approval.</div>
+    </div>
+  </div>
+</div>
+
+<p style="font-size:11px;color:#9BA1A6;margin-top:40px;text-align:center;font-family:'Space Grotesk',sans-serif;">
+  PagePay Task System — Aligned with actual implementation · Brand colors: #0E7C66 mint · #FBFAF6 paper · Space Grotesk typography
+</p>
+
+</body>
+</html>

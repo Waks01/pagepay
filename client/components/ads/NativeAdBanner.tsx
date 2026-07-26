@@ -63,11 +63,14 @@ export function NativeAdBanner({ adUnit, sessionId }: NativeAdBannerProps) {
           setNativeAd(ad);
           setError(false);
 
-          unsubClicked = ad.addAdEventListener(NativeAdEventType.CLICKED, () => {
+          const listenerHandle = ad.addAdEventListener(NativeAdEventType.CLICKED, () => {
             if (__DEV__) {
               console.log('[NativeAdBanner] Ad clicked');
             }
           });
+          unsubClicked = typeof listenerHandle === 'function'
+            ? listenerHandle
+            : () => { try { listenerHandle.remove?.(); } catch { /* noop */ } };
         })
         .catch((err: any) => {
           if (__DEV__) {
@@ -87,7 +90,11 @@ export function NativeAdBanner({ adUnit, sessionId }: NativeAdBannerProps) {
     return () => {
       isActive = false;
       if (retryTimer) clearTimeout(retryTimer);
-      if (unsubClicked) unsubClicked();
+      if (typeof unsubClicked === 'function') {
+        unsubClicked();
+      } else if (unsubClicked && typeof (unsubClicked as any).remove === 'function') {
+        (unsubClicked as any).remove();
+      }
       if (adRef.current) {
         adRef.current.destroy();
         adRef.current = null;

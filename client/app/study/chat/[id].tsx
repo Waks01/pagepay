@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -46,6 +46,9 @@ export default function StudyChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [educationLevel, setEducationLevel] = useState<string>('secondary');
+  const [difficulty, setDifficulty] = useState<string>('medium');
+  const [showSettings, setShowSettings] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -88,7 +91,12 @@ export default function StudyChatScreen() {
         const res = await apiFetch('/api/v1/study/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ material_id: materialId, message: text.trim() }),
+          body: JSON.stringify({
+            material_id: materialId,
+            message: text.trim(),
+            education_level: educationLevel,
+            difficulty,
+          }),
         });
 
         if (!res.ok) {
@@ -150,7 +158,73 @@ export default function StudyChatScreen() {
           </Text>
           <Text style={[styles.subtitle, { color: tokens.inkMuted }]}>{t('study_chat.subtitle')}</Text>
         </View>
+        <TouchableOpacity
+          onPress={() => setShowSettings(!showSettings)}
+          style={styles.settingsBtn}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="settings-outline" size={22} color={tokens.mint} />
+        </TouchableOpacity>
       </View>
+
+      {showSettings && (
+        <View style={[styles.settingsBar, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+          <View style={styles.settingGroup}>
+            <Text style={[styles.settingLabel, { color: tokens.inkMuted }]}>Level</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.settingOptions}>
+              {['primary', 'secondary', 'tertiary', 'research'].map((level) => (
+                <TouchableOpacity
+                  key={level}
+                  onPress={() => setEducationLevel(level)}
+                  style={[
+                    styles.settingChip,
+                    {
+                      backgroundColor: educationLevel === level ? tokens.mint : tokens.paper,
+                      borderColor: educationLevel === level ? tokens.mint : tokens.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.settingChipText,
+                      { color: educationLevel === level ? tokens.mintText : tokens.ink },
+                    ]}
+                  >
+                    {level}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+          <View style={styles.settingGroup}>
+            <Text style={[styles.settingLabel, { color: tokens.inkMuted }]}>Difficulty</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.settingOptions}>
+              {['easy', 'medium', 'hard'].map((diff) => (
+                <TouchableOpacity
+                  key={diff}
+                  onPress={() => setDifficulty(diff)}
+                  style={[
+                    styles.settingChip,
+                    {
+                      backgroundColor: difficulty === diff ? tokens.mint : tokens.paper,
+                      borderColor: difficulty === diff ? tokens.mint : tokens.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.settingChipText,
+                      { color: difficulty === diff ? tokens.mintText : tokens.ink },
+                    ]}
+                  >
+                    {diff}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      )}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -259,6 +333,43 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  settingsBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  settingGroup: {
+    gap: 6,
+  },
+  settingLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  settingOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  settingChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  settingChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   title: {
     fontSize: 17,

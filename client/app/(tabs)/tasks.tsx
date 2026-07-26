@@ -22,11 +22,17 @@ export default function TasksScreen() {
     queryFn: fetchTasks,
   });
 
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
   }, [refetch]);
+
+  const categories = Array.from(
+    new Set((tasksData?.items || []).map((t) => t.category).filter(Boolean))
+  );
 
   const getPlatformIcon = (platform: string): any => {
     const platformLower = platform.toLowerCase();
@@ -137,8 +143,34 @@ export default function TasksScreen() {
         </TouchableOpacity>
       </View>
 
+      {categories.length > 0 && (
+        <View style={styles.filterRow}>
+          <TouchableOpacity
+            style={[styles.filterPill, !categoryFilter && styles.filterPillActive]}
+            onPress={() => setCategoryFilter(null)}
+          >
+            <Text style={[styles.filterPillText, !categoryFilter && styles.filterPillTextActive]}>
+              All
+            </Text>
+          </TouchableOpacity>
+          {categories.map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.filterPill, categoryFilter === cat && styles.filterPillActive]}
+              onPress={() => setCategoryFilter(cat)}
+            >
+              <Text style={[styles.filterPillText, categoryFilter === cat && styles.filterPillTextActive]}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       <FlatList
-        data={tasksData?.items || []}
+        data={(tasksData?.items || []).filter(
+          (t) => !categoryFilter || t.category === categoryFilter
+        )}
         renderItem={renderTask}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContent}
@@ -186,6 +218,34 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E2DA',
+  },
+  filterPillActive: {
+    backgroundColor: '#0E7C66',
+    borderColor: '#0E7C66',
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    fontFamily: 'SpaceGrotesk_600',
+  },
+  filterPillTextActive: {
+    color: '#fff',
   },
   taskCard: {
     borderRadius: 12,

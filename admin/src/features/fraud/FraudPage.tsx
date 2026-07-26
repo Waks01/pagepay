@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tantml:react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/lib/api";
 import type { FraudFlagListResponse } from "@/lib/types";
 import { useState } from "react";

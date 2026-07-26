@@ -111,7 +111,7 @@ export default function Onboarding() {
     // app launch will re-prompt onboarding, which is a tolerable
     // failure mode (it's never destructive).
     void persistOnboardingCompleted(true);
-    router.replace('/(auth)/');
+    router.replace('/(auth)/' as any);
   }, [router, setOnboardingCompleted]);
 
   return (

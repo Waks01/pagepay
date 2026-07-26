@@ -79,7 +79,7 @@ export default function ResetPasswordScreen() {
       }
 
       setSuccess(true);
-      setTimeout(() => router.replace('/(auth)/'), 1500);
+      setTimeout(() => router.replace('/(auth)/' as any), 1500);
     } catch {
       setFormError(t('reset_password.errors.connection_error'));
       setErrorTrigger(true);

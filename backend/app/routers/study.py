@@ -14,14 +14,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.prompts import (
     CHAT_TUTOR_SYSTEM,
-    MCQ_GENERATOR,
-    FLASHCARD_GENERATOR,
+    DIAGRAM_GENERATOR,
+    ESSAY_ALL_TOPICS_GENERATOR,
     ESSAY_GENERATOR,
+    ESSAY_TOPIC_GENERATOR,
+    EXAMPLE_GENERATOR,
+    FLASHCARD_ALL_TOPICS_GENERATOR,
+    FLASHCARD_GENERATOR,
+    FLASHCARD_TOPIC_GENERATOR,
+    MCQ_ALL_TOPICS_GENERATOR,
+    MCQ_GENERATOR,
+    MCQ_TOPIC_GENERATOR,
     SOW_PARSER,
+    VIDEO_SCRIPT_GENERATOR,
 )
-from app.ai.router import route_ai
-from app.database import get_db
-from app.models import StudyAsset, StudyMaterial, StudyTransaction, User, ReadingSession
+from app.models import (
+    StudyAsset,
+    StudyMaterial,
+    StudyProgress,
+    StudyTransaction,
+    User,
+    ReadingSession,
+)
 from app.routers.auth import get_current_user
 from app.services.sanitize import (
     safe_filename,
@@ -30,6 +44,9 @@ from app.services.sanitize import (
 from app.schemas import (
     ChatRequest,
     ChatResponse,
+    ExampleCheckRequest,
+    ExampleCheckResponse,
+    ExampleGenerateRequest,
     GenerateAssetRequest,
     GenerateAssetResponse,
     MaterialDetail,
@@ -65,6 +82,7 @@ ALLOWED_IMAGE_TYPES: frozenset[str] = frozenset({
 })
 
 UNLOCK_POINTS_COST = 50
+VIDEO_UNLOCK_POINTS_COST = 200
 
 
 # ── POST /study/sow/upload ──────────────────────────────────────────
@@ -401,6 +419,7 @@ async def get_material(
     for a in assets:
         asset_dict = {
             "id": a.id,
+            "material_id": a.material_id,
             "type": a.asset_type,
             "points_to_unlock": a.points_to_unlock,
             "created_at": a.created_at.isoformat(),
@@ -450,24 +469,65 @@ async def generate_asset(
     import json as _json
     parsed = _json.loads(material.parsed_structure)
 
-    # Build context from parsed structure
-    context_parts = []
-    for topic in parsed.get("topics", []):
-        context_parts.append(f"Topic: {topic['name']}")
-        for st in topic.get("subtopics", []):
-            context_parts.append(f"  - {st}")
-        for cc in topic.get("key_concepts", []):
-            context_parts.append(f"    * {cc}")
-    context = "\n".join(context_parts)
+    topics = parsed.get("topics", [])
 
-    if payload.asset_type == "mcq":
-        prompt = MCQ_GENERATOR.format(context=context, count=payload.count)
-    elif payload.asset_type == "flashcard":
-        prompt = FLASHCARD_GENERATOR.format(context=context, count=payload.count)
-    elif payload.asset_type == "essay":
-        prompt = ESSAY_GENERATOR.format(context=context, count=payload.count)
+    if payload.mode == "topic":
+        if not payload.topic:
+            raise HTTPException(status_code=400, detail="Topic name is required in topic mode.")
+        topic_data = None
+        for t in topics:
+            if t.get("name") == payload.topic:
+                topic_data = t
+                break
+        if topic_data is None:
+            available = [t.get("name", "") for t in topics]
+            raise HTTPException(
+                status_code=404,
+                detail=f"Topic '{payload.topic}' not found. Available topics: {', '.join(available)}",
+            )
+        context_parts = []
+        context_parts.append(f"Topic: {topic_data['name']}")
+        for st in topic_data.get("subtopics", []):
+            context_parts.append(f"  - {st}")
+        for cc in topic_data.get("key_concepts", []):
+            context_parts.append(f"    * {cc}")
+        context = "\n".join(context_parts)
+
+        if payload.asset_type == "mcq":
+            prompt = MCQ_TOPIC_GENERATOR.format(topic=payload.topic, context=context, count=payload.count, difficulty=payload.difficulty)
+        elif payload.asset_type == "flashcard":
+            prompt = FLASHCARD_TOPIC_GENERATOR.format(topic=payload.topic, context=context, count=payload.count)
+        elif payload.asset_type == "essay":
+            prompt = ESSAY_TOPIC_GENERATOR.format(topic=payload.topic, context=context, count=payload.count)
+        elif payload.asset_type == "diagram":
+            prompt = DIAGRAM_GENERATOR.format(topic=payload.topic, context=context, education_level=payload.education_level or "secondary")
+        elif payload.asset_type == "video":
+            prompt = VIDEO_SCRIPT_GENERATOR.format(topic=payload.topic, context=context, education_level=payload.education_level or "secondary")
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown asset type: {payload.asset_type}")
+
     else:
-        raise HTTPException(status_code=400, detail=f"Unknown asset type: {payload.asset_type}")
+        context_parts = []
+        for topic in topics:
+            context_parts.append(f"Topic: {topic['name']}")
+            for st in topic.get("subtopics", []):
+                context_parts.append(f"  - {st}")
+            for cc in topic.get("key_concepts", []):
+                context_parts.append(f"    * {cc}")
+        context = "\n".join(context_parts)
+
+        if payload.asset_type == "mcq":
+            prompt = MCQ_ALL_TOPICS_GENERATOR.format(context=context, count=payload.count, difficulty=payload.difficulty)
+        elif payload.asset_type == "flashcard":
+            prompt = FLASHCARD_ALL_TOPICS_GENERATOR.format(context=context, count=payload.count)
+        elif payload.asset_type == "essay":
+            prompt = ESSAY_ALL_TOPICS_GENERATOR.format(context=context, count=payload.count)
+        elif payload.asset_type == "diagram":
+            prompt = DIAGRAM_GENERATOR.format(topic="All Topics", context=context, education_level=payload.education_level or "secondary")
+        elif payload.asset_type == "video":
+            prompt = VIDEO_SCRIPT_GENERATOR.format(topic="All Topics", context=context, education_level=payload.education_level or "secondary")
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown asset type: {payload.asset_type}")
 
     ai_result = await route_ai(prompt, task_type="fast", db=db)
 
@@ -478,9 +538,172 @@ async def generate_asset(
         logger.error("Asset generator returned non-JSON: %s", ai_result["response"][:200])
         raise HTTPException(status_code=502, detail="AI returned invalid format. Try again.")
 
+    points_cost = VIDEO_UNLOCK_POINTS_COST if payload.asset_type == "video" else UNLOCK_POINTS_COST
+
     asset = StudyAsset(
         material_id=payload.material_id,
         asset_type=payload.asset_type,
+        content_json=_json.dumps(content),
+        points_to_unlock=points_cost,
+    )
+    db.add(asset)
+    await db.commit()
+    await db.refresh(asset)
+
+    return GenerateAssetResponse(assets=[content])
+
+
+# ── POST /study/progress ─────────────────────────────────────────────
+@router.post("/progress", response_model=StudyProgressResponse, status_code=201)
+async def update_progress(
+    payload: StudyProgressUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == payload.material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    progress = StudyProgress(
+        user_id=current_user.id,
+        material_id=payload.material_id,
+        topic_index=payload.topic_index,
+        topic_name=payload.topic_name,
+        status=payload.status,
+        mastery_score=payload.mastery_score,
+    )
+    db.add(progress)
+    await db.commit()
+    await db.refresh(progress)
+    return progress
+
+
+@router.get("/materials/{material_id}/progress", response_model=StudyProgressListResponse)
+async def get_progress(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    import json as _json
+    parsed = _json.loads(material.parsed_structure or '{"topics": []}')
+    total_topics = len(parsed.get("topics", []))
+
+    progress_result = await db.execute(
+        select(StudyProgress).where(
+            StudyProgress.user_id == current_user.id,
+            StudyProgress.material_id == material_id,
+        )
+    )
+    progress_rows = progress_result.scalars().all()
+
+    mastered = sum(1 for p in progress_rows if p.status == "mastered")
+    reviewing = sum(1 for p in progress_rows if p.status == "reviewing")
+    not_started = total_topics - mastered - reviewing
+
+    return StudyProgressListResponse(
+        material_id=material_id,
+        total_topics=total_topics,
+        mastered=mastered,
+        reviewing=reviewing,
+        not_started=max(0, not_started),
+        progress=[
+            StudyProgressResponse(
+                id=p.id,
+                material_id=p.material_id,
+                topic_index=p.topic_index,
+                topic_name=p.topic_name,
+                status=p.status,
+                mastery_score=p.mastery_score,
+                last_reviewed_at=p.last_reviewed_at,
+            )
+            for p in progress_rows
+        ],
+    )
+
+
+# ── POST /study/examples/generate ───────────────────────────────────
+
+
+@router.post("/examples/generate", response_model=GenerateAssetResponse, status_code=201)
+async def generate_example(
+    payload: ExampleGenerateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == payload.material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    if not material.parsed_structure:
+        raise HTTPException(status_code=400, detail="Material has no parsed structure. Re-upload or try again.")
+
+    import json as _json
+    parsed = _json.loads(material.parsed_structure)
+    topics = parsed.get("topics", [])
+
+    context_parts = []
+    target_topic = payload.topic
+    if payload.mode == "topic" and target_topic:
+        topic_data = next((t for t in topics if t.get("name") == target_topic), None)
+        if not topic_data:
+            available = [t.get("name", "") for t in topics]
+            raise HTTPException(status_code=404, detail=f"Topic '{target_topic}' not found. Available: {', '.join(available)}")
+        context_parts.append(f"Topic: {topic_data['name']}")
+        for st in topic_data.get("subtopics", []):
+            context_parts.append(f"  - {st}")
+        for cc in topic_data.get("key_concepts", []):
+            context_parts.append(f"    * {cc}")
+    else:
+        for topic in topics:
+            context_parts.append(f"Topic: {topic['name']}")
+            for st in topic.get("subtopics", []):
+                context_parts.append(f"  - {st}")
+            for cc in topic.get("key_concepts", []):
+                context_parts.append(f"    * {cc}")
+        target_topic = "All Topics"
+
+    context = "\n".join(context_parts)
+    prompt = EXAMPLE_GENERATOR.format(
+        topic=target_topic,
+        context=context,
+        education_level=payload.education_level or "secondary",
+        subject_hints=payload.subject_hints,
+    )
+
+    ai_result = await route_ai(prompt, task_type="fast", db=db)
+
+    content = None
+    try:
+        content = _json.loads(ai_result["response"])
+    except Exception:
+        logger.error("Example generator returned non-JSON: %s", ai_result["response"][:200])
+        raise HTTPException(status_code=502, detail="AI returned invalid format. Try again.")
+
+    asset = StudyAsset(
+        material_id=payload.material_id,
+        asset_type="example",
         content_json=_json.dumps(content),
         points_to_unlock=UNLOCK_POINTS_COST,
     )
@@ -491,12 +714,92 @@ async def generate_asset(
     return GenerateAssetResponse(assets=[content])
 
 
+# ── POST /study/examples/check ──────────────────────────────────────
+
+
+@router.post("/examples/check", response_model=ExampleCheckResponse)
+async def check_example(
+    payload: ExampleCheckRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    asset_result = await db.execute(
+        select(StudyAsset).where(
+            StudyAsset.id == payload.example_id,
+            StudyAsset.asset_type == "example",
+        )
+    )
+    asset = asset_result.scalar_one_or_none()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Example not found")
+
+    material_result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == asset.material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    if not material_result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="Not your material")
+
+    import json as _json
+    content = _json.loads(asset.content_json)
+    try_data = content.get("try_yourself", {})
+
+    checker_prompt = f"""You are a friendly tutor checking a student's answer to a practice problem.
+
+Problem: {try_data.get('problem', '')}
+Correct final answer: {try_data.get('final_answer', '')}
+Student's answer: {payload.user_answer}
+
+Available hints (use only if the student is wrong):
+{chr(10).join(f"- {h}" for h in try_data.get('hints', []))}
+
+Solution steps:
+{chr(10).join(f"{i+1}. {s}" for i, s in enumerate(try_data.get('solution_steps', [])))}
+
+Output strict JSON only. No markdown. No backticks. No extra text.
+{{
+  "correct": true/false,
+  "feedback": "Encouraging feedback on their answer",
+  "hint": "A helpful hint if they got it wrong (null if correct)",
+  "next_step_instruction": "What to do next",
+  "show_answer": false
+}}
+
+Rules:
+- Be encouraging, not discouraging
+- If correct: congratulate and suggest moving to the next topic
+- If wrong: explain what went wrong in simple terms, don't just say "incorrect"
+- Use the hints provided above
+- show_answer should be true only if the student has attempted 3+ times (we'll track this client-side for now)"""
+
+    ai_result = await route_ai(checker_prompt, task_type="fast", db=db)
+
+    check_result = None
+    try:
+        check_result = _json.loads(ai_result["response"])
+    except Exception:
+        logger.error("Example checker returned non-JSON: %s", ai_result["response"][:200])
+        raise HTTPException(status_code=502, detail="AI returned invalid format. Try again.")
+
+    return ExampleCheckResponse(
+        correct=check_result.get("correct", False),
+        feedback=check_result.get("feedback", "Keep trying!"),
+        hint=check_result.get("hint"),
+        next_step_instruction=check_result.get("next_step_instruction"),
+        show_answer=check_result.get("show_answer", False),
+    )
+
+
 # ── POST /study/chat (streaming) ────────────────────────────────────
 
 
 @router.post("/chat")
 async def chat_study(
     payload: ChatRequest,
+    education_level: str | None = None,
+    difficulty: str = "medium",
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -521,7 +824,11 @@ async def chat_study(
                 context_parts.append(f"  - {st}")
         context = "\n".join(context_parts)
 
-    system_prompt = CHAT_TUTOR_SYSTEM.format(context=context or "No structured context available.")
+    system_prompt = CHAT_TUTOR_SYSTEM.format(
+        context=context or "No structured context available.",
+        education_level=education_level or "secondary",
+        difficulty=difficulty,
+    )
     full_prompt = f"{system_prompt}\n\nStudent question: {payload.message}"
 
     async def generate():
@@ -718,6 +1025,31 @@ async def complete_quiz(
         new_balance = new_balance_result.scalar_one() or 0
         bonus_awarded = True
 
+    # Send push notification for bonus (fire-and-forget)
+    if bonus_awarded:
+        try:
+            from app.services.fcm import send_push_notification
+            from app.services.notifications import create_notification
+            import asyncio
+            asyncio.create_task(send_push_notification(
+                db=db,
+                user_id=current_user.id,
+                title="Quiz Bonus! 🎉",
+                body=f"You scored {payload.score}% and earned +{bonus_points} points!",
+                data={"type": "quiz_bonus", "score": str(payload.score), "points": str(bonus_points)},
+                category="study_reminders",
+            ))
+            asyncio.create_task(create_notification(
+                db=db,
+                user_id=current_user.id,
+                title="Quiz Bonus! 🎉",
+                body=f"You scored {payload.score}% and earned +{bonus_points} points!",
+                category="study_reminders",
+                data={"type": "quiz_bonus", "score": payload.score, "points": bonus_points},
+            ))
+        except Exception:
+            pass
+
     return QuizCompleteResponse(
         bonus_awarded=bonus_awarded,
         bonus_points=bonus_points,
@@ -870,3 +1202,29 @@ async def end_study_session(
         duration_seconds=session["duration_seconds"],
         ended_at=session["ended_at"].isoformat(),
     )
+
+    # Notify on study milestone: 30+ minutes
+    if session.get("duration_seconds", 0) >= 30 * 60:
+        try:
+            from app.services.fcm import send_push_notification
+            from app.services.notifications import create_notification
+            import asyncio
+            duration_min = session["duration_seconds"] // 60
+            asyncio.create_task(send_push_notification(
+                db=db,
+                user_id=current_user.id,
+                title="Study Milestone! 📚",
+                body=f"You studied for {duration_min} minutes. Keep it up!",
+                data={"type": "study_reminder", "duration_minutes": str(duration_min)},
+                category="study_reminders",
+            ))
+            asyncio.create_task(create_notification(
+                db=db,
+                user_id=current_user.id,
+                title="Study Milestone! 📚",
+                body=f"You studied for {duration_min} minutes. Keep it up!",
+                category="study_reminders",
+                data={"type": "study_reminder", "duration_minutes": duration_min},
+            ))
+        except Exception:
+            pass

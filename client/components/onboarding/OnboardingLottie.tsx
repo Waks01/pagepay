@@ -13,7 +13,7 @@ import { View, StyleSheet } from 'react-native';
 import LottieView from 'lottie-react-native';
 
 type OnboardingLottieProps = {
-  source: number; // require(...) result
+  source: any; // require(...) result for lottie-react-native
   autoPlay?: boolean;
   loop?: boolean;
 };

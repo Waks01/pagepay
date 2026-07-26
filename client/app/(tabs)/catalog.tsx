@@ -75,14 +75,14 @@ export default function CatalogScreen() {
   const storeCategory = useCatalogFilter((s) => s.category);
   const setStoreCategory = useCatalogFilter((s) => s.setCategory);
 
-  // Education filters. We keep these as local state rather than
-  // store state because they're transient — the user picks a level
-  // for one browse session, not as a global preference. Local state
-  // is also cleared when the user navigates away and back. Per v3
-  // §4.2 the class-level filter is session-only for the same reason
-  // (persisting it across launches is noise).
-  const [educationLevel, setEducationLevel] = useState<string | null>(null);
-  const [classLevel, setClassLevel] = useState<string | null>(null);
+  // Education filters live in the shared catalog store so the Home
+  // screen's level grid can pre-apply a level before navigating here.
+  // The class selection is reset whenever the level changes — the class
+  // grid is scoped to a single level (v3 §4.2).
+  const educationLevel = useCatalogFilter((s) => s.educationLevel);
+  const setEducationLevel = useCatalogFilter((s) => s.setEducationLevel);
+  const classLevel = useCatalogFilter((s) => s.classLevel);
+  const setClassLevel = useCatalogFilter((s) => s.setClassLevel);
   const [levelGridExpanded, setLevelGridExpanded] = useState(false);
 
   // Search: typed value + debounced value. We type into `searchInput`
@@ -257,7 +257,9 @@ export default function CatalogScreen() {
 
   const onClearFilter = useCallback(() => {
     setStoreCategory(null);
-  }, [setStoreCategory]);
+    setEducationLevel(null);
+    setClassLevel(null);
+  }, [setStoreCategory, setEducationLevel, setClassLevel]);
 
   const items = data ?? [];
   const isInitialLoad = isLoading && !refreshing && items.length === 0;

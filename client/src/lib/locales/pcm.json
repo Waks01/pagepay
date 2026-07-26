@@ -97,6 +97,7 @@
     "wallet_access": "Check wallet, you get {{points}} points",
     "keep_reading": "Continue reading",
     "browse": "See wetin dey",
+    "browse_by_level": "See by level",
     "trending": "Wetin dey trend today",
     "see_all": "See all",
     "feed_error": "We no fit load your feed.",
@@ -531,7 +532,9 @@
     "error_connection": "We no fit reach server. Check your connection.",
     "error_generic": "Verification no work. Try again.",
     "verifying": "Dey verify...",
-    "verify": "Verify"
+    "verify": "Verify",
+    "submit": "Verify Email",
+    "resending": "Dey send again..."
   },
   "billing_history": {
     "title": "Payment History",

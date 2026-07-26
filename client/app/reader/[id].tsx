@@ -19,6 +19,10 @@ import { ShareAsImage } from '@/components/reader/ShareAsImage';
 import { ReaderModeSwitcher } from '@/components/reader/ReaderModeSwitcher';
 import { ListenMode } from '@/components/reader/ListenMode';
 import { PremiumUpsellModal } from '@/components/PremiumUpsellModal';
+import { SocialBar } from '@/components/SocialBar';
+import { ShareSheet, type ShareTarget } from '@/components/ShareSheet';
+import { CommentsSection } from '@/components/CommentsSection';
+import { useWorkSocial, useLogWorkShare } from '@/src/features/works/hooks/use-works';
 import { useStudyStore } from '@/src/shared/lib/studyStore';
 import { usePreferences } from '@/src/shared/lib/preferences';
 import { PagePay } from '@/constants/theme';
@@ -127,6 +131,23 @@ export default function ReaderScreen() {
 
   // Fetch native ad unit for in-content placement
   const [nativeAdUnit, setNativeAdUnit] = useState('');
+
+  // Social: the reader attaches like/comment/share to the PARENT WORK
+  // (design-plan Step 6), not the slice. A slice's parent_work_id points
+  // at the work; standalone slices ARE the work. Comments + SocialBar key
+  // off `workId` so the conversation lives on the book, not the slice.
+  const workId = content?.parent_work_id ?? Number(id);
+  const socialQuery = useWorkSocial(workId);
+  const logShare = useLogWorkShare(workId);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+
+  const onSharePress = useCallback(() => setShareSheetOpen(true), []);
+  const onShareTarget = useCallback(
+    (_target: ShareTarget) => {
+      logShare.mutate('other', { onError: () => undefined });
+    },
+    [logShare],
+  );
 
   const appState = useRef(AppState.currentState);
   const heartbeatRef = useRef<number | null>(null);
@@ -748,8 +769,36 @@ export default function ReaderScreen() {
           )}
           </View>
         )}
+
+        {/* Social bar + comments (design-plan Step 6). Lives at the
+            end of the slice, below the finish footer. Attaches to the
+            parent work via `workId`. Share opens the ShareSheet. */}
+        {content ? (
+          <View style={[styles.socialCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <SocialBar
+              workId={workId}
+              initialLikes={socialQuery.data?.likes_count ?? 0}
+              initialComments={socialQuery.data?.comments_count ?? 0}
+              isInitiallyLiked={socialQuery.data?.is_liked ?? false}
+              onSharePress={onSharePress}
+            />
+          </View>
+        ) : null}
+
+        {content ? <CommentsSection workId={workId} /> : null}
+
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {content ? (
+        <ShareSheet
+          visible={shareSheetOpen}
+          workId={workId}
+          title={content.title}
+          onShare={onShareTarget}
+          onClose={() => setShareSheetOpen(false)}
+        />
+      ) : null}
 
       {/* v3 §3.4 — Reader mode switcher (Read / Study / Listen).
           Pinned below the scroll so it's always reachable. */}
@@ -886,4 +935,12 @@ const styles = StyleSheet.create({
   },
   finishBtnDisabled: {},
   finishBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  // Social card wrapping the reader's SocialBar (design-plan Step 6).
+  socialCard: {
+    marginTop: 24,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingBottom: 4,
+  },
 });

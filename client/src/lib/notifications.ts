@@ -9,11 +9,13 @@ import { getApp } from '@react-native-firebase/app';
 import {
   getMessaging,
   onMessage,
+  onTokenRefresh,
   setBackgroundMessageHandler,
   requestPermission,
   AuthorizationStatus,
 } from '@react-native-firebase/messaging';
 import { apiFetch } from '@/src/shared/api/client';
+import { router } from 'expo-router';
 
 let messaging: ReturnType<typeof getMessaging> | null = null;
 let initError: Error | null = null;
@@ -197,8 +199,19 @@ export async function deregisterFCMToken(): Promise<boolean> {
  */
 export function setupNotificationListeners() {
   let unsubscribeForeground: (() => void) | undefined;
+  let unsubscribeTokenRefresh: (() => void) | undefined;
+
   getFirebaseMessaging().then((messagingInstance) => {
     if (!messagingInstance) return;
+
+    unsubscribeTokenRefresh = onTokenRefresh(messagingInstance, async (newToken) => {
+      console.log('FCM token refreshed, re-registering:', newToken);
+      try {
+        await registerFCMToken();
+      } catch (error) {
+        console.error('Failed to re-register refreshed FCM token:', error);
+      }
+    });
 
     unsubscribeForeground = onMessage(messagingInstance, async (remoteMessage) => {
       console.log('Foreground notification received:', remoteMessage);
@@ -233,22 +246,25 @@ export function setupNotificationListeners() {
     const data = response.notification.request.content.data;
     
     if (data?.type === 'study_reminder') {
-      // Navigate to study tab
-      // router.push('/(tabs)/study');
+      router.push('/(tabs)/study' as any);
     } else if (data?.type === 'task_alert') {
-      // Navigate to tasks tab
-      // router.push('/(tabs)/tasks');
+      router.push('/(tabs)/tasks' as any);
     } else if (data?.type === 'referral_bonus') {
-      // Navigate to profile tab
-      // router.push('/(tabs)/profile');
+      router.push('/(tabs)/profile' as any);
+    } else if (data?.type === 'wallet_update') {
+      router.push('/(tabs)/wallet' as any);
+    } else if (data?.type === 'ad_reward') {
+      router.push('/(tabs)/home' as any);
     }
-    // Add more navigation logic as needed
   });
 
   // Return cleanup function
   return () => {
     if (unsubscribeForeground) {
       unsubscribeForeground();
+    }
+    if (unsubscribeTokenRefresh) {
+      unsubscribeTokenRefresh();
     }
     notificationListener.remove();
     responseListener.remove();

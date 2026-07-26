@@ -123,7 +123,8 @@ async def list_transactions(
 
 class WalletDepositRequest(BaseModel):
     """Request to fund wallet via Paystack."""
-    amount_kobo: int = Field(ge=50000, description="Minimum ₦500 (50,000 kobo)")
+    deposit_amount_kobo: int = Field(ge=50000, description="Deposit amount in kobo (minimum ₦500)")
+    custom_amount: bool = Field(default=False, description="Whether this is a custom deposit amount")
 
 
 class WalletDepositResponse(BaseModel):
@@ -131,6 +132,7 @@ class WalletDepositResponse(BaseModel):
     payment_url: str
     reference: str
     amount_kobo: int
+    deposit_amount_kobo: int
 
 
 @router.post("/deposit", response_model=WalletDepositResponse)
@@ -160,7 +162,7 @@ async def initiate_wallet_deposit(
     allowed, current_24h = record_amount_v2(
         user_id=current_user.id,
         kind="deposit",
-        amount_kobo=payload.amount_kobo,
+        amount_kobo=total_amount,
         max_per_tx=settings.max_deposit_kobo_per_tx,
         max_per_day=settings.max_deposit_kobo_per_day,
     )
@@ -186,18 +188,25 @@ async def initiate_wallet_deposit(
     # Generate unique reference
     reference = f"wallet_deposit_{current_user.id}_{uuid.uuid4().hex[:16]}"
     
+    # Calculate fee
+    processing_fee = min(ceil(payload.deposit_amount_kobo * 0.015), 2000)
+    total_amount = payload.deposit_amount_kobo + processing_fee
+    
     # Initialize Paystack transaction
     paystack = get_client()
     try:
         result = await paystack.initialize_transaction(
             email=current_user.email,
-            amount_kobo=payload.amount_kobo,
+            amount_kobo=total_amount,
             reference=reference,
             callback_url=f"{settings.frontend_url}/wallet",
             metadata={
                 "user_id": current_user.id,
                 "type": "wallet_deposit",
-                "amount_kobo": payload.amount_kobo,
+                "deposit_amount_kobo": payload.deposit_amount_kobo,
+                "processing_fee_kobo": processing_fee,
+                "total_amount_kobo": total_amount,
+                "custom_amount": payload.custom_amount,
             }
         )
     except Exception as exc:
@@ -207,22 +216,29 @@ async def initiate_wallet_deposit(
     # Create Payment record to track deposit
     payment = Payment(
         user_id=current_user.id,
-        tier="wallet_deposit",  # Using tier field to indicate deposit
-        amount_kobo=payload.amount_kobo,
+        tier="wallet_deposit",
+        amount_kobo=total_amount,
         provider="paystack",
         provider_tx_ref=reference,
         status="pending",
+        metadata={
+            "deposit_amount_kobo": payload.deposit_amount_kobo,
+            "processing_fee_kobo": processing_fee,
+            "total_amount_kobo": total_amount,
+            "custom_amount": payload.custom_amount,
+        },
     )
     db.add(payment)
     await db.commit()
     
     logger.info(
         "Wallet deposit initiated: user_id=%d, amount=%d, ref=%s",
-        current_user.id, payload.amount_kobo, reference
+        current_user.id, payload.deposit_amount_kobo, reference
     )
     
     return WalletDepositResponse(
         payment_url=result["authorization_url"],
         reference=reference,
-        amount_kobo=payload.amount_kobo,
+        amount_kobo=total_amount,
+        deposit_amount_kobo=payload.deposit_amount_kobo,
     )

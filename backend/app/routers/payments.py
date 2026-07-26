@@ -5,10 +5,9 @@ Users upgrade from FREE → PREMIUM_MONTHLY or PREMIUM_YEARLY.
 """
 
 import logging
-from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
-from sqlalchemy import select, update
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -17,11 +16,9 @@ from app.routers.auth import get_current_user
 from app.schemas import (
     PaymentInitiateRequest,
     PaymentInitiateResponse,
-    PaymentWebhookResponse,
     UserTierInfo,
     TierInfo,
 )
-from app.services.paystack import get_client
 from app.services.subscription import (
     get_tier_price_kobo,
     calculate_subscription_end_date,
@@ -185,103 +182,6 @@ async def initiate_payment(
         raise HTTPException(status_code=400, detail=f"Provider {payload.provider} not supported")
 
 
-@router.post("/paystack/webhook", response_model=PaymentWebhookResponse)
-async def paystack_webhook(
-    request: Request,
-    x_paystack_signature: str = Header(None),
-    db: AsyncSession = Depends(get_db),
-):
-    """Handle Paystack webhook events.
-    
-    Verifies webhook signature using Paystack secret key (HMAC-SHA512).
-    Processes successful payments and upgrades user tier.
-    """
-    if not settings.paystack_secret_key:
-        logger.error("Paystack secret key not configured")
-        return PaymentWebhookResponse(status="error", message="Webhook not configured")
-    
-    # Get raw body for signature verification
-    body = await request.body()
-    
-    # Verify signature - Paystack uses the SECRET KEY for HMAC-SHA512
-    if not get_client().verify_webhook_signature(
-        raw_body=body,
-        signature_header=x_paystack_signature,
-        secret=settings.paystack_secret_key,
-    ):
-        logger.warning("Invalid Paystack webhook signature")
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
-    
-    # Parse webhook data
-    try:
-        data = await request.json()
-    except Exception:
-        logger.error("Could not parse webhook JSON")
-        return PaymentWebhookResponse(status="error", message="Invalid JSON")
-    
-    event = data.get("event")
-    event_data = data.get("data", {})
-    
-    # Only process successful charges
-    if event != "charge.success":
-        return PaymentWebhookResponse(status="ignored", message=f"Event {event} not handled")
-    
-    tx_ref = event_data.get("reference")
-    if not tx_ref:
-        logger.error("Webhook missing reference")
-        return PaymentWebhookResponse(status="error", message="Missing reference")
-    
-    # Find payment record
-    result = await db.execute(
-        select(Payment).where(Payment.provider_tx_ref == tx_ref)
-    )
-    payment = result.scalar_one_or_none()
-    
-    if not payment:
-        logger.warning(f"Payment not found for reference: {tx_ref}")
-        return PaymentWebhookResponse(status="error", message="Payment not found")
-    
-    # Idempotency: already processed
-    if payment.webhook_confirmed:
-        return PaymentWebhookResponse(status="success", message="Already processed")
-    
-    # Update payment status
-    payment.status = "success"
-    payment.webhook_confirmed = True
-    payment.confirmed_at = datetime.utcnow()
-    
-    # Upgrade user tier
-    try:
-        tier = UserTier(payment.tier)
-        expires_at = calculate_subscription_end_date(tier)
-        
-        await db.execute(
-            update(User)
-            .where(User.id == payment.user_id)
-            .values(
-                tier=tier,
-                subscription_expires_at=expires_at,
-            )
-        )
-        
-        await db.commit()
-        
-        logger.info(
-            f"User {payment.user_id} upgraded to {tier.value} "
-            f"(expires {expires_at.isoformat()})"
-        )
-        
-        return PaymentWebhookResponse(
-            status="success",
-            message=f"User upgraded to {tier.value}"
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to upgrade user {payment.user_id}: {e}")
-        await db.rollback()
-        return PaymentWebhookResponse(status="error", message=str(e))
-
-
 @router.get("/history", response_model=list[dict])
 async def get_payment_history(
     current_user: User = Depends(get_current_user),
@@ -299,7 +199,7 @@ async def get_payment_history(
         {
             "id": p.id,
             "tier": p.tier,
-            "tier_name": format_tier_name(UserTier(p.tier)),
+            "tier_name": _format_payment_tier_name(p.tier),
             "amount_kobo": p.amount_kobo,
             "amount_naira": p.amount_kobo / 100,
             "provider": p.provider,
@@ -309,3 +209,12 @@ async def get_payment_history(
         }
         for p in payments
     ]
+
+
+def _format_payment_tier_name(tier: str) -> str:
+    if tier == "wallet_deposit":
+        return "Wallet Deposit"
+    try:
+        return format_tier_name(UserTier(tier))
+    except ValueError:
+        return tier.replace("_", " ").title()

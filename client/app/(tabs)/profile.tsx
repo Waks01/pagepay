@@ -255,12 +255,20 @@ export default function ProfileScreen() {
       // actually protects the user.
     }
 
+    // Deregister FCM token on logout
+    try {
+      const { deregisterFCMToken } = await import('@/src/lib/notifications');
+      await deregisterFCMToken();
+    } catch (error) {
+      console.error('Failed to deregister FCM token on logout:', error);
+    }
+
     const { clearToken } = await import('@/src/shared/lib/storage');
     const biometric = usePreferences.getState().biometricEnabled;
     await clearToken(!biometric);
 
     qc.clear();
-    router.replace('/(auth)/');
+    router.replace('/(auth)/' as any);
   }, [qc, router]);
 
   const version =
@@ -717,7 +725,7 @@ function Row({
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   trailing?: React.ReactNode;
-  onPress: () => void;
+  onPress?: () => void;
 }) {
   return (
     <Pressable
@@ -752,28 +760,27 @@ function ReferralSection({ tokens }: { tokens: (typeof PagePay)['light'] | (type
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
+  const handleReferralUpdate = useCallback((stats: any) => {
+    queryClient.setQueryData(['referral', 'stats'], stats);
+  }, [queryClient]);
+
   // Socket.IO real-time updates
   useEffect(() => {
     const queryData = queryClient.getQueryData(['me']) as { data: { id: number } } | undefined;
     const user = queryData?.data;
     if (!user?.id) return;
 
-    // Import socket functions dynamically
+    let cleanup: (() => void) | undefined;
     import('@/src/lib/socket').then(({ connectSocket, onReferralUpdate, offReferralUpdate }) => {
       connectSocket(user.id);
-
-      const handleUpdate = (stats: any) => {
-        // Update cache with new stats
-        queryClient.setQueryData(['referral', 'stats'], stats);
-      };
-
-      onReferralUpdate(handleUpdate);
-
-      return () => {
-        offReferralUpdate(handleUpdate);
-      };
+      onReferralUpdate(handleReferralUpdate);
+      cleanup = () => offReferralUpdate(handleReferralUpdate);
     });
-  }, [queryClient]);
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [queryClient, handleReferralUpdate]);
 
   const stats = statsQ.data as { code: string; signups: number; pending_rewards: number; claimed_rewards: number } | undefined;
   const code = stats?.code ?? '';

@@ -31,6 +31,18 @@ import { SkeletonPage } from '@/components/skeletons';
 
 const CATEGORIES = ['Fiction', 'Classics', 'News', 'Study'] as const;
 
+// Education level grid for the Home screen (design-plan Step 4). Mirrors
+// the catalog's level grid so a tap here lands the user on Catalog already
+// filtered to that level. The selected level is written to the shared
+// catalog store; Catalog reads it on focus.
+const HOME_LEVEL_OPTIONS: ReadonlyArray<{ value: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
+  { value: 'creche', label: 'Creche', icon: 'happy-outline' },
+  { value: 'primary', label: 'Primary', icon: 'pencil-outline' },
+  { value: 'secondary', label: 'Secondary', icon: 'flask-outline' },
+  { value: 'tertiary', label: 'University', icon: 'school-outline' },
+  { value: 'research', label: 'Research', icon: 'document-text-outline' },
+];
+
 type UserMe = {
   id: number;
   email: string | null;
@@ -98,6 +110,19 @@ export default function HomeScreen() {
     },
     [router, setCatalogCategory],
   );
+
+  // Tapping a level on Home pre-applies that education-level filter to
+  // the shared catalog store and jumps to Catalog already filtered
+  // (design-plan Step 4). The Catalog reads educationLevel on focus.
+  const setCatalogEducationLevel = useCatalogFilter((s) => s.setEducationLevel);
+  const onLevelPress = useCallback(
+    (level: string) => {
+      setCatalogEducationLevel(level);
+      router.push('/(tabs)/catalog');
+    },
+    [router, setCatalogEducationLevel],
+  );
+
 
   const onCardPress = useCallback(
     (id: number) => {
@@ -374,6 +399,33 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Education level grid (design-plan Step 4). Tapping a level
+            pre-filters Catalog by that education tier. */}
+        <View style={styles.section}>
+          <Text
+            style={[styles.sectionTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}
+          >
+            {t('home.browse_by_level')}
+          </Text>
+          <View style={styles.levelGrid}>
+            {HOME_LEVEL_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.levelCell, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+                onPress={() => onLevelPress(opt.value)}
+                accessibilityRole="button"
+                accessibilityLabel={`Browse ${opt.label} content`}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={opt.icon} size={22} color={tokens.mint} style={styles.levelIcon} />
+                <Text style={[styles.levelLabel, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         {/* Trending today */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -524,6 +576,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  levelGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  levelCell: {
+    width: '31%',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    gap: 6,
+  },
+  levelIcon: {
+    marginBottom: 2,
+  },
+  levelLabel: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   feed: {
     gap: 12,

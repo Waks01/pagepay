@@ -11,8 +11,9 @@ import { useAdsConfig } from '@/src/shared/hooks/use-ads-config';
 import { bootstrapPreferences, usePreferences } from '@/src/shared/lib/preferences';
 import { getToken } from '@/src/shared/lib/storage';
 import { initializeAdMob } from '@/src/shared/lib/ads-native';
-import { setOnUnauthenticated } from '@/src/shared/api/client';
+import { setOnUnauthenticated, apiFetch } from '@/src/shared/api/client';
 import { setupNotificationListeners, registerFCMToken } from '@/src/lib/notifications';
+import { connectSocket, disconnectSocket, onNotification } from '@/src/lib/socket';
 import { SplashOverlay } from '@/components/SplashOverlay';
 import '@/src/lib/i18n';
 
@@ -125,8 +126,10 @@ export default function RootLayout() {
     void initApp();
   }, []);
 
-  // Initialize Firebase Cloud Messaging and notification listeners
+  // Initialize Firebase Cloud Messaging, notification listeners, and Socket.IO
   useEffect(() => {
+    if (!isReady) return;
+
     let cleanup: (() => void) | undefined;
 
     const initNotifications = async () => {
@@ -137,12 +140,32 @@ export default function RootLayout() {
       }
     };
 
+    const initSocket = async () => {
+      const token = await getToken();
+      if (!token) return;
+      try {
+        const res = await apiFetch('/api/v1/auth/me');
+        if (!res.ok) return;
+        const me = await res.json();
+        if (me?.id) {
+          connectSocket(me.id);
+          onNotification((notification) => {
+            console.log('In-app notification:', notification);
+          });
+        }
+      } catch (error) {
+        console.error('Failed to init socket:', error);
+      }
+    };
+
     initNotifications();
+    initSocket();
 
     return () => {
       if (cleanup) cleanup();
+      disconnectSocket();
     };
-  }, []);
+  }, [isReady]);
 
   // Splash overlay state. Native splash (expo-splash-screen) shows first
   // as a static image while JS loads. Once fonts are loaded and auth is
@@ -183,6 +206,12 @@ export default function RootLayout() {
         <Stack.Screen name="sponsor/dashboard" options={{ headerShown: false, title: 'Sponsor Dashboard' }} />
         <Stack.Screen name="sponsor/tasks/create" options={{ headerShown: false, title: 'Create Task' }} />
         <Stack.Screen name="sponsor/tasks/[id]" options={{ headerShown: false, title: 'Task Submissions' }} />
+        <Stack.Screen name="billing/history" options={{ headerShown: false, title: 'Billing History' }} />
+        <Stack.Screen name="billing/subscription" options={{ headerShown: false, title: 'Manage Subscription' }} />
+        <Stack.Screen name="subscription/success" options={{ headerShown: false, title: 'Payment Success' }} />
+        <Stack.Screen name="fund-wallet/success" options={{ headerShown: false, title: 'Deposit Success' }} />
+        <Stack.Screen name="admin/tasks/create" options={{ headerShown: false, title: 'Create Task' }} />
+        <Stack.Screen name="admin/tasks/review" options={{ headerShown: false, title: 'Review Queue' }} />
         <Stack.Screen name="forgot-password" options={{ headerShown: false, title: 'Reset Password' }} />
         <Stack.Screen name="forgot-password-otp" options={{ headerShown: false, title: 'Enter OTP' }} />
         <Stack.Screen name="reset-password" options={{ headerShown: false, title: 'New Password' }} />

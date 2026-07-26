@@ -8,11 +8,15 @@ import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { McqQuestion } from '@/components/study/McqQuestion';
 import { Flashcard } from '@/components/study/Flashcard';
 import { EssayPrompt } from '@/components/study/EssayPrompt';
+import { VideoPlayer } from '@/components/study/VideoPlayer';
+import { DiagramViewer } from '@/components/study/DiagramViewer';
+import { InteractiveExample } from '@/components/study/InteractiveExample';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { UnlockModal } from '@/components/study/UnlockModal';
 
 type AssetInfo = {
   id: number;
+  material_id: number;
   type: string;
   points_to_unlock: number;
 };
@@ -34,7 +38,55 @@ type EssayContent = {
   questions: Array<{ id: number; prompt: string; outline: string[] }>;
 };
 
-type AssetContent = McqContent | FlashcardContent | EssayContent;
+type DiagramContent = {
+  title: string;
+  description: string;
+  elements: Array<{
+    id: string;
+    label: string;
+    description: string;
+    position: string;
+  }>;
+  connections: Array<{
+    from: string;
+    to: string;
+    label: string;
+  }>;
+  svg_hint: string;
+};
+
+type VideoContent = {
+  title: string;
+  duration_seconds: number;
+  scenes: Array<{
+    time: string;
+    visual: string;
+    narration: string;
+    text_overlay: string;
+  }>;
+  summary: string;
+};
+
+type ExampleContent = {
+  title: string;
+  problem: string;
+  steps: Array<{
+    step: number;
+    instruction: string;
+    hint: string;
+    answer: string;
+    explanation: string;
+  }>;
+  final_answer: string;
+  try_yourself: {
+    problem: string;
+    hints: string[];
+    solution_steps: string[];
+    final_answer: string;
+  };
+};
+
+type AssetContent = McqContent | FlashcardContent | EssayContent | DiagramContent | VideoContent | ExampleContent;
 
 type AssetBrowserProps = {
   assets: AssetInfo[];
@@ -45,7 +97,7 @@ type AssetBrowserProps = {
 };
 
 type AccordionSection = {
-  type: 'mcq' | 'flashcard' | 'essay';
+  type: 'mcq' | 'flashcard' | 'essay' | 'diagram' | 'video' | 'example';
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   assets: AssetInfo[];
@@ -110,6 +162,24 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
   };
 
   const sections: AccordionSection[] = useMemo(() => [
+    {
+      type: 'video',
+      label: 'Video Lessons',
+      icon: 'play-circle-outline',
+      assets: assets.filter((a) => a.type === 'video'),
+    },
+    {
+      type: 'diagram',
+      label: 'Diagrams',
+      icon: 'git-branch-outline',
+      assets: assets.filter((a) => a.type === 'diagram'),
+    },
+    {
+      type: 'example',
+      label: 'Try It Yourself',
+      icon: 'create-outline',
+      assets: assets.filter((a) => a.type === 'example'),
+    },
     {
       type: 'mcq',
       label: 'MCQs',
@@ -224,6 +294,30 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
           {essay.questions.map((q) => (
             <EssayPrompt key={q.id} prompt={q.prompt} outline={q.outline} />
           ))}
+        </View>
+      );
+    }
+    if (asset.type === 'video') {
+      const video = content as VideoContent;
+      return (
+        <View style={styles.assetContent}>
+          <VideoPlayer content={video} />
+        </View>
+      );
+    }
+    if (asset.type === 'diagram') {
+      const diagram = content as DiagramContent;
+      return (
+        <View style={styles.assetContent}>
+          <DiagramViewer content={diagram} />
+        </View>
+      );
+    }
+    if (asset.type === 'example') {
+      const example = content as ExampleContent;
+      return (
+        <View style={styles.assetContent}>
+          <InteractiveExample content={example} materialId={asset.material_id} exampleId={asset.id} />
         </View>
       );
     }

@@ -97,6 +97,7 @@
     "wallet_access": "Wo apamọwọ, o ni {{points}} aaye",
     "keep_reading": "Tẹsiwaju kika",
     "browse": "Wa àwọn nkan",
+    "browse_by_level": "Wa nipa ipele",
     "trending": "Ohun tó ń gbajúmọ̀ lónìí",
     "see_all": "Wo gbogbo rẹ",
     "feed_error": "A kò lè ṣe ìgbéjade rẹ.",
@@ -531,7 +532,9 @@
     "error_connection": "Ko le de olupin. Ṣayẹwo isopọ rẹ.",
     "error_generic": "Ijẹrisi kuna. Gbiyanju lẹẹkansi.",
     "verifying": "N jẹrisi...",
-    "verify": "Jẹrisi"
+    "verify": "Jẹrisi",
+    "submit": "Jẹrisi Imeeli",
+    "resending": "N tun ranṣẹ..."
   },
   "billing_history": {
     "title": "Itan Isanwo",

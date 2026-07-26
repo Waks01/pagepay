@@ -50,6 +50,18 @@ type WithdrawalRecord = {
   settled_at: string | null;
 };
 
+type PaymentRecord = {
+  id: number;
+  tier: string;
+  tier_name: string;
+  amount_kobo: number;
+  amount_naira: number;
+  provider: string;
+  status: string;
+  created_at: string;
+  confirmed_at: string | null;
+};
+
 type WithdrawalResponse = {
   transfer_reference: string;
   status: 'pending' | 'success' | 'failed';
@@ -98,6 +110,19 @@ export default function WalletScreen() {
     }
   }, [adConfig]);
 
+  const payoutQ = useQuery({
+    queryKey: ['payout', 'account'],
+    queryFn: async () => {
+      const res = await apiFetch('/api/v1/payouts/account');
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error('Failed to load payout account');
+      return (await res.json()) as PayoutAccount;
+    },
+    staleTime: 30_000,
+  });
+
+  const payoutAccount = payoutQ.data ?? null;
+
   // If the user just verified their PIN for a withdrawal, open the
   // withdrawal modal automatically.
   useFocusEffect(
@@ -126,17 +151,6 @@ export default function WalletScreen() {
     },
   });
 
-  const payoutQ = useQuery({
-    queryKey: ['payout', 'account'],
-    queryFn: async () => {
-      const res = await apiFetch('/api/v1/payouts/account');
-      if (res.status === 404) return null;
-      if (!res.ok) throw new Error('Failed to load payout account');
-      return (await res.json()) as PayoutAccount;
-    },
-    staleTime: 30_000,
-  });
-
   const pinStatusQ = useQuery({
     queryKey: ['pin', 'status'],
     queryFn: async () => {
@@ -162,6 +176,15 @@ export default function WalletScreen() {
     },
   });
 
+  const paymentsQ = useQuery({
+    queryKey: ['payments', 'history'],
+    queryFn: async () => {
+      const res = await apiFetch('/api/v1/payments/history');
+      if (!res.ok) throw new Error('Failed to load payments');
+      return (await res.json()) as PaymentRecord[];
+    },
+  });
+
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showLink, setShowLink] = useState(false);
   // Set to true after a successful withdrawal in this session so the
@@ -176,6 +199,7 @@ export default function WalletScreen() {
       qc.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
       qc.invalidateQueries({ queryKey: ['payout', 'account'] });
       qc.invalidateQueries({ queryKey: ['payouts', 'transactions'] });
+      qc.invalidateQueries({ queryKey: ['payments', 'history'] });
     }, [qc]),
   );
 
@@ -187,7 +211,6 @@ export default function WalletScreen() {
   };
   const transactions = txQ.data ?? [];
   const withdrawals = withdrawalsQ.data ?? [];
-  const payoutAccount = payoutQ.data ?? null;
   const belowMin = balance < MIN_WITHDRAWAL_KOBO;
 
   const onRefresh = () => {
@@ -195,6 +218,7 @@ export default function WalletScreen() {
     qc.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
     qc.invalidateQueries({ queryKey: ['payout', 'account'] });
     qc.invalidateQueries({ queryKey: ['payouts', 'transactions'] });
+    qc.invalidateQueries({ queryKey: ['payments', 'history'] });
   };
 
   const handleWithdrawPress = useCallback(() => {
@@ -238,12 +262,9 @@ export default function WalletScreen() {
     [qc],
   );
 
-  // The list renders a unified transaction history: reading-session earnings
-  // on top, then withdrawals below. Combining them in a single FlatList
-  // keeps the visual order consistent (newest first across both sources)
-  // and avoids an awkward second card with its own header.
   const combinedItems: ListItem[] = [];
   for (const t of transactions) combinedItems.push({ kind: 'session', data: t });
+  for (const p of paymentsQ.data ?? []) combinedItems.push({ kind: 'payment', data: p });
   for (const w of withdrawals) combinedItems.push({ kind: 'withdrawal', data: w });
   // Both endpoints already return newest-first; we don't re-sort.
 
@@ -253,12 +274,13 @@ export default function WalletScreen() {
         data={combinedItems}
         keyExtractor={(item, index) => {
           if (item.kind === 'session') return `s-${item.data.id}`;
+          if (item.kind === 'payment') return `p-${item.data.id}-${index}`;
           return `w-${item.data.reference}-${index}`;
         }}
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}
         refreshControl={
           <RefreshControl
-            refreshing={meQ.isFetching || txQ.isFetching}
+            refreshing={meQ.isFetching || txQ.isFetching || paymentsQ.isFetching}
             onRefresh={onRefresh}
             tintColor={c.mint}
           />
@@ -438,6 +460,8 @@ export default function WalletScreen() {
             <View>
               {item.kind === 'withdrawal' ? (
                 <WithdrawalRow row={item.data} tokens={c} />
+              ) : item.kind === 'payment' ? (
+                <PaymentRow item={item.data} tokens={c} />
               ) : (
                 <SessionRow item={item.data} tokens={c} />
               )}
@@ -451,7 +475,7 @@ export default function WalletScreen() {
           );
         }}
         ListEmptyComponent={
-          txQ.isLoading || withdrawalsQ.isLoading ? (
+          txQ.isLoading || withdrawalsQ.isLoading || paymentsQ.isLoading ? (
             <View>
               {Array.from({ length: 5 }).map((_, i) => (
                 <SkeletonTransactionRow key={i} />
@@ -515,7 +539,79 @@ export default function WalletScreen() {
 
 type ListItem =
   | { kind: 'session'; data: Transaction }
+  | { kind: 'payment'; data: PaymentRecord }
   | { kind: 'withdrawal'; data: WithdrawalRecord };
+
+function PaymentRow({
+  item,
+  tokens,
+}: {
+  item: PaymentRecord;
+  tokens: (typeof PagePay)['light'];
+}) {
+  const { t } = useTranslation();
+  const isSuccess = item.status === 'success';
+  const isPending = item.status === 'pending';
+  const isFailed = item.status === 'failed';
+
+  const iconName = isSuccess ? 'checkmark-circle' : isPending ? 'time' : 'close-circle';
+  const iconColor = isSuccess ? tokens.mint : isPending ? tokens.inkMuted : tokens.signal;
+
+  return (
+    <View
+      style={[
+        rowStyles.row,
+        { backgroundColor: tokens.card, borderColor: tokens.border },
+      ]}
+    >
+      <View
+        style={[
+          rowStyles.icon,
+          {
+            backgroundColor: isSuccess ? tokens.mintSoft : tokens.mintSoft,
+          },
+        ]}
+      >
+        <Ionicons name={iconName as any} size={16} color={iconColor} />
+      </View>
+      <View style={{ flex: 1, marginRight: 12 }}>
+        <Text
+          style={{ fontSize: 14, fontWeight: '500', color: tokens.ink, marginBottom: 2 }}
+          numberOfLines={1}
+        >
+          {item.tier_name}
+        </Text>
+        <Text style={{ fontSize: 12, color: tokens.inkMuted }}>
+          {formatDate(item.created_at)}
+        </Text>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <Text
+          style={{
+            fontSize: 15,
+            fontWeight: '600',
+            color: isSuccess ? tokens.mint : isPending ? tokens.inkMuted : tokens.signal,
+          }}
+        >
+          {isSuccess ? '+' : ''}₦{item.amount_naira.toLocaleString()}
+        </Text>
+        {isPending ? (
+          <Text
+            style={{
+              fontSize: 10,
+              color: tokens.inkMuted,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+              marginTop: 2,
+            }}
+          >
+            Pending
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
 
 function SessionRow({
   item,

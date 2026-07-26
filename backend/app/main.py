@@ -33,6 +33,7 @@ from app.routers.works_social import router as works_social_router
 from app.seed import run_all_seeds, run_migrations
 from app.services.task_processor import task_processor
 from app.services.ai_verification import verification_service
+from app.services.fcm import initialize_firebase
 from app.websocket import sio
 
 logger = logging.getLogger("uvicorn.error")
@@ -116,6 +117,13 @@ async def lifespan(app: FastAPI):
             logger.warning("AdMob SSV key pre-warm failed (will retry on first callback): %s", exc)
 
     asyncio.create_task(_prewarm_admob_keys())
+    
+    # Initialize Firebase Admin for push notifications
+    try:
+        initialize_firebase()
+        logger.info("Firebase Admin initialized for push notifications")
+    except Exception as exc:
+        logger.warning("Firebase Admin initialization failed: %s", exc)
     
     # Start Phase 7 background task processor
     # Only start if explicitly enabled via environment variable

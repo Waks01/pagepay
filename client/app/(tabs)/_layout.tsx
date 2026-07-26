@@ -19,15 +19,23 @@ import { apiFetch } from '@/src/shared/api/client';
 import { EmailVerificationGate } from '@/src/components/EmailVerificationGate';
 
 type Tokens = (typeof PagePay)['light'];
+type DrawerItem = {
+  name: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  desc: string;
+  badge?: number;
+};
 
 const VISIBLE_TABS = ['index', 'catalog', 'study', 'wallet'];
 type VisibleTab = (typeof VISIBLE_TABS)[number];
 
-const DRAWER_ITEMS = [
-  { name: 'tasks', label: 'Tasks', icon: 'briefcase' as const, desc: 'Daily challenges and goals' },
-  { name: 'community', label: 'Community', icon: 'people' as const, desc: 'Connect with other readers' },
-  { name: 'profile', label: 'Profile', icon: 'person-circle' as const, desc: 'Account, settings, preferences' },
-  { name: 'premium', label: 'Premium', icon: 'diamond' as const, desc: 'Unlock exclusive content' },
+const DRAWER_ITEMS: DrawerItem[] = [
+  { name: 'notifications', label: 'Notifications', icon: 'notifications-outline', desc: 'Your alerts and updates' },
+  { name: 'tasks', label: 'Tasks', icon: 'briefcase', desc: 'Daily challenges and goals' },
+  { name: 'community', label: 'Community', icon: 'people', desc: 'Connect with other readers' },
+  { name: 'profile', label: 'Profile', icon: 'person-circle', desc: 'Account, settings, preferences' },
+  { name: 'premium', label: 'Premium', icon: 'diamond', desc: 'Unlock exclusive content' },
 ];
 
 export default function TabLayout() {
@@ -124,6 +132,7 @@ export default function TabLayout() {
           }}
         />
         {/* Hidden tabs — navigable via drawer, not shown in bar */}
+        <Tabs.Screen name="notifications" options={{ href: null }} />
         <Tabs.Screen name="tasks" options={{ href: null }} />
         <Tabs.Screen name="community" options={{ href: null }} />
         <Tabs.Screen name="profile" options={{ href: null }} />
@@ -280,6 +289,19 @@ function MoreDrawer({
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(0)).current;
 
+  const { data: notifData } = useQuery({
+    queryKey: ['notifications-unread'],
+    queryFn: async () => {
+      const res = await apiFetch('/api/v1/notifications?limit=1');
+      if (!res.ok) return { unread_count: 0 };
+      return res.json();
+    },
+    enabled: visible,
+    staleTime: 1000 * 30,
+  });
+
+  const unreadCount = notifData?.unread_count ?? 0;
+
   useEffect(() => {
     if (visible) {
       slideAnim.setValue(0);
@@ -296,6 +318,13 @@ function MoreDrawer({
     onClose();
     setTimeout(() => router.push(`/(tabs)/${name}` as any), 200);
   };
+
+  const itemsWithBadge = DRAWER_ITEMS.map((item) => {
+    if (item.name === 'notifications' && unreadCount > 0) {
+      return { ...item, badge: unreadCount } as typeof item & { badge?: number };
+    }
+    return item;
+  });
 
   return (
     <Modal
@@ -337,7 +366,7 @@ function MoreDrawer({
               More
             </Text>
 
-            {DRAWER_ITEMS.map((item) => (
+            {itemsWithBadge.map((item) => (
               <TouchableOpacity
                 key={item.name}
                 onPress={() => handleItemPress(item.name)}
@@ -358,7 +387,15 @@ function MoreDrawer({
                     {item.desc}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={tokens.border} />
+                {item.badge ? (
+                  <View style={[styles.badge, { backgroundColor: tokens.mint }]}>
+                    <Text style={[styles.badgeText, { color: tokens.mintText }]}>
+                      {item.badge > 9 ? '9+' : item.badge}
+                    </Text>
+                  </View>
+                ) : (
+                  <Ionicons name="chevron-forward" size={18} color={tokens.border} />
+                )}
               </TouchableOpacity>
             ))}
           </Animated.View>
@@ -435,5 +472,17 @@ const styles = StyleSheet.create({
   drawerItemDesc: {
     fontSize: 12,
     marginTop: 1,
+  },
+  badge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

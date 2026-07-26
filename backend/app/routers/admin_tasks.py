@@ -550,3 +550,407 @@ async def tasks_analytics(
             "pending_kyc": int(pending_kyc),
         },
     }
+
+
+# ── Admin Task Management ────────────────────────────────────────────
+
+
+@router.get("/admin/list")
+async def admin_list_tasks(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    status: str | None = None,
+    task_source: str | None = None,
+    current_admin: AdminUser = Depends(require_permission("tasks.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all tasks for admin management."""
+    q = select(Task)
+    
+    if status:
+        q = q.where(Task.status == status)
+    if task_source:
+        q = q.where(Task.task_source == task_source)
+    
+    q = q.order_by(Task.created_at.desc())
+    
+    total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
+    rows = await db.execute(q.limit(limit).offset((page - 1) * limit))
+    
+    items = []
+    for task in rows.scalars().all():
+        items.append({
+            "id": task.id,
+            "title": task.title,
+            "task_type": task.task_type,
+            "platform": task.platform,
+            "category": task.category,
+            "task_source": task.task_source,
+            "reward_type": task.reward_type,
+            "reward_amount": task.reward_amount,
+            "max_completions": task.max_completions,
+            "completed_count": task.completed_count,
+            "status": task.status,
+            "expires_at": task.expires_at.isoformat() if task.expires_at else None,
+            "created_at": task.created_at.isoformat(),
+        })
+    
+    return {"items": items, "total": int(total), "page": page, "limit": limit}
+
+
+@router.post("/admin/create", status_code=201)
+async def admin_create_task(
+    request: Request,
+    title: str = Query(...),
+    description: str = Query(...),
+    platform: str = Query(...),
+    task_type: str = Query(default="engagement"),
+    category: str = Query(default="social"),
+    reward_type: str = Query(default="points"),
+    reward_amount: int = Query(...),
+    instructions: str = Query(...),
+    target_url: str | None = Query(None),
+    proof_type: str = Query(default="screenshot"),
+    proof_instructions: str | None = Query(None),
+    max_completions: int = Query(default=500),
+    expires_in_days: int = Query(default=30),
+    current_admin: AdminUser = Depends(require_permission("tasks.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin creates a new task."""
+    from datetime import timedelta
+    expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+    
+    task = Task(
+        sponsor_id=current_admin.id,
+        title=title,
+        description=description,
+        instructions=instructions,
+        task_type=task_type,
+        platform=platform,
+        category=category,
+        task_source="admin",
+        reward_type=reward_type,
+        reward_amount=reward_amount,
+        reward_multiplier=1.0,
+        max_completions=max_completions,
+        total_escrowed=0,
+        platform_fee_amount=0,
+        platform_fee_percent=0,
+        expires_at=expires_at,
+        proof_type=proof_type,
+        proof_instructions=proof_instructions,
+        target_url=target_url,
+        status="active",
+        time_limit_minutes=None,
+        min_worker_level=0,
+        min_approval_rate=0.0,
+        ai_verification_enabled=False,
+        manual_review_required=True,
+    )
+    
+    db.add(task)
+    await db.commit()
+    await db.refresh(task)
+    
+    db.add(
+        _log_admin_action(
+            current_admin.id,
+            current_admin.email,
+            "create_task",
+            "task",
+            task.id,
+            {
+                "title": title,
+                "platform": platform,
+                "reward_amount": reward_amount,
+                "reward_type": reward_type,
+            },
+            request.client.host,
+        )
+    )
+    await db.commit()
+    
+    logger.info(f"Admin {current_admin.id} created task {task.id}")
+    return {"success": True, "task_id": task.id}
+
+
+@router.put("/admin/{task_id}")
+async def admin_update_task(
+    request: Request,
+    task_id: int,
+    title: str | None = Query(None),
+    description: str | None = Query(None),
+    status: str | None = Query(None),
+    max_completions: int | None = Query(None),
+    reward_amount: int | None = Query(None),
+    current_admin: AdminUser = Depends(require_permission("tasks.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin updates a task."""
+    task = await db.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    changes = {}
+    if title is not None:
+        task.title = title
+        changes["title"] = title
+    if description is not None:
+        task.description = description
+        changes["description"] = description
+    if status is not None:
+        task.status = status
+        changes["status"] = status
+    if max_completions is not None:
+        task.max_completions = max_completions
+        changes["max_completions"] = max_completions
+    if reward_amount is not None:
+        task.reward_amount = reward_amount
+        changes["reward_amount"] = reward_amount
+    
+    await db.commit()
+    
+    db.add(
+        _log_admin_action(
+            current_admin.id,
+            current_admin.email,
+            "update_task",
+            "task",
+            task_id,
+            changes,
+            request.client.host,
+        )
+    )
+    await db.commit()
+    
+    logger.info(f"Admin {current_admin.id} updated task {task_id}")
+    return {"success": True}
+
+
+@router.delete("/admin/{task_id}")
+async def admin_delete_task(
+    request: Request,
+    task_id: int,
+    current_admin: AdminUser = Depends(require_permission("tasks.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin deletes a task."""
+    task = await db.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    await db.delete(task)
+    await db.commit()
+    
+    db.add(
+        _log_admin_action(
+            current_admin.id,
+            current_admin.email,
+            "delete_task",
+            "task",
+            task_id,
+            {"title": task.title},
+            request.client.host,
+        )
+    )
+    await db.commit()
+    
+    logger.info(f"Admin {current_admin.id} deleted task {task_id}")
+    return {"success": True}
+
+
+@router.get("/admin/submissions")
+async def admin_list_submissions(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    status: str | None = None,
+    task_source: str | None = Query(None),
+    current_admin: AdminUser = Depends(require_permission("tasks.review")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List submissions for admin review."""
+    q = (
+        select(TaskSubmission, Task, User)
+        .join(Task, Task.id == TaskSubmission.task_id)
+        .join(User, User.id == TaskSubmission.worker_id)
+    )
+    
+    if status:
+        q = q.where(TaskSubmission.status == status)
+    if task_source:
+        q = q.where(Task.task_source == task_source)
+    
+    q = q.order_by(TaskSubmission.created_at.desc())
+    
+    total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
+    rows = await db.execute(q.limit(limit).offset((page - 1) * limit))
+    
+    items = []
+    for submission, task, worker in rows.all():
+        items.append({
+            "submission_id": submission.id,
+            "task_id": task.id,
+            "task_title": task.title,
+            "task_type": task.task_type,
+            "platform": task.platform,
+            "task_source": task.task_source,
+            "reward_type": task.reward_type,
+            "reward_amount": task.reward_amount,
+            "worker_id": worker.id,
+            "worker_email": worker.email,
+            "proof_type": submission.proof_type,
+            "proof_url": submission.proof_url,
+            "proof_image_url": submission.proof_image_url,
+            "proof_text": submission.proof_text,
+            "status": submission.status,
+            "rejection_reason": submission.rejection_reason,
+            "submitted_at": submission.submitted_at.isoformat(),
+        })
+    
+    return {"items": items, "total": int(total), "page": page, "limit": limit}
+
+
+@router.post("/admin/submissions/{submission_id}/approve")
+async def admin_approve_submission_v2(
+    request: Request,
+    submission_id: int,
+    current_admin: AdminUser = Depends(require_permission("tasks.review")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin approves a submission and credits points."""
+    result = await db.execute(
+        select(TaskSubmission, Task)
+        .join(Task, Task.id == TaskSubmission.task_id)
+        .where(TaskSubmission.id == submission_id)
+    )
+    row = result.one_or_none()
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    submission, task = row
+    
+    if submission.status == "approved":
+        raise HTTPException(status_code=400, detail="Already approved")
+    
+    submission.status = "approved"
+    submission.reviewed_by = current_admin.id
+    submission.reviewed_at = datetime.utcnow()
+    submission.reward_paid = task.reward_amount
+    submission.payment_status = "paid"
+    submission.paid_at = datetime.utcnow()
+    
+    # Credit points to user wallet
+    worker_result = await db.execute(
+        select(User).where(User.id == submission.worker_id)
+    )
+    worker = worker_result.scalar_one_or_none()
+    
+    if worker:
+        worker.points_balance = (worker.points_balance or 0) + task.reward_amount
+    
+    # Update task stats
+    task.completed_count += 1
+    task.approved_count += 1
+    if task.pending_count > 0:
+        task.pending_count -= 1
+    if task.completed_count >= task.max_completions:
+        task.status = "completed"
+        task.completed_at = datetime.utcnow()
+    
+    # Update reputation
+    rep_result = await db.execute(
+        select(UserReputation).where(UserReputation.user_id == submission.worker_id)
+    )
+    reputation = rep_result.scalar_one_or_none()
+    
+    if not reputation:
+        reputation = UserReputation(user_id=submission.worker_id)
+        db.add(reputation)
+    
+    reputation.tasks_approved += 1
+    reputation.tasks_completed += 1
+    reputation.total_earnings += task.reward_amount
+    if reputation.tasks_completed > 0:
+        reputation.approval_rate = (
+            reputation.tasks_approved / reputation.tasks_completed
+        )
+    
+    db.add(
+        _log_admin_action(
+            current_admin.id,
+            current_admin.email,
+            "approve_submission",
+            "task_submission",
+            submission_id,
+            {"task_id": task.id, "worker_id": submission.worker_id, "reward": task.reward_amount},
+            request.client.host,
+        )
+    )
+    
+    await db.commit()
+    logger.info(f"Admin {current_admin.id} approved submission {submission_id}")
+    return {"success": True, "reward_paid": task.reward_amount}
+
+
+@router.post("/admin/submissions/{submission_id}/reject")
+async def admin_reject_submission_v2(
+    request: Request,
+    submission_id: int,
+    reason: str = Query(..., min_length=10, max_length=500),
+    current_admin: AdminUser = Depends(require_permission("tasks.review")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin rejects a submission."""
+    result = await db.execute(
+        select(TaskSubmission, Task)
+        .join(Task, Task.id == TaskSubmission.task_id)
+        .where(TaskSubmission.id == submission_id)
+    )
+    row = result.one_or_none()
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    submission, task = row
+    
+    if submission.status in ["approved", "rejected"]:
+        raise HTTPException(status_code=400, detail=f"Already {submission.status}")
+    
+    submission.status = "rejected"
+    submission.rejection_reason = reason
+    submission.reviewed_by = current_admin.id
+    submission.reviewed_at = datetime.utcnow()
+    
+    task.rejected_count += 1
+    if task.pending_count > 0:
+        task.pending_count -= 1
+    
+    rep_result = await db.execute(
+        select(UserReputation).where(UserReputation.user_id == submission.worker_id)
+    )
+    reputation = rep_result.scalar_one_or_none()
+    
+    if reputation:
+        reputation.tasks_rejected += 1
+        if reputation.tasks_completed > 0:
+            reputation.approval_rate = (
+                reputation.tasks_approved / (reputation.tasks_approved + reputation.tasks_rejected)
+            )
+    
+    db.add(
+        _log_admin_action(
+            current_admin.id,
+            current_admin.email,
+            "reject_submission",
+            "task_submission",
+            submission_id,
+            {"task_id": task.id, "worker_id": submission.worker_id, "reason": reason},
+            request.client.host,
+        )
+    )
+    
+    await db.commit()
+    logger.info(f"Admin {current_admin.id} rejected submission {submission_id}")
+    return {"success": True, "reason": reason}

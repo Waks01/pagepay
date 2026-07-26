@@ -72,6 +72,7 @@ async def list_tasks(
         query = query.where(Task.reward_amount <= max_reward)
     
     # Check user reputation for eligibility
+    # Admin tasks (task_source='admin') are open to all users
     rep_result = await db.execute(
         select(UserReputation).where(UserReputation.user_id == current_user.id)
     )
@@ -79,9 +80,17 @@ async def list_tasks(
     
     if user_rep:
         query = query.where(
-            Task.min_worker_level <= user_rep.worker_level,
-            Task.min_approval_rate <= user_rep.approval_rate
+            or_(
+                Task.task_source == "admin",
+                and_(
+                    Task.task_source != "admin",
+                    Task.min_worker_level <= user_rep.worker_level,
+                    Task.min_approval_rate <= user_rep.approval_rate,
+                ),
+            )
         )
+    else:
+        query = query.where(Task.task_source == "admin")
     
     # Exclude tasks user already submitted
     subquery = select(TaskSubmission.task_id).where(
@@ -190,7 +199,7 @@ async def start_task(
     await db.refresh(submission)
     
     expires_at = None
-    if task.time_limit_minutes:
+    if task.time_limit_minutes and task.task_source != "admin":
         from datetime import timedelta
         expires_at = submission.started_at + timedelta(minutes=task.time_limit_minutes)
     
@@ -351,9 +360,16 @@ async def submit_task(
     submission.proof_image_url = proof_image_url
     submission.proof_url = proof_url
     submission.proof_text = proof_text
-    submission.status = "validating"  # Will trigger AI verification
+    # Admin tasks skip AI validation — go straight to pending
+    if task.task_source == "admin":
+        submission.status = "pending"
+    else:
+        submission.status = "validating"
     submission.submitted_at = datetime.utcnow()
     submission.completion_time_seconds = completion_time
+    
+    # Update task pending count
+    task.pending_count += 1
     
     # Update reputation
     rep = await db.execute(
@@ -366,39 +382,28 @@ async def submit_task(
     await db.commit()
     await db.refresh(submission)
     
-    # H4 audit fix: run fraud checks but don't let a fraud-check bug
-    # block a legitimate submission. We narrow the except to a known
-    # transient set (DB disconnect, AI provider rate limit) so an
-    # unexpected error (a typo in fraud_detection.py, a missing column)
-    # surfaces as ERROR in the logs instead of a silent WARNING. The
-    # submission keeps the "validating" status; an admin can re-run
-    # the check later via the admin task reviewer.
-    try:
-        from app.services.fraud_detection import run_fraud_checks_on_submission
-        await run_fraud_checks_on_submission(
-            db=db,
-            submission_id=submission.id,
-            user_id=current_user.id,
-            proof_image_url=proof_image_url,
-            device_fingerprint=submission.device_fingerprint,
-            ip_address=submission.ip_address
-        )
-    except (ConnectionError, TimeoutError) as e:
-        # Transient: fraud check will be retried by the async worker.
-        logger.warning(
-            "Transient fraud-check failure on submission %s (will retry): %s",
-            submission.id, e,
-        )
-    except Exception as e:
-        # Unexpected: this is a bug in fraud_detection.py or a schema
-        # mismatch, not normal operation. Log at ERROR with traceback
-        # so it gets investigated, but still don't fail the submission
-        # — the worker has already done the work, and the admin
-        # reviewer will catch it during manual review.
-        logger.error(
-            "Fraud check raised an unexpected error on submission %s: %s",
-            submission.id, e, exc_info=True,
-        )
+    # Skip fraud checks for admin tasks
+    if task.task_source != "admin":
+        try:
+            from app.services.fraud_detection import run_fraud_checks_on_submission
+            await run_fraud_checks_on_submission(
+                db=db,
+                submission_id=submission.id,
+                user_id=current_user.id,
+                proof_image_url=proof_image_url,
+                device_fingerprint=submission.device_fingerprint,
+                ip_address=submission.ip_address
+            )
+        except (ConnectionError, TimeoutError) as e:
+            logger.warning(
+                "Transient fraud-check failure on submission %s (will retry): %s",
+                submission.id, e,
+            )
+        except Exception as e:
+            logger.error(
+                "Fraud check raised an unexpected error on submission %s: %s",
+                submission.id, e, exc_info=True,
+            )
     
     return TaskSubmissionResponse(
         id=submission.id,
@@ -417,6 +422,30 @@ async def submit_task(
         submitted_at=submission.submitted_at,
         completion_time_seconds=submission.completion_time_seconds
     )
+
+    # Send push notification for task submission (fire-and-forget)
+    try:
+        from app.services.fcm import send_push_notification
+        from app.services.notifications import create_notification
+        import asyncio
+        asyncio.create_task(send_push_notification(
+            db=db,
+            user_id=current_user.id,
+            title="Task Submitted ✅",
+            body=f"Your submission for '{task.title}' is pending review.",
+            data={"type": "task_alert", "task_id": str(task_id), "status": "pending"},
+            category="task_alerts",
+        ))
+        asyncio.create_task(create_notification(
+            db=db,
+            user_id=current_user.id,
+            title="Task Submitted ✅",
+            body=f"Your submission for '{task.title}' is pending review.",
+            category="task_alerts",
+            data={"type": "task_alert", "task_id": task_id, "status": "pending"},
+        ))
+    except Exception:
+        pass
 
 
 @router.get("/my-submissions", response_model=list[TaskSubmissionResponse])

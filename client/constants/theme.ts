@@ -25,6 +25,14 @@ export const Colors = {
     tabIconDefault: '#9BA1A6',
     tabIconSelected: tintColorDark,
   },
+  sepia: {
+    text: '#3E2C1C',
+    background: '#F5ECD7',
+    tint: '#7C5E2A',
+    icon: '#7A6650',
+    tabIconDefault: '#7A6650',
+    tabIconSelected: '#7C5E2A',
+  },
 };
 
 /**

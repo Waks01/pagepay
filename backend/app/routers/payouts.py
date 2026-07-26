@@ -37,12 +37,12 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.models import User, PayoutAccount as PayoutAccountRow, PayoutTransaction
+from app.models import User, PayoutAccount as PayoutAccountRow, PayoutTransaction, Payment, UserTier
 from app.routers.auth import get_current_user
 from app.schemas import (
     AccountResolveRequest,
@@ -59,6 +59,7 @@ from app.services.paystack import (
     get_client as get_paystack_client,
 )
 from app.services.money_caps import record_amount_v2
+from app.services.subscription import calculate_subscription_end_date
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -654,7 +655,7 @@ async def paystack_webhook(
     # We only care about transfer events for Phase 4. Charges
     # (premium subscriptions) are Phase 3 — log and move on so
     # Paystack doesn't retry.
-    if event_name not in ("transfer.success", "transfer.failed", "transfer.reversed"):
+    if event_name not in ("transfer.success", "transfer.failed", "transfer.reversed", "charge.success"):
         logger.info("Paystack webhook: ignoring event=%s", event_name)
         return {"received": True, "handled": False}
 
@@ -666,6 +667,64 @@ async def paystack_webhook(
         )
         # Still return 200 — Paystack would retry forever otherwise.
         return {"received": True, "handled": False, "reason": "no_reference"}
+
+    # ── charge.success: wallet deposit credit ─────────────────────────
+    if event_name == "charge.success":
+        payment = (
+            await db.execute(
+                select(Payment).where(Payment.provider_tx_ref == reference)
+            )
+        ).scalar_one_or_none()
+        if payment is None:
+            logger.warning("Paystack charge.success for unknown reference=%s; ignoring", reference)
+            return {"received": True, "handled": False, "reason": "unknown_reference"}
+
+        if payment.webhook_confirmed:
+            return {"received": True, "handled": True, "event": event_name, "reason": "duplicate_event"}
+
+        payment.status = "success"
+        payment.webhook_confirmed = True
+        payment.confirmed_at = datetime.utcnow()
+
+        if payment.tier == "wallet_deposit" and payment.metadata:
+            metadata = payment.metadata if isinstance(payment.metadata, dict) else {}
+            deposit_amount_kobo = metadata.get("deposit_amount_kobo")
+            if deposit_amount_kobo and deposit_amount_kobo > 0:
+                user_row = (
+                    await db.execute(
+                        select(User).where(User.id == payment.user_id)
+                    )
+                ).scalar_one_or_none()
+                if user_row is not None:
+                    user_row.points_balance = (user_row.points_balance or 0) + deposit_amount_kobo
+                    logger.info(
+                        "Wallet deposit credited: user=%s ref=%s amount_kobo=%s new_balance=%s",
+                        payment.user_id, reference, deposit_amount_kobo, user_row.points_balance,
+                    )
+                else:
+                    logger.error("Wallet deposit webhook: user %s not found for ref=%s", payment.user_id, reference)
+
+        elif payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value):
+            try:
+                tier = UserTier(payment.tier)
+                expires_at = calculate_subscription_end_date(tier)
+                await db.execute(
+                    update(User)
+                    .where(User.id == payment.user_id)
+                    .values(
+                        tier=tier,
+                        subscription_expires_at=expires_at,
+                    )
+                )
+                logger.info(
+                    "Subscription upgraded: user=%s tier=%s expires=%s",
+                    payment.user_id, payment.tier, expires_at.isoformat(),
+                )
+            except Exception as exc:
+                logger.error("Failed to upgrade subscription for user=%s ref=%s: %s", payment.user_id, reference, exc)
+
+        await db.commit()
+        return {"received": True, "handled": True, "event": event_name}
 
     txn = (
         await db.execute(

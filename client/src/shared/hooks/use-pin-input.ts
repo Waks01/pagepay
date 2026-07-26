@@ -3,7 +3,7 @@ import { NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
 
 type UsePinInputOptions = {
   length?: number;
-  onSubmit: (value: string) => void;
+  onSubmit?: (value: string) => void;
   autoSubmit?: boolean;
 };
 
@@ -18,7 +18,7 @@ type UsePinInputReturn = {
 
 export function usePinInput({
   length = 4,
-  onSubmit,
+  onSubmit = () => {},
   autoSubmit = true,
 }: UsePinInputOptions = {}): UsePinInputReturn {
   const [values, setValues] = useState<string[]>(() => Array(length).fill(''));

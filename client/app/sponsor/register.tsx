@@ -144,7 +144,7 @@ export default function SponsorRegisterScreen() {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => router.push('/(auth)/')} style={styles.loginLink}>
+        <TouchableOpacity onPress={() => router.push('/(auth)/' as any)} style={styles.loginLink}>
           <Text style={[styles.loginLinkText, { color: tokens.mint }]}>{t('sponsor_register.login_link')}</Text>
         </TouchableOpacity>
       </View>

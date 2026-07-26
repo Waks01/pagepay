@@ -18,9 +18,22 @@ import { create } from 'zustand';
 type CatalogFilterState = {
   category: string | null;
   setCategory: (c: string | null) => void;
+  // Education filters shared between Home (the level grid) and Catalog
+  // (the expanded grid + class picker). Keeping them in the store means
+  // tapping a level on Home lands the user on Catalog already filtered,
+  // without leaking the selection into the URL (which would break deep
+  // links). Local-only — not persisted across app launches.
+  educationLevel: string | null;
+  setEducationLevel: (l: string | null) => void;
+  classLevel: string | null;
+  setClassLevel: (c: string | null) => void;
 };
 
 export const useCatalogFilter = create<CatalogFilterState>((set) => ({
   category: null,
   setCategory: (category) => set({ category }),
+  educationLevel: null,
+  setEducationLevel: (educationLevel) => set({ educationLevel }),
+  classLevel: null,
+  setClassLevel: (classLevel) => set({ classLevel }),
 }));
