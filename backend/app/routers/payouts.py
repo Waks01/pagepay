@@ -686,8 +686,8 @@ async def paystack_webhook(
         payment.webhook_confirmed = True
         payment.confirmed_at = datetime.utcnow()
 
-        if payment.tier == "wallet_deposit" and payment.metadata:
-            metadata = payment.metadata if isinstance(payment.metadata, dict) else {}
+        if payment.tier == "wallet_deposit" and payment.payment_metadata:
+            metadata = payment.payment_metadata if isinstance(payment.payment_metadata, dict) else {}
             deposit_amount_kobo = metadata.get("deposit_amount_kobo")
             if deposit_amount_kobo and deposit_amount_kobo > 0:
                 user_row = (
