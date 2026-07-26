@@ -36,6 +36,7 @@ from app.models import (
     User,
     ReadingSession,
 )
+from app.database import get_db
 from app.routers.auth import get_current_user
 from app.services.sanitize import (
     safe_filename,
