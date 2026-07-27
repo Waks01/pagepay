@@ -111,7 +111,7 @@ export function AnalyticsPage() {
               <h3 className="text-sm font-semibold text-text-main">
                 Daily Active Users
               </h3>
-                <p className="mt-0.5 text-sm text-text-muted">Last {daysCount} days</p>
+                <p className="mt-0.5 text-sm text-text-muted">Last {safeDaysCount} days</p>
             </div>
             <div className="p-4 sm:p-6">
               {dauLoading && <ShimmerLoader lines={4} />}

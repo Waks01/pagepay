@@ -65,13 +65,15 @@ export function FinancePage() {
         )
       : parseInt(dateRange.preset.replace("d", ""));
 
+  const safeDaysCount = Number.isFinite(daysCount) && daysCount > 0 ? daysCount : 30;
+
   const { data: revenueDaily, isLoading: revenueDailyLoading } = useQuery({
-    queryKey: ["admin", "finance", "revenue-daily", daysCount],
+    queryKey: ["admin", "finance", "revenue-daily", safeDaysCount],
     queryFn: async () => {
       const { data } = await adminApi.get<{
         items: { date: string; total_revenue_kobo: number }[];
       }>("/admin/revenue/daily", {
-        params: { days: daysCount },
+        params: { days: safeDaysCount },
       });
       return data;
     },
@@ -275,7 +277,7 @@ export function FinancePage() {
               <Card>
                 <div className="border-b border-border px-4 py-4 sm:px-6">
                   <h3 className="text-sm font-semibold text-text-main">
-                    Revenue Trend (Last {daysCount} Days)
+                     Revenue Trend (Last {safeDaysCount} Days)
                   </h3>
                   <p className="mt-0.5 text-sm text-text-muted">
                     Daily total revenue (ad + premium) in NGN

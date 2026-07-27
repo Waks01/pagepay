@@ -45,12 +45,8 @@ async def dashboard_stats(
     end_date: str | None = Query(None)
 
     if start_date and end_date:
-        window_start = datetime.fromisoformat(start_date).replace(
-            tzinfo=timezone.utc
-        )
-        window_end = datetime.fromisoformat(end_date).replace(
-            tzinfo=timezone.utc
-        ) + timedelta(days=1)
+        window_start = datetime.fromisoformat(start_date)
+        window_end = datetime.fromisoformat(end_date) + timedelta(days=1)
     elif days:
         window_end = datetime.utcnow()
         window_start = window_end - timedelta(days=days)

@@ -52,12 +52,14 @@ export function AdDashboardPage() {
         ? 1
         : parseInt(dateRange.preset.replace("d", ""));
 
+  const safeDaysCount = Number.isFinite(daysCount) && daysCount > 0 ? daysCount : 30;
+
   // Fetch metrics summary (derived from multiple endpoints)
   const { data: topEarners = [], isLoading: earnersLoading } = useQuery({
-    queryKey: ["admin", "ads", "top-earners", daysCount],
+    queryKey: ["admin", "ads", "top-earners", safeDaysCount],
     queryFn: async () => {
       const { data } = await adminApi.get("/admin/ads/top-earners", {
-        params: { days: daysCount, limit: 5 },
+        params: { days: safeDaysCount, limit: 5 },
       });
       return data;
     },
@@ -65,10 +67,10 @@ export function AdDashboardPage() {
   });
 
   const { data: unitPerformance = [], isLoading: unitsLoading } = useQuery({
-    queryKey: ["admin", "ads", "unit-performance", daysCount],
+    queryKey: ["admin", "ads", "unit-performance", safeDaysCount],
     queryFn: async () => {
       const { data } = await adminApi.get("/admin/ads/unit-performance", {
-        params: { days: daysCount },
+        params: { days: safeDaysCount },
       });
       return data;
     },
@@ -76,10 +78,10 @@ export function AdDashboardPage() {
   });
 
   const { data: ecpmTrend = [], isLoading: ecpmLoading } = useQuery({
-    queryKey: ["admin", "ads", "ecpm-trending", daysCount],
+    queryKey: ["admin", "ads", "ecpm-trending", safeDaysCount],
     queryFn: async () => {
       const { data } = await adminApi.get("/admin/ads/ecpm-trending", {
-        params: { days: daysCount },
+        params: { days: safeDaysCount },
       });
       return data;
     },
@@ -125,11 +127,11 @@ export function AdDashboardPage() {
             {!earnersLoading && !unitsLoading && (
               <>
                 <StatCard
-                  label={`Total Ads (${daysCount}d)`}
+                  label={`Total Ads (${safeDaysCount}d)`}
                   value={totalAdsWatched.toLocaleString()}
                 />
                 <StatCard
-                  label={`Points Credited (${daysCount}d)`}
+                  label={`Points Credited (${safeDaysCount}d)`}
                   value={totalPointsCredited.toLocaleString()}
                 />
                 <StatCard
