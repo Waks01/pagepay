@@ -56,6 +56,7 @@ from app.schemas import (
     QuizCompleteResponse,
     SowUploadRequest,
     SowUploadResponse,
+    StudyProgressListResponse,
     StudyProgressResponse,
     StudyProgressUpdate,
     UnlockRequest,
