@@ -57,6 +57,7 @@ from app.schemas import (
     SowUploadRequest,
     SowUploadResponse,
     StudyProgressResponse,
+    StudyProgressUpdate,
     UnlockRequest,
     UnlockResponse,
 )
