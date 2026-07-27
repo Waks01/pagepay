@@ -41,13 +41,16 @@ export function AnalyticsPage() {
         )
       : parseInt(dateRange.preset.replace("d", ""));
 
+  // Guard against invalid presets or NaN from incomplete custom ranges.
+  const safeDaysCount = Number.isFinite(daysCount) && daysCount > 0 ? daysCount : 30;
+
   const { data: dau = [], isLoading: dauLoading } = useQuery({
-    queryKey: ["admin", "analytics", "dau", daysCount],
+    queryKey: ["admin", "analytics", "dau", safeDaysCount],
     queryFn: async () => {
       const { data } = await adminApi.get<DailyActiveUsers[]>(
         "/admin/analytics/dau",
         {
-          params: { days: daysCount },
+          params: { days: safeDaysCount },
         },
       );
       return data;
@@ -56,12 +59,12 @@ export function AnalyticsPage() {
   });
 
   const { data: retention = [], isLoading: retentionLoading } = useQuery({
-    queryKey: ["admin", "analytics", "retention", daysCount],
+    queryKey: ["admin", "analytics", "retention", safeDaysCount],
     queryFn: async () => {
       const { data } = await adminApi.get<RetentionCohort[]>(
         "/admin/analytics/retention",
         {
-          params: { days: daysCount },
+          params: { days: safeDaysCount },
         },
       );
       return data;

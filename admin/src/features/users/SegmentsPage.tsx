@@ -12,7 +12,7 @@ export function SegmentsPage() {
     queryKey: ["admin", "users", "segments"],
     queryFn: async () => {
       const { data } = await adminApi.get<UserSegments>(
-        "/admin/users/segments",
+        "/admin/segments",
       );
       return data;
     },
