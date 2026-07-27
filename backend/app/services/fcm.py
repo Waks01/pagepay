@@ -32,7 +32,7 @@ def initialize_firebase():
     
     try:
         # Load service account JSON from file
-        cred = credentials.Certificate(settings.FIREBASE_SERVICE_ACCOUNT_PATH)
+        cred = credentials.Certificate(settings.firebase_service_account_path)
         _firebase_app = firebase_admin.initialize_app(cred)
         logger.info("Firebase Admin SDK initialized successfully")
         return _firebase_app
