@@ -61,6 +61,27 @@ class FCMTokenResponse(BaseModel):
         from_attributes = True
 
 
+class NotificationResponse(BaseModel):
+    """Notification detail."""
+    id: int
+    user_id: int
+    title: str
+    body: str
+    category: str
+    data: Optional[dict]
+    read: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationsListResponse(BaseModel):
+    """List of notifications with unread count."""
+    notifications: list[NotificationResponse]
+    unread_count: int
+
+
 # ── Endpoints ────────────────────────────────────────────────────────
 
 
