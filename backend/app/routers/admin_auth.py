@@ -57,12 +57,15 @@ async def admin_login(
     token = create_admin_token(admin.id, admin.role)
 
     # Set httpOnly cookie instead of returning token in response
+    # In production (HTTPS), use secure cookies. In development (HTTP),
+    # allow non-secure cookies so localhost admin panel works.
+    is_production = settings.public_base_url.startswith("https://")
     response.set_cookie(
         key="admin_session",
         value=token,
         httponly=True,
-        secure=True,
-        samesite="none",
+        secure=is_production,
+        samesite="none" if is_production else "lax",
         max_age=settings.access_token_expire_minutes * 60,
         path="/",
     )
@@ -101,5 +104,11 @@ async def admin_me(
 @router.post("/logout")
 async def admin_logout(response: Response):
     """Clear admin session cookie and logout."""
-    response.delete_cookie(key="admin_session", path="/", samesite="none")
+    is_production = settings.public_base_url.startswith("https://")
+    response.delete_cookie(
+        key="admin_session",
+        path="/",
+        samesite="none" if is_production else "lax",
+        secure=is_production,
+    )
     return {"success": True, "message": "Logged out successfully"}
