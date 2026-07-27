@@ -35,6 +35,13 @@ const plugins = (baseConfig.plugins || []).map((plugin) => {
   return plugin;
 });
 
+// Ensure expo-asset is registered as a plugin. expo-audio requires it,
+// and it must appear explicitly in the plugins array for native module
+// resolution on bare/development builds.
+if (!plugins.some((p) => p === "expo-asset" || (Array.isArray(p) && p[0] === "expo-asset"))) {
+  plugins.push("expo-asset");
+}
+
 module.exports = ({ config }) => {
   return {
     ...config,
