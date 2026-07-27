@@ -169,9 +169,27 @@ async def global_exception_handler(request: Request, exc: Exception):
     (which reads `response.data.detail`) works without changes.
     """
     logger.error("Unhandled exception: %s\n%s", exc, traceback.format_exc())
+    
+    # Determine status code and detail
+    from fastapi import HTTPException
+    if isinstance(exc, HTTPException):
+        status_code = exc.status_code
+        content = {"detail": exc.detail}
+    else:
+        status_code = 500
+        content = {"detail": "Internal server error"}
+    
+    # Ensure CORS headers are present on all error responses
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin and origin in settings.cors_origins_list:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    
     return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"},
+        status_code=status_code,
+        content=content,
+        headers=headers,
     )
 
 
@@ -233,8 +251,6 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
-app.add_middleware(RequestSizeLimitMiddleware)
-app.add_middleware(CSRFMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -242,6 +258,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Origin", "Referer"],
 )
+app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(CSRFMiddleware)
 
 API_PREFIX = "/api/v1"
 
