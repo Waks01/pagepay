@@ -247,7 +247,7 @@ async def list_active_subscriptions(
     db: AsyncSession = Depends(get_db),
 ):
     """List users with active premium subscriptions."""
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     query = select(User).where(
         (User.subscription_expires_at > now) &
         (User.tier != "free")

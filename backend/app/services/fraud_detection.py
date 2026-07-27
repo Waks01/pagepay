@@ -159,7 +159,7 @@ class FraudDetectionService:
             FraudFlag if abuse detected, None otherwise
         """
         # Check referral velocity (last 24 hours)
-        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        since = datetime.utcnow() - timedelta(hours=24)
         
         stmt = select(func.count()).select_from(Referral).where(
             and_(

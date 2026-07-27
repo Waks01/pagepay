@@ -119,7 +119,7 @@ async def approve_kyc(
 
     # Update KYC status
     kyc.status = "approved"
-    kyc.reviewed_at = datetime.now(timezone.utc)
+    kyc.reviewed_at = datetime.utcnow()
     kyc.reviewed_by = current_admin.id
     if admin_notes:
         kyc.admin_notes = admin_notes
@@ -133,7 +133,7 @@ async def approve_kyc(
     if user:
         user.sponsor_verified = True
         user.sponsor_kyc_status = "approved"
-        user.sponsor_kyc_reviewed_at = datetime.now(timezone.utc)
+        user.sponsor_kyc_reviewed_at = datetime.utcnow()
         user.sponsor_kyc_reviewer_id = current_admin.id
 
     # Log action
@@ -179,7 +179,7 @@ async def reject_kyc(
     # Update KYC status
     kyc.status = "rejected"
     kyc.rejection_reason = reason
-    kyc.reviewed_at = datetime.now(timezone.utc)
+    kyc.reviewed_at = datetime.utcnow()
     kyc.reviewed_by = current_admin.id
     if admin_notes:
         kyc.admin_notes = admin_notes
@@ -192,7 +192,7 @@ async def reject_kyc(
 
     if user:
         user.sponsor_kyc_status = "rejected"
-        user.sponsor_kyc_reviewed_at = datetime.now(timezone.utc)
+        user.sponsor_kyc_reviewed_at = datetime.utcnow()
         user.sponsor_kyc_reviewer_id = current_admin.id
 
     # Log action
@@ -308,7 +308,7 @@ async def admin_approve_submission(
         worker.points_balance += net_reward
         submission.reward_paid = net_reward
         submission.payment_status = "paid"
-        submission.paid_at = datetime.now(timezone.utc)
+        submission.paid_at = datetime.utcnow()
 
     # Update task stats
     task.approved_count += 1

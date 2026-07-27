@@ -207,7 +207,7 @@ async def ignore_fraud_flag(
 
     old_status = flag.status
     flag.status = "ignored"
-    flag.reviewed_at = datetime.now(timezone.utc)
+    flag.reviewed_at = datetime.utcnow()
     flag.reviewed_by = current_admin.id
 
     # Append ignore reason to details

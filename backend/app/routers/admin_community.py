@@ -247,7 +247,7 @@ async def reject_note(
 
     old_status = note.status
     note.status = "rejected"
-    note.updated_at = datetime.now(timezone.utc)
+    note.updated_at = datetime.utcnow()
 
     db.add(
         _log_admin_action(

@@ -35,9 +35,9 @@ async def revenue_summary(
     start = end - timedelta(days=30)
     
     if start_date:
-        start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+        start = datetime.fromisoformat(start_date)
     if end_date:
-        end = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+        end = datetime.fromisoformat(end_date)
 
     # Ad Revenue - Calculate using historical FX rates.
     # Include both legacy events (with revenue_usd) and SSV events (with user_points_credited).
