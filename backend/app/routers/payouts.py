@@ -527,7 +527,7 @@ async def withdraw(
     # Step 4: create the transaction row. fee_kobo is persisted so the
     # audit trail shows the gross debit, and so the webhook reversal
     # can refund the right amount even if the schedule changes later.
-    reference = f"pp_{uuid.uuid4().hex[:24]}"
+    reference = f"pp_withdraw_{uuid.uuid4().hex[:24]}"
     txn = PayoutTransaction(
         user_id=user_row.id,
         reference=reference,

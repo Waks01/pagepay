@@ -211,9 +211,9 @@ async def initiate_wallet_deposit(
     
         paystack = get_paystack_client()
     
-    # Generate reference
+    # Generate reference with project prefix
     import uuid
-    reference = f"sponsor_deposit_{current_user.id}_{uuid.uuid4().hex[:16]}"
+    reference = f"pp_sponsor_{current_user.id}_{uuid.uuid4().hex[:16]}"
     
     # Initialize transaction
     result = await paystack.initialize_transaction(

@@ -185,8 +185,8 @@ async def initiate_wallet_deposit(
             ),
         )
     
-    # Generate unique reference
-    reference = f"wallet_deposit_{current_user.id}_{uuid.uuid4().hex[:16]}"
+    # Generate unique reference with project prefix "pp_"
+    reference = f"pp_wallet_{current_user.id}_{uuid.uuid4().hex[:16]}"
     
     # Calculate fee
     processing_fee = min(ceil(payload.deposit_amount_kobo * 0.015), 2000)

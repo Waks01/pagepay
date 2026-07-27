@@ -98,9 +98,9 @@ async def initiate_payment(
     # Get tier price
     amount_kobo = get_tier_price_kobo(tier)
     
-    # Generate unique reference
+    # Generate unique reference with project prefix "pp_"
     import uuid
-    tx_ref = f"PP-{current_user.id}-{uuid.uuid4().hex[:12]}"
+    tx_ref = f"pp_sub_{current_user.id}_{uuid.uuid4().hex[:12]}"
     
     # Create pending payment record
     payment = Payment(

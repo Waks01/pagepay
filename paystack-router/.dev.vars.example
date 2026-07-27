@@ -1,0 +1,9 @@
+# Copy this file to .dev.vars for local development
+# wrangler dev will automatically load this file
+# DO NOT commit .dev.vars to git — it contains secrets
+
+PAYSTACK_SECRET_KEY=sk_test_xxx
+
+# Optional: override webhook URLs for local testing
+# PAGEPAY_WEBHOOK_URL=http://localhost:8000/payouts/webhook
+# SALON_WEBHOOK_URL=http://localhost:4000/webhooks/paystack
