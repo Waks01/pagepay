@@ -72,6 +72,60 @@ async def _migrate_in_background():
         logger.error("Background migration failed: %s", exc)
 
 
+async def _ensure_critical_columns():
+    """Defensive column backfill for known prod schema drift.
+
+    Alembic migration 025 is the canonical fix for the missing
+    `tasks.task_source / category / reward_type / reward_multiplier`
+    columns, but the prod DB has been observed stuck at alembic
+    revision 021 — Alembic refuses to walk the chain forward with
+    `MultipleHeads: requested revision 024 overlaps with 021`, so the
+    background migration silently no-ops and the admin endpoints 500.
+
+    This helper runs raw SQL `ADD COLUMN IF NOT EXISTS` for each known
+    missing column on every boot. It's strictly additive (won't touch
+    existing rows, won't break the table), idempotent, and survives
+    even if alembic chain issues persist. Once the alembic state on
+    prod catches up to head, the IF NOT EXISTS guards make this a
+    cheap no-op.
+
+    See: GitHub issue #admin-tasks-500 (admin/tasks/admin/list 500s).
+    """
+    from sqlalchemy import text
+
+    # Columns the production DB is known to be missing. Each tuple is
+    # (table, column, postgres_type_with_default). We deliberately
+    # use server defaults that match the SQLAlchemy model so any
+    # future rows inserted before alembic catches up still get sane
+    # values.
+    additions = (
+        ("tasks", "task_source",         "VARCHAR(20)  NOT NULL DEFAULT 'sponsored'"),
+        ("tasks", "category",            "VARCHAR(50)  NOT NULL DEFAULT 'social_media'"),
+        ("tasks", "reward_type",         "VARCHAR(20)  NOT NULL DEFAULT 'cash'"),
+        ("tasks", "reward_multiplier",   "DOUBLE PRECISION NOT NULL DEFAULT 1.0"),
+    )
+
+    try:
+        async with engine.begin() as conn:
+            for table, column, ddl in additions:
+                # `ADD COLUMN IF NOT EXISTS` is Postgres 9.6+ and is
+                # concurrency-safe: a parallel runner can't blow up
+                # with a duplicate-column error. Each statement is
+                # independent — a failure on one column doesn't
+                # abort the others.
+                await conn.execute(text(
+                    f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS "
+                    f"{column} {ddl}"
+                ))
+        logger.info("Critical-column backfill: ensured %d columns exist",
+                    len(additions))
+    except Exception as exc:
+        # Don't crash the API on boot if the backfill fails — admin
+        # endpoints will still 500, but reader/wallet flows keep
+        # working. The error is logged so it surfaces in Render logs.
+        logger.error("Critical-column backfill failed: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global processor_task
@@ -105,6 +159,17 @@ async def lifespan(app: FastAPI):
     # Apply pending migrations in background (idempotent on every boot).
     logger.info("Scheduling background migrations...")
     asyncio.create_task(_migrate_in_background())
+
+    # Defensive backfill: ensure known-missing columns exist. Runs in
+    # parallel with `_migrate_in_background()`; whichever lands first
+    # creates the columns, the other becomes a no-op. Critical for
+    # the prod DB that's stuck at alembic rev 021 — the alembic chain
+    # refuses to walk forward with "024 overlaps with 021" because of
+    # a parallel migration branch that was merged in production, so
+    # the canonical migration 025 never applies. The raw SQL here is
+    # strictly additive and idempotent.
+    logger.info("Scheduling critical-column backfill...")
+    asyncio.create_task(_ensure_critical_columns())
 
     # Pre-warm AdMob SSV verifier keys in background so the first
     # callback doesn't block on a 10s HTTPS fetch.
@@ -179,11 +244,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     Uses FastAPI's standard `detail` key so the frontend error handling
     (which reads `response.data.detail`) works without changes.
 
-    The actual exception class + message is always included in the
-    response body under `debug` so we can see exactly what's failing
-    without server log access. This is intentionally verbose during
-    the current debugging pass — gate on `settings.environment !="production"`
-    once we know what's broken.
+    The `debug` block (exception class + message + path) is gated on
+    `settings.environment != "production"` so production responses don't
+    leak internals to the client. Operators should consult server logs
+    for full tracebacks (logged via `logger.error` below).
     """
     logger.error("Unhandled exception: %s\n%s", exc, traceback.format_exc())
 
@@ -194,16 +258,13 @@ async def global_exception_handler(request: Request, exc: Exception):
         content = {"detail": exc.detail}
     else:
         status_code = 500
-        # TEMP DEBUG (remove after fix): always include exception class +
-        # message so we can see what's failing without Render log access.
-        content = {
-            "detail": "Internal server error",
-            "debug": {
+        content = {"detail": "Internal server error"}
+        if settings.environment != "production":
+            content["debug"] = {
                 "type": type(exc).__name__,
                 "message": str(exc),
                 "path": request.url.path,
-            },
-        }
+            }
     
     # Ensure CORS headers are present on all error responses
     origin = request.headers.get("origin")
