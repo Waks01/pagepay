@@ -657,6 +657,15 @@ async def get_user_segments(
 
     now = datetime.utcnow()
     week_ago = now - timedelta(days=7)
+    thirty_ago = now - timedelta(days=30)
+
+    logger.info(
+        "segments: admin=%s now=%s week_ago=%s thirty_ago=%s",
+        current_admin.email if current_admin else None,
+        now.isoformat(),
+        week_ago.isoformat(),
+        thirty_ago.isoformat(),
+    )
 
     total = (await db.execute(select(func.count(User.id)))).scalar_one()
 
@@ -701,11 +710,21 @@ async def get_user_segments(
     at_risk = (
         await db.execute(
             select(func.count(User.id)).where(
-                User.last_active_at < week_ago,
-                User.last_active_at >= now - timedelta(days=30),
+                User.last_login_at < week_ago,
+                User.last_login_at >= thirty_ago,
             )
         )
     ).scalar_one()
+
+    logger.info(
+        "segments: total=%s high_value=%s power_readers=%s premium=%s new=%s at_risk=%s",
+        total,
+        high_value,
+        power_readers,
+        premium,
+        new_users,
+        at_risk,
+    )
 
     return {
         "total_users": int(total),

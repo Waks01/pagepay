@@ -58,15 +58,21 @@ export function DashboardPage() {
   } = useQuery({
     queryKey: ["admin", "dashboard", "stats", dateRange],
     queryFn: async () => {
-      const { data } = await adminApi.get<DashboardStats>(
-        "/admin/dashboard/stats",
-        {
-          params: useCustom
-            ? { start_date: startDate, end_date: endDate }
-            : { days: safeDaysCount },
-        },
-      );
-      return data;
+      const params = useCustom
+        ? { start_date: startDate, end_date: endDate }
+        : { days: safeDaysCount };
+      console.debug("[dashboard] stats request", params);
+      try {
+        const { data } = await adminApi.get<DashboardStats>(
+          "/admin/dashboard/stats",
+          { params },
+        );
+        console.debug("[dashboard] stats response", data);
+        return data;
+      } catch (err) {
+        console.error("[dashboard] stats error", err);
+        throw err;
+      }
     },
     staleTime: 60_000,
   });
@@ -82,13 +88,20 @@ export function DashboardPage() {
   const { data: dau = [], isLoading: dauLoading } = useQuery({
     queryKey: ["admin", "analytics", "dau", safeDaysCount],
     queryFn: async () => {
-      const { data } = await adminApi.get<DailyActiveUsers[]>(
-        "/admin/analytics/dau",
-        {
-          params: { days: safeDaysCount },
-        },
-      );
-      return data;
+      console.debug("[dashboard] dau request days=", safeDaysCount);
+      try {
+        const { data } = await adminApi.get<DailyActiveUsers[]>(
+          "/admin/analytics/dau",
+          {
+            params: { days: safeDaysCount },
+          },
+        );
+        console.debug("[dashboard] dau response", data);
+        return data;
+      } catch (err) {
+        console.error("[dashboard] dau error", err);
+        throw err;
+      }
     },
     staleTime: 60_000,
   });

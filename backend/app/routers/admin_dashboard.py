@@ -7,7 +7,7 @@ Real-time data aggregation from multiple sources.
 
 import logging
 from datetime import date, datetime
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,9 @@ router = APIRouter(prefix="/dashboard", tags=["admin-dashboard"])
 
 @router.get("/stats", response_model=DashboardStats)
 async def dashboard_stats(
+    days: int | None = Query(None, ge=1, le=366),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     current_admin: AdminUser = Depends(require_permission("dashboard.view")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -38,21 +41,32 @@ async def dashboard_stats(
     always returned irrespective of the window.
     """
     from app.services import fx
-    from datetime import timezone, timedelta
+    from datetime import timedelta
 
-    days: int | None = Query(None, ge=1, le=366)
-    start_date: str | None = Query(None)
-    end_date: str | None = Query(None)
+    logger.info(
+        "dashboard_stats: admin=%s days=%s start_date=%s end_date=%s",
+        current_admin.email if current_admin else None,
+        days,
+        start_date,
+        end_date,
+    )
 
     if start_date and end_date:
-        window_start = datetime.fromisoformat(start_date)
-        window_end = datetime.fromisoformat(end_date) + timedelta(days=1)
+        try:
+            window_start = datetime.fromisoformat(start_date)
+            window_end = datetime.fromisoformat(end_date) + timedelta(days=1)
+        except ValueError as exc:
+            logger.error("dashboard_stats: bad date format: %s", exc)
+            raise HTTPException(status_code=400, detail=f"Invalid date format: {exc}")
+        logger.info("dashboard_stats: custom window %s..%s", window_start, window_end)
     elif days:
         window_end = datetime.utcnow()
         window_start = window_end - timedelta(days=days)
+        logger.info("dashboard_stats: rolling %d-day window %s..%s", days, window_start, window_end)
     else:
         window_start = datetime.combine(date.today(), datetime.min.time())
         window_end = datetime.utcnow()
+        logger.info("dashboard_stats: today-only window %s..%s", window_start, window_end)
 
     # Basic stats
     total_users = (await db.execute(select(func.count(User.id)))).scalar_one()

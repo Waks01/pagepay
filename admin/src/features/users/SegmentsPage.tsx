@@ -11,10 +11,17 @@ export function SegmentsPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "users", "segments"],
     queryFn: async () => {
-      const { data } = await adminApi.get<UserSegments>(
-        "/admin/segments",
-      );
-      return data;
+      console.debug("[segments] request /admin/users/segments");
+      try {
+        const { data } = await adminApi.get<UserSegments>(
+          "/admin/users/segments",
+        );
+        console.debug("[segments] response", data);
+        return data;
+      } catch (err) {
+        console.error("[segments] error", err);
+        throw err;
+      }
     },
     staleTime: 60_000,
   });
