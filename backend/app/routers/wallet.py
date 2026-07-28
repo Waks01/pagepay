@@ -45,8 +45,28 @@ async def list_transactions(
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
 ):
-    """Unified point-earning history combining reading sessions and ad rewards."""
-    # Reading sessions
+    """Unified point-earning history combining reading sessions and ad rewards.
+
+    Two independent streams feed the wallet, and we surface both:
+
+    1. **Reading sessions** — every session with `end_time` set and
+       `points_earned > 0`. Slice-completion bonuses are settled at
+       /session/end (no claim required), so any verified session that
+       earned the bonus is listed as an "earn" entry. Unverified or
+       in-progress sessions are excluded — they have no balance impact.
+
+    2. **Ad events** — every AdEvent row with `credit_status='credited'`
+       AND `user_points_credited > 0`. Pre-read, post-read, and unbonded
+       (unrelated to a session) ads are all listed. SSV webhooks are
+       independent of /session/end, so an ad credited to a settled
+       session still appears as its own entry here.
+
+    Entries are sorted newest-first and truncated to `limit`. The 0-pts
+    "Reading…" placeholder that used to appear for unverified sessions
+    is gone — there's nothing to show for them, and surfacing "0 pts"
+    was misleading.
+    """
+    # Reading sessions: only those that actually credited the wallet.
     session_stmt = (
         select(
             ReadingSession,
@@ -56,18 +76,21 @@ async def list_transactions(
         )
         .join(ContentCatalog, ContentCatalog.id == ReadingSession.content_id)
         .where(ReadingSession.user_id == current_user.id)
-        .order_by(ReadingSession.start_time.desc())
+        .where(ReadingSession.end_time.is_not(None))
+        .where(ReadingSession.points_earned > 0)
+        .order_by(ReadingSession.end_time.desc())
         .limit(limit)
     )
     sessions = (await db.execute(session_stmt)).all()
 
-    # Ad reward events
+    # Ad events: every credited ad, regardless of session_id. SSV
+    # callbacks credit the wallet directly; the ad may or may not be
+    # bound to a session row, but the credit lands in either case.
     ad_stmt = (
         select(AdEvent)
         .where(AdEvent.user_id == current_user.id)
         .where(AdEvent.credit_status == "credited")
         .where(AdEvent.user_points_credited > 0)
-        .where(AdEvent.session_id.is_(None))
         .order_by(AdEvent.created_at.desc())
         .limit(limit)
     )
@@ -77,40 +100,30 @@ async def list_transactions(
     for session, title, read_order, total_slices in sessions:
         sid = session.id
         slice_info = _slice_label(read_order, total_slices)
-        if session.claimed_at is not None and session.points_earned > 0:
-            out.append(
-                Transaction(
-                    id=sid, type="earn", points=session.points_earned,
-                    description=f'Earned on "{title}{slice_info}"', date=session.claimed_at,
-                )
+        # Type "earn" because the bonus was settled at /session/end.
+        # Pre-read/post-read ads credited by SSV appear separately as
+        # their own "earn" entries below.
+        out.append(
+            Transaction(
+                id=sid, type="earn", points=session.points_earned,
+                description=f'Read "{title}{slice_info}"',
+                date=session.end_time,
             )
-        elif (session.pending_points or 0) > 0:
-            out.append(
-                Transaction(
-                    id=sid, type="pending", points=session.pending_points or 0,
-                    description=f'Watch an ad to claim "{title}{slice_info}"',
-                    date=session.end_time or session.start_time,
-                )
-            )
-        else:
-            desc = "Reading..." if session.end_time is None else f'Read "{title}{slice_info}"'
-            out.append(
-                Transaction(
-                    id=sid, type="pending", points=0,
-                    description=desc,
-                    date=session.end_time or session.start_time,
-                )
-            )
+        )
 
     for event in ad_events:
         out.append(
             Transaction(
                 id=event.id, type="earn", points=event.user_points_credited,
-                description="Ad reward", date=event.created_at,
+                description="Rewarded ad",
+                date=event.created_at,
             )
         )
 
-    # Sort newest first, limit
+    # Sort newest first, limit. We pull `limit` from each stream and
+    # merge — a user with hundreds of ads and a handful of sessions
+    # gets a coherent merged list. To bias more toward recent activity,
+    # we sort by date desc and slice to `limit` again.
     out.sort(key=lambda t: t.date, reverse=True)
     return out[:limit]
 

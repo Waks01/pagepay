@@ -106,12 +106,18 @@ class Settings(BaseSettings):
 
     # ── Ad reward payout (SSV-only flow) ────────────────────────────
     # How many points one rewarded ad is worth, before the user-share
-    # discount. 10 × USER_SHARE (0.95) = 9 points credited per ad.
-    # 9 points = ₦0.09. Adjust this single number to change the
-    # per-ad payout; the value is read from settings (env-overridable)
-    # and lives in exactly one place. Only rewarded_* ad units earn;
-    # in-feed and interstitial credits are blocked at the SSV handler.
-    rewarded_ad_payout_points: int = 10
+    # discount. 20 × USER_SHARE (0.80) = 16 points credited per ad.
+    # 16 points = ₦1.60. Override via env `REWARDED_AD_PAYOUT_POINTS`.
+    # The value is read from settings (env-overridable) and lives in
+    # exactly one place. Only rewarded_* ad units earn; in-feed and
+    # interstitial credits are blocked at the SSV handler.
+    rewarded_ad_payout_points: int = 20
+    # Bonus credited to the user when they finish a 1-minute reading
+    # slice, independent of any ads watched. Settled at /session/end.
+    # Override via env `READING_SLICE_BONUS_POINTS`.
+    # Floor for participation: ads still dominate the reward (~80%),
+    # but the user always gets *something* for finishing the slice.
+    reading_slice_bonus_points: int = 2
     # Lifetime of an ad-request token. 5 minutes matches AdMob's
     # recommended window for a rewarded video to complete. Too short =
     # legit slow networks miss credits. Too long = attackers can
@@ -216,8 +222,9 @@ class Settings(BaseSettings):
 
     # ── Platform revenue splits ──────────────────────────────────────
     # Ads: portion of ad revenue kept by platform (rest goes to user as points).
-    # 0.15 = platform keeps 15%, user gets 85%.
-    platform_ad_revenue_percent: float = 0.15
+    # 0.20 = platform keeps 20%, user gets 80%. Override via env
+    # `PLATFORM_AD_REVENUE_PERCENT`.
+    platform_ad_revenue_percent: float = 0.20
     # Tasks: platform fee added on top of worker reward.
     # 0.30 = platform keeps 30% of total escrow, worker gets 70%.
     platform_task_revenue_percent: float = 0.30

@@ -1,31 +1,42 @@
 """Reading-session endpoints.
 
-Reward-gate flow (Phase 1+)
-----------------------------
+Reward flow (split — ads and reading settled independently)
+-----------------------------------------------------------
 1. POST /session/start  — open a session, return session_id.
 2. POST /session/heartbeat — keep the timer alive (scroll + app_state).
-3. POST /session/end  — STOP the timer. **Does not credit points.** Stages
-   the earned amount on the row as `pending_points` and returns
-   `requires_claim=True` so the client can show the post-read ad modal.
-4. POST /session/claim — the user watched the post-read ad. Credit the
-   staged `pending_points` to the user's wallet. Idempotent.
+3. POST /session/end  — STOP the timer. If the session is verified
+   (scroll_events > 0), **immediately credits the slice-completion
+   bonus** (env `READING_SLICE_BONUS_POINTS`, default 2 pts) to the
+   user's wallet and stamps `session.points_earned`. The response
+   carries `slice_bonus_credited` and `new_balance`.
 
-The pre-read ad gate (no separate endpoint) is enforced client-side: the
-reader surfaces a "watch to start" modal and only calls /session/start
-after the user claims it. If you want the same enforcement on the server
-later, add a `claim_token` round-trip here.
+   Ad rewards (pre-read + post-read) are credited independently by the
+   SSV webhook when the user finishes watching each ad. They land as
+   their own wallet entries — see `AdEvent.user_points_credited`.
+
+4. POST /session/claim — DEPRECATED no-op for back-compat. New clients
+   should not call it. Kept so older clients don't 404.
+
+The pre-read ad gate is enforced client-side: the reader surfaces a
+"watch to start" modal and only calls /session/start after the user
+finishes watching it. The pre-read ad itself is settled by the SSV
+webhook, not by this router.
 """
 
 import logging
 from datetime import datetime
 
-logger = logging.getLogger("uvicorn")
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select
+
 from app.database import get_db
+from app.config import settings
 from app.models import ReadingSession, User
-from app.schemas import SessionStart, SessionHeartbeat, SessionEnd, SessionEndResponse, SessionClaimResponse
+from app.schemas import (
+    SessionStart, SessionHeartbeat, SessionEnd,
+    SessionEndResponse, SessionClaimResponse,
+)
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/session", tags=["session"])
@@ -85,15 +96,22 @@ async def end_session(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Stop the timer. Does NOT credit points.
+    """Stop the timer and settle the slice-completion bonus (if verified).
 
-    If the session was verified (scroll_events > 0) and ran long enough to
-    clear the duration floor, we stage `pending_points` on the row and tell
-    the client to surface the claim modal. The actual wallet credit happens
-    in /session/claim after the user has watched the post-read ad.
+    A verified session (scroll_events > 0) is one where the user genuinely
+    engaged with the slice — they scrolled, didn't background the app, and
+    the duration floor was met. For those sessions we credit the
+    env-overridable `READING_SLICE_BONUS_POINTS` (default 2) directly to
+    the user's wallet.
 
-    Sessions that were too short or had no scroll events get
-    `requires_claim=False, pending_points=0` — there's nothing to claim.
+    Ad rewards (pre-read and post-read) are settled by the SSV webhook
+    and are independent of this endpoint — they land as their own wallet
+    entries when the user finishes watching each ad.
+
+    Sessions that didn't pass anti-cheat (no scroll events, too short,
+    etc.) get `bonus_eligible=False, slice_bonus_credited=0`. The session
+    row is still updated with `end_time` for audit, but no wallet credit
+    is issued.
     """
     result = await db.execute(
         select(ReadingSession).where(ReadingSession.id == payload.session_id)
@@ -109,28 +127,35 @@ async def end_session(
 
     effective_duration = max(0, session.duration_seconds - session.total_paused_seconds)
 
-    if session.scroll_events > 0:
+    # Default: no bonus. Verified sessions below.
+    bonus_credited = 0
+    bonus_eligible = False
+
+    if session.scroll_events > 0 and effective_duration >= 30:
+        # Treat scroll + at least 30s of effective reading as a verified
+        # slice. The 30s floor is shorter than the 60s mark that triggers
+        # the post-read modal so the bonus can settle even if the user
+        # skipped the post-read ad (which is the whole point of the bonus).
         session.verified = True
-
-        # User earns points ONLY via the rewarded ads associated with this session.
-        # Reading time itself provides no extra points.
-        pending_total = session.pending_points or 0
-
-        await db.commit()
-        await db.refresh(session)
-        return SessionEndResponse(
-            requires_claim=True, # Always require claim if verified to trigger post-read ad
-            pending_points=pending_total,
-            session_id=session.id,
-            verified=True,
+        bonus_credited = settings.reading_slice_bonus_points
+        current_user.points_balance += bonus_credited
+        session.points_earned = bonus_credited
+        bonus_eligible = True
+        logger.info(
+            "session %d settled: user=%d verified=True bonus=%d new_balance=%d",
+            session.id, current_user.id, bonus_credited,
+            current_user.points_balance,
         )
 
     await db.commit()
+    await db.refresh(current_user)
+
     return SessionEndResponse(
-        requires_claim=False,
-        pending_points=0,
         session_id=session.id,
-        verified=False,
+        verified=session.verified,
+        bonus_eligible=bonus_eligible,
+        slice_bonus_credited=bonus_credited,
+        new_balance=current_user.points_balance,
     )
 
 
@@ -140,15 +165,16 @@ async def claim_session(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Credit the staged `pending_points` to the user's wallet.
+    """DEPRECATED no-op for back-compat.
 
-    Called after the user has watched the post-read ad. Idempotent: if the
-    session was already claimed (`claimed_at` set), we return the original
-    grant and the current balance without re-crediting.
+    Slice points are settled at /session/end (see SessionEndResponse). Ad
+    rewards are settled by the SSV webhook. New clients should not call
+    this endpoint. We return `already_claimed=True, points_earned=0` so
+    old clients that still POST to /session/claim don't crash.
 
-    The claim modal is only shown by the client when /session/end returned
-    `requires_claim=True`. We don't gate the claim endpoint on that flag —
-    the user might close the app between end and claim and reopen later.
+    We still verify the session exists and belongs to the caller before
+    returning — that way guessing another user's session id still 404s
+    instead of silently leaking a wallet balance.
     """
     result = await db.execute(
         select(ReadingSession).where(ReadingSession.id == payload.session_id)
@@ -157,25 +183,11 @@ async def claim_session(
     if not session or session.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Already claimed: idempotent return. Pull current balance fresh so we
-    # don't echo a stale value from a long-lived User ORM instance.
-    if session.claimed_at is not None:
-        me = (await db.execute(select(User.points_balance).where(User.id == current_user.id))).scalar_one()
-        return SessionClaimResponse(
-            points_earned=session.points_earned,
-            new_balance=me,
-            already_claimed=True,
-        )
-
-    pending = session.pending_points or 0
-    if pending > 0:
-        session.points_earned = pending
-        session.pending_points = 0
-    session.claimed_at = datetime.utcnow()
-    current_user.points_balance += pending
-    await db.commit()
+    me = (await db.execute(
+        select(User.points_balance).where(User.id == current_user.id)
+    )).scalar_one()
     return SessionClaimResponse(
-        points_earned=pending,
-        new_balance=current_user.points_balance,
-        already_claimed=False,
+        points_earned=0,
+        new_balance=me,
+        already_claimed=True,
     )

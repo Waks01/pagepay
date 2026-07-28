@@ -58,7 +58,7 @@ router = APIRouter(prefix="/ads", tags=["ads"])
 
 # Platform revenue share is read from settings so ops can change it
 # without a deploy. Default is set in config.py
-# (platform_ad_revenue_percent, default 0.15 = 15% platform, 85% user).
+# (platform_ad_revenue_percent, default 0.20 = 20% platform, 80% user).
 PLATFORM_SHARE = settings.platform_ad_revenue_percent
 USER_SHARE = 1.0 - PLATFORM_SHARE
 
@@ -751,34 +751,21 @@ async def admob_ssv_callback(
     )
 
     if req.session_id:
-        # Bundle reward into the reading session instead of global balance
-        session_claimed = False
-        if req.session_id:
-            session_row = await db.execute(
-                select(ReadingSession.claimed_at).where(ReadingSession.id == req.session_id)
-            )
-            session_claimed = session_row.scalar_one_or_none() is not None
-
-        if session_claimed:
-            await db.execute(
-                update(User)
-                .where(User.id == user_id)
-                .values(points_balance=User.points_balance + points)
-            )
-            logger.info(
-                "AdMob SSV: late credit -> wallet user=%s session=%s pts=%d",
-                user_id, req.session_id, points,
-            )
-        else:
-            await db.execute(
-                update(ReadingSession)
-                .where(ReadingSession.id == req.session_id)
-                .values(pending_points=ReadingSession.pending_points + points)
-            )
-            logger.info(
-                "AdMob SSV: session credit user=%s session=%s pts=%d",
-                user_id, req.session_id, points,
-            )
+        # Ad rewards always credit the user's wallet directly, even when
+        # the ad is bound to a reading session. The session row's
+        # `pending_points` field is no longer the queue (slice bonuses are
+        # settled at /session/end, ad bonuses at the SSV webhook). We
+        # keep `req.session_id` on the AdEvent for analytics so we can
+        # still measure "ads watched during a reading session" separately.
+        await db.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(points_balance=User.points_balance + points)
+        )
+        logger.info(
+            "AdMob SSV: session-bound credit → wallet user=%s session=%s pts=%d",
+            user_id, req.session_id, points,
+        )
     else:
         # Fallback: credit the global wallet immediately
         await db.execute(

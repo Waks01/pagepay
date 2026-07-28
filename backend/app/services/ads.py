@@ -37,7 +37,7 @@ logger = logging.getLogger("uvicorn.error")
 
 # Platform revenue share is read from settings so ops can change it
 # without a deploy. Default is set in config.py
-# (platform_ad_revenue_percent, default 0.15 = 15% platform, 85% user).
+# (platform_ad_revenue_percent, default 0.20 = 20% platform, 80% user).
 PLATFORM_SHARE = settings.platform_ad_revenue_percent
 USER_SHARE = 1.0 - PLATFORM_SHARE
 
@@ -313,7 +313,7 @@ def points_for_rewarded_ad() -> int:
     """The integer point value credited for one rewarded ad.
 
     `int(settings.rewarded_ad_payout_points * USER_SHARE)`. With the
-    defaults (10 × 0.95) this is 9. The `int()` floor is important:
+    defaults (20 × 0.80) this is 16. The `int()` floor is important:
     we never credit fractional points, and we never over-credit if
     the user-share ratio is changed in the future.
 

@@ -179,24 +179,33 @@ class SessionEnd(BaseModel):
 class SessionEndResponse(BaseModel):
     """Return shape of POST /session/end.
 
-    With the reward gate in place, ending a session does NOT credit points
-    directly. The client must call POST /session/claim after the user has
-    watched the post-read ad. Until then, `pending_points` is staged on the
-    session row and `requires_claim=True` signals the client to surface the
-    claim modal.
+    Points are credited IMMEDIATELY at /session/end (slice-completion
+    bonus, env `READING_SLICE_BONUS_POINTS`, default 2 pts). Ad rewards
+    are credited independently by the SSV webhook when the user finishes
+    watching them — they don't depend on this endpoint.
+
+    `slice_bonus_credited` is the integer points added to the wallet for
+    finishing this slice. `new_balance` is the post-credit balance.
+    `verified` reflects the server-side anti-cheat verdict (scroll
+    events > 0). `bonus_eligible` is true when the bonus was actually
+    credited; a non-verified session returns false with bonus_credited=0.
     """
-    requires_claim: bool
-    pending_points: int  # 0 if the session wasn't eligible (no scroll, too short)
     session_id: int
-    verified: bool  # true if scroll_events > 0 (anti-cheat passed)
+    verified: bool
+    bonus_eligible: bool
+    slice_bonus_credited: int
+    new_balance: int
 
 
 class SessionClaimResponse(BaseModel):
     """Return shape of POST /session/claim.
 
-    Idempotent: re-claiming a session that was already claimed returns the
-    same `points_earned` and the wallet balance as it stood after the first
-    claim. Callers can safely retry on network failure.
+    Deprecated no-op for back-compat. Slice points are now settled at
+    /session/end (see SessionEndResponse). Ad rewards are settled by
+    the SSV webhook independently. This endpoint is kept so old clients
+    don't crash if they still call it; new clients should ignore it.
+
+    Idempotent: re-claiming returns `already_claimed=True, points_earned=0`.
     """
     points_earned: int
     new_balance: int

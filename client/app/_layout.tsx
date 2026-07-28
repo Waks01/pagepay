@@ -15,6 +15,7 @@ import { setOnUnauthenticated, apiFetch } from '@/src/shared/api/client';
 import { setupNotificationListeners, registerFCMToken } from '@/src/lib/notifications';
 import { connectSocket, disconnectSocket, onNotification } from '@/src/lib/socket';
 import { SplashOverlay } from '@/components/SplashOverlay';
+import { AdSlotProvider } from '@/src/shared/contexts/AdSlot';
 import '@/src/lib/i18n';
 
 const queryClient = new QueryClient();
@@ -188,7 +189,8 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AdsBootstrapComponent />
-        <Stack>
+        <AdSlotProvider>
+          <Stack>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -224,6 +226,7 @@ export default function RootLayout() {
         <Stack.Screen name="pin/setup" options={{ headerShown: false, title: 'Set PIN' }} />
         <Stack.Screen name="pin/change" options={{ headerShown: false, title: 'Change PIN' }} />
         </Stack>
+        </AdSlotProvider>
         <StatusBar style="auto" />
       </ThemeProvider>
     </QueryClientProvider>

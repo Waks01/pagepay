@@ -38,6 +38,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { requestAdToken, pollRecentCredits } from '@/src/shared/lib/ads';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { useAdSlot } from '@/src/shared/contexts/AdSlot';
+import type { AdSlotName } from '@/src/shared/contexts/AdSlot';
 
 type AdState = 'loading' | 'ready' | 'showing' | 'error';
 
@@ -113,6 +115,7 @@ export function RewardedAd(props: RewardedAdProps) {
 
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
+  const slot = useAdSlot();
 
   const [adState, setAdState] = useState<AdState>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -130,6 +133,25 @@ export function RewardedAd(props: RewardedAdProps) {
     onClaimedRef.current = onClaimed;
     onSkippedRef.current = onSkipped;
   }, [onClose, onClaimed, onSkipped]);
+
+  // Slot integration. AdSlotContext keeps one ad loaded at the app
+  // level (AdsBootstrapComponent kicks off a load on mount). When the
+  // modal opens, we just need to *consume* the ready ad — no need
+  // to spin up a fresh network load. The slot's `release()` re-arms
+  // the slot for the next call.
+  //
+  // We hold the slot-acquired ad in a ref so `handleWatchAd` can
+  // call its `show()` without going through state. The CLOSED
+  // event still flows through the RewardedAdEventType handlers we
+  // registered below when we subscribed to the underlying AdMob
+  // instance returned by the slot.
+  const acquiredRef = useRef<{
+    show: () => void;
+    customData: string;
+    tokenIssuedAt: string;
+    onClosed?: () => void;
+    onEarned?: () => void;
+  } | null>(null);
 
   // Load ad when modal opens, or when preload is requested.
   //
@@ -153,6 +175,29 @@ export function RewardedAd(props: RewardedAdProps) {
       return;
     }
 
+    // Fast path: ask the slot for a ready ad. If we get one, the
+    // network round-trip already happened at app start (or after
+    // the previous consumption) — no spinner, immediate play.
+    // adUnitName is loosely typed (free-form string in props); cast
+    // to the slot's union so the consumer doesn't need to know the
+    // internal slot naming convention.
+    const acquired = slot.acquire(adUnitName as AdSlotName);
+    if (acquired) {
+      acquiredRef.current = {
+        show: acquired.show,
+        customData: acquired.customData,
+        tokenIssuedAt: acquired.tokenIssuedAt,
+      };
+      tokenIssuedAtRef.current = acquired.tokenIssuedAt;
+      setAdState('ready');
+      setErrorMessage(null);
+      rewardDataRef.current = null;
+      // Release the slot's claim but don't trigger a re-load yet —
+      // we want the ad to remain loaded while the user is on this
+      // modal. Release happens on close.
+      return;
+    }
+
     let isActive = true;
     let unsubLoaded: (() => void) | null = null;
     let unsubEarned: (() => void) | null = null;
@@ -173,6 +218,7 @@ export function RewardedAd(props: RewardedAdProps) {
     setAdState('loading');
     setErrorMessage(null);
     rewardDataRef.current = null;
+    acquiredRef.current = null;
 
     if (__DEV__) {
       console.log('[RewardedAd] Loading ad...', { visible, preload });
@@ -281,8 +327,9 @@ export function RewardedAd(props: RewardedAdProps) {
         }
         rewardedRef.current = null;
       }
+      acquiredRef.current = null;
     };
-  }, [preload, visible, adUnit, userId, sessionId, adUnitName]);
+  }, [preload, visible, adUnit, userId, sessionId, adUnitName, slot]);
 
   // Step 4-6: poll for the credit. This is the core of the
   // server-authoritative flow — the AdMob SDK has already
@@ -319,6 +366,68 @@ export function RewardedAd(props: RewardedAdProps) {
   }, [onClaimed]);
 
   const handleWatchAd = useCallback(() => {
+    // Slot-acquired ad path: the AdMob instance lives inside the
+    // AdSlot context. The slot owns the underlying ad and forwards
+    // its CLOSED + EARNED_REWARD events via AcquiredAd.onClosed
+    // and AcquiredAd.onEarned. We mirror what the non-slot path
+    // does in its `AdEventType.CLOSED` listener (poll for credit,
+    // then call onCloseRef + onSkippedRef as appropriate).
+    if (acquiredRef.current) {
+      const acquired = acquiredRef.current;
+      acquiredRef.current = null;
+      let watchedToCompletion = false;
+      acquired.onEarned = () => {
+        watchedToCompletion = true;
+        // The reward is being earned — the SSV callback is in
+        // flight to the server. We'll pick up the credit on the
+        // CLOSED handler via /recent-credits.
+      };
+      acquired.onClosed = async () => {
+        // The slot's CLOSED event fires after the user dismissed
+        // the ad. If EARNED_REWARD fired first, we know to expect
+        // a credit. Otherwise the user skipped — no credit.
+        const since = acquired.tokenIssuedAt;
+        if (watchedToCompletion) {
+          try {
+            const { pollRecentCredits } = await import('@/src/shared/lib/ads');
+            const credit = await pollRecentCredits(since);
+            if (credit) {
+              onClaimedRef.current({
+                pointsCredited: credit.points_credited,
+                newBalance: credit.new_balance,
+              });
+            } else {
+              // SSV is taking longer than the poll window. Tell
+              // the parent a credit is pending; their next
+              // /auth/me refresh will surface it.
+              onClaimedRef.current({ pointsCredited: 0, newBalance: 0, pending: true });
+            }
+          } catch {
+            onClaimedRef.current({ pointsCredited: 0, newBalance: 0, pending: true });
+          }
+        } else {
+          onSkippedRef.current?.();
+        }
+        // Hand the slot back so it can re-load the next one.
+        slot.release();
+        onCloseRef.current();
+      };
+      try {
+        setAdState('showing');
+        acquired.show();
+        if (__DEV__) {
+          console.log('[RewardedAd] Slot-acquired ad showing');
+        }
+      } catch (err) {
+        if (__DEV__) {
+          console.error('[RewardedAd] Failed to show slot ad:', err);
+        }
+        setAdState('error');
+        setErrorMessage('Failed to display ad');
+      }
+      return;
+    }
+
     if (!rewardedRef.current || adState !== 'ready') {
       if (__DEV__) {
         console.warn('[RewardedAd] Cannot show ad - state:', adState);
@@ -340,7 +449,7 @@ export function RewardedAd(props: RewardedAdProps) {
       setAdState('error');
       setErrorMessage('Failed to display ad');
     }
-  }, [adState]);
+  }, [adState, slot]);
 
   const handleSkip = useCallback(() => {
     onSkippedRef.current?.();

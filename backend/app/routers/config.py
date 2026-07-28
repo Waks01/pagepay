@@ -77,8 +77,8 @@ async def get_platform_config(db: AsyncSession = Depends(get_db)) -> dict[str, f
 
     Shape:
         {
-          "ad_revenue_platform_percent": 0.15,
-          "ad_revenue_user_percent": 0.85,
+          "ad_revenue_platform_percent": 0.20,
+          "ad_revenue_user_percent": 0.80,
           "task_revenue_platform_percent": 0.30,
           "task_revenue_worker_percent": 0.70,
           "task_base_rates_kobo": {
@@ -89,7 +89,7 @@ async def get_platform_config(db: AsyncSession = Depends(get_db)) -> dict[str, f
           }
         }
 
-    Revenue values are fractions (0.15 = 15%). Task rates are in kobo
+    Revenue values are fractions (0.20 = 20%). Task rates are in kobo
     so the client can render them without another conversion step.
 
     Task rates are read from AppConfig if present, otherwise the

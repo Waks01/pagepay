@@ -65,10 +65,13 @@ type ContinueReading = {
 };
 
 type SessionEndResponse = {
-  requires_claim: boolean;
-  pending_points: number;
+  // Slice-completion bonus settled at /session/end. Reading-only reward;
+  // ad rewards are independent (SSV webhook → AdEvent row → wallet).
   session_id: number;
   verified: boolean;
+  bonus_eligible: boolean;
+  slice_bonus_credited: number;
+  new_balance: number;
 };
 
 /**
@@ -83,22 +86,21 @@ type SessionEndResponse = {
  *      timer ticks (1s) up to 60s, then the inline Finish button
  *      unlocks.
  *   4. Tap Finish → POST-READ GATE (ad #2): show RewardedAd FIRST.
- *      On claim → POST /session/end (stages pending_points) →
- *      auto-POST /session/claim (credits the wallet) → POST
- *      /progress/finish (advance the slice pointer) → navigate to
- *      the book detail.
+ *      On claim → POST /session/end (settles slice-completion bonus
+ *      directly to the wallet; ~2 pts by default) → POST /progress/finish
+ *      (advance the slice pointer) → navigate back to the book detail.
  *      On skip → POST /session/end still fires (we advance the slice
- *      pointer), but /session/claim is skipped → user forfeits the
- *      staged points. Still navigates back to the book detail.
+ *      pointer); user forfeits only the ad bonus, not the slice bonus.
  *
  * Why ad #2 sits BEFORE /session/end: the user explicitly said the
  * second ad should gate the end-of-session, not sit after it. Putting
  * it first means the user's act of "finishing" is driven by watching
  * (or skipping) the ad, not by tapping Finish alone.
  *
- * Why we don't block skip on claiming: the user already did the read;
- * making them sit through a third modal to confirm forfeit would be
- * punitive. Skip forfeits the points but never stalls the flow.
+ * Why slice bonus is settled at /session/end (no separate claim):
+ * points that depend on ad-watching land via the SSV webhook on their
+ * own. Points that depend on reading-the-slice land at /session/end.
+ * This avoids the "I watched an ad but got 0 pts" class of bugs.
  */
 export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -123,9 +125,8 @@ export default function ReaderScreen() {
   const [preReadOpen, setPreReadOpen] = useState(true);
   // Post-read gate: sits BEFORE /session/end, not after. The user has
   // read for the 1-minute floor — now they watch (or skip) a second ad
-  // to "fire" the end-of-session sequence. The server still recalculates
-  // and stages pending_points inside /session/end; the auto-claim after
-  // /session/end closes the loop without surfacing a third modal.
+  // to "fire" the end-of-session sequence. The slice-completion bonus is
+  // settled at /session/end (no separate claim needed).
   const [postReadAdOpen, setPostReadAdOpen] = useState(false);
   const [preloadPostRead, setPreloadPostRead] = useState(false);
 
@@ -533,23 +534,11 @@ export default function ReaderScreen() {
       return;
     }
 
-    const endRes = await endSession(sessionIdRef.current);
-
-    if (endRes?.requires_claim) {
-      try {
-        await apiFetch('/api/v1/session/claim', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionIdRef.current }),
-        });
-        queryClient.invalidateQueries({ queryKey: ['me'] });
-        queryClient.invalidateQueries({ queryKey: ['wallet'] });
-      } catch (e) {
-        console.warn('Session claim failed', e);
-        router.back();
-        return;
-      }
-    }
+    // /session/end settles the slice-completion bonus directly to the
+    // wallet. The ad reward itself is settled by the SSV webhook (the
+    // server fires `pointsCredited` already reflects the wallet update
+    // from the webhook; this query invalidation just makes the UI match).
+    await endSession(sessionIdRef.current);
 
     try {
       await apiFetch(`/api/v1/progress/finish?slice_id=${Number(id)}`, { method: 'POST' });
@@ -569,20 +558,9 @@ export default function ReaderScreen() {
       return;
     }
 
-    const endRes = await endSession(sessionIdRef.current);
-    if (endRes?.requires_claim && endRes.pending_points > 0) {
-      try {
-        await apiFetch('/api/v1/session/claim', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionIdRef.current }),
-        });
-        queryClient.invalidateQueries({ queryKey: ['me'] });
-        queryClient.invalidateQueries({ queryKey: ['wallet'] });
-      } catch (e) {
-        console.warn('Session claim failed', e);
-      }
-    }
+    // Skip forfeits the ad bonus only — the slice-completion bonus is
+    // still settled at /session/end, so the user gets paid for reading.
+    await endSession(sessionIdRef.current);
 
     try {
       await apiFetch(`/api/v1/progress/finish?slice_id=${Number(id)}`, { method: 'POST' });
