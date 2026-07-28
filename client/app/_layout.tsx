@@ -208,12 +208,10 @@ export default function RootLayout() {
         <Stack.Screen name="sponsor/dashboard" options={{ headerShown: false, title: 'Sponsor Dashboard' }} />
         <Stack.Screen name="sponsor/tasks/create" options={{ headerShown: false, title: 'Create Task' }} />
         <Stack.Screen name="sponsor/tasks/[id]" options={{ headerShown: false, title: 'Task Submissions' }} />
+        <Stack.Screen name="fund-wallet/success" options={{ headerShown: false, title: 'Deposit Success' }} />
         <Stack.Screen name="billing/history" options={{ headerShown: false, title: 'Billing History' }} />
         <Stack.Screen name="billing/subscription" options={{ headerShown: false, title: 'Manage Subscription' }} />
         <Stack.Screen name="subscription/success" options={{ headerShown: false, title: 'Payment Success' }} />
-        <Stack.Screen name="fund-wallet/success" options={{ headerShown: false, title: 'Deposit Success' }} />
-        <Stack.Screen name="admin/tasks/create" options={{ headerShown: false, title: 'Create Task' }} />
-        <Stack.Screen name="admin/tasks/review" options={{ headerShown: false, title: 'Review Queue' }} />
         <Stack.Screen name="forgot-password" options={{ headerShown: false, title: 'Reset Password' }} />
         <Stack.Screen name="forgot-password-otp" options={{ headerShown: false, title: 'Enter OTP' }} />
         <Stack.Screen name="reset-password" options={{ headerShown: false, title: 'New Password' }} />

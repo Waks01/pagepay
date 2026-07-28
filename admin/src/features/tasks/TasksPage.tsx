@@ -1,11 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { useState } from 'react';
-import { Card, StatCard, Badge, Button, Pagination, ShimmerLoader, Container, Tooltip } from '@/shared/components';
+import { Card, StatCard, Badge, Button, Pagination, ShimmerLoader, Container, Tooltip, Modal } from '@/shared/components';
 import { TopHeader } from '@/shared/components/TopHeader';
 import { useLayoutContext } from '@/shared/components/Layout';
 import { useAuthStore } from '@/store/auth';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { useToast } from '@/shared/hooks/use-toast';
+import { Input } from '@/shared/components/Input';
+import { ConfirmModal } from '@/shared/components/ConfirmModal';
+import { CheckCircle, XCircle, Plus, Trash2, Pencil, ListTodo, Briefcase, Inbox } from 'lucide-react';
 
 interface SponsorKYC {
   sponsor_id: number;
@@ -70,14 +73,118 @@ interface TaskAnalytics {
   };
 }
 
+interface AdminTask {
+  id: number;
+  title: string;
+  task_type: string;
+  platform: string;
+  category: string;
+  task_source: string;
+  reward_type: string;
+  reward_amount: number;
+  max_completions: number;
+  completed_count: number;
+  status: string;
+  expires_at: string | null;
+  created_at: string;
+}
+
+interface TaskCreateForm {
+  title: string;
+  description: string;
+  instructions: string;
+  platform: string;
+  target_url: string;
+  reward_amount: string;
+  max_completions: string;
+  expires_in_days: string;
+}
+
+const DEFAULT_PLATFORMS = [
+  'youtube',
+  'instagram',
+  'twitter',
+  'tiktok',
+  'facebook',
+  'website',
+];
+
+const EMPTY_FORM: TaskCreateForm = {
+  title: '',
+  description: '',
+  instructions: '',
+  platform: 'youtube',
+  target_url: '',
+  reward_amount: '100',
+  max_completions: '500',
+  expires_in_days: '30',
+};
+
+/**
+ * Empty-state panel — rendered when a list query has returned 0 items.
+ * Same component drives all three tabs so the visual language stays
+ * consistent. The icon + title + body copy + primary CTA are configurable
+ * so each tab can specialize without re-implementing the layout.
+ */
+function EmptyState({
+  icon,
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <Card>
+      <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-bg-muted text-text-muted">
+          {icon}
+        </div>
+        <h3 className="mb-1 text-base font-semibold text-text-main">{title}</h3>
+        <p className="max-w-sm text-sm text-text-muted">{description}</p>
+        {actionLabel && onAction && (
+          <div className="mt-6">
+            <Button variant="primary" onClick={onAction}>
+              {actionLabel}
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export function TasksPage() {
   const { onMenuClick } = useLayoutContext();
   const hasPermission = useAuthStore((s) => s.hasPermission);
-  const [tab, setTab] = useState<'kyc' | 'submissions' | 'analytics'>('kyc');
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<'tasks' | 'kyc' | 'submissions' | 'analytics'>('tasks');
   const [kycPage, setKycPage] = useState(1);
   const [submissionsPage, setSubmissionsPage] = useState(1);
+  const [tasksPage, setTasksPage] = useState(1);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState<TaskCreateForm>(EMPTY_FORM);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  const queryClient = useQueryClient();
+  // Fetch task list
+  const { data: tasks, isLoading: tasksLoading } = useQuery({
+    queryKey: ['admin', 'tasks', 'list', tasksPage],
+    queryFn: async () => {
+      const { data } = await adminApi.get<{ items: AdminTask[]; total: number; page: number; limit: number }>(
+        '/admin/tasks/admin/list',
+        { params: { page: tasksPage, limit: 50 } },
+      );
+      return data;
+    },
+    staleTime: 30_000,
+    enabled: tab === 'tasks',
+  });
 
   // Fetch pending KYC
   const { data: kyc, isLoading: kycLoading } = useQuery({
@@ -126,7 +233,9 @@ export function TasksPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'tasks', 'kyc'] });
+      toast.success('KYC approved');
     },
+    onError: (err: any) => toast.error(err?.response?.data?.detail || 'Failed to approve KYC'),
   });
 
   const rejectKycMutation = useMutation({
@@ -135,7 +244,9 @@ export function TasksPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'tasks', 'kyc'] });
+      toast.success('KYC rejected');
     },
+    onError: (err: any) => toast.error(err?.response?.data?.detail || 'Failed to reject KYC'),
   });
 
   // Submission mutations
@@ -146,7 +257,9 @@ export function TasksPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'tasks', 'submissions'] });
+      toast.success('Submission approved');
     },
+    onError: (err: any) => toast.error(err?.response?.data?.detail || 'Failed to approve submission'),
   });
 
   const rejectSubmissionMutation = useMutation({
@@ -155,6 +268,59 @@ export function TasksPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'tasks', 'submissions'] });
+      toast.success('Submission rejected');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.detail || 'Failed to reject submission'),
+  });
+
+  // Task management mutations
+  const createTaskMutation = useMutation({
+    mutationFn: async (payload: TaskCreateForm) => {
+      const body = {
+        title: payload.title,
+        description: payload.description,
+        instructions: payload.instructions,
+        platform: payload.platform,
+        target_url: payload.target_url || undefined,
+        category: 'social',
+        reward_type: 'points',
+        reward_amount: parseInt(payload.reward_amount, 10),
+        proof_type: 'screenshot',
+        max_completions: parseInt(payload.max_completions, 10),
+        expires_in_days: parseInt(payload.expires_in_days, 10),
+      };
+      const { data } = await adminApi.post<{ success: boolean; task_id: number }>(
+        '/admin/tasks/admin/create',
+        body,
+      );
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'tasks', 'list'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'tasks', 'analytics'] });
+      setCreateOpen(false);
+      setForm(EMPTY_FORM);
+      toast.success(`Task created (id #${data.task_id})`);
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'Failed to create task');
+    },
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (taskId: number) => {
+      await adminApi.delete(`/admin/tasks/admin/${taskId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'tasks', 'list'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'tasks', 'analytics'] });
+      setDeleteId(null);
+      toast.success('Task deleted');
+    },
+    onError: (err: any) => {
+      setDeleteId(null);
+      toast.error(err?.response?.data?.detail || 'Failed to delete task');
     },
   });
 
@@ -165,7 +331,7 @@ export function TasksPage() {
   };
 
   const handleRejectKyc = (sponsorId: number) => {
-    const reason = prompt('Rejection reason:');
+    const reason = prompt('Rejection reason (min 10 chars):');
     if (reason && reason.length >= 10) {
       rejectKycMutation.mutate({ sponsorId, reason });
     } else if (reason) {
@@ -180,12 +346,36 @@ export function TasksPage() {
   };
 
   const handleRejectSubmission = (submissionId: number) => {
-    const reason = prompt('Rejection reason:');
+    const reason = prompt('Rejection reason (min 10 chars):');
     if (reason && reason.length >= 10) {
       rejectSubmissionMutation.mutate({ submissionId, reason });
     } else if (reason) {
       alert('Reason must be at least 10 characters');
     }
+  };
+
+  const handleCreateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim() || !form.description.trim() || !form.instructions.trim()) {
+      toast.error('Title, description and instructions are required');
+      return;
+    }
+    const reward = parseInt(form.reward_amount, 10);
+    const max = parseInt(form.max_completions, 10);
+    const days = parseInt(form.expires_in_days, 10);
+    if (Number.isNaN(reward) || reward < 1) {
+      toast.error('Reward must be a positive integer');
+      return;
+    }
+    if (Number.isNaN(max) || max < 1) {
+      toast.error('Max completions must be a positive integer');
+      return;
+    }
+    if (Number.isNaN(days) || days < 1) {
+      toast.error('Expiry must be a positive integer');
+      return;
+    }
+    createTaskMutation.mutate(form);
   };
 
   return (
@@ -195,33 +385,138 @@ export function TasksPage() {
         subtitle="Manage Phase 7 social tasks marketplace"
         onMenuClick={onMenuClick}
         actions={
-          <div className="flex rounded-lg border border-border">
-            <button
-              onClick={() => setTab('kyc')}
-              className={`px-4 py-1.5 text-sm font-semibold transition-colors ${tab === 'kyc' ? 'bg-primary text-white' : 'text-text-muted hover:text-text-main'}`}
-            >
-              KYC
-            </button>
-            <button
-              onClick={() => setTab('submissions')}
-              className={`px-4 py-1.5 text-sm font-semibold transition-colors ${tab === 'submissions' ? 'bg-primary text-white' : 'text-text-muted hover:text-text-main'}`}
-            >
-              Submissions
-            </button>
-            <button
-              onClick={() => setTab('analytics')}
-              className={`px-4 py-1.5 text-sm font-semibold transition-colors ${tab === 'analytics' ? 'bg-primary text-white' : 'text-text-muted hover:text-text-main'}`}
-            >
-              Analytics
-            </button>
+          <div className="flex items-center gap-3">
+            {tab === 'tasks' && hasPermission('tasks.manage') && (
+              <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                <Plus size={16} /> Create Task
+              </Button>
+            )}
+            <div className="flex rounded-lg border border-border">
+              <button
+                onClick={() => setTab('tasks')}
+                className={`px-4 py-1.5 text-sm font-semibold transition-colors ${tab === 'tasks' ? 'bg-primary text-white' : 'text-text-muted hover:text-text-main'}`}
+              >
+                Tasks
+              </button>
+              <button
+                onClick={() => setTab('kyc')}
+                className={`px-4 py-1.5 text-sm font-semibold transition-colors ${tab === 'kyc' ? 'bg-primary text-white' : 'text-text-muted hover:text-text-main'}`}
+              >
+                KYC
+              </button>
+              <button
+                onClick={() => setTab('submissions')}
+                className={`px-4 py-1.5 text-sm font-semibold transition-colors ${tab === 'submissions' ? 'bg-primary text-white' : 'text-text-muted hover:text-text-main'}`}
+              >
+                Submissions
+              </button>
+              <button
+                onClick={() => setTab('analytics')}
+                className={`px-4 py-1.5 text-sm font-semibold transition-colors ${tab === 'analytics' ? 'bg-primary text-white' : 'text-text-muted hover:text-text-main'}`}
+              >
+                Analytics
+              </button>
+            </div>
           </div>
         }
       />
       <Container size="full">
+        {tab === 'tasks' && (
+          <div>
+            {tasksLoading && <ShimmerLoader lines={5} />}
+            {tasks && tasks.items.length === 0 && (
+              <EmptyState
+                icon={<ListTodo size={26} />}
+                title="No tasks yet"
+                description="Create your first task to start engaging workers. Tasks appear here once they're published."
+                {...(hasPermission('tasks.manage')
+                  ? { actionLabel: 'Create Task', onAction: () => setCreateOpen(true) }
+                  : {})}
+              />
+            )}
+            {tasks && tasks.items.length > 0 && (
+              <Card>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-border">
+                    <thead className="bg-bg-muted">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">ID</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Title</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Platform</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Source</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Reward</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Completion</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Expires</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-text-muted">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {tasks.items.map((t) => (
+                        <tr key={t.id} className="hover:bg-bg-hover">
+                          <td className="px-4 py-3 text-sm text-text-main">#{t.id}</td>
+                          <td className="px-4 py-3 text-sm text-text-main">{t.title}</td>
+                          <td className="px-4 py-3 text-sm text-text-main capitalize">{t.platform}</td>
+                          <td className="px-4 py-3 text-sm text-text-main">
+                            <Badge variant={t.task_source === 'admin' ? 'info' : 'neutral'}>
+                              {t.task_source}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-text-main">₦{t.reward_amount.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-sm text-text-main">
+                            {t.completed_count} / {t.max_completions}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-text-main">
+                            <Badge variant={
+                              t.status === 'active' ? 'success' :
+                              t.status === 'completed' ? 'neutral' :
+                              t.status === 'paused' ? 'warning' : 'neutral'
+                            }>
+                              {t.status}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-text-main">
+                            {t.expires_at ? new Date(t.expires_at).toLocaleDateString() : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-text-main">
+                            {hasPermission('tasks.manage') && (
+                              <div className="flex gap-2">
+                                <Tooltip content="Delete this task" position="top">
+                                  <Button
+                                    size="sm"
+                                    variant="danger"
+                                    onClick={() => setDeleteId(t.id)}
+                                  >
+                                    <Trash2 size={14} /> Delete
+                                  </Button>
+                                </Tooltip>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="p-4 sm:p-6">
+                  <Pagination page={tasksPage} totalPages={Math.ceil(tasks.total / 50)} onPageChange={setTasksPage} />
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
+
         {tab === 'kyc' && (
           <div>
             {kycLoading && <ShimmerLoader lines={5} />}
-            {kyc && (
+            {kyc && kyc.items.length === 0 && (
+              <EmptyState
+                icon={<Briefcase size={26} />}
+                title="No pending KYC applications"
+                description="Sponsor verification requests appear here for review. Once a sponsor submits their business documents, you'll be able to approve or reject them here."
+              />
+            )}
+            {kyc && kyc.items.length > 0 && (
               <Card>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-border">
@@ -277,7 +572,14 @@ export function TasksPage() {
         {tab === 'submissions' && (
           <div>
             {submissionsLoading && <ShimmerLoader lines={5} />}
-            {submissions && (
+            {submissions && submissions.items.length === 0 && (
+              <EmptyState
+                icon={<Inbox size={26} />}
+                title="No pending submissions"
+                description="Flagged or pending task submissions appear here for review. Approve to release the worker reward, or reject to deny with feedback."
+              />
+            )}
+            {submissions && submissions.items.length > 0 && (
               <Card>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-border">
@@ -388,6 +690,139 @@ export function TasksPage() {
           </div>
         )}
       </Container>
+
+      {/* Create Task Modal */}
+      <Modal
+        isOpen={createOpen}
+        onClose={() => {
+          if (!createTaskMutation.isPending) {
+            setCreateOpen(false);
+            setForm(EMPTY_FORM);
+          }
+        }}
+        title="Create New Task"
+        size="xl"
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setCreateOpen(false);
+                setForm(EMPTY_FORM);
+              }}
+              disabled={createTaskMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="create-task-form"
+              variant="primary"
+              disabled={createTaskMutation.isPending}
+            >
+              {createTaskMutation.isPending ? 'Creating...' : 'Create Task'}
+            </Button>
+          </>
+        }
+      >
+        <form id="create-task-form" onSubmit={handleCreateSubmit} className="space-y-4">
+          <Input
+            label="Task Title *"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            placeholder="e.g. Subscribe to PagePay on YouTube"
+            disabled={createTaskMutation.isPending}
+          />
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-text-main">Description *</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Short description shown on the task card"
+              rows={3}
+              disabled={createTaskMutation.isPending}
+              className="w-full rounded-lg border border-border bg-bg-main px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 disabled:opacity-50"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-text-main">Instructions *</label>
+            <textarea
+              value={form.instructions}
+              onChange={(e) => setForm({ ...form, instructions: e.target.value })}
+              placeholder="Step-by-step instructions for the worker"
+              rows={4}
+              disabled={createTaskMutation.isPending}
+              className="w-full rounded-lg border border-border bg-bg-main px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 disabled:opacity-50"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-text-main">Platform</label>
+            <div className="flex flex-wrap gap-2">
+              {DEFAULT_PLATFORMS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setForm({ ...form, platform: p })}
+                  disabled={createTaskMutation.isPending}
+                  className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+                    form.platform === p
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-border bg-bg-main text-text-muted hover:border-border-hover'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Input
+            label="Target URL (optional)"
+            value={form.target_url}
+            onChange={(e) => setForm({ ...form, target_url: e.target.value })}
+            placeholder="https://youtube.com/@pagepay"
+            disabled={createTaskMutation.isPending}
+          />
+          <div className="grid grid-cols-3 gap-3">
+            <Input
+              label="Reward (₦) *"
+              type="number"
+              min={1}
+              value={form.reward_amount}
+              onChange={(e) => setForm({ ...form, reward_amount: e.target.value })}
+              disabled={createTaskMutation.isPending}
+            />
+            <Input
+              label="Max Completions *"
+              type="number"
+              min={1}
+              value={form.max_completions}
+              onChange={(e) => setForm({ ...form, max_completions: e.target.value })}
+              disabled={createTaskMutation.isPending}
+            />
+            <Input
+              label="Expires (days) *"
+              type="number"
+              min={1}
+              value={form.expires_in_days}
+              onChange={(e) => setForm({ ...form, expires_in_days: e.target.value })}
+              disabled={createTaskMutation.isPending}
+            />
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete Confirm Modal */}
+      <ConfirmModal
+        isOpen={deleteId !== null}
+        onClose={() => setDeleteId(null)}
+        onConfirm={() => deleteId && deleteTaskMutation.mutate(deleteId)}
+        title="Delete Task"
+        message="This will permanently delete the task and any pending submissions. This cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+        isLoading={deleteTaskMutation.isPending}
+      />
     </>
   );
 }
