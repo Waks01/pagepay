@@ -179,8 +179,21 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     
     # ── Phase 3: Firebase Cloud Messaging (Push Notifications) ───────
-    # Path to Firebase service account JSON file downloaded from console
+    # Two ways to provide Firebase Admin credentials, checked in order:
+    #
+    #   1. `firebase_service_account_json` — the raw JSON contents as a
+    #      string. Preferred for managed deploys (Render, Railway, Fly,
+    #      etc.) where the credential JSON is stored as a secret env
+    #      var so nothing sensitive touches the repo or filesystem.
+    #
+    #   2. `firebase_service_account_path` — path to a JSON file on
+    #      disk. Used for local dev where the file is in
+    #      `backend/firebase-service-account.json` (gitignored).
+    #
+    # If neither is set / the file is missing, push notifications are
+    # disabled at startup and a clear error is logged once.
     firebase_service_account_path: str = "firebase-service-account.json"
+    firebase_service_account_json: str | None = None
     
     # ── Phase 7: Cloudinary for task proof uploads ───────────────────
     cloudinary_cloud_name: str | None = None

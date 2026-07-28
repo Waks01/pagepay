@@ -118,12 +118,23 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(_prewarm_admob_keys())
     
-    # Initialize Firebase Admin for push notifications
+    # Initialize Firebase Admin for push notifications. The init helper
+    # reads credentials from FIREBASE_SERVICE_ACCOUNT_JSON (raw JSON) or
+    # FIREBASE_SERVICE_ACCOUNT_PATH (file path). On managed deploys
+    # (Render/Railway) the raw-JSON env var is the supported path —
+    # the file is gitignored so it can't ship with the code.
     try:
         initialize_firebase()
         logger.info("Firebase Admin initialized for push notifications")
     except Exception as exc:
-        logger.warning("Firebase Admin initialization failed: %s", exc)
+        logger.error(
+            "Firebase Admin initialization failed: %s. "
+            "Set FIREBASE_SERVICE_ACCOUNT_JSON (raw service-account JSON) "
+            "in the environment, or ensure FIREBASE_SERVICE_ACCOUNT_PATH "
+            "points to a readable file. Push notifications will be "
+            "disabled until this is resolved.",
+            exc,
+        )
     
     # Start Phase 7 background task processor
     # Only start if explicitly enabled via environment variable

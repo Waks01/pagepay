@@ -2,7 +2,9 @@
 Firebase Cloud Messaging service for sending push notifications.
 Phase 3 feature: Push notifications via FCM.
 """
+import json
 import logging
+import os
 from typing import List, Optional, Dict, Any
 from datetime import datetime, time as time_type
 
@@ -20,21 +22,76 @@ logger = logging.getLogger(__name__)
 _firebase_app = None
 
 
+def _load_service_account_info() -> dict:
+    """Resolve the Firebase service-account JSON from the available sources.
+
+    Resolution order (first one that yields a dict wins):
+
+      1. ``FIREBASE_SERVICE_ACCOUNT_JSON`` env var — raw JSON contents.
+         This is the path used on managed deploys (Render, Railway,
+         Fly, etc.) where the credential is stored as a secret env
+         var and the filesystem never holds it.
+
+      2. ``FIREBASE_SERVICE_ACCOUNT_PATH`` env var (default
+         ``firebase-service-account.json``) — path to a JSON file on
+         disk. Used for local dev where the file is gitignored but
+         present in the working directory.
+
+    Raises the underlying ``FileNotFoundError`` / ``ValueError`` if
+    neither source yields a parseable service-account JSON. Callers
+    should treat that as a fatal startup error — silent degradation
+    leaves push notifications dark with no obvious breadcrumb.
+    """
+    raw_json = settings.firebase_service_account_json
+    if raw_json:
+        # Strip any whitespace the operator accidentally included in
+        # the env var; the JSON parser is sensitive to leading
+        # newlines.
+        parsed = json.loads(raw_json.strip())
+        if not isinstance(parsed, dict) or "project_id" not in parsed:
+            raise ValueError(
+                "FIREBASE_SERVICE_ACCOUNT_JSON does not look like a "
+                "Firebase service-account JSON (missing project_id)."
+            )
+        return parsed
+
+    path = settings.firebase_service_account_path
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"Firebase service account JSON not found at '{path}'. "
+            "Set FIREBASE_SERVICE_ACCOUNT_JSON (raw JSON) or place "
+            "the JSON file at the configured path. See README for "
+            "Render / managed deploy setup."
+        )
+    with open(path, "r", encoding="utf-8") as f:
+        parsed = json.load(f)
+    if not isinstance(parsed, dict) or "project_id" not in parsed:
+        raise ValueError(
+            f"File at '{path}' does not look like a Firebase "
+            "service-account JSON (missing project_id)."
+        )
+    return parsed
+
+
 def initialize_firebase():
     """
     Initialize Firebase Admin SDK with service account credentials.
     Call this once at app startup.
     """
     global _firebase_app
-    
+
     if _firebase_app is not None:
         return _firebase_app
-    
+
     try:
-        # Load service account JSON from file
-        cred = credentials.Certificate(settings.firebase_service_account_path)
+        info = _load_service_account_info()
+        cred = credentials.Certificate(info)
         _firebase_app = firebase_admin.initialize_app(cred)
-        logger.info("Firebase Admin SDK initialized successfully")
+        project_id = info.get("project_id", "<unknown>")
+        logger.info(
+            "Firebase Admin SDK initialized successfully (project_id=%s)",
+            project_id,
+        )
         return _firebase_app
     except Exception as e:
         logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
