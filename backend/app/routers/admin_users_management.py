@@ -51,6 +51,102 @@ def _log_admin_action(
     )
 
 
+# ── User Segments (read-only aggregates) ────────────────────────────
+# IMPORTANT: declared BEFORE the `/{user_id}` route. FastAPI matches
+# routes in declaration order — if `/{user_id}` (user_id: int) is
+# declared first, "/segments" is coerced as a user_id and fails int
+# validation with 422 before this endpoint is ever considered.
+
+
+@router.get("/segments")
+async def get_user_segments(
+    current_admin: AdminUser = Depends(require_permission("users.view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Count users in common behavioral segments (read-only)."""
+    from datetime import timedelta
+
+    now = datetime.utcnow()
+    week_ago = now - timedelta(days=7)
+    thirty_ago = now - timedelta(days=30)
+
+    logger.info(
+        "segments: admin=%s now=%s week_ago=%s thirty_ago=%s",
+        current_admin.email if current_admin else None,
+        now.isoformat(),
+        week_ago.isoformat(),
+        thirty_ago.isoformat(),
+    )
+
+    total = (await db.execute(select(func.count(User.id)))).scalar_one()
+
+    # High-value: users who watched >1000 ads (credited AdEvents)
+    high_value = (
+        await db.execute(
+            select(func.count(func.distinct(AdEvent.user_id))).where(
+                AdEvent.watched_fully == True,  # noqa: E712
+                AdEvent.user_points_credited > 0,
+            )
+        )
+    ).scalar_one()
+
+    # Power readers: >50 reading sessions
+    power_readers = (
+        await db.execute(
+            select(func.count())
+            .select_from(
+                select(ReadingSession.user_id)
+                .group_by(ReadingSession.user_id)
+                .having(func.count(ReadingSession.id) > 50)
+                .subquery()
+            )
+        )
+    ).scalar_one()
+
+    # Premium users
+    premium = (
+        await db.execute(
+            select(func.count(User.id)).where(User.tier != "free")
+        )
+    ).scalar_one()
+
+    # New users: signed up <7 days ago
+    new_users = (
+        await db.execute(
+            select(func.count(User.id)).where(User.created_at >= week_ago)
+        )
+    ).scalar_one()
+
+    # At-risk: active 7+ days ago but not since
+    at_risk = (
+        await db.execute(
+            select(func.count(User.id)).where(
+                User.last_login_at < week_ago,
+                User.last_login_at >= thirty_ago,
+            )
+        )
+    ).scalar_one()
+
+    logger.info(
+        "segments: total=%s high_value=%s power_readers=%s premium=%s new=%s at_risk=%s",
+        total,
+        high_value,
+        power_readers,
+        premium,
+        new_users,
+        at_risk,
+    )
+
+    return {
+        "total_users": int(total),
+        "high_value_users": int(high_value),
+        "power_readers": int(power_readers),
+        "premium_users": int(premium),
+        "new_users_7d": int(new_users),
+        "at_risk_users_7_30d": int(at_risk),
+    }
+
+
 # ── User Listing & Details ──────────────────────────────────────────
 
 
@@ -642,99 +738,6 @@ async def get_user_wallet_history(
         "user_id": user_id,
         "current_balance": user.points_balance,
     }
-
-
-# ── User Segments (read-only aggregates) ────────────────────────────
-
-
-@router.get("/segments")
-async def get_user_segments(
-    current_admin: AdminUser = Depends(require_permission("users.view")),
-    db: AsyncSession = Depends(get_db),
-):
-    """Count users in common behavioral segments (read-only)."""
-    from datetime import timedelta
-
-    now = datetime.utcnow()
-    week_ago = now - timedelta(days=7)
-    thirty_ago = now - timedelta(days=30)
-
-    logger.info(
-        "segments: admin=%s now=%s week_ago=%s thirty_ago=%s",
-        current_admin.email if current_admin else None,
-        now.isoformat(),
-        week_ago.isoformat(),
-        thirty_ago.isoformat(),
-    )
-
-    total = (await db.execute(select(func.count(User.id)))).scalar_one()
-
-    # High-value: users who watched >1000 ads (credited AdEvents)
-    high_value = (
-        await db.execute(
-            select(func.count(func.distinct(AdEvent.user_id))).where(
-                AdEvent.watched_fully == True,  # noqa: E712
-                AdEvent.user_points_credited > 0,
-            )
-        )
-    ).scalar_one()
-
-    # Power readers: >50 reading sessions
-    power_readers = (
-        await db.execute(
-            select(func.count())
-            .select_from(
-                select(ReadingSession.user_id)
-                .group_by(ReadingSession.user_id)
-                .having(func.count(ReadingSession.id) > 50)
-                .subquery()
-            )
-        )
-    ).scalar_one()
-
-    # Premium users
-    premium = (
-        await db.execute(
-            select(func.count(User.id)).where(User.tier != "free")
-        )
-    ).scalar_one()
-
-    # New users: signed up <7 days ago
-    new_users = (
-        await db.execute(
-            select(func.count(User.id)).where(User.created_at >= week_ago)
-        )
-    ).scalar_one()
-
-    # At-risk: active 7+ days ago but not since
-    at_risk = (
-        await db.execute(
-            select(func.count(User.id)).where(
-                User.last_login_at < week_ago,
-                User.last_login_at >= thirty_ago,
-            )
-        )
-    ).scalar_one()
-
-    logger.info(
-        "segments: total=%s high_value=%s power_readers=%s premium=%s new=%s at_risk=%s",
-        total,
-        high_value,
-        power_readers,
-        premium,
-        new_users,
-        at_risk,
-    )
-
-    return {
-        "total_users": int(total),
-        "high_value_users": int(high_value),
-        "power_readers": int(power_readers),
-        "premium_users": int(premium),
-        "new_users_7d": int(new_users),
-        "at_risk_users_7_30d": int(at_risk),
-    }
-
 
 
 # ── User Admin Notes ────────────────────────────────────────────────
