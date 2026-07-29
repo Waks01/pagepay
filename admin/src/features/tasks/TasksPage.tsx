@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { useState } from 'react';
-import { Card, StatCard, Badge, Button, Pagination, ShimmerLoader, Container, Tooltip, Modal } from '@/shared/components';
+import { Card, StatCard, Badge, Button, Pagination, ShimmerLoader, Container, Tooltip, Modal, Select } from '@/shared/components';
 import { TopHeader } from '@/shared/components/TopHeader';
 import { useLayoutContext } from '@/shared/components/Layout';
 import { useAuthStore } from '@/store/auth';
@@ -103,6 +103,16 @@ interface TaskCreateForm {
   reward_amount: string; // admin input in NGN; backend expects kobo (×100)
   max_completions: string;
   expires_in_days: string;
+}
+
+// Human label for a `task_type` code like "youtube_subscribe".
+// Splits on "_", title-cases each piece, and joins platform · action
+// so admin users see "YouTube · Subscribe" rather than "youtube_subscribe".
+// Defensive: returns the raw string if the format is unexpected.
+function formatTaskType(t: string): string {
+  const parts = t.split('_').map((p) => p.charAt(0).toUpperCase() + p.slice(1));
+  if (parts.length <= 1) return parts.join(' ') || t;
+  return `${parts[0]} · ${parts.slice(1).join(' ')}`;
 }
 
 // Subset of the TaskCreateRequest Literal that an admin is most likely to
@@ -841,32 +851,26 @@ export function TasksPage() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-text-main">Task Type</label>
-              <select
-                value={form.task_type}
-                onChange={(e) => setForm({ ...form, task_type: e.target.value })}
-                disabled={createTaskMutation.isPending}
-                className="w-full rounded-lg border border-border bg-bg-main px-3 py-2 text-sm text-text-main focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 disabled:opacity-50"
-              >
-                {TASK_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-text-main">Proof Type</label>
-              <select
-                value={form.proof_type}
-                onChange={(e) => setForm({ ...form, proof_type: e.target.value })}
-                disabled={createTaskMutation.isPending}
-                className="w-full rounded-lg border border-border bg-bg-main px-3 py-2 text-sm text-text-main focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 disabled:opacity-50"
-              >
-                {PROOF_TYPES.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
+            <Select
+              label="Task Type"
+              value={form.task_type}
+              onChange={(v) => setForm({ ...form, task_type: v })}
+              disabled={createTaskMutation.isPending}
+              options={TASK_TYPES.map((t) => ({
+                value: t,
+                label: formatTaskType(t),
+              }))}
+            />
+            <Select
+              label="Proof Type"
+              value={form.proof_type}
+              onChange={(v) => setForm({ ...form, proof_type: v })}
+              disabled={createTaskMutation.isPending}
+              options={PROOF_TYPES.map((p) => ({
+                value: p,
+                label: p.charAt(0).toUpperCase() + p.slice(1),
+              }))}
+            />
           </div>
           <Input
             label="Target URL (optional)"
