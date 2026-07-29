@@ -24,6 +24,8 @@
   --color-info: #0A7EA4;
   --color-info-50: #E0F2FE;
   --color-info-600: #075985;
+  --color-danger-bg-hover: #FEE2E2;   /* light-mode logout hover bg */
+  --color-danger-text-hover: #DC2626; /* light-mode logout hover fg */
   --color-ink: #0E1116;
   --color-bg-body: #FBFAF6;
   --color-bg-card: #FFFFFF;
@@ -42,6 +44,8 @@
   --color-text-main: #FBFAF6;
   --color-text-muted: #9BA1A6;
   --color-border: #2A2F38;
+  --color-danger-bg-hover: #3F1D1D;   /* dark-mode logout hover bg (deep tinted) */
+  --color-danger-text-hover: #FCA5A5; /* dark-mode logout hover fg (lighter red for contrast) */
 }
 
 @layer base {
