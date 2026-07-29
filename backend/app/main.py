@@ -244,10 +244,9 @@ async def global_exception_handler(request: Request, exc: Exception):
     Uses FastAPI's standard `detail` key so the frontend error handling
     (which reads `response.data.detail`) works without changes.
 
-    The `debug` block (exception class + message + path) is gated on
-    `settings.environment != "production"` so production responses don't
-    leak internals to the client. Operators should consult server logs
-    for full tracebacks (logged via `logger.error` below).
+    The `debug` block (exception class + message + path) is ALWAYS
+    included so we can see what's failing without Render log access.
+    Once we know what's broken, gate on `settings.environment != "production"`.
     """
     logger.error("Unhandled exception: %s\n%s", exc, traceback.format_exc())
 
@@ -258,13 +257,16 @@ async def global_exception_handler(request: Request, exc: Exception):
         content = {"detail": exc.detail}
     else:
         status_code = 500
-        content = {"detail": "Internal server error"}
-        if settings.environment != "production":
-            content["debug"] = {
+        # TEMP DEBUG (remove after fix): always include exception class +
+        # message so we can see what's failing without Render log access.
+        content = {
+            "detail": "Internal server error",
+            "debug": {
                 "type": type(exc).__name__,
                 "message": str(exc),
                 "path": request.url.path,
-            }
+            },
+        }
     
     # Ensure CORS headers are present on all error responses
     origin = request.headers.get("origin")
