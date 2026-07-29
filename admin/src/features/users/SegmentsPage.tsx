@@ -23,12 +23,15 @@ export function SegmentsPage() {
         // (status, statusText, data). The backend's debug block on 5xx
         // exposes the actual exception class + message so we can see
         // what's failing without server log access.
-        console.error("[segments] ← ERROR", {
-          status: err?.response?.status,
-          statusText: err?.response?.statusText,
-          body: err?.response?.data,
-          message: err?.message,
-        });
+        const debug = err?.response?.data?.debug;
+        console.error(
+          "[segments] ← ERROR",
+          "status=" + err?.response?.status,
+          "detail=" + JSON.stringify(err?.response?.data?.detail),
+          "debug.type=" + debug?.type,
+          "debug.message=" + debug?.message,
+          "debug.path=" + debug?.path,
+        );
         throw err;
       }
     },
