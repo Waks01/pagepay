@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import (
     User, ReadingSession, PayoutTransaction, Payment, AdminUser,
-    AdminAuditLog, AdEvent, FraudFlag, AdminUserNote,
+    AdminAuditLog, AdEvent, FraudFlag, AdminUserNote, UserTier,
 )
 from app.schemas import UserListResponse
 from app.services.admin_auth import require_permission
@@ -106,7 +106,7 @@ async def get_user_segments(
     # Premium users
     premium = (
         await db.execute(
-            select(func.count(User.id)).where(User.tier != "free")
+            select(func.count(User.id)).where(User.tier != UserTier.FREE)
         )
     ).scalar_one()
 
@@ -163,7 +163,16 @@ async def list_users(
     """List platform users with filtering and search."""
     query = select(User)
     if tier:
-        query = query.where(User.tier == tier)
+        # Coerce the query-string string into the UserTier enum so the
+        # WHERE clause uses the enum's value (or name, depending on
+        # the SQLAlchemy column config) consistently. Without this,
+        # raw "free" → `WHERE tier = 'free'` raises
+        # InvalidTextRepresentationError against the postgres enum.
+        try:
+            tier_enum = UserTier(tier)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid tier: {tier}")
+        query = query.where(User.tier == tier_enum)
     if status:
         query = query.where(User.status == status)
     if search:

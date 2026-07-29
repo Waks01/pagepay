@@ -25,7 +25,21 @@ class User(Base):
     phone: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
     password_hash: Mapped[str | None] = mapped_column(String(255))
     points_balance: Mapped[int] = mapped_column(BigInteger, default=0)
-    tier: Mapped[UserTier] = mapped_column(Enum(UserTier), default=UserTier.FREE)
+    tier: Mapped[UserTier] = mapped_column(
+        Enum(
+            UserTier,
+            # Use the lowercase `.value` strings ("free", "premium_monthly",
+            # "premium_yearly") instead of the uppercase enum names ("FREE",
+            # ...). Without this, SQLAlchemy generates
+            # `WHERE tier != 'FREE'::usertier` for `UserTier.FREE`, but
+            # `WHERE tier != 'free'` for the string literal — the two paths
+            # disagree, and against the prod enum (whose values are
+            # lowercase .value strings) the literal form raises
+            # asyncpg.exceptions.InvalidTextRepresentationError.
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        default=UserTier.FREE,
+    )
     referral_code: Mapped[str | None] = mapped_column(String(12), unique=True)
     referred_by: Mapped[str | None] = mapped_column(String(12), index=True)
     referrals_today_count: Mapped[int] = mapped_column(Integer, default=0)

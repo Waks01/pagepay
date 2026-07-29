@@ -12,7 +12,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Payment, User, AdminUser
+from app.models import Payment, User, AdminUser, UserTier
 from app.services.admin_auth import require_permission
 
 logger = logging.getLogger("uvicorn.error")
@@ -250,7 +250,7 @@ async def list_active_subscriptions(
     now = datetime.utcnow()
     query = select(User).where(
         (User.subscription_expires_at > now) &
-        (User.tier != "free")
+        (User.tier != UserTier.FREE)
     )
 
     total = (
