@@ -20,7 +20,7 @@ export function TopHeader({ title, subtitle, actions, children, onMenuClick }: T
               className="cursor-pointer rounded-lg p-2 text-text-muted hover:bg-bg-hover hover:text-text-main lg:hidden"
               aria-label="Open menu"
             >
-              <Menu size={20} />
+              <Menu size={20} className="text-icon-system" />
             </button>
           )}
           <div>

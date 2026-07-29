@@ -66,7 +66,7 @@ export function TopEarnersTable() {
             }}
             disabled={!earners || earners.length === 0}
           >
-            <Download size={16} className="mr-1" />
+            <Download size={16} className="mr-1 text-icon-action" />
             Export CSV
           </Button>
         </div>

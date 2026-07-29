@@ -102,7 +102,7 @@ export function MultiSelect({
                   onClick={(e) => handleRemove(value[index], e)}
                   className="hover:text-error"
                 >
-                  <X size={12} />
+                  <X size={12} className="text-icon-shield" />
                 </button>
               </span>
             ))
@@ -110,7 +110,7 @@ export function MultiSelect({
         </div>
         <ChevronDown
           size={16}
-          className={`ml-2 text-text-muted transition-transform ${
+          className={`ml-2 text-icon-system transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
         />

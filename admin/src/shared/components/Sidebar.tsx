@@ -20,20 +20,20 @@ import { useAuthStore } from "@/store/auth";
 import { adminApi } from "@/lib/api";
 
 const NAV_ITEMS = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-  { label: "Analytics", icon: BarChart3, path: "/analytics" },
-  { label: "Ad Analytics", icon: TrendingUp, path: "/ads" },
-  { label: "Users", icon: Users, path: "/users" },
-  { label: "Segments", icon: Users, path: "/segments" },
-  { label: "Admin Users", icon: UserCog, path: "/admins" },
-  { label: "Finance", icon: DollarSign, path: "/finance" },
-  { label: "Content", icon: FileText, path: "/content" },
-  { label: "Community", icon: MessageSquare, path: "/community" },
-  { label: "Tasks", icon: ListTodo, path: "/tasks" },
-  { label: "Fraud", icon: Shield, path: "/fraud" },
-  { label: "AI Health", icon: Brain, path: "/ai-health" },
-  { label: "Config", icon: Settings, path: "/config" },
-  { label: "Audit Logs", icon: ScrollText, path: "/logs" },
+  { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard", colorClass: "text-icon-system" },
+  { label: "Analytics", icon: BarChart3, path: "/analytics", colorClass: "text-icon-analytics" },
+  { label: "Ad Analytics", icon: TrendingUp, path: "/ads", colorClass: "text-icon-content" },
+  { label: "Users", icon: Users, path: "/users", colorClass: "text-icon-users" },
+  { label: "Segments", icon: Users, path: "/segments", colorClass: "text-icon-users" },
+  { label: "Admin Users", icon: UserCog, path: "/admins", colorClass: "text-icon-users" },
+  { label: "Finance", icon: DollarSign, path: "/finance", colorClass: "text-icon-finance" },
+  { label: "Content", icon: FileText, path: "/content", colorClass: "text-icon-content" },
+  { label: "Community", icon: MessageSquare, path: "/community", colorClass: "text-icon-users" },
+  { label: "Tasks", icon: ListTodo, path: "/tasks", colorClass: "text-icon-action" },
+  { label: "Fraud", icon: Shield, path: "/fraud", colorClass: "text-icon-shield" },
+  { label: "AI Health", icon: Brain, path: "/ai-health", colorClass: "text-icon-ai" },
+  { label: "Config", icon: Settings, path: "/config", colorClass: "text-icon-system" },
+  { label: "Audit Logs", icon: ScrollText, path: "/logs", colorClass: "text-icon-system" },
 ];
 
 interface SidebarProps {
@@ -92,7 +92,7 @@ export function Sidebar({ onNavigate, onClose }: SidebarProps) {
             className="cursor-pointer rounded-lg p-2 text-text-muted hover:bg-bg-hover hover:text-text-main"
             aria-label="Close menu"
           >
-            <X size={20} />
+            <X size={20} className="text-icon-system" />
           </button>
         )}
       </div>
@@ -112,7 +112,7 @@ export function Sidebar({ onNavigate, onClose }: SidebarProps) {
               ].join(" ")
             }
           >
-            <item.icon size={18} />
+            <item.icon size={18} className={item.colorClass} />
             <span>{item.label}</span>
           </NavLink>
         ))}
@@ -123,7 +123,7 @@ export function Sidebar({ onNavigate, onClose }: SidebarProps) {
           onClick={handleLogout}
           className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-text-muted transition-colors hover:bg-danger-bg-hover hover:text-danger-text-hover"
         >
-          <LogOut size={18} />
+          <LogOut size={18} className="text-icon-shield" />
           <span>Logout</span>
         </button>
       </div>

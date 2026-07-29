@@ -32,7 +32,7 @@ export function ThemeToggle() {
       aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
       className="cursor-pointer"
     >
-      {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+      {theme === 'light' ? <Moon size={18} className="text-icon-system" /> : <Sun size={18} className="text-icon-system" />}
     </Button>
   );
 }

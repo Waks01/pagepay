@@ -284,7 +284,7 @@ export function PaymentPage() {
                                   size="sm"
                                   onClick={() => handleViewDetail(payment)}
                                 >
-                                  <Eye size={14} />
+                                  <Eye size={14} className="text-icon-action" />
                                 </Button>
                               </Tooltip>
                               {hasPermission('finance.approve') && payment.status === 'success' && (
@@ -294,7 +294,7 @@ export function PaymentPage() {
                                     size="sm"
                                     onClick={() => handleRefundClick(payment)}
                                   >
-                                    <Trash2 size={14} />
+                                    <Trash2 size={14} className="text-icon-shield" />
                                   </Button>
                                 </Tooltip>
                               )}
@@ -371,7 +371,7 @@ export function PaymentPage() {
                   </table>
                   {failedPayments.items.length === 0 && (
                     <div className="p-6 text-center text-text-muted flex items-center justify-center gap-2">
-                      <AlertCircle size={16} />
+                      <AlertCircle size={16} className="text-icon-shield" />
                       No failed payments found
                     </div>
                   )}
@@ -484,7 +484,7 @@ export function PaymentPage() {
                   </table>
                   {activeSubscriptions.items.length === 0 && (
                     <div className="p-6 text-center text-text-muted flex items-center justify-center gap-2">
-                      <CreditCard size={16} />
+                      <CreditCard size={16} className="text-icon-finance" />
                       No active subscriptions found
                     </div>
                   )}
@@ -566,7 +566,7 @@ export function PaymentPage() {
                   }}
                   className="flex-1"
                 >
-                  <Trash2 size={16} className="mr-2" />
+                  <Trash2 size={16} className="mr-2 text-icon-shield" />
                   Refund Payment
                 </Button>
               </div>

@@ -93,12 +93,36 @@ interface TaskCreateForm {
   title: string;
   description: string;
   instructions: string;
+  // Backend TaskCreateRequest uses these schema-defined Literals. The
+  // platform "web" (not "website") and the task_type list below are
+  // validated by FastAPI — using anything outside the Literal returns 422.
+  task_type: string;
   platform: string;
+  proof_type: string;
   target_url: string;
-  reward_amount: string;
+  reward_amount: string; // admin input in NGN; backend expects kobo (×100)
   max_completions: string;
   expires_in_days: string;
 }
+
+// Subset of the TaskCreateRequest Literal that an admin is most likely to
+// create. Defaults to YouTube since the form's default platform is YouTube.
+const TASK_TYPES = [
+  'youtube_subscribe',
+  'youtube_like',
+  'youtube_watch',
+  'youtube_comment',
+  'twitter_follow',
+  'instagram_follow',
+  'tiktok_follow',
+  'facebook_follow',
+  'website_visit',
+  'app_download',
+  'survey',
+  'custom',
+] as const;
+
+const PROOF_TYPES = ['screenshot', 'link', 'text', 'photo', 'video'] as const;
 
 const DEFAULT_PLATFORMS = [
   'youtube',
@@ -106,14 +130,16 @@ const DEFAULT_PLATFORMS = [
   'twitter',
   'tiktok',
   'facebook',
-  'website',
+  'web',
 ];
 
 const EMPTY_FORM: TaskCreateForm = {
   title: '',
   description: '',
   instructions: '',
+  task_type: 'youtube_subscribe',
   platform: 'youtube',
+  proof_type: 'screenshot',
   target_url: '',
   reward_amount: '100',
   max_completions: '500',
@@ -276,23 +302,34 @@ export function TasksPage() {
   // Task management mutations
   const createTaskMutation = useMutation({
     mutationFn: async (payload: TaskCreateForm) => {
+      // Backend reuses the sponsor TaskCreateRequest schema — see
+      // `backend/app/schemas/__init__.py`. The schema requires:
+      //   - `title` ≥ 5 chars, `description`/`instructions` ≥ 20 chars
+      //   - `reward_amount_kobo` (NOT naira), in [5000, 5_000_000]
+      //   - `max_completions` ≥ 500
+      //   - `task_type` / `platform` / `proof_type` from Literal lists
+      // The form's NGN input gets multiplied by 100 here.
+      const naira = parseInt(payload.reward_amount, 10);
       const body = {
         title: payload.title,
         description: payload.description,
         instructions: payload.instructions,
+        task_type: payload.task_type,
         platform: payload.platform,
+        category: 'social_media',
         target_url: payload.target_url || undefined,
-        category: 'social',
-        reward_type: 'points',
-        reward_amount: parseInt(payload.reward_amount, 10),
-        proof_type: 'screenshot',
+        proof_type: payload.proof_type,
+        reward_amount_kobo: Number.isFinite(naira) ? naira * 100 : 0,
+        reward_multiplier: 1.0,
         max_completions: parseInt(payload.max_completions, 10),
         expires_in_days: parseInt(payload.expires_in_days, 10),
       };
+      console.log('[createTask] payload →', JSON.stringify(body));
       const { data } = await adminApi.post<{ success: boolean; task_id: number }>(
         '/admin/tasks/admin/create',
         body,
       );
+      console.log('[createTask] response ←', JSON.stringify(data));
       return data;
     },
     onSuccess: (data) => {
@@ -304,6 +341,11 @@ export function TasksPage() {
     },
     onError: (err: any) => {
       const detail = err?.response?.data?.detail;
+      console.error(
+        '[createTask] ← ERROR',
+        'status=' + err?.response?.status,
+        'detail=' + JSON.stringify(err?.response?.data?.detail),
+      );
       toast.error(typeof detail === 'string' ? detail : 'Failed to create task');
     },
   });
@@ -354,25 +396,47 @@ export function TasksPage() {
     }
   };
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.title.trim() || !form.description.trim() || !form.instructions.trim()) {
-      toast.error('Title, description and instructions are required');
+  // Called from the modal's "Create Task" submit button (no React.FormEvent
+  // available — that pattern was broken because the Button component drops
+  // the `form` attribute, so type="submit" never associated the button with
+  // the <form> and clicks were silently no-ops). We keep the form's
+  // onSubmit={handleCreateSubmit} too, so Enter-key inside an input still
+  // submits; the optional event lets `e.preventDefault()` work in that path.
+  //
+  // Validation mirrors the backend TaskCreateRequest schema so the user gets
+  // a friendly error before the request 422s. Bounds lifted verbatim from
+  // backend/app/schemas/__init__.py:TaskCreateRequest.
+  const handleCreateSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (form.title.trim().length < 5) {
+      toast.error('Title must be at least 5 characters');
       return;
     }
-    const reward = parseInt(form.reward_amount, 10);
+    if (form.description.trim().length < 20) {
+      toast.error('Description must be at least 20 characters');
+      return;
+    }
+    if (form.instructions.trim().length < 20) {
+      toast.error('Instructions must be at least 20 characters');
+      return;
+    }
+    const naira = parseInt(form.reward_amount, 10);
+    if (Number.isNaN(naira) || naira < 50) {
+      toast.error('Reward must be at least ₦50');
+      return;
+    }
+    if (naira > 50_000) {
+      toast.error('Reward cannot exceed ₦50,000');
+      return;
+    }
     const max = parseInt(form.max_completions, 10);
+    if (Number.isNaN(max) || max < 500) {
+      toast.error('Max completions must be at least 500');
+      return;
+    }
     const days = parseInt(form.expires_in_days, 10);
-    if (Number.isNaN(reward) || reward < 1) {
-      toast.error('Reward must be a positive integer');
-      return;
-    }
-    if (Number.isNaN(max) || max < 1) {
-      toast.error('Max completions must be a positive integer');
-      return;
-    }
-    if (Number.isNaN(days) || days < 1) {
-      toast.error('Expiry must be a positive integer');
+    if (Number.isNaN(days) || days < 1 || days > 365) {
+      toast.error('Expiry must be between 1 and 365 days');
       return;
     }
     createTaskMutation.mutate(form);
@@ -388,7 +452,7 @@ export function TasksPage() {
           <div className="flex items-center gap-3">
             {tab === 'tasks' && hasPermission('tasks.manage') && (
               <Button variant="primary" onClick={() => setCreateOpen(true)}>
-                <Plus size={16} /> Create Task
+                <Plus size={16} className="text-icon-action" /> Create Task
               </Button>
             )}
             <div className="flex rounded-lg border border-border">
@@ -426,7 +490,7 @@ export function TasksPage() {
             {tasksLoading && <ShimmerLoader lines={5} />}
             {tasks && tasks.items.length === 0 && (
               <EmptyState
-                icon={<ListTodo size={26} />}
+                icon={<ListTodo size={26} className="text-icon-action" />}
                 title="No tasks yet"
                 description="Create your first task to start engaging workers. Tasks appear here once they're published."
                 {...(hasPermission('tasks.manage')
@@ -487,7 +551,7 @@ export function TasksPage() {
                                     variant="danger"
                                     onClick={() => setDeleteId(t.id)}
                                   >
-                                    <Trash2 size={14} /> Delete
+                                    <Trash2 size={14} className="text-icon-shield" /> Delete
                                   </Button>
                                 </Tooltip>
                               </div>
@@ -511,7 +575,7 @@ export function TasksPage() {
             {kycLoading && <ShimmerLoader lines={5} />}
             {kyc && kyc.items.length === 0 && (
               <EmptyState
-                icon={<Briefcase size={26} />}
+                icon={<Briefcase size={26} className="text-icon-action" />}
                 title="No pending KYC applications"
                 description="Sponsor verification requests appear here for review. Once a sponsor submits their business documents, you'll be able to approve or reject them here."
               />
@@ -545,12 +609,12 @@ export function TasksPage() {
                               <div className="flex gap-2">
                                 <Tooltip content="Approve KYC application" position="top">
                                   <Button size="sm" variant="secondary" onClick={() => handleApproveKyc(k.sponsor_id)}>
-                                    <CheckCircle size={14} /> Approve
+                                    <CheckCircle size={14} className="text-icon-finance" /> Approve
                                   </Button>
                                 </Tooltip>
                                 <Tooltip content="Reject KYC application" position="top">
                                   <Button size="sm" variant="danger" onClick={() => handleRejectKyc(k.sponsor_id)}>
-                                    <XCircle size={14} /> Reject
+                                    <XCircle size={14} className="text-icon-shield" /> Reject
                                   </Button>
                                 </Tooltip>
                               </div>
@@ -574,7 +638,7 @@ export function TasksPage() {
             {submissionsLoading && <ShimmerLoader lines={5} />}
             {submissions && submissions.items.length === 0 && (
               <EmptyState
-                icon={<Inbox size={26} />}
+                icon={<Inbox size={26} className="text-icon-action" />}
                 title="No pending submissions"
                 description="Flagged or pending task submissions appear here for review. Approve to release the worker reward, or reject to deny with feedback."
               />
@@ -618,12 +682,12 @@ export function TasksPage() {
                               <div className="flex gap-2">
                                 <Tooltip content="Approve this submission" position="top">
                                   <Button size="sm" variant="secondary" onClick={() => handleApproveSubmission(s.submission_id)}>
-                                    <CheckCircle size={14} /> Approve
+                                    <CheckCircle size={14} className="text-icon-finance" /> Approve
                                   </Button>
                                 </Tooltip>
                                 <Tooltip content="Reject this submission" position="top">
                                   <Button size="sm" variant="danger" onClick={() => handleRejectSubmission(s.submission_id)}>
-                                    <XCircle size={14} /> Reject
+                                    <XCircle size={14} className="text-icon-shield" /> Reject
                                   </Button>
                                 </Tooltip>
                               </div>
@@ -716,10 +780,10 @@ export function TasksPage() {
               Cancel
             </Button>
             <Button
-              type="submit"
-              form="create-task-form"
+              type="button"
               variant="primary"
               disabled={createTaskMutation.isPending}
+              onClick={() => handleCreateSubmit()}
             >
               {createTaskMutation.isPending ? 'Creating...' : 'Create Task'}
             </Button>
@@ -774,6 +838,34 @@ export function TasksPage() {
                   {p}
                 </button>
               ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-text-main">Task Type</label>
+              <select
+                value={form.task_type}
+                onChange={(e) => setForm({ ...form, task_type: e.target.value })}
+                disabled={createTaskMutation.isPending}
+                className="w-full rounded-lg border border-border bg-bg-main px-3 py-2 text-sm text-text-main focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 disabled:opacity-50"
+              >
+                {TASK_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-text-main">Proof Type</label>
+              <select
+                value={form.proof_type}
+                onChange={(e) => setForm({ ...form, proof_type: e.target.value })}
+                disabled={createTaskMutation.isPending}
+                className="w-full rounded-lg border border-border bg-bg-main px-3 py-2 text-sm text-text-main focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 disabled:opacity-50"
+              >
+                {PROOF_TYPES.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
             </div>
           </div>
           <Input

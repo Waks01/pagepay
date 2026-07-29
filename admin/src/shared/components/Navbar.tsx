@@ -21,7 +21,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
         className="cursor-pointer rounded-lg p-2 text-text-muted hover:bg-bg-hover hover:text-text-main md:hidden"
         aria-label="Open menu"
       >
-        <Menu size={20} />
+        <Menu size={20} className="text-icon-system" />
       </button>
       <div className="flex-1 md:flex-none" />
       <ThemeToggle />

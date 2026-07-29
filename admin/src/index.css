@@ -26,6 +26,16 @@
   --color-info-600: #075985;
   --color-danger-bg-hover: #FEE2E2;   /* light-mode logout hover bg */
   --color-danger-text-hover: #DC2626; /* light-mode logout hover fg */
+  /* Per-icon semantic colors — each lucide icon inherits one of these based on what it represents.
+     Independent of the text-error / text-warning / text-success tokens (which signal live status). */
+  --color-icon-users:     #0E7CB4;  /* blue  — people / account icons */
+  --color-icon-finance:   #059669;  /* green — money / payments */
+  --color-icon-content:   #D97706;  /* amber — books / editorial content */
+  --color-icon-analytics: #6D28D9;  /* violet — charts / metrics */
+  --color-icon-shield:    #DC2626;  /* red   — security / fraud / danger */
+  --color-icon-ai:        #7C3AED;  /* purple — AI features */
+  --color-icon-system:    #475569;  /* slate — config / chrome / neutral */
+  --color-icon-action:    #0E7C66;  /* mint  — generic primary actions */
   --color-ink: #0E1116;
   --color-bg-body: #FBFAF6;
   --color-bg-card: #FFFFFF;
@@ -46,6 +56,14 @@
   --color-border: #2A2F38;
   --color-danger-bg-hover: #3F1D1D;   /* dark-mode logout hover bg (deep tinted) */
   --color-danger-text-hover: #FCA5A5; /* dark-mode logout hover fg (lighter red for contrast) */
+  --color-icon-users:     #38BDF8;  /* sky-400    — lighter for dark contrast */
+  --color-icon-finance:   #34D399;  /* emerald-400 */
+  --color-icon-content:   #FBBF24;  /* amber-400   */
+  --color-icon-analytics: #A78BFA;  /* violet-400  */
+  --color-icon-shield:    #F87171;  /* red-400     */
+  --color-icon-ai:        #C084FC;  /* purple-400  */
+  --color-icon-system:    #94A3B8;  /* slate-400   */
+  --color-icon-action:    #2DD4BF;  /* teal-400    — slightly brighter than primary */
 }
 
 @layer base {

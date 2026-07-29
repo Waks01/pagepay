@@ -193,7 +193,7 @@ export function FraudPage() {
                   : "text-text-muted hover:text-text-main"
               }`}
             >
-              <AlertCircle size={16} className="mr-1.5 inline" />
+              <AlertCircle size={16} className="mr-1.5 inline text-icon-shield" />
               Suspicious Sessions
             </button>
             <button
@@ -204,7 +204,7 @@ export function FraudPage() {
                   : "text-text-muted hover:text-text-main"
               }`}
             >
-              <Copy size={16} className="mr-1.5 inline" />
+              <Copy size={16} className="mr-1.5 inline text-icon-shield" />
               Duplicate Accounts
             </button>
             <button
@@ -215,7 +215,7 @@ export function FraudPage() {
                   : "text-text-muted hover:text-text-main"
               }`}
             >
-              <Users size={16} className="mr-1.5 inline" />
+              <Users size={16} className="mr-1.5 inline text-icon-users" />
               Referral Abuse
             </button>
             <button
@@ -226,7 +226,7 @@ export function FraudPage() {
                   : "text-text-muted hover:text-text-main"
               }`}
             >
-              <TrendingUp size={16} className="mr-1.5 inline" />
+              <TrendingUp size={16} className="mr-1.5 inline text-icon-content" />
               Ad Fraud
             </button>
           </div>
@@ -285,7 +285,7 @@ export function FraudPage() {
                     !sessionsData?.items || sessionsData.items.length === 0
                   }
                 >
-                  <Download size={16} className="mr-1" />
+                  <Download size={16} className="mr-1 text-icon-action" />
                   Export CSV
                 </Button>
               </div>
@@ -388,7 +388,7 @@ export function FraudPage() {
                                     onClick={() => handleResolveClick(flag.id)}
                                     disabled={resolveMutation.isPending}
                                   >
-                                    <CheckCircle size={14} className="mr-1" />
+                                    <CheckCircle size={14} className="mr-1 text-icon-finance" />
                                     Resolve
                                   </Button>
                                 </Tooltip>
@@ -402,7 +402,7 @@ export function FraudPage() {
                                     onClick={() => handleIgnoreClick(flag.id)}
                                     disabled={ignoreMutation.isPending}
                                   >
-                                    <XCircle size={14} className="mr-1" />
+                                    <XCircle size={14} className="mr-1 text-icon-shield" />
                                     Ignore
                                   </Button>
                                 </Tooltip>
@@ -467,7 +467,7 @@ export function FraudPage() {
                     !duplicatesData?.items || duplicatesData.items.length === 0
                   }
                 >
-                  <Download size={16} className="mr-1" />
+                  <Download size={16} className="mr-1 text-icon-action" />
                   Export CSV
                 </Button>
               </div>
@@ -564,7 +564,7 @@ export function FraudPage() {
                                     onClick={() => handleResolveClick(flag.id)}
                                     disabled={resolveMutation.isPending}
                                   >
-                                    <CheckCircle size={14} className="mr-1" />
+                                    <CheckCircle size={14} className="mr-1 text-icon-finance" />
                                     Resolve
                                   </Button>
                                 </Tooltip>
@@ -578,7 +578,7 @@ export function FraudPage() {
                                     onClick={() => handleIgnoreClick(flag.id)}
                                     disabled={ignoreMutation.isPending}
                                   >
-                                    <XCircle size={14} className="mr-1" />
+                                    <XCircle size={14} className="mr-1 text-icon-shield" />
                                     Ignore
                                   </Button>
                                 </Tooltip>
@@ -643,7 +643,7 @@ export function FraudPage() {
                     !referralsData?.items || referralsData.items.length === 0
                   }
                 >
-                  <Download size={16} className="mr-1" />
+                  <Download size={16} className="mr-1 text-icon-action" />
                   Export CSV
                 </Button>
               </div>
@@ -740,7 +740,7 @@ export function FraudPage() {
                                     onClick={() => handleResolveClick(flag.id)}
                                     disabled={resolveMutation.isPending}
                                   >
-                                    <CheckCircle size={14} className="mr-1" />
+                                    <CheckCircle size={14} className="mr-1 text-icon-finance" />
                                     Resolve
                                   </Button>
                                 </Tooltip>
@@ -754,7 +754,7 @@ export function FraudPage() {
                                     onClick={() => handleIgnoreClick(flag.id)}
                                     disabled={ignoreMutation.isPending}
                                   >
-                                    <XCircle size={14} className="mr-1" />
+                                    <XCircle size={14} className="mr-1 text-icon-shield" />
                                     Ignore
                                   </Button>
                                 </Tooltip>
@@ -836,7 +836,7 @@ export function FraudPage() {
                     }}
                     disabled={!adFraudData || adFraudData.length === 0}
                   >
-                    <Download size={16} className="mr-1" />
+                    <Download size={16} className="mr-1 text-icon-action" />
                     Export CSV
                   </Button>
                 </div>
@@ -956,7 +956,7 @@ export function FraudPage() {
                                     );
                                   }}
                                 >
-                                  <XCircle size={14} className="mr-1" />
+                                  <XCircle size={14} className="mr-1 text-icon-shield" />
                                   Ban
                                 </Button>
                               </Tooltip>

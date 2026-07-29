@@ -291,7 +291,7 @@ export function CommunityPage() {
                               size="sm"
                               onClick={() => handleViewClick(note)}
                             >
-                              <Eye size={14} />
+                              <Eye size={14} className="text-icon-action" />
                             </Button>
                           </Tooltip>
                           {note.status === 'pending' && (
@@ -303,7 +303,7 @@ export function CommunityPage() {
                                   onClick={() => handleApproveClick(note)}
                                   disabled={approveMutation.isPending}
                                 >
-                                  <CheckCircle size={14} />
+                                  <CheckCircle size={14} className="text-icon-finance" />
                                 </Button>
                               </Tooltip>
                               <Tooltip content="Reject this note" position="top">
@@ -313,7 +313,7 @@ export function CommunityPage() {
                                   onClick={() => handleRejectClick(note)}
                                   disabled={rejectMutation.isPending}
                                 >
-                                  <XCircle size={14} />
+                                  <XCircle size={14} className="text-icon-shield" />
                                 </Button>
                               </Tooltip>
                             </>
@@ -326,7 +326,7 @@ export function CommunityPage() {
                                 onClick={() => handleDeleteClick(note)}
                                 disabled={deleteMutation.isPending}
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={14} className="text-icon-shield" />
                               </Button>
                             </Tooltip>
                           )}
@@ -446,7 +446,7 @@ export function CommunityPage() {
                   }}
                   className="flex-1"
                 >
-                  <CheckCircle size={16} className="mr-2" />
+                  <CheckCircle size={16} className="mr-2 text-icon-finance" />
                   Approve
                 </Button>
                 <Button
@@ -457,7 +457,7 @@ export function CommunityPage() {
                   }}
                   className="flex-1"
                 >
-                  <XCircle size={16} className="mr-2" />
+                  <XCircle size={16} className="mr-2 text-icon-shield" />
                   Reject
                 </Button>
               </div>

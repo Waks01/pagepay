@@ -17,6 +17,7 @@ from app.models import (
     SponsorKYC, User, TaskSubmission, Task, UserReputation,
     AdminUser, AdminAuditLog,
 )
+from app.schemas import TaskCreateRequest
 from app.services.admin_auth import require_permission
 
 logger = logging.getLogger("uvicorn.error")
@@ -601,58 +602,67 @@ async def admin_list_tasks(
 @router.post("/admin/create", status_code=201)
 async def admin_create_task(
     request: Request,
-    title: str = Query(...),
-    description: str = Query(...),
-    platform: str = Query(...),
-    task_type: str = Query(default="engagement"),
-    category: str = Query(default="social"),
-    reward_type: str = Query(default="points"),
-    reward_amount: int = Query(...),
-    instructions: str = Query(...),
-    target_url: str | None = Query(None),
-    proof_type: str = Query(default="screenshot"),
-    proof_instructions: str | None = Query(None),
-    max_completions: int = Query(default=500),
-    expires_in_days: int = Query(default=30),
+    payload: TaskCreateRequest,
     current_admin: AdminUser = Depends(require_permission("tasks.manage")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin creates a new task."""
+    """Admin creates a new task.
+
+    Reuses the sponsor TaskCreateRequest schema for body validation
+    (title/description/instructions length, platform/proof_type/task_type
+    Literal, reward bounds, max_completions minimum). Admin-specific
+    overrides — task_source="admin", manual review required, status="active"
+    instead of "draft" — are applied after validation.
+    """
     from datetime import timedelta
-    expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
-    
+    expires_at = datetime.utcnow() + timedelta(days=payload.expires_in_days)
+
     task = Task(
+        # Note: admin id is reused here as sponsor_id to satisfy the
+        # non-nullable FK. A dedicated "platform" sponsor account would be
+        # cleaner but is a separate refactor.
         sponsor_id=current_admin.id,
-        title=title,
-        description=description,
-        instructions=instructions,
-        task_type=task_type,
-        platform=platform,
-        category=category,
+        title=payload.title,
+        description=payload.description,
+        instructions=payload.instructions,
+        task_type=payload.task_type,
+        platform=payload.platform,
+        category=payload.category,
         task_source="admin",
-        reward_type=reward_type,
-        reward_amount=reward_amount,
-        reward_multiplier=1.0,
-        max_completions=max_completions,
+        reward_type="points",
+        reward_amount=payload.reward_amount_kobo,  # stored in kobo
+        reward_multiplier=payload.reward_multiplier,
+        max_completions=payload.max_completions,
+        # Admin tasks don't escrow funds up-front — workers are paid from
+        # an internal pool or admin budget later.
         total_escrowed=0,
         platform_fee_amount=0,
         platform_fee_percent=0,
         expires_at=expires_at,
-        proof_type=proof_type,
-        proof_instructions=proof_instructions,
-        target_url=target_url,
+        proof_type=payload.proof_type,
+        proof_instructions=payload.proof_instructions,
+        target_url=payload.target_url,
         status="active",
-        time_limit_minutes=None,
-        min_worker_level=0,
-        min_approval_rate=0.0,
+        time_limit_minutes=payload.time_limit_minutes,
+        target_countries=(
+            json.dumps(payload.target_countries) if payload.target_countries else None
+        ),
+        target_cities=(
+            json.dumps(payload.target_cities) if payload.target_cities else None
+        ),
+        target_gender=payload.target_gender,
+        target_age_min=payload.target_age_min,
+        target_age_max=payload.target_age_max,
+        min_worker_level=payload.min_worker_level,
+        min_approval_rate=payload.min_approval_rate,
         ai_verification_enabled=False,
         manual_review_required=True,
     )
-    
+
     db.add(task)
     await db.commit()
     await db.refresh(task)
-    
+
     db.add(
         _log_admin_action(
             current_admin.id,
@@ -661,16 +671,16 @@ async def admin_create_task(
             "task",
             task.id,
             {
-                "title": title,
-                "platform": platform,
-                "reward_amount": reward_amount,
-                "reward_type": reward_type,
+                "title": payload.title,
+                "platform": payload.platform,
+                "task_type": payload.task_type,
+                "reward_amount_kobo": payload.reward_amount_kobo,
             },
             request.client.host,
         )
     )
     await db.commit()
-    
+
     logger.info(f"Admin {current_admin.id} created task {task.id}")
     return {"success": True, "task_id": task.id}
 

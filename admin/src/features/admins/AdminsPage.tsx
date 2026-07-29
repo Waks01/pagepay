@@ -249,7 +249,7 @@ export function AdminsPage() {
       >
         <Tooltip content="Create a new admin account" position="bottom">
           <Button variant="primary" onClick={handleCreateClick}>
-            <UserPlus size={16} className="mr-2" />
+            <UserPlus size={16} className="mr-2 text-icon-users" />
             Create Admin
           </Button>
         </Tooltip>
@@ -322,7 +322,7 @@ export function AdminsPage() {
                               size="sm"
                               onClick={() => handleEditClick(admin)}
                             >
-                              <Edit2 size={14} />
+                              <Edit2 size={14} className="text-icon-action" />
                             </Button>
                           </Tooltip>
                           <Tooltip content="Reset admin password" position="top">
@@ -331,7 +331,7 @@ export function AdminsPage() {
                               size="sm"
                               onClick={() => handlePasswordClick(admin)}
                             >
-                              <Key size={14} />
+                              <Key size={14} className="text-icon-action" />
                             </Button>
                           </Tooltip>
                           <Tooltip content="Deactivate admin account" position="top">
@@ -341,7 +341,7 @@ export function AdminsPage() {
                               onClick={() => handleDeleteClick(admin)}
                               disabled={!admin.is_active}
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={14} className="text-icon-shield" />
                             </Button>
                           </Tooltip>
                         </div>

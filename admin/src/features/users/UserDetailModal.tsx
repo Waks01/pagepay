@@ -204,7 +204,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                 : 'text-text-muted hover:text-text-main'
             }`}
           >
-            <UserIcon size={16} className="mr-1.5 inline" />
+            <UserIcon size={16} className="mr-1.5 inline text-icon-users" />
             Details
           </button>
           <button
@@ -215,7 +215,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                 : 'text-text-muted hover:text-text-main'
             }`}
           >
-            <Activity size={16} className="mr-1.5 inline" />
+            <Activity size={16} className="mr-1.5 inline text-icon-analytics" />
             Sessions
           </button>
           <button
@@ -226,7 +226,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                 : 'text-text-muted hover:text-text-main'
             }`}
           >
-            <Receipt size={16} className="mr-1.5 inline" />
+            <Receipt size={16} className="mr-1.5 inline text-icon-finance" />
             Transactions
           </button>
           <button
@@ -237,7 +237,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                 : 'text-text-muted hover:text-text-main'
             }`}
           >
-            <Calendar size={16} className="mr-1.5 inline" />
+            <Calendar size={16} className="mr-1.5 inline text-icon-system" />
             Activity
           </button>
           <button
@@ -248,7 +248,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                 : 'text-text-muted hover:text-text-main'
             }`}
           >
-            <DollarSign size={16} className="mr-1.5 inline" />
+            <DollarSign size={16} className="mr-1.5 inline text-icon-finance" />
             Ads
           </button>
           <button
@@ -259,7 +259,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                 : 'text-text-muted hover:text-text-main'
             }`}
           >
-            <Receipt size={16} className="mr-1.5 inline" />
+            <Receipt size={16} className="mr-1.5 inline text-icon-finance" />
             Wallet
           </button>
           <button
@@ -270,7 +270,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                 : 'text-text-muted hover:text-text-main'
             }`}
           >
-            <Activity size={16} className="mr-1.5 inline" />
+            <Activity size={16} className="mr-1.5 inline text-icon-analytics" />
             Notes
           </button>
         </div>
@@ -321,7 +321,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                   <div>
                     <span className="text-text-muted">Created:</span>
                     <p className="font-medium text-text-main">
-                      <Calendar size={14} className="mr-1 inline" />
+                      <Calendar size={14} className="mr-1 inline text-icon-system" />
                       {new Date(user.created_at).toLocaleDateString()}
                     </p>
                   </div>
@@ -348,7 +348,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                       variant="secondary"
                       disabled={adjustBalanceMutation.isPending}
                     >
-                      <DollarSign size={16} />
+                      <DollarSign size={16} className="text-icon-finance" />
                       Adjust Balance
                     </Button>
                     {hasPermission('users.ban') && user.status === 'active' && (
@@ -357,7 +357,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                         variant="danger"
                         disabled={banMutation.isPending}
                       >
-                        <Shield size={16} />
+                        <Shield size={16} className="text-icon-shield" />
                         Ban User
                       </Button>
                     )}
@@ -367,7 +367,7 @@ export function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
                         variant="secondary"
                         disabled={unbanMutation.isPending}
                       >
-                        <Ban size={16} />
+                        <Ban size={16} className="text-icon-finance" />
                         Unban User
                       </Button>
                     )}

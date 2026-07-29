@@ -495,7 +495,7 @@ export function FinancePage() {
                     }}
                     disabled={!payouts.items || payouts.items.length === 0}
                   >
-                    <Download size={16} className="mr-1" />
+                    <Download size={16} className="mr-1 text-icon-action" />
                     Export CSV
                   </Button>
                 </div>
@@ -571,7 +571,7 @@ export function FinancePage() {
                                       variant="secondary"
                                       onClick={() => handleApproveClick(p.id)}
                                     >
-                                      <CheckCircle size={14} /> Approve
+                                      <CheckCircle size={14} className="text-icon-finance" /> Approve
                                     </Button>
                                   </Tooltip>
                                   <Tooltip
@@ -583,7 +583,7 @@ export function FinancePage() {
                                       variant="danger"
                                       onClick={() => handleRejectClick(p.id)}
                                     >
-                                      <XCircle size={14} /> Reject
+                                      <XCircle size={14} className="text-icon-shield" /> Reject
                                     </Button>
                                   </Tooltip>
                                 </div>
@@ -595,7 +595,7 @@ export function FinancePage() {
                                   variant="secondary"
                                   onClick={() => handleRetryClick(p.id)}
                                 >
-                                  <RefreshCw size={14} /> Retry
+                                  <RefreshCw size={14} className="text-icon-action" /> Retry
                                 </Button>
                               </Tooltip>
                             )}

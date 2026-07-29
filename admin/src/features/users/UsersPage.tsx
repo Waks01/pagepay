@@ -227,7 +227,7 @@ export function UsersPage() {
                 }}
                 disabled={!data?.items || data.items.length === 0}
               >
-                <Download size={16} className="mr-1" />
+                <Download size={16} className="mr-1 text-icon-action" />
                 Export CSV
               </Button>
             </div>
@@ -243,14 +243,14 @@ export function UsersPage() {
                 variant="danger"
                 onClick={() => setBulkAction("ban")}
               >
-                <Ban size={14} className="mr-1" /> Bulk Ban
+                <Ban size={14} className="mr-1 text-icon-shield" /> Bulk Ban
               </Button>
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => setBulkAction("unban")}
               >
-                <CheckCircle2 size={14} className="mr-1" /> Bulk Unban
+                <CheckCircle2 size={14} className="mr-1 text-icon-finance" /> Bulk Unban
               </Button>
               <Button
                 size="sm"
@@ -357,7 +357,7 @@ export function UsersPage() {
                                 variant="secondary"
                                 onClick={() => setSelectedUserId(user.id)}
                               >
-                                <Eye size={14} /> View
+                                <Eye size={14} className="text-icon-action" /> View
                               </Button>
                             </Tooltip>
                             {hasPermission("users.ban") &&
@@ -368,7 +368,7 @@ export function UsersPage() {
                                     variant="danger"
                                     onClick={() => handleBanClick(user.id)}
                                   >
-                                    <Shield size={14} /> Ban
+                                    <Shield size={14} className="text-icon-shield" /> Ban
                                   </Button>
                                 </Tooltip>
                               )}

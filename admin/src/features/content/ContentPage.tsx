@@ -199,7 +199,7 @@ export function ContentPage() {
                   }}
                   disabled={!data?.items || data.items.length === 0}
                 >
-                  <Download size={16} className="mr-1" />
+                  <Download size={16} className="mr-1 text-icon-action" />
                   Export CSV
                 </Button>
                 <Button
@@ -211,7 +211,7 @@ export function ContentPage() {
                 >
                   <RefreshCw
                     size={16}
-                    className={refreshMutation.isPending ? "animate-spin" : ""}
+                    className={`text-icon-action ${refreshMutation.isPending ? "animate-spin" : ""}`}
                   />
                   {refreshMutation.isPending
                     ? "Importing..."
@@ -226,7 +226,7 @@ export function ContentPage() {
                 >
                   <BookOpen
                     size={16}
-                    className={openstaxMutation.isPending ? "animate-spin" : ""}
+                    className={`text-icon-content ${openstaxMutation.isPending ? "animate-spin" : ""}`}
                   />
                   {openstaxMutation.isPending
                     ? "Importing..."
@@ -304,7 +304,7 @@ export function ContentPage() {
                                  onClick={() => openEdit(item.id)}
                                  disabled={editMutation.isPending}
                                >
-                                 <Pencil size={14} /> Edit
+                                 <Pencil size={14} className="text-icon-action" /> Edit
                                </Button>
                              </Tooltip>
                              <Tooltip content="Delete this content" position="top">
@@ -313,7 +313,7 @@ export function ContentPage() {
                                  variant="danger"
                                  onClick={() => setDeleteId(item.id)}
                                >
-                                 <Trash2 size={14} /> Delete
+                                 <Trash2 size={14} className="text-icon-shield" /> Delete
                                </Button>
                              </Tooltip>
                            </div>
