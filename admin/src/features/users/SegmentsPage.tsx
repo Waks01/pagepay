@@ -11,15 +11,24 @@ export function SegmentsPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "users", "segments"],
     queryFn: async () => {
-      console.debug("[segments] request /admin/users/segments");
+      console.log("[segments] → GET /admin/users/segments");
       try {
-        const { data } = await adminApi.get<UserSegments>(
+        const response = await adminApi.get<UserSegments>(
           "/admin/users/segments",
         );
-        console.debug("[segments] response", data);
-        return data;
-      } catch (err) {
-        console.error("[segments] error", err);
+        console.log("[segments] ← 200", response.data);
+        return response.data;
+      } catch (err: any) {
+        // TEMP DEBUG: log the full axios error including response body
+        // (status, statusText, data). The backend's debug block on 5xx
+        // exposes the actual exception class + message so we can see
+        // what's failing without server log access.
+        console.error("[segments] ← ERROR", {
+          status: err?.response?.status,
+          statusText: err?.response?.statusText,
+          body: err?.response?.data,
+          message: err?.message,
+        });
         throw err;
       }
     },
