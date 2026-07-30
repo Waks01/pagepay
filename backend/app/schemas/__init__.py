@@ -4,8 +4,8 @@ from typing import Literal
 
 
 def _validate_password_strength(v: str) -> str:
-    if len(v) < 10:
-        raise ValueError("Password must be at least 10 characters")
+    if len(v) < 6:
+        raise ValueError("Password must be at least 6 characters")
     if not any(c.isupper() for c in v):
         raise ValueError("Password must contain at least one uppercase letter")
     if not any(c.isdigit() for c in v):

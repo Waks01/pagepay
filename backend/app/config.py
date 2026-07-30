@@ -350,9 +350,9 @@ class Settings(BaseSettings):
     # (20+10=30 per worker, pool_recycle 1800s = 30 min) match
     # asyncpg's recommended idle-window to dodge stale-connection
     # errors on managed Postgres (RDS, Supabase, Neon).
-    db_pool_size: int = 20
-    db_max_overflow: int = 10
-    db_pool_recycle_seconds: int = 1800
+    db_pool_size: int = 10
+    db_max_overflow: int = 5
+    db_pool_recycle_seconds: int = 300
 
     # ── HTTP request body cap ────────────────────────────────────────
     # The RequestSizeLimitMiddleware rejects anything bigger than these
