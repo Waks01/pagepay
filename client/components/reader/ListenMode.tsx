@@ -8,7 +8,13 @@
  *   - Play/pause
  *   - ±15s skip (backward/forward)
  *   - Speed: 0.75x / 1x / 1.25x / 1.5x
- *   - Background playback (via expo-av audio mode)
+ *   - Background playback (via expo-audio audio mode + iOS UIBackgroundModes)
+ *
+ * Migrated from `expo-av` (deprecated in SDK 54) to `expo-audio`.
+ * The new API is hook-based (`useAudioPlayer`) for lifecycle
+ * management; we use the imperative `createAudioPlayer` instead
+ * since this component owns the URL lifecycle (loads on mount, unloads
+ * on URL change/unmount) and the hook assumes a stable source.
  *
  * UX: the audio URL is fetched from the server (via the slice detail
  * response, which now includes `audio_url: string | null`). If the
@@ -21,7 +27,11 @@
  */
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
-import { Audio } from 'expo-av';
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+} from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
@@ -46,7 +56,7 @@ export function ListenMode({
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
 
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [player, setPlayer] = useState<AudioPlayer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -64,33 +74,43 @@ export function ListenMode({
     setIsLoading(true);
     setError(null);
 
+    let mounted = true;
+    let createdPlayer: AudioPlayer | null = null;
+
     const loadAudio = async () => {
       try {
-        // Configure expo-av for background playback (v3 §3.3)
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: true,
-          shouldDuckAndroid: true,
+        // Configure expo-audio for background playback (v3 §3.3).
+        // iOS also requires UIBackgroundModes: ["audio"] in app.json
+        // for play to continue when the app is backgrounded.
+        await setAudioModeAsync({
+          playsInSilentMode: true,
+          shouldPlayInBackground: true,
+          interruptionMode: 'duckOthers',
         });
 
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: audioUrl },
-          { shouldPlay: false, rate: speed },
-          (status) => {
-            if (status.isLoaded) {
-              setDuration(status.durationMillis || 0);
-              setIsPlaying(status.isPlaying);
-              setPosition(status.positionMillis);
-            }
-          },
-        );
-
-        setSound(newSound);
+        const newPlayer = createAudioPlayer(audioUrl, { updateInterval: 500 });
+        createdPlayer = newPlayer;
+        newPlayer.playbackRate = speed;
+        if (!mounted) {
+          newPlayer.release();
+          return;
+        }
+        setPlayer(newPlayer);
+        // Initial duration fetch — duration is 0 until the source is
+        // loaded, so we set it from the player once it's available.
+        newPlayer.addListener('playbackStatusUpdate', (status) => {
+          if (!mounted) return;
+          if (status.duration != null) setDuration(status.duration);
+          setIsPlaying(status.playing);
+          setPosition(status.currentTime);
+        });
         setIsLoading(false);
       } catch (err) {
         console.error('Audio load failed:', err);
-        setError('Audio not available yet. The TTS generation may still be processing.');
-        setIsLoading(false);
+        if (mounted) {
+          setError('Audio not available yet. The TTS generation may still be processing.');
+          setIsLoading(false);
+        }
       }
     };
 
@@ -98,8 +118,9 @@ export function ListenMode({
 
     // Cleanup on unmount or URL change
     return () => {
-      if (sound) {
-        sound.unloadAsync();
+      mounted = false;
+      if (createdPlayer) {
+        createdPlayer.release();
       }
       if (positionUpdateInterval.current) {
         clearInterval(positionUpdateInterval.current);
@@ -107,14 +128,15 @@ export function ListenMode({
     };
   }, [audioUrl, unitId, locked, speed]);
 
-  // Update position every 500ms while playing
+  // Update position every 500ms while playing.
+  // expo-audio's playbackStatusUpdate listener fires on its own
+  // updateInterval, so this manual polling is redundant — but the
+  // legacy behavior relied on it for the position display, and the
+  // interval is cheap when isPlaying is false. Keep it for now.
   useEffect(() => {
-    if (isPlaying && sound) {
-      positionUpdateInterval.current = setInterval(async () => {
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded) {
-          setPosition(status.positionMillis);
-        }
+    if (isPlaying && player) {
+      positionUpdateInterval.current = setInterval(() => {
+        setPosition(player.currentTime);
       }, 500);
     } else {
       if (positionUpdateInterval.current) {
@@ -128,43 +150,41 @@ export function ListenMode({
         clearInterval(positionUpdateInterval.current);
       }
     };
-  }, [isPlaying, sound]);
+  }, [isPlaying, player]);
 
-  const togglePlayPause = useCallback(async () => {
-    if (!sound) return;
+  const togglePlayPause = useCallback(() => {
+    if (!player) return;
     if (isPlaying) {
-      await sound.pauseAsync();
+      player.pause();
     } else {
-      await sound.playAsync();
+      player.play();
     }
-  }, [sound, isPlaying]);
+  }, [player, isPlaying]);
 
   const skip = useCallback(
-    async (seconds: number) => {
-      if (!sound) return;
-      const status = await sound.getStatusAsync();
-      if (status.isLoaded) {
-        const newPos = Math.max(0, Math.min(duration, position + seconds * 1000));
-        await sound.setPositionAsync(newPos);
-      }
+    (seconds: number) => {
+      if (!player) return;
+      const target = Math.max(0, Math.min(duration, position + seconds));
+      player.seekTo(target);
+      setPosition(target);
     },
-    [sound, position, duration],
+    [player, position, duration],
   );
 
-  const cycleSpeed = useCallback(async () => {
-    if (!sound) return;
+  const cycleSpeed = useCallback(() => {
+    if (!player) return;
     const speeds: PlaybackSpeed[] = [0.75, 1, 1.25, 1.5];
     const currentIndex = speeds.indexOf(speed);
     const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
-    await sound.setRateAsync(nextSpeed, true);
+    player.playbackRate = nextSpeed;
     setSpeed(nextSpeed);
-  }, [sound, speed]);
+  }, [player, speed]);
 
-  const formatTime = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000);
+  const formatTime = (seconds: number) => {
+    const totalSeconds = Math.floor(seconds);
     const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    const secs = totalSeconds % 60;
+    return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   if (locked) {
