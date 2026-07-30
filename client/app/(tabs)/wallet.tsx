@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { View, Text, FlatList, RefreshControl, ActivityIndicator, StyleSheet, Platform, TouchableOpacity } from 'react-native';
@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/src/shared/api/client';
 import { PLATFORM_ENV } from '@/src/shared/lib/ads';
 import { consumePendingWithdrawAfterPin } from '@/src/shared/lib/pin-verify-flag';
-import { formatKobo, formatPoints } from '@/src/shared/lib/money';
+import { formatKobo, formatPoints, pointsToNairaString } from '@/src/shared/lib/money';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay, Fonts } from '@/constants/theme';
 import { PageMark } from '@/components/PageMark';
@@ -90,6 +90,8 @@ export default function WalletScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const params = useLocalSearchParams<{ welcomeBonus?: string }>();
+  const welcomeBonus = Number(params.welcomeBonus ?? 0);
 
   // Fetch ad config for native unit
   const [nativeAdUnit, setNativeAdUnit] = useState('');
@@ -303,6 +305,39 @@ export default function WalletScreen() {
               </Text>
             </View>
 
+            {/* One-time welcome bonus banner — appears after a fresh
+                signup+verification lands on this tab. Driven by the
+                `welcomeBonus` route param set by verify-email-code.tsx.
+                `welcomeNaira` is computed from EXPO_PUBLIC_POINTS_PER_NAIRA
+                via pointsToNairaString so the value is in lockstep with
+                the backend at POINTS_PER_NAIRA env var. */}
+            {welcomeBonus > 0 ? (
+              <View
+                style={{
+                  backgroundColor: c.mintSoft,
+                  borderColor: c.mint,
+                  borderWidth: 1,
+                  borderRadius: 14,
+                  padding: 16,
+                  marginBottom: 16,
+                  gap: 8,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="gift" size={22} color={c.mint} />
+                  <Text style={{ fontFamily: Fonts.display, fontSize: 16, color: c.ink, flex: 1 }}>
+                    {t('verify_email.welcome_title')}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 14, color: c.inkMuted, lineHeight: 20 }}>
+                  {t('verify_email.welcome_bonus', {
+                    points: welcomeBonus.toLocaleString(),
+                    naira: pointsToNairaString(welcomeBonus).replace(/^₦/, ''),
+                  })}
+                </Text>
+              </View>
+            ) : null}
+
             {/* Balance card */}
             <View
               style={{
@@ -346,7 +381,7 @@ export default function WalletScreen() {
                     </Text>
                   </View>
                   <Text style={{ fontSize: 13, color: c.inkMuted, marginTop: 4 }}>
-                    {t('wallet.approx')} {formatKobo(balance)}
+                    {t('wallet.approx')} {pointsToNairaString(balance)}
                   </Text>
                 </>
               )}

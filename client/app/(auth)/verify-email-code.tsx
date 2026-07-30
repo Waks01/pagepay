@@ -12,7 +12,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { OtpInput } from '@/components/OtpInput';
@@ -30,8 +29,6 @@ export default function VerifyEmailCodeScreen() {
   const welcomeBonus = Number(params.welcomeBonus ?? 0);
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
-  const pointsPerNaira = Number(process.env.EXPO_PUBLIC_POINTS_PER_NAIRA ?? 10);
-  const welcomeNaira = welcomeBonus > 0 ? welcomeBonus / Math.max(1, pointsPerNaira) : 0;
 
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -60,7 +57,18 @@ export default function VerifyEmailCodeScreen() {
           setError(detail);
         } else {
           setMessage(t('verify_email.success'));
-          setTimeout(() => router.replace('/(tabs)'), 1200);
+          // Redirect to the wallet tab so the user sees the welcome
+          // bonus banner over their new balance. The wallet reads
+          // `welcomeBonus` from useLocalSearchParams and renders a
+          // one-time celebratory banner.
+          setTimeout(
+            () =>
+              router.replace({
+                pathname: '/(tabs)/wallet',
+                params: welcomeBonus > 0 ? { welcomeBonus: String(welcomeBonus) } : {},
+              }),
+            1200,
+          );
         }
       } catch {
         setError(t('verify_email.error_connection'));
@@ -107,37 +115,12 @@ export default function VerifyEmailCodeScreen() {
           <Text style={[styles.title, { color: tokens.ink }]}>
             {t('verify_email.title')}
           </Text>
+          {/* Use `code_subtitle` (not `subtitle`) — the system sends a
+              6-digit CODE via email, never a link. The `subtitle` key
+              was the legacy copy for the token-based flow. */}
           <Text style={[styles.subtitle, { color: tokens.inkMuted }]}>
-            {t('verify_email.subtitle', { email })}
+            {t('verify_email.code_subtitle', { email })}
           </Text>
-
-          {welcomeBonus > 0 ? (
-            <View
-              style={[
-                styles.welcomeBanner,
-                { backgroundColor: tokens.mintSoft, borderColor: tokens.mint },
-              ]}
-            >
-              <View style={styles.welcomeBannerHeader}>
-                <Ionicons name="gift" size={22} color={tokens.mint} />
-                <Text style={[styles.welcomeTitle, { color: tokens.ink }]}>
-                  {t('verify_email.welcome_title')}
-                </Text>
-              </View>
-              <Text style={[styles.welcomeBody, { color: tokens.inkMuted }]}>
-                {t('verify_email.welcome_bonus', {
-                  points: welcomeBonus.toLocaleString(),
-                  naira: welcomeNaira.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  }),
-                })}
-              </Text>
-              <Text style={[styles.welcomeCta, { color: tokens.ink }]}>
-                {t('verify_email.welcome_cta')}
-              </Text>
-            </View>
-          ) : null}
 
           <OtpInput
             length={OTP_LENGTH}
@@ -197,35 +180,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 32,
-  },
-  welcomeBanner: {
-    width: '100%',
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 24,
-    gap: 8,
-  },
-  welcomeBannerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  welcomeTitle: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 16,
-  },
-  welcomeBody: {
-    fontFamily: 'SpaceGrotesk_500Medium',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  welcomeCta: {
-    fontFamily: 'SpaceGrotesk_500Medium',
-    fontSize: 13,
-    lineHeight: 18,
-    opacity: 0.75,
-    marginTop: 2,
   },
   error: {
     fontFamily: 'SpaceGrotesk_500Medium',

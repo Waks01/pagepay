@@ -151,16 +151,14 @@ async def register(payload: UserRegister, request: Request, db: AsyncSession = D
     except Exception as exc:
         logger.error("Failed to send verification email to %s: %s", sanitize_for_log(user.email), exc)
 
-    # Welcome bonus + welcome email + in-app notification. Best-effort:
-    # failures are logged inside grant_welcome_bonus() and never propagate,
-    # so a flaky email/notification provider cannot break /register. The
-    # point_credits UNIQUE(user_id, 'welcome_bonus') constraint makes
-    # this idempotent — a retry of /register for the same email never
-    # pays out twice.
-    try:
-        await grant_welcome_bonus(db, user)
-    except Exception as exc:
-        logger.error("Welcome bonus flow failed for user_id=%s: %s", user.id, sanitize_for_log(str(exc)))
+    # NOTE: The welcome bonus (100 pts = ₦10) is intentionally NOT
+    # credited here. It fires AFTER the user successfully verifies
+    # their email — see verify_email() and verify_email_code() below.
+    # Reasoning: a brand-new unverified account that never confirms
+    # ownership of the email should not receive a payout. Idempotency
+    # is enforced by UNIQUE(user_id, 'welcome_bonus') on point_credits,
+    # so the bonus still fires at most once per user even if both
+    # verify paths race.
 
     # Issue tokens
     access_token = create_access_token(user.id)
@@ -516,6 +514,19 @@ async def verify_email(payload: EmailVerificationRequest, db: AsyncSession = Dep
         extra_data={"method": "token"},
     )
 
+    # Welcome bonus fires AFTER verification. Idempotent via the
+    # UNIQUE(user_id, 'welcome_bonus') on point_credits. Wrapped in
+    # try/except so a flaky email/push provider can't 5xx the verify
+    # response (the user is already verified — a 5xx would leave them
+    # stuck and unable to log in).
+    try:
+        await grant_welcome_bonus(db, user)
+    except Exception as exc:
+        logger.error(
+            "Welcome bonus flow failed after verify (token) for user_id=%s: %s",
+            user.id, sanitize_for_log(str(exc))
+        )
+
     logger.info("Email verified for user_id=%s", user.id)
     return {"ok": True, "message": "Email verified successfully"}
 
@@ -550,6 +561,16 @@ async def verify_email_code(payload: EmailVerificationCodeRequest, db: AsyncSess
         "email_verify",
         extra_data={"method": "code"},
     )
+
+    # Welcome bonus fires AFTER verification (see comment above the
+    # other verify_email handler for the rationale on try/except).
+    try:
+        await grant_welcome_bonus(db, user)
+    except Exception as exc:
+        logger.error(
+            "Welcome bonus flow failed after verify (code) for user_id=%s: %s",
+            user.id, sanitize_for_log(str(exc))
+        )
 
     logger.info("Email verified for user_id=%s via code", user.id)
     return {"ok": True, "message": "Email verified successfully"}

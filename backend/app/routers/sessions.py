@@ -148,6 +148,23 @@ async def end_session(
             current_user.points_balance,
         )
 
+        # Fire wallet-update push. asyncio.create_task so the response
+        # returns immediately; FCM failures never block /session/end.
+        # The helper is best-effort — it short-circuits silently if the
+        # user has push_enabled=False, no FCM tokens, or is in quiet
+        # hours.
+        bonus_naira = bonus_credited / max(1, settings.points_per_naira)
+        from app.services.fcm import send_wallet_update
+        asyncio.create_task(
+            send_wallet_update(
+                db,
+                current_user.id,
+                amount_naira=bonus_naira,
+                transaction_type="credit",
+                reason="slice_bonus",
+            )
+        )
+
     await db.commit()
     await db.refresh(current_user)
 

@@ -24,6 +24,7 @@ helpers — the credit/audit path is already network-agnostic.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
@@ -795,7 +796,7 @@ async def admob_ssv_callback(
         credit_status="credited",
     )
     db.add(event)
-    
+
     # AD WATCHED + CLEANUP complete: the AdRequest row is now marked
     # 'credited' (consumed, cannot be reused), the wallet/session got
     # `points`, and an AdEvent audit row was written. This single line
@@ -815,6 +816,23 @@ async def admob_ssv_callback(
         rejection_reason=None,
         points_credited=points,
     )
+
+    # Fire ad-reward push. asyncio.create_task so the response returns
+    # immediately; FCM failures never block the SSV webhook (Google
+    # retries timeouts aggressively, so we MUST respond fast).
+    # Best-effort: send_ad_reward short-circuits silently when there
+    # are no FCM tokens (common — AdMob SSV callbacks fire even when
+    # the user isn't currently logged in on a device).
+    if points > 0:
+        from app.services.fcm import send_ad_reward
+        asyncio.create_task(
+            send_ad_reward(
+                db,
+                user_id,
+                points_earned=points,
+                ad_unit=req.ad_unit,
+            )
+        )
     
     await db.commit()
 

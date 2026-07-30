@@ -6,11 +6,12 @@ commits. Idempotency is enforced by the UNIQUE(user_id, source) constraint
 on `point_credits` — a duplicate insert for the same user is a no-op, never
 a double credit.
 
-All side effects (email, notification) are best-effort: failures are logged
-but never propagate, so a flaky email provider or push service can't break
-the /auth/register response. The user is created + tokens issued even if
-every welcome message fails.
+All side effects (email, in-app notification, push) are best-effort:
+failures are logged but never propagate, so a flaky email provider or
+push service can't break the /auth/register response. The user is
+created + tokens issued even if every welcome message fails.
 """
+import asyncio
 import logging
 
 from sqlalchemy import insert, update
@@ -141,6 +142,36 @@ async def grant_welcome_bonus(db: AsyncSession, user: User) -> bool:
     except Exception as exc:
         logger.error(
             "Welcome notification failed for user_id=%s: %s", user.id, exc
+        )
+
+    # Push notification: fire-and-forget so the FCM round-trip never
+    # adds latency to /auth/register. Uses the existing
+    # `wallet_updates` category in user_notification_preferences so
+    # users who already muted wallet pushes stay quiet. Most users
+    # on a fresh device won't have an FCM token yet (they register
+    # the token after the first /login), so the helper will return
+    # {"reason": "no_tokens"} and log only — that's the expected
+    # path for the *first* signup but the *second* (e.g. a re-issued
+    # token) will start delivering.
+    try:
+        from app.services.fcm import send_push_notification
+
+        asyncio.create_task(
+            send_push_notification(
+                db,
+                user_id=user.id,
+                title="Welcome bonus! 🎉",
+                body=(
+                    f"+{bonus_points:,} points (₦{bonus_naira:,.2f}) "
+                    "credited to your wallet."
+                ),
+                data={"type": "welcome_bonus", "points": str(bonus_points)},
+                category="wallet_updates",
+            )
+        )
+    except Exception as exc:
+        logger.error(
+            "Welcome push failed for user_id=%s: %s", user.id, exc
         )
 
     return True
