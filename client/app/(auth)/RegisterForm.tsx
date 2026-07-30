@@ -161,16 +161,33 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
       if (!res.ok) {
         const status = res.status;
         let detail = '';
+        let rawText = '';
         try {
-          const data = await res.json();
-          detail = typeof data?.detail === 'string' ? data.detail : '';
+          // Capture the raw body too so we can surface gateway errors
+          // (HTML 5xx pages, plain-text 4xx, etc.) that don't parse as JSON.
+          rawText = await res.text();
+          if (rawText) {
+            try {
+              const data = JSON.parse(rawText);
+              detail = typeof data?.detail === 'string' ? data.detail : '';
+            } catch {
+              detail = rawText.slice(0, 200);
+            }
+          }
         } catch {
-          /* non-JSON response */
+          /* body not readable */
+        }
+        // Surface the actual failure clearly so we can debug from logs.
+        if (__DEV__) {
+          console.warn(`[register] failed: status=${status} detail=${detail}`);
         }
         if (status === 409) {
           setFormError(t('auth.register.errors.account_exists'));
-        } else if (status === 400 && detail.includes('referral')) {
+        } else if (status === 400 && detail.toLowerCase().includes('referral')) {
           setErrors({ referralCode: t('auth.register.errors.invalid_referral') });
+        } else if (status === 400 && detail.toLowerCase().includes('already exists')) {
+          // Backend returns 400 on duplicate (not 409) — surface as account-exists.
+          setFormError(t('auth.register.errors.account_exists'));
         } else {
           setFormError(detail || t('auth.register.errors.create_failed'));
         }
@@ -198,7 +215,10 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
           }),
         1000,
       );
-    } catch {
+    } catch (err) {
+      if (__DEV__) {
+        console.warn('[register] caught error:', err);
+      }
       setFormError(t('auth.register.errors.connection_error'));
       setErrorTrigger(true);
       setTimeout(() => setErrorTrigger(false), 600);

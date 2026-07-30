@@ -75,7 +75,22 @@ def _cleanup_expired_otps() -> None:
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
 async def register(payload: UserRegister, request: Request, db: AsyncSession = Depends(get_db)):
+    # Log every register attempt — success + failure — so the support
+    # team can correlate client-side "Couldn't create your account"
+    # errors with the actual backend state. Without this, a network
+    # error vs a server error vs a duplicate-user vs a validation
+    # error all look identical from the client.
+    client_ip = request.client.host if request.client else "unknown"
+    logger.info(
+        "register attempt: email=%s phone=%s ip=%s ua=%s",
+        sanitize_for_log(payload.email),
+        sanitize_for_log(payload.phone),
+        client_ip,
+        sanitize_for_log(request.headers.get("user-agent", "")),
+    )
+
     if not payload.email and not payload.phone:
+        logger.info("register rejected: no email/phone provided")
         raise HTTPException(status_code=400, detail="Email or phone required")
 
     query = select(User).where(
@@ -83,6 +98,10 @@ async def register(payload: UserRegister, request: Request, db: AsyncSession = D
     )
     result = await db.execute(query)
     if result.scalar_one_or_none():
+        logger.info(
+            "register rejected: user already exists (%s)",
+            sanitize_for_log(payload.email or payload.phone),
+        )
         raise HTTPException(status_code=400, detail="User already exists")
 
     # Validate referral code if provided
@@ -157,6 +176,11 @@ async def register(payload: UserRegister, request: Request, db: AsyncSession = D
     db.add(refresh_token)
     await db.commit()
 
+    logger.info(
+        "register success: user_id=%s email=%s",
+        user.id,
+        sanitize_for_log(user.email),
+    )
     return TokenResponse(access_token=access_token, refresh_token=refresh_token_str)
 
 
