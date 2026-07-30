@@ -33,24 +33,40 @@ function useAuthGate() {
   const onboardingCompleted = usePreferences((s) => s.onboardingCompleted);
   const hydrated = usePreferences((s) => s.hydrated);
 
+  // Routes that are reachable while unauthenticated. These are
+  // non-auth pages that we still want to show — onboarding, the
+  // password-reset flow, and legal pages (Terms / Privacy Policy).
+  // The latter is mandatory: a fresh user creating an account MUST
+  // be able to read the terms before tapping the "I agree" checkbox,
+  // and the auth gate must NOT bounce them back to login when they
+  // do. v3 §auth.legal — Terms/Privacy must be reachable pre-login.
+  const isPublicRoute = (seg: string | undefined) =>
+    seg === '(onboarding)' ||
+    seg === '(auth)' ||
+    seg === 'forgot-password' ||
+    seg === 'forgot-password-otp' ||
+    seg === 'reset-password' ||
+    seg === 'legal';
+
   useEffect(() => {
     if (!hydrated) return;
     (async () => {
       const token = await getToken();
       const inAuthGroup = segments[0] === '(auth)';
       const inOnboardingGroup = segments[0] === '(onboarding)';
-      const inForgotFlow = segments[0] === 'forgot-password' || segments[0] === 'forgot-password-otp' || segments[0] === 'reset-password';
+      const inPublic = isPublicRoute(segments[0]);
 
       if (!token) {
         if (!onboardingCompleted && !inOnboardingGroup) {
           (router as any).replace('/(onboarding)');
-        } else if (onboardingCompleted && !inAuthGroup && !inForgotFlow) {
+        } else if (onboardingCompleted && !inAuthGroup && !inPublic) {
           (router as any).replace('/(auth)/');
         }
       } else if (token && inAuthGroup && segments[1] !== 'verify-email-code') {
         (router as any).replace('/(tabs)');
       }
-      // else: already on /onboarding or /auth/* — leave alone.
+      // else: already on /onboarding, /auth/*, or a public route
+      // (legal, forgot-password flow) — leave alone.
 
       // Small delay to let the scheduled navigation take effect before
       // we allow the layout to render. Prevents a flash of the wrong
@@ -62,12 +78,14 @@ function useAuthGate() {
 
   // Register the global 401 → login redirect so apiFetch can
   // redirect the user when the server rejects their token.
-  // Only redirect if we're NOT already on an auth/onboarding screen,
-  // otherwise login/register error responses cause a blank refresh
-  // instead of showing the error to the user.
+  // Only redirect if we're NOT already on an auth/onboarding/public
+  // screen — otherwise login/register error responses cause a blank
+  // refresh instead of showing the error to the user. Public routes
+  // (legal, forgot-password) are also exempt so a 401 from
+  // publicApiFetch on /legal doesn't bounce the user.
   useEffect(() => {
     setOnUnauthenticated(() => {
-      if (segments[0] !== '(auth)' && segments[0] !== '(onboarding)' && segments[0] !== 'forgot-password' && segments[0] !== 'forgot-password-otp' && segments[0] !== 'reset-password') {
+      if (!isPublicRoute(segments[0])) {
         (router as any).replace('/(auth)/');
       }
     });
@@ -215,6 +233,7 @@ export default function RootLayout() {
         <Stack.Screen name="forgot-password" options={{ headerShown: false, title: 'Reset Password' }} />
         <Stack.Screen name="forgot-password-otp" options={{ headerShown: false, title: 'Enter OTP' }} />
         <Stack.Screen name="reset-password" options={{ headerShown: false, title: 'New Password' }} />
+        <Stack.Screen name="legal" options={{ headerShown: false, title: 'Legal' }} />
         <Stack.Screen name="buy-airtime" options={{ headerShown: false, title: 'Buy Airtime' }} />
         <Stack.Screen name="buy-data" options={{ headerShown: false, title: 'Buy Data' }} />
         <Stack.Screen name="buy-electricity" options={{ headerShown: false, title: 'Buy Electricity' }} />

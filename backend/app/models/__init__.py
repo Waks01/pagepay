@@ -1,7 +1,7 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import (
     String, Integer, BigInteger, Boolean, Text, DateTime, Time, Enum, Float,
-    SmallInteger, JSON,
+    SmallInteger, JSON, UniqueConstraint,
 )
 from datetime import datetime, time
 import enum
@@ -1382,6 +1382,33 @@ class Notification(Base):
     data: Mapped[str | None] = mapped_column(Text, nullable=True)
     read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class PointCredit(Base):
+    """Audit row for every points credited to User.points_balance.
+
+    Acts as both an audit trail and an idempotency key. The UNIQUE
+    constraint on (user_id, source) makes one-shot grants (welcome
+    bonus, future promo grants) replay-safe: a duplicate insert is
+    caught by the DB IntegrityError, never producing a double credit.
+
+    `source` is a string enum (e.g. "welcome_bonus", "referral_referee",
+    "promo_<code>") — each source can fire at most once per user. The
+    caller INSERTs with `ON CONFLICT DO NOTHING` and inspects
+    `rowcount` to decide whether to actually credit points_balance.
+    """
+    __tablename__ = "point_credits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    source: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    points: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "source", name="uq_point_credits_user_source"),
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════

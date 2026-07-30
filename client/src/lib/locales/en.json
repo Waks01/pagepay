@@ -251,7 +251,7 @@
       "forgot_password": "Forgot password?",
       "sign_in": "Sign in",
       "new_to_pagepay": "New to PagePay?",
-      "create_account": "Create an account  →",
+      "create_account": "Create an account",
       "biometric_button": "Sign in with Biometrics",
       "authenticating": "Authenticating...",
       "errors": {
@@ -283,7 +283,7 @@
       "privacy": "Privacy Policy",
       "create_account": "Create account",
       "already_have_account": "Already have an account?",
-      "sign_in_link": "Sign in  →",
+      "sign_in_link": "Sign in",
       "password_strength": {
         "too_weak": "Too weak",
         "weak": "Weak",
@@ -584,7 +584,10 @@
     "verifying": "Verifying...",
     "verify": "Verify",
     "submit": "Verify Email",
-    "resending": "Resending..."
+    "resending": "Resending...",
+    "welcome_title": "Welcome to PagePay!",
+    "welcome_bonus": "We've credited {points} points (₦{naira}) to your wallet as a welcome gift.",
+    "welcome_cta": "Enter the code below to verify your email and start earning."
   },
   "billing_history": {
     "title": "Billing History",

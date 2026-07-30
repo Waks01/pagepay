@@ -215,7 +215,7 @@
       "forgot_password": "Ị chefuru okwuntughe?",
       "sign_in": "Banye",
       "new_to_pagepay": "Ọ bụ oge mbụ na PagePay?",
-      "create_account": "Mepee akaụntụ  →",
+      "create_account": "Mepee akaụntụ",
       "biometric_button": "Banye na Biometric",
       "authenticating": "Na-enyocha...",
       "errors": {
@@ -247,7 +247,7 @@
       "privacy": "Iwu Nzuzo",
       "create_account": "Mepee akaụntụ",
       "already_have_account": "Ị nwere akaụntụ?",
-      "sign_in_link": "Banye  →",
+      "sign_in_link": "Banye",
       "password_strength": {
         "too_weak": "Adịghị ike",
         "weak": "Adịghị ike",
@@ -535,7 +535,10 @@
     "verifying": "Na-enyocha...",
     "verify": "Nyochaa",
     "submit": "Nyochaa Email",
-    "resending": "Na-eziga ọzọ..."
+    "resending": "Na-eziga ọzọ...",
+    "welcome_title": "Nnọọ na PagePay!",
+    "welcome_bonus": "Etinyela isi {points} (₦{naira}) na-atọ gị ụlọ ego gị dịka onyinye ọmụmụ.",
+    "welcome_cta": "Tinye koodu n'okpuru iji gosi na email gị ziri ezi ma malite ịnweta ego."
   },
   "billing_history": {
     "title": "Akụkọ Ịkwụ Ụgwọ",

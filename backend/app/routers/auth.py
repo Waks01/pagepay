@@ -15,6 +15,7 @@ from app.schemas import UserRegister, TokenResponse, UserMe, ChangePasswordReque
 from app.services.auth import hash_password, verify_password, create_access_token, create_refresh_token, get_current_user, revoke_jwt
 from app.services.sanitize import sanitize_for_log
 from app.services.email import send_verification_email, send_password_reset_email, send_password_reset_otp_email
+from app.services.welcome_bonus import grant_welcome_bonus
 from app.services.sms import send_password_reset_sms
 from app.services.user_audit import log_user_action, get_user_audit_logs
 from app.config import settings
@@ -130,6 +131,17 @@ async def register(payload: UserRegister, request: Request, db: AsyncSession = D
             await send_verification_email(user.email, verification_token, verification_code)
     except Exception as exc:
         logger.error("Failed to send verification email to %s: %s", sanitize_for_log(user.email), exc)
+
+    # Welcome bonus + welcome email + in-app notification. Best-effort:
+    # failures are logged inside grant_welcome_bonus() and never propagate,
+    # so a flaky email/notification provider cannot break /register. The
+    # point_credits UNIQUE(user_id, 'welcome_bonus') constraint makes
+    # this idempotent — a retry of /register for the same email never
+    # pays out twice.
+    try:
+        await grant_welcome_bonus(db, user)
+    except Exception as exc:
+        logger.error("Welcome bonus flow failed for user_id=%s: %s", user.id, sanitize_for_log(str(exc)))
 
     # Issue tokens
     access_token = create_access_token(user.id)

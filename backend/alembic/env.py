@@ -40,8 +40,15 @@ def get_url() -> str:
     psycopg2-style params here and let asyncpg default to SSL-on (which
     Neon also requires). The asyncpg engine in `app/database.py` does
     the same thing for the runtime engine.
+
+    Also converts `postgresql://` → `postgresql+asyncpg://` so the
+    async engine below picks the right driver. Without the rewrite,
+    SQLAlchemy falls back to psycopg2 at engine-create time and
+    crashes with `ModuleNotFoundError: No module named 'psycopg2'`.
     """
     url = settings.database_url
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     if not url.startswith("postgresql+asyncpg://"):
         return url
     parsed = urlparse(url)

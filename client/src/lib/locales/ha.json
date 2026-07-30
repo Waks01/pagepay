@@ -215,7 +215,7 @@
       "forgot_password": "Ka manta da kalmar sirri?",
       "sign_in": "Shiga",
       "new_to_pagepay": "Sabon ga PagePay?",
-      "create_account": "Ƙirƙiri asusun  →",
+      "create_account": "Ƙirƙiri asusun",
       "biometric_button": "Shiga da Biometric",
       "authenticating": "Ana tantancewa...",
       "errors": {
@@ -247,7 +247,7 @@
       "privacy": "Manufar Sirri",
       "create_account": "Ƙirƙiri asusun",
       "already_have_account": "Kuna da asusun?",
-      "sign_in_link": "Shiga  →",
+      "sign_in_link": "Shiga",
       "password_strength": {
         "too_weak": "Maras ƙarfi",
         "weak": "Maras ƙarfi",
@@ -535,7 +535,10 @@
     "verifying": "Ana tabbatarwa...",
     "verify": "Tabbatar",
     "submit": "Tabbatar da Email",
-    "resending": "Ana sake aikawa..."
+    "resending": "Ana sake aikawa...",
+    "welcome_title": "Barka da zuwa PagePay!",
+    "welcome_bonus": "Mun sanya maki {points} (₦{naira}) a cikin walat ɗin ku a matsayin kyautar maraba.",
+    "welcome_cta": "Shigar da lambar da ke ƙasa don tabbatar da imel ɗin ku kuma fara samun kuɗi."
   },
   "billing_history": {
     "title": "Tarihin Biyan Kuɗi",

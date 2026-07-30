@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { saveToken, saveRefreshToken, getRefreshToken } from '@/src/shared/lib/storage';
@@ -229,10 +230,20 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
                     <Text style={[styles.tertiaryMuted, { color: tokens.inkMuted }]}>
                       {t('auth.login.new_to_pagepay')}
                     </Text>
-                     <Pressable onPress={onSwitchToRegister} hitSlop={6}>
+                     <Pressable
+                       onPress={onSwitchToRegister}
+                       hitSlop={6}
+                       style={styles.tertiaryLinkGroup}
+                     >
                       <Text style={[styles.tertiaryLink, { color: tokens.mint }]}>
                         {t('auth.login.create_account')}
                       </Text>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={14}
+                        color={tokens.mint}
+                        style={styles.tertiaryLinkChevron}
+                      />
                     </Pressable>
                   </View>
                 </View>
@@ -316,5 +327,13 @@ const styles = StyleSheet.create({
   tertiaryLink: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  tertiaryLinkGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  tertiaryLinkChevron: {
+    marginTop: 1,
   },
 });

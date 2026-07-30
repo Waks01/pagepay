@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { OtpInput } from '@/components/OtpInput';
@@ -24,10 +25,13 @@ const OTP_LENGTH = 6;
 export default function VerifyEmailCodeScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const params = useLocalSearchParams<{ email?: string }>();
+  const params = useLocalSearchParams<{ email?: string; welcomeBonus?: string }>();
   const email = params.email;
+  const welcomeBonus = Number(params.welcomeBonus ?? 0);
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
+  const pointsPerNaira = Number(process.env.EXPO_PUBLIC_POINTS_PER_NAIRA ?? 10);
+  const welcomeNaira = welcomeBonus > 0 ? welcomeBonus / Math.max(1, pointsPerNaira) : 0;
 
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -107,6 +111,34 @@ export default function VerifyEmailCodeScreen() {
             {t('verify_email.subtitle', { email })}
           </Text>
 
+          {welcomeBonus > 0 ? (
+            <View
+              style={[
+                styles.welcomeBanner,
+                { backgroundColor: tokens.mintSoft, borderColor: tokens.mint },
+              ]}
+            >
+              <View style={styles.welcomeBannerHeader}>
+                <Ionicons name="gift" size={22} color={tokens.mint} />
+                <Text style={[styles.welcomeTitle, { color: tokens.ink }]}>
+                  {t('verify_email.welcome_title')}
+                </Text>
+              </View>
+              <Text style={[styles.welcomeBody, { color: tokens.inkMuted }]}>
+                {t('verify_email.welcome_bonus', {
+                  points: welcomeBonus.toLocaleString(),
+                  naira: welcomeNaira.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  }),
+                })}
+              </Text>
+              <Text style={[styles.welcomeCta, { color: tokens.ink }]}>
+                {t('verify_email.welcome_cta')}
+              </Text>
+            </View>
+          ) : null}
+
           <OtpInput
             length={OTP_LENGTH}
             onChange={setCode}
@@ -165,6 +197,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 32,
+  },
+  welcomeBanner: {
+    width: '100%',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 24,
+    gap: 8,
+  },
+  welcomeBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  welcomeTitle: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 16,
+  },
+  welcomeBody: {
+    fontFamily: 'SpaceGrotesk_500Medium',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  welcomeCta: {
+    fontFamily: 'SpaceGrotesk_500Medium',
+    fontSize: 13,
+    lineHeight: 18,
+    opacity: 0.75,
+    marginTop: 2,
   },
   error: {
     fontFamily: 'SpaceGrotesk_500Medium',

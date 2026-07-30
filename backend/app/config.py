@@ -209,6 +209,14 @@ class Settings(BaseSettings):
     # signups. Fraud detection still runs on top of this — daily cap
     # is the cheap first line of defense.
     referral_daily_cap: int = 10
+    # Welcome bonus credited to a brand-new user on first signup. 100 pts
+    # = ₦10 at the default 10 pts/₦1 rate. Idempotency is enforced by
+    # the UNIQUE(user_id, source) constraint on point_credits — a
+    # duplicate insert for the same user is a no-op, never a double
+    # credit. Set to 0 to disable the bonus entirely (e.g. for a
+    # re-launch promo) — the welcome email + in-app notification still
+    # fire so the user knows they're onboarded.
+    welcome_bonus_points: int = 100
     # Public base URL used to build share links of the form
     # "<base>/<code>". The client opens these as deep links into the
     # Expo app, where the route handler reads the code from the path.

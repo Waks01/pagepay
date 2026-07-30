@@ -215,7 +215,7 @@
       "forgot_password": "You forget password?",
       "sign_in": "Sign in",
       "new_to_pagepay": "You new for PagePay?",
-      "create_account": "Create account  →",
+      "create_account": "Create account",
       "biometric_button": "Sign in with Biometrics",
       "authenticating": "Dey check...",
       "errors": {
@@ -247,7 +247,7 @@
       "privacy": "Privacy Policy",
       "create_account": "Create account",
       "already_have_account": "You get account already?",
-      "sign_in_link": "Sign in  →",
+      "sign_in_link": "Sign in",
       "password_strength": {
         "too_weak": "Too weak",
         "weak": "Weak",
@@ -535,7 +535,10 @@
     "verifying": "Dey verify...",
     "verify": "Verify",
     "submit": "Verify Email",
-    "resending": "Dey send again..."
+    "resending": "Dey send again...",
+    "welcome_title": "Welcome to PagePay!",
+    "welcome_bonus": "We don put {points} points (₦{naira}) inside your wallet as welcome gift.",
+    "welcome_cta": "Type the code wey dey below to confirm your email and start to dey earn."
   },
   "billing_history": {
     "title": "Payment History",

@@ -215,7 +215,7 @@
       "forgot_password": "O gbagbe ọrọigbaniwọle?",
       "sign_in": "Wọle",
       "new_to_pagepay": "Tuntun ni PagePay?",
-      "create_account": "Ṣẹda akọọlẹ  →",
+      "create_account": "Ṣẹda akọọlẹ",
       "biometric_button": "Wọle pẹlu Biometric",
       "authenticating": "N ṣayẹwo...",
       "errors": {
@@ -247,7 +247,7 @@
       "privacy": "Ilana Aṣiri",
       "create_account": "Ṣẹda akọọlẹ",
       "already_have_account": "Ṣe o ni akọọlẹ tẹlẹ?",
-      "sign_in_link": "Wọle  →",
+      "sign_in_link": "Wọle",
       "password_strength": {
         "too_weak": "Alailagbara",
         "weak": "Alailagbara",
@@ -535,7 +535,10 @@
     "verifying": "N jẹrisi...",
     "verify": "Jẹrisi",
     "submit": "Jẹrisi Imeeli",
-    "resending": "N tun ranṣẹ..."
+    "resending": "N tun ranṣẹ...",
+    "welcome_title": "Kaabọ si PagePay!",
+    "welcome_bonus": "A ti fi awọn ojuami {points} (₦{naira}) kun apamọwọ rẹ gẹgẹ bi ẹbun ìkàbọ̀.",
+    "welcome_cta": "Tẹ koodu ti o wa ni isalẹ lati jẹrisi imeeli rẹ ki o bẹrẹ sisi owo."
   },
   "billing_history": {
     "title": "Itan Isanwo",

@@ -185,7 +185,19 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
         await saveRefreshToken(data.refresh_token);
       }
       setSuccess(true);
-      setTimeout(() => router.replace({ pathname: '/(auth)/verify-email-code', params: { email: email.trim() } }), 1000);
+      setTimeout(
+        () =>
+          router.replace({
+            pathname: '/(auth)/verify-email-code',
+            params: {
+              email: email.trim(),
+              welcomeBonus: String(
+                Number(process.env.EXPO_PUBLIC_WELCOME_BONUS_POINTS ?? 100),
+              ),
+            },
+          }),
+        1000,
+      );
     } catch {
       setFormError(t('auth.register.errors.connection_error'));
       setErrorTrigger(true);
@@ -349,10 +361,16 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
                   <Text style={[styles.tertiaryMuted, { color: tokens.inkMuted }]}>
                     {t('auth.register.already_have_account')}
                   </Text>
-                  <Pressable onPress={onSwitchToLogin} hitSlop={6}>
+                  <Pressable onPress={onSwitchToLogin} hitSlop={6} style={styles.tertiaryLinkGroup}>
                     <Text style={[styles.tertiaryLink, { color: tokens.mint }]}>
                       {t('auth.register.sign_in_link')}
                     </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={14}
+                      color={tokens.mint}
+                      style={styles.tertiaryLinkChevron}
+                    />
                   </Pressable>
                 </View>
               </View>
@@ -451,5 +469,13 @@ const styles = StyleSheet.create({
   tertiaryLink: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  tertiaryLinkGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  tertiaryLinkChevron: {
+    marginTop: 1,
   },
 });

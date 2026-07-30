@@ -90,21 +90,51 @@ async def send_password_reset_email(to: str, token: str) -> bool:
     return await send_email(to, "Reset your PagePay password", html)
 
 
-async def send_welcome_email(to: str, name: str = "there") -> bool:
-    """Send welcome email after registration."""
+async def send_welcome_email(
+    to: str,
+    name: str = "there",
+    bonus_points: int = 0,
+    bonus_naira: float = 0.0,
+) -> bool:
+    """Send welcome email after registration.
+
+    Includes the welcome bonus amount prominently so the user knows what
+    they just earned. Pass `bonus_points=0` to suppress the bonus block
+    (e.g. for a re-launch promo) — the rest of the email still fires.
+
+    `bonus_naira` is the points-to-currency equivalent at the configured
+    POINTS_PER_NAIRA rate, kept in lockstep with the in-app conversion.
+    """
+    bonus_block = ""
+    if bonus_points > 0:
+        naira_str = f"{bonus_naira:,.2f}"
+        bonus_block = f"""
+        <div style="background: linear-gradient(135deg, #0E7C66 0%, #34C39B 100%); border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
+            <p style="color: #E6F1ED; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; margin: 0 0 8px 0;">Welcome Bonus</p>
+            <p style="color: #FFFFFF; font-size: 40px; font-weight: bold; margin: 0; line-height: 1.1;">+{bonus_points:,}</p>
+            <p style="color: #E6F1ED; font-size: 15px; margin: 8px 0 0 0;">points (₦{naira_str})</p>
+            <p style="color: #E6F1ED; font-size: 13px; margin: 12px 0 0 0;">credited to your wallet</p>
+        </div>
+        """
+
     html = f"""
     <html>
-    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #4F46E5;">Welcome to PagePay, {name}!</h2>
-        <p>Thanks for joining PagePay. You can now:</p>
-        <ul>
-            <li>Study with unlimited materials</li>
-            <li>Earn points from ads</li>
-            <li>Pay bills and earn cashback</li>
-            <li>Connect with other students</li>
-        </ul>
-        <p>If you have any questions, feel free to reach out to our support team.</p>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #FBFAF6;">
+        <div style="background-color: #FFFFFF; border-radius: 16px; padding: 32px; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
+            <h2 style="color: #0E1116; margin-top: 0;">Welcome to PagePay, {name}!</h2>
+            <p style="color: #6B7280; font-size: 15px; line-height: 22px;">Thanks for joining PagePay. We're excited to have you.</p>
+            {bonus_block}
+            <p style="color: #6B7280; font-size: 15px; line-height: 22px;">Here's what you can do with PagePay:</p>
+            <ul style="color: #6B7280; font-size: 15px; line-height: 24px;">
+                <li>Read for 1 minute → earn points</li>
+                <li>Watch rewarded ads → multiply your earnings</li>
+                <li>Redeem points as cash via mobile money or bank transfer</li>
+                <li>Unlock AI study tools (flashcards, quizzes, essays)</li>
+            </ul>
+            <p style="color: #6B7280; font-size: 14px;">Verify your email to start earning. If you have any questions, reach out to our support team.</p>
+        </div>
+        <p style="color: #9CA3AF; font-size: 12px; text-align: center; margin-top: 16px;">© PagePay — Read. Learn. Earn.</p>
     </body>
     </html>
     """
-    return await send_email(to, "Welcome to PagePay!", html)
+    return await send_email(to, "Welcome to PagePay — your bonus is inside!", html)
