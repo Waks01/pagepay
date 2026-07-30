@@ -141,15 +141,18 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
   const isEmail = useCallback((v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), []);
 
   const handleRegister = useCallback(async () => {
+    console.log('[register] handleRegister called');
     setFormError(null);
     const v = validate();
     setErrors(v);
     if (Object.keys(v).length > 0) {
+      console.log('[register] client-side validation failed:', v);
       setErrorTrigger(true);
       setTimeout(() => setErrorTrigger(false), 600);
       return;
     }
     if (!agreed) {
+      console.log('[register] terms not agreed');
       setFormError(t('auth.register.errors.agree_to_terms'));
       setErrorTrigger(true);
       setTimeout(() => setErrorTrigger(false), 600);
@@ -168,12 +171,14 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
       } else if (email.trim().length >= 10) {
         payload.phone = email.trim();
       } else {
+        console.log('[register] not a valid email or phone');
         setFormError(t('auth.register.errors.invalid_email_phone'));
         setErrorTrigger(true);
         setTimeout(() => setErrorTrigger(false), 600);
         setLoading(false);
         return;
       }
+      console.log('[register] sending payload:', payload);
 
       const res = await apiFetch('/api/v1/auth/register', {
         method: 'POST',
@@ -184,19 +189,38 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
         body: JSON.stringify(payload),
       });
 
+      console.log('[register] response status:', res.status, 'ok:', res.ok);
+
       if (!res.ok) {
         const status = res.status;
         let detail = '';
+        let rawText = '';
         try {
-          const data = await res.json();
-          detail = typeof data?.detail === 'string' ? data.detail : '';
-        } catch {
-          /* non-JSON response */
+          rawText = await res.text();
+          console.log('[register] raw error body:', rawText);
+          if (rawText) {
+            try {
+              const data = JSON.parse(rawText);
+              // FastAPI's 422 returns detail as an array of {loc, msg, type}.
+              // Surface the first msg so the user sees the real reason.
+              if (Array.isArray(data?.detail) && data.detail.length > 0) {
+                detail = data.detail.map((d: any) => d?.msg).filter(Boolean).join('; ');
+              } else if (typeof data?.detail === 'string') {
+                detail = data.detail;
+              }
+            } catch {
+              detail = rawText.slice(0, 200);
+            }
+          }
+        } catch (e) {
+          console.log('[register] could not read response body:', e);
         }
         if (status === 409) {
           setFormError(t('auth.register.errors.account_exists'));
-        } else if (status === 400 && detail.includes('referral')) {
+        } else if (status === 400 && detail.toLowerCase().includes('referral')) {
           setErrors({ referralCode: t('auth.register.errors.invalid_referral') });
+        } else if (status === 400 && detail.toLowerCase().includes('already exists')) {
+          setFormError(t('auth.register.errors.account_exists'));
         } else {
           setFormError(detail || t('auth.register.errors.create_failed'));
         }
@@ -206,6 +230,7 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
       }
 
       const data = await res.json();
+      console.log('[register] success, token length:', data.access_token?.length);
       await saveToken(data.access_token);
       if (data.refresh_token) {
         await saveRefreshToken(data.refresh_token);
@@ -224,7 +249,8 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
           }),
         1000,
       );
-    } catch {
+    } catch (err) {
+      console.log('[register] thrown error:', err, err instanceof Error ? err.message : String(err));
       setFormError(t('auth.register.errors.connection_error'));
       setErrorTrigger(true);
       setTimeout(() => setErrorTrigger(false), 600);
