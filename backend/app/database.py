@@ -1,4 +1,6 @@
 import ssl
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from app.config import settings
@@ -8,6 +10,18 @@ DATABASE_URL = settings.database_url
 # Convert postgresql:// to postgresql+asyncpg:// for async support
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+# SQLAlchemy's asyncpg dialect (as of 2.0.36) auto-unpacks the URL's query
+# string into asyncpg.connect() kwargs. asyncpg doesn't accept `sslmode`,
+# `channel_binding`, or other psycopg2-style params — it expects `ssl` (an
+# SSLContext) and a few others. Strip the unsupported params from the URL
+# before handing it to the engine; we handle SSL via connect_args["ssl"]
+# below, so we don't need any of them.
+parsed = urlparse(DATABASE_URL)
+qs = parse_qs(parsed.query)
+unsupported = {"sslmode", "sslrootcert", "channel_binding", "sslcert", "sslkey"}
+qs = {k: v for k, v in qs.items() if k not in unsupported}
+DATABASE_URL = urlunparse(parsed._replace(query=urlencode(qs, doseq=True)))
 
 connect_args: dict[str, object] = {
     "server_settings": {

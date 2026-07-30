@@ -1,5 +1,8 @@
 from logging.config import fileConfig
 import asyncio
+import ssl
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -28,9 +31,41 @@ target_metadata = Base.metadata
 # ... etc.
 
 
-def get_url():
-    """Get database URL from settings."""
-    return settings.database_url
+def get_url() -> str:
+    """Get database URL from settings, with SSL params stripped.
+
+    SQLAlchemy's asyncpg dialect auto-unpacks the URL's query string
+    into asyncpg.connect() kwargs. asyncpg doesn't accept `sslmode`,
+    `channel_binding`, etc. — it uses `ssl` (SSLContext). We strip the
+    psycopg2-style params here and let asyncpg default to SSL-on (which
+    Neon also requires). The asyncpg engine in `app/database.py` does
+    the same thing for the runtime engine.
+    """
+    url = settings.database_url
+    if not url.startswith("postgresql+asyncpg://"):
+        return url
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    unsupported = {"sslmode", "sslrootcert", "channel_binding", "sslcert", "sslkey"}
+    qs = {k: v for k, v in qs.items() if k not in unsupported}
+    return urlunparse(parsed._replace(query=urlencode(qs, doseq=True)))
+
+
+def _connect_args() -> dict:
+    """Build connect_args for the asyncpg engine with a real SSL context.
+
+    asyncpg requires an ssl.SSLContext (not the `sslmode` string), so
+    we construct one here and pass it explicitly. Without this, asyncpg
+    refuses to connect to Neon (which requires TLS).
+    """
+    ctx = ssl.create_default_context()
+    if settings.environment == "production":
+        ctx.check_hostname = True
+        ctx.verify_mode = ssl.CERT_REQUIRED
+    else:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    return {"ssl": ctx}
 
 
 def run_migrations_offline() -> None:
@@ -70,8 +105,11 @@ async def run_async_migrations() -> None:
 
     """
 
+    section = config.get_section(config.config_ini_section, {})
+    # Merge connect_args so asyncpg gets a real SSLContext, not a string.
+    section["connect_args"] = _connect_args()
     connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
         url=get_url(),
