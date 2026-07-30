@@ -82,28 +82,54 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
   // the first keystroke — never `formError` and never in `onFocus`. Clearing
   // state from `onFocus` was the cause of the focus-jumping loop on Android:
   // focus → setState → layout pass → focus stolen → next field grabs focus.
+  /**
+   * Live validation — runs on every keystroke so the user sees field
+   * errors immediately instead of waiting for submit. Reuses the same
+   * `validate()` rules, then merges only the field being typed into.
+   * Other fields keep their last error so the user isn't spammed.
+   */
+  const validateField = useCallback(
+    (field: keyof FieldErrors, v: string) => {
+      const e: FieldErrors = {};
+      if (field === 'password') {
+        if (!v) e.password = t('auth.register.errors.enter_password');
+        else if (v.length < 6) e.password = t('auth.register.errors.password_too_short');
+      } else if (field === 'email') {
+        if (!v.trim()) e.email = t('auth.register.errors.enter_email');
+      } else if (field === 'confirm') {
+        if (!v) e.confirm = t('auth.register.errors.enter_confirm');
+        else if (v !== password) e.confirm = t('auth.register.errors.passwords_mismatch');
+      } else if (field === 'referralCode') {
+        if (v && v.length !== 6) e.referralCode = t('auth.register.errors.referral_length');
+      }
+      setErrors((p) => ({ ...p, ...e }));
+    },
+    [password, t],
+  );
+
   const onChangeEmail = useCallback((v: string) => {
     setEmail(v);
-    setErrors((p) => (p.email ? { ...p, email: undefined } : p));
-  }, []);
+    validateField('email', v);
+  }, [validateField]);
   const onChangePassword = useCallback((v: string) => {
     setPassword(v);
-    setErrors((p) => (p.password ? { ...p, password: undefined } : p));
-  }, []);
+    validateField('password', v);
+  }, [validateField]);
   const onChangeConfirm = useCallback((v: string) => {
     setConfirm(v);
-    setErrors((p) => (p.confirm ? { ...p, confirm: undefined } : p));
-  }, []);
+    validateField('confirm', v);
+  }, [validateField]);
   const onChangeReferralCode = useCallback((v: string) => {
-    setReferralCode(v.toUpperCase());
-    setErrors((p) => (p.referralCode ? { ...p, referralCode: undefined } : p));
-  }, []);
+    const upper = v.toUpperCase();
+    setReferralCode(upper);
+    validateField('referralCode', upper);
+  }, [validateField]);
 
   const validate = useCallback((): FieldErrors => {
     const e: FieldErrors = {};
     if (!email.trim()) e.email = t('auth.register.errors.enter_email');
     if (!password) e.password = t('auth.register.errors.enter_password');
-    else if (password.length < 8) e.password = t('auth.register.errors.password_too_short');
+    else if (password.length < 6) e.password = t('auth.register.errors.password_too_short');
     if (!confirm) e.confirm = t('auth.register.errors.enter_confirm');
     else if (confirm !== password) e.confirm = t('auth.register.errors.passwords_mismatch');
     if (referralCode && referralCode.length !== 6) {
@@ -161,33 +187,16 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
       if (!res.ok) {
         const status = res.status;
         let detail = '';
-        let rawText = '';
         try {
-          // Capture the raw body too so we can surface gateway errors
-          // (HTML 5xx pages, plain-text 4xx, etc.) that don't parse as JSON.
-          rawText = await res.text();
-          if (rawText) {
-            try {
-              const data = JSON.parse(rawText);
-              detail = typeof data?.detail === 'string' ? data.detail : '';
-            } catch {
-              detail = rawText.slice(0, 200);
-            }
-          }
+          const data = await res.json();
+          detail = typeof data?.detail === 'string' ? data.detail : '';
         } catch {
-          /* body not readable */
-        }
-        // Surface the actual failure clearly so we can debug from logs.
-        if (__DEV__) {
-          console.warn(`[register] failed: status=${status} detail=${detail}`);
+          /* non-JSON response */
         }
         if (status === 409) {
           setFormError(t('auth.register.errors.account_exists'));
-        } else if (status === 400 && detail.toLowerCase().includes('referral')) {
+        } else if (status === 400 && detail.includes('referral')) {
           setErrors({ referralCode: t('auth.register.errors.invalid_referral') });
-        } else if (status === 400 && detail.toLowerCase().includes('already exists')) {
-          // Backend returns 400 on duplicate (not 409) — surface as account-exists.
-          setFormError(t('auth.register.errors.account_exists'));
         } else {
           setFormError(detail || t('auth.register.errors.create_failed'));
         }
@@ -215,10 +224,7 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
           }),
         1000,
       );
-    } catch (err) {
-      if (__DEV__) {
-        console.warn('[register] caught error:', err);
-      }
+    } catch {
       setFormError(t('auth.register.errors.connection_error'));
       setErrorTrigger(true);
       setTimeout(() => setErrorTrigger(false), 600);

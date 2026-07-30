@@ -18,7 +18,7 @@ def _validate_password_strength(v: str) -> str:
 class UserRegister(BaseModel):
     email: EmailStr | None = None
     phone: str | None = None
-    password: str = Field(min_length=10)
+    password: str = Field(min_length=6)
     referral_code: str | None = Field(default=None, max_length=12, description="6-char referral code from inviter")
 
     @field_validator("password")
