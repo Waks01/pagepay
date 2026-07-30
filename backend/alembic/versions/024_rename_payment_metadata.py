@@ -22,8 +22,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Rename metadata column to payment_metadata
-    if _column_exists("payments", "metadata"):
+    # Idempotent in two cases:
+    #   - Fresh DB: model declares `payment_metadata` directly, no rename
+    #     needed.
+    #   - Legacy DB: had `metadata`, never been renamed.
+    if _column_exists("payments", "metadata") and not _column_exists("payments", "payment_metadata"):
         op.alter_column('payments', 'metadata', new_column_name='payment_metadata')
 
 

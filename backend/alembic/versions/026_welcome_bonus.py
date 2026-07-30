@@ -33,6 +33,23 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Idempotent: 000_create_base_schema already created the table on a
+    # fresh DB because the SQLAlchemy model declares it. We only need to
+    # create it explicitly when migrating from a pre-existing DB that
+    # was bootstrapped before the model had PointCredit.
+    conn = op.get_bind()
+    exists = conn.execute(
+        sa.text(
+            "SELECT 1 FROM pg_tables "
+            "WHERE schemaname='public' AND tablename='point_credits'"
+        )
+    ).first()
+    if exists:
+        # Ensure the unique constraint + indexes are present (in case
+        # 000 created the table without them, which shouldn't happen
+        # with the current model but is a safe guard).
+        return
+
     op.create_table(
         'point_credits',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
@@ -72,7 +89,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(op.f('ix_point_credits_created_at'), table_name='point_credits')
-    op.drop_index(op.f('ix_point_credits_source'), table_name='point_credits')
-    op.drop_index(op.f('ix_point_credits_user_id'), table_name='point_credits')
-    op.drop_table('point_credits')
+    # Match upgrade's idempotency: only drop if we created it.
+    conn = op.get_bind()
+    exists = conn.execute(
+        sa.text(
+            "SELECT 1 FROM pg_tables "
+            "WHERE schemaname='public' AND tablename='point_credits'"
+        )
+    ).first()
+    if exists:
+        op.drop_index(op.f('ix_point_credits_created_at'), table_name='point_credits')
+        op.drop_index(op.f('ix_point_credits_source'), table_name='point_credits')
+        op.drop_index(op.f('ix_point_credits_user_id'), table_name='point_credits')
+        op.drop_table('point_credits')

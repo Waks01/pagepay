@@ -23,7 +23,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    if not _column_exists("payments", "metadata"):
+    # Idempotent: only add `metadata` if neither `metadata` nor its
+    # eventual rename target `payment_metadata` exist. 024 handles the
+    # rename, but on a fresh DB the model already declares
+    # `payment_metadata`, so 023 must skip entirely (rather than add a
+    # `metadata` column that 024 will then fail to rename).
+    if not _column_exists("payments", "metadata") and not _column_exists("payments", "payment_metadata"):
         op.add_column('payments', sa.Column('metadata', sa.JSON(), nullable=True))
 
 

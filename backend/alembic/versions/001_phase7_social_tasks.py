@@ -13,7 +13,7 @@ from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision: str = '001_phase7_social_tasks'
-down_revision: Union[str, None] = None
+down_revision: Union[str, None] = '000_create_base_schema'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -120,7 +120,7 @@ def upgrade() -> None:
             sa.Column('expires_at', sa.DateTime(), nullable=False),
             sa.Column('time_limit_minutes', sa.Integer(), nullable=True),
             sa.Column('ai_verification_enabled', sa.Boolean(), nullable=False, server_default='1'),
-            sa.Column('ai_auto_approve_threshold', sa.BigInteger(), nullable=False, server_default='0.9'),
+            sa.Column('ai_auto_approve_threshold', sa.Numeric(4, 3), nullable=False, server_default='0.9'),
             sa.Column('manual_review_required', sa.Boolean(), nullable=False, server_default='0'),
             sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
             sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
@@ -208,12 +208,12 @@ def upgrade() -> None:
             sa.Column('avg_completion_time_seconds', sa.Integer(), nullable=False, server_default='0'),
             sa.Column('fastest_completion_seconds', sa.Integer(), nullable=True),
             sa.Column('total_earnings', sa.BigInteger(), nullable=False, server_default='0'),
-            sa.Column('quality_score', sa.BigInteger(), nullable=False, server_default='5.0'),
+            sa.Column('quality_score', sa.Numeric(3, 2), nullable=False, server_default='5.0'),
             sa.Column('badges', sa.Text(), nullable=True),
             sa.Column('current_streak_days', sa.Integer(), nullable=False, server_default='0'),
             sa.Column('longest_streak_days', sa.Integer(), nullable=False, server_default='0'),
             sa.Column('last_task_date', sa.DateTime(), nullable=True),
-            sa.Column('sponsor_rating', sa.BigInteger(), nullable=False, server_default='5.0'),
+            sa.Column('sponsor_rating', sa.Numeric(3, 2), nullable=False, server_default='5.0'),
             sa.Column('sponsor_rating_count', sa.Integer(), nullable=False, server_default='0'),
             sa.Column('tasks_posted', sa.Integer(), nullable=False, server_default='0'),
             sa.Column('tasks_completed_as_sponsor', sa.Integer(), nullable=False, server_default='0'),
@@ -221,7 +221,7 @@ def upgrade() -> None:
             sa.Column('submissions_reviewed', sa.Integer(), nullable=False, server_default='0'),
             sa.Column('submissions_approved', sa.Integer(), nullable=False, server_default='0'),
             sa.Column('submissions_rejected', sa.Integer(), nullable=False, server_default='0'),
-            sa.Column('sponsor_approval_rate', sa.BigInteger(), nullable=False, server_default='100.0'),
+            sa.Column('sponsor_approval_rate', sa.Numeric(5, 2), nullable=False, server_default='100.0'),
             sa.Column('avg_review_time_seconds', sa.Integer(), nullable=False, server_default='0'),
             sa.Column('trusted_sponsor', sa.Boolean(), nullable=False, server_default='0'),
             sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
