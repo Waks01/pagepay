@@ -325,28 +325,67 @@ async def send_referral_bonus(db: AsyncSession, user_id: int, friend_name: str, 
     )
 
 
-async def send_wallet_update(db: AsyncSession, user_id: int, amount: int, transaction_type: str):
-    """Send wallet credit/debit notification."""
+async def send_wallet_update(
+    db: AsyncSession,
+    user_id: int,
+    amount_naira: float,
+    transaction_type: str = "credit",
+    reason: str = "wallet",
+):
+    """Send wallet credit/debit notification.
+
+    `amount_naira` is the human-readable ₦ amount (already converted
+    from points via settings.points_per_naira). `reason` is a short
+    free-text tag (e.g. "slice_bonus", "ad_reward", "refund") appended
+    to the body so the user knows why the credit/debit fired:
+        "You received ₦0.20 for slice_bonus"
+    """
     emoji = "💰" if transaction_type == "credit" else "💸"
     action = "received" if transaction_type == "credit" else "spent"
-    
+    body = f"You {action} ₦{amount_naira:.2f} for {reason}"
+
     await send_push_notification(
         db=db,
         user_id=user_id,
         title=f"{emoji} Wallet Update",
-        body=f"You {action} ₦{amount}",
-        data={"type": "wallet_update", "amount": str(amount), "transaction_type": transaction_type},
+        body=body,
+        data={
+            "type": "wallet_update",
+            "amount": str(amount_naira),
+            "transaction_type": transaction_type,
+            "reason": reason,
+        },
         category="wallet_updates",
     )
 
 
-async def send_ad_reward(db: AsyncSession, user_id: int, points_earned: int):
-    """Send ad watch reward notification."""
+async def send_ad_reward(
+    db: AsyncSession,
+    user_id: int,
+    points_earned: int,
+    ad_unit: str | None = None,
+):
+    """Send ad watch reward notification.
+
+    `ad_unit` is the AdMob ad-unit id (e.g. 'ca-app-pub-xxx/banner').
+    Included in the data payload for analytics; not echoed in the body
+    because ad-unit ids are not user-readable.
+    """
+    naira = points_earned / max(1, settings.points_per_naira)
+    body = (
+        f"You earned {points_earned:,} points (₦{naira:.2f}) "
+        "for watching an ad!"
+    )
+
     await send_push_notification(
         db=db,
         user_id=user_id,
         title="📺 Ad Reward Earned!",
-        body=f"You earned {points_earned} points for watching an ad!",
-        data={"type": "ad_reward", "points": str(points_earned)},
+        body=body,
+        data={
+            "type": "ad_reward",
+            "points": str(points_earned),
+            "ad_unit": ad_unit or "",
+        },
         category="ad_rewards",
     )
