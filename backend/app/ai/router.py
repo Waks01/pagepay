@@ -9,6 +9,11 @@ Single entry point for all AI calls. Priority logic:
 On provider failure the circuit breaker marks it and the router
 falls through to the next candidate. If every candidate is exhausted
 the endpoint returns 503.
+
+Provider order is hardcoded (you don't want ops reshuffling the
+fallback chain accidentally). Per-provider model IDs, however, read
+from `settings.*_default_model` so a model upgrade on the provider's
+side is one env-var change, not a code change.
 """
 
 from fastapi import HTTPException
@@ -17,24 +22,25 @@ from app.ai.circuit_breaker import get_circuit_open, mark_failed, mark_success
 from app.ai.providers.gemini import call_gemini
 from app.ai.providers.groq import call_groq
 from app.ai.providers.openrouter import call_openrouter
+from app.config import settings
 
 # Ordered provider registry. Order = fallback priority.
 PROVIDERS = [
     {
         "name": "gemini",
-        "model": "gemini-2.5-flash",
+        "model": settings.gemini_default_model,
         "try": call_gemini,
         "task_types": {"heavy", "chat", "fast"},
     },
     {
         "name": "groq",
-        "model": "llama-3.3-70b-versatile",
+        "model": settings.groq_default_model,
         "try": call_groq,
         "task_types": {"fast", "chat"},
     },
     {
         "name": "openrouter",
-        "model": "deepseek/deepseek-chat:free",
+        "model": settings.openrouter_default_model,
         "try": call_openrouter,
         "task_types": {"heavy", "fast", "chat"},
     },
@@ -44,7 +50,7 @@ PROVIDERS = [
 async def route_ai(
     prompt: str,
     task_type: str = "fast",
-    max_tokens: int = 4000,
+    max_tokens: int = settings.ai_default_max_tokens,
     db=None,
 ) -> dict:
     """Route an AI prompt to the best available provider.

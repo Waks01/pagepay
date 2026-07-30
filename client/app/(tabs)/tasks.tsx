@@ -10,6 +10,7 @@ import { fetchTasks, type Task } from '@/src/features/tasks/api';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
 import { SkeletonPage } from '@/components/skeletons';
+import { koboToPoints, koboToNairaString } from '@/src/shared/lib/money';
 
 export default function TasksScreen() {
   const [refreshing, setRefreshing] = useState(false);
@@ -70,9 +71,19 @@ export default function TasksScreen() {
   };
 
   const renderTask = ({ item }: { item: Task }) => {
-    const netReward = Math.floor(item.reward_amount * (item.reward_multiplier ?? 1) * 0.85);
+    const netRewardKobo = Math.floor(item.reward_amount * (item.reward_multiplier ?? 1) * 0.85);
     const remaining = item.max_completions - item.completed_count;
     const taskTypeKey = item.task_type as keyof typeof t extends `tasks.task_types.${infer K}` ? K : string;
+    // Worker display follows the JumpTask pattern: primary unit is the
+    // in-app points balance (which the user sees everywhere else in
+    // the app), with the actual naira equivalent shown alongside so
+    // they understand the real-world value.
+    //
+    // Both conversions read from the same env rate via money.ts, so a
+    // revaluation only needs updating POINTS_PER_NAIRA in
+    // backend/.env AND EXPO_PUBLIC_POINTS_PER_NAIRA in client/.env.
+    const points = koboToPoints(netRewardKobo);
+    const naira = koboToNairaString(netRewardKobo);
 
     return (
       <TouchableOpacity
@@ -86,8 +97,11 @@ export default function TasksScreen() {
             </Text>
           </View>
           <View style={[styles.rewardBadge, { backgroundColor: tokens.mintSoft }]}>
-            <Text style={[styles.rewardText, { color: tokens.mint }]}>
-              ₦{(netReward / 100).toFixed(2)}
+            <Text style={[styles.rewardPointsText, { color: tokens.mint }]}>
+              +{points.toLocaleString()} {t('tasks.points_unit')}
+            </Text>
+            <Text style={[styles.rewardNairaText, { color: tokens.mint }]}>
+              ≈ {naira}
             </Text>
           </View>
         </View>
@@ -278,6 +292,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
+    alignItems: 'flex-end',
+  },
+  rewardPointsText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    fontFamily: 'SpaceGrotesk_700Bold',
+  },
+  rewardNairaText: {
+    fontSize: 11,
+    opacity: 0.8,
+    marginTop: 1,
   },
   rewardText: {
     fontSize: 14,

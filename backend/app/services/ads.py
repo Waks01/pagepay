@@ -41,9 +41,12 @@ logger = logging.getLogger("uvicorn.error")
 PLATFORM_SHARE = settings.platform_ad_revenue_percent
 USER_SHARE = 1.0 - PLATFORM_SHARE
 
-# 10 points = ₦1 (NGN). All point math goes through this constant so
-# the conversion rate lives in exactly one place.
-POINTS_PER_NAIRA = 10
+# 10 points = ₦1 (NGN) by default. All point math goes through this
+# constant so the conversion rate lives in exactly one place —
+# `settings.points_per_naira`, env var `POINTS_PER_NAIRA`. Bumping
+# the env value updates every consumer (this file, routers/ads.py,
+# routers/admin_ads.py, routers/bills.py) in lockstep.
+POINTS_PER_NAIRA = settings.points_per_naira
 
 # Google's documented test unit IDs. The /api/v1/config/ads endpoint
 # returns these when `env=dev` so dev builds never burn real

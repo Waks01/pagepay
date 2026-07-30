@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionLocal
 from app.models import TaskSubmission, Task, User, UserReputation, SponsorWalletTransaction
 from app.services.ai_verification import verification_service
+from app.services.money import kobo_to_points
+from app.config import settings
 
 logger = logging.getLogger("uvicorn")
 
@@ -163,15 +165,20 @@ class TaskProcessor:
         worker = result.scalar_one_or_none()
         
         if worker:
-            # Calculate net reward (after platform fee)
-            net_reward = int(task.reward_amount * task.reward_multiplier * (100 - task.platform_fee_percent) / 100)
-            
-            worker.points_balance += net_reward
-            submission.reward_paid = net_reward
+            # Calculate net reward (after platform fee). Stored in kobo
+            # because task.reward_amount is kobo (100 kobo = ₦1).
+            net_reward_kobo = int(task.reward_amount * task.reward_multiplier * (100 - task.platform_fee_percent) / 100)
+            net_reward_points = kobo_to_points(net_reward_kobo)
+
+            worker.points_balance += net_reward_points
+            # submission.reward_paid is in kobo (matches the source-of-truth
+            # money column on TaskSubmission); the points display layer
+            # converts via the same helper.
+            submission.reward_paid = net_reward_kobo
             submission.payment_status = "paid"
             submission.paid_at = datetime.utcnow()
-            
-            logger.info(f"Credited {net_reward} points to user {worker.id}")
+
+            logger.info(f"Credited {net_reward_points} points (₦{net_reward_kobo / 100:.2f}) to user {worker.id}")
         
         # Update worker reputation
         stmt = select(UserReputation).where(UserReputation.user_id == submission.worker_id)
@@ -191,18 +198,24 @@ class TaskProcessor:
         if reputation.tasks_completed > 0:
             reputation.approval_rate = reputation.tasks_approved / reputation.tasks_completed
         
-        # Award XP (10 XP per task + bonus for quality)
-        xp_earned = 10
-        if submission.ai_confidence >= 0.95:
-            xp_earned += 5  # Bonus for high quality
-        
+        # Award XP — base + high-quality bonus. Both pulled from settings
+        # so ops can retune the rewards curve without a deploy.
+        xp_earned = settings.task_xp_base
+        if submission.ai_confidence >= settings.ai_high_quality_confidence_floor:
+            xp_earned += settings.task_xp_high_quality_bonus
+
         reputation.worker_xp += xp_earned
-        
-        # Check for level up
+
+        # Check for level up. The XP-to-next-level ramps by
+        # `settings.task_xp_level_multiplier` (default 1.5) so each
+        # level requires 50% more XP than the previous one — classic
+        # RPG curve without becoming a grind.
         while reputation.worker_xp >= reputation.worker_xp_to_next_level:
             reputation.worker_level += 1
             reputation.worker_xp -= reputation.worker_xp_to_next_level
-            reputation.worker_xp_to_next_level = int(reputation.worker_xp_to_next_level * 1.5)
+            reputation.worker_xp_to_next_level = int(
+                reputation.worker_xp_to_next_level * settings.task_xp_level_multiplier
+            )
             logger.info(f"User {submission.worker_id} leveled up to {reputation.worker_level}")
         
         # Update streak

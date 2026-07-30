@@ -23,8 +23,14 @@ from app.limiter import limiter
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger("uvicorn.error")
 
-MAX_FAILED_ATTEMPTS = 5
-LOCKOUT_MINUTES = 15
+# Lockout policy reads from settings so ops can tune the lockout
+# duration and attempt cap without a deploy. Both are documented in
+# config.py (env: AUTH_MAX_FAILED_ATTEMPTS, AUTH_LOCKOUT_MINUTES).
+# We DO NOT cache them as module-level constants — settings is the
+# canonical source and any test that monkeypatches it would otherwise
+# see stale values.
+MAX_FAILED_ATTEMPTS = settings.auth_max_failed_attempts
+LOCKOUT_MINUTES = settings.auth_lockout_minutes
 
 
 def _get_jti_from_request(request: Request) -> str | None:
@@ -158,7 +164,10 @@ async def me(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("5/15minutes")
+# Rate-limit window lives in settings (env AUTH_LOGIN_RATE_LIMIT). The
+# slowapi DSL "N/<window>" is parsed at request time, so the string
+# itself is read fresh each call — no caching concerns.
+@limiter.limit(settings.auth_login_rate_limit)
 async def login(
     request: Request,
     form: OAuth2PasswordRequestForm = Depends(),

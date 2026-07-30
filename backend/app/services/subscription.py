@@ -6,41 +6,39 @@ Helpers for checking premium status, calculating benefits, and managing subscrip
 from datetime import datetime, timedelta
 from typing import Optional
 
+from app.config import settings
 from app.models import User, UserTier
 
 
 def is_premium(user: User) -> bool:
     """Check if user has an active premium subscription.
-    
+
     Args:
         user: User model instance
-        
+
     Returns:
         True if user has active premium subscription, False otherwise
     """
     if user.tier == UserTier.FREE:
         return False
-    
+
     if user.subscription_expires_at is None:
         return False
-    
+
     # Check if subscription is still valid
     return user.subscription_expires_at > datetime.utcnow()
 
 
 def get_points_multiplier(user: User) -> float:
     """Get the points earning multiplier for a user.
-    
-    Premium users earn 2x points.
-    Free users earn 1x points.
-    
-    Args:
-        user: User model instance
-        
-    Returns:
-        Multiplier value (1.0 for free, 2.0 for premium)
+
+    Reads `settings.premium_points_multiplier` so ops can tune the
+    premium benefit without a deploy. The setting's default is 2.0
+    ("earn double on every credit"); override via env
+    `PREMIUM_POINTS_MULTIPLIER`. Free users always get 1.0 — we never
+    make the base rate worse than the published "earn points" pitch.
     """
-    return 2.0 if is_premium(user) else 1.0
+    return settings.premium_points_multiplier if is_premium(user) else 1.0
 
 
 def calculate_subscription_end_date(tier: UserTier, start_date: Optional[datetime] = None) -> datetime:
@@ -66,21 +64,31 @@ def calculate_subscription_end_date(tier: UserTier, start_date: Optional[datetim
 
 def get_tier_price_kobo(tier: UserTier) -> int:
     """Get the price in kobo for a subscription tier.
-    
+
+    Reads from `settings.premium_monthly_price_kobo` and
+    `settings.premium_yearly_price_kobo` so ops can A/B test price
+    points without a deploy. Both are in kobo (₦1 = 100 kobo). The
+    FREE tier has no price — Paystack charges are skipped for free users.
+
     Args:
         tier: The subscription tier
-        
+
     Returns:
         Price in kobo (₦1 = 100 kobo)
+
+    Raises:
+        ValueError: if `tier` is FREE — PREVENTED, you can't price a
+            free tier, callers should branch on `tier == UserTier.FREE`
+            before charging.
     """
     prices = {
-        UserTier.PREMIUM_MONTHLY: 50_000,  # ₦500
-        UserTier.PREMIUM_YEARLY: 500_000,  # ₦5,000
+        UserTier.PREMIUM_MONTHLY: settings.premium_monthly_price_kobo,
+        UserTier.PREMIUM_YEARLY: settings.premium_yearly_price_kobo,
     }
-    
+
     if tier not in prices:
         raise ValueError(f"No price defined for tier: {tier}")
-    
+
     return prices[tier]
 
 

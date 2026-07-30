@@ -172,7 +172,8 @@
     "remaining": "{{count}} ló kù",
     "expires": "Yoo pari",
     "empty_title": "Ko si iṣẹ ti o wa",
-    "empty_subtitle": "Pada wa nigbamii fun awọn aye tuntun"
+    "empty_subtitle": "Pada wa nigbamii fun awọn aye tuntun",
+    "points_unit": "pts"
   },
   "study": {
     "title": "Ẹ̀kọ́",
@@ -749,6 +750,7 @@
   "task_detail": {
     "title": "Awọn Alaye Iṣẹ",
     "you_earn": "O Yoo Gba",
+    "points_unit": "pts",
     "after_fee": "Lẹhin {{percent}}% owo syeed",
     "description_title": "Apejuwe",
     "instructions_title": "Awọn Ilana",
@@ -825,6 +827,7 @@
   },
   "task_history": {
     "title": "Itan Ifisilẹ",
+    "points_unit": "pts",
     "filter_all": "Gbogbo",
     "filter_pending": "Ti Nduro",
     "filter_validating": "N Ṣayẹwo",

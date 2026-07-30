@@ -37,6 +37,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, update
+from app.config import settings
 from app.models import ContentCatalog
 
 # Slice size. Each slice is **3,000 characters** and is labeled as a
@@ -45,16 +46,21 @@ from app.models import ContentCatalog
 # reward gate fires at slice end, and the catalog UI uses the same label.
 # Do not change either without revisiting the reader state machine and
 # the per-slice point formula.
-TARGET_CHARS_PER_SLICE = 3_000
+#
+# All three knobs read from settings (SLICE_TARGET_CHARS,
+# SLICE_MAX_CHARS, SLICE_NO_SLICE_THRESHOLD_CHARS) so ops can retune
+# slice granularity without a deploy. MAX defaults to TARGET × 1.30 to
+# bound slice length while letting the boundary-snap have room to breathe.
+TARGET_CHARS_PER_SLICE = settings.slice_target_chars
 
 # Below this length, we don't split at all — a short body is already one
 # 1-minute slice. Imports with body_text under this threshold become a
 # single slice.
-NO_SLICE_THRESHOLD_CHARS = 3_600
+NO_SLICE_THRESHOLD_CHARS = settings.slice_no_slice_threshold_chars
 
 # Tolerance: a slice can be up to 30% over target before we cut, to avoid
 # leaving tiny trailing slices when no boundary falls near the target.
-MAX_CHARS_PER_SLICE = int(TARGET_CHARS_PER_SLICE * 1.30)
+MAX_CHARS_PER_SLICE = settings.slice_max_chars
 
 # Hard cap. Protects the TEXT column from unbounded growth. If a
 # paragraph is longer than this, we hard-cut inside it because boundary

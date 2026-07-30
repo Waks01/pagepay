@@ -32,6 +32,19 @@ class Settings(BaseSettings):
     # surfaced in our backend logs when an operator needs to verify
     # which environment (test vs live) is configured.
     paystack_public_key: str | None = None
+    # Base URL for the Paystack API. Default is production
+    # (https://api.paystack.co). Set to the test-sandbox endpoint
+    # (`https://api.paystack.co` is fine for both — Paystack switches
+    # based on the secret key prefix, but we keep this knob in case
+    # we ever proxy through a region-local endpoint).
+    paystack_base_url: str = "https://api.paystack.co"
+    # HTTP timeout for outbound Paystack calls. 10s matches Paystack's
+    # SLA per their docs. Override lower (e.g. 5) in dev to surface
+    # slow-API issues faster.
+    paystack_http_timeout_seconds: float = 10.0
+    # Cache TTL for the GET /bank list — Nigerian banks change rarely,
+    # so a 1h cache dodges the per-call overhead in the bank picker.
+    paystack_banks_cache_ttl_seconds: int = 3600
     # Base URL we expose to Paystack's dashboard (return URLs after a
     # checkout session; the webhook URL). Defaults to localhost so
     # `paystack-cli listen-forward` works out of the box. In production
@@ -142,7 +155,7 @@ class Settings(BaseSettings):
     # Peyflex is the primary VTU provider (airtime, data, electricity, TV).
     # API key from peyflex.com.ng dashboard — never commit the real value.
     peyflex_api_key: str | None = None
-    peyflex_base_url: str = "https://portal.peyflex.com.ng/api/v1"
+    peyflex_base_url: str = "https://client.peyflex.com.ng/api"
 
     # Commission split: portion of the aggregator's commission that goes
     # back to the user as points (the rest funds the platform).
@@ -162,6 +175,265 @@ class Settings(BaseSettings):
     # cron container and any operator script must send the same value.
     # In dev it's the default below; production must override via env.
     admin_token: str = "dev-admin-token"
+
+    # ── Auth: failed-login lockout + rate limit ──────────────────────
+    # Account lockout policy. After `auth_max_failed_attempts` bad
+    # passwords the account is locked for `auth_lockout_minutes`
+    # minutes. Both are deliberately generous — a real user
+    # mistyping should reset by the next session, but a brute-force
+    # attacker with the right username is capped at 5 tries per lockout.
+    # Override via env `AUTH_MAX_FAILED_ATTEMPTS` / `AUTH_LOCKOUT_MINUTES`.
+    auth_max_failed_attempts: int = 5
+    auth_lockout_minutes: int = 15
+
+    # slowapi rate-limit DSL applied to POST /auth/login. The string
+    # "<count>/<window>" is parsed by slowapi at request time:
+    #   "5/15minutes" → max 5 calls per 15-minute window per key
+    #   (key = user-id if authenticated, else client IP)
+    # Override via env `AUTH_LOGIN_RATE_LIMIT` if you want to relax
+    # this in dev (e.g. "100/minute") without touching code.
+    auth_login_rate_limit: str = "5/15minutes"
+
+    # ── Referral program ─────────────────────────────────────────────
+    # Points credited to the referrer when their referee completes the
+    # first verified reading session. 500 pts = ₦50 at the default
+    # 10 pts/₦1 rate. Override via env `REFERRAL_REFERRER_REWARD`.
+    referral_referrer_reward: int = 500
+    # Points credited to the referee when they complete signup using a
+    # valid referral code (well — credited when they finish their first
+    # session, not on signup itself). 200 pts = ₦20.
+    referral_referee_reward: int = 200
+    # Hard cap on how many referral rewards a single user can claim
+    # in one calendar day. Bounds the cost of the program against a
+    # single user farming themselves across many device-emulated
+    # signups. Fraud detection still runs on top of this — daily cap
+    # is the cheap first line of defense.
+    referral_daily_cap: int = 10
+    # Public base URL used to build share links of the form
+    # "<base>/<code>". The client opens these as deep links into the
+    # Expo app, where the route handler reads the code from the path.
+    # In dev override with a tunnel URL (e.g. ngrok) so phones off-WiFi
+    # can resolve the link.
+    referral_app_base_url: str = "https://pagepay.app/ref"
+
+    # ── FX rate lookup ──────────────────────────────────────────────
+    # We hit `open.er-api.com` (free, no key) for live USD→NGN. The
+    # URL is overrideable so tests / staging can point at a mock
+    # server without patching code. Override via env `FX_URL`.
+    fx_url: str = "https://open.er-api.com/v6/latest/USD"
+    # In-process cache TTL. 60s balances "don't hammer upstream" vs
+    # "don't lose money to stale rates during NGN volatility".
+    fx_cache_ttl_seconds: int = 60
+    fx_http_timeout_seconds: float = 5.0
+
+    # ── AI provider base URLs + default models ───────────────────────
+    # Gemini, OpenRouter, and Groq all expose stable HTTP APIs and
+    # ship model versions over time. The base URL is stable; the
+    # default model is overridden by the PROVIDERS list in
+    # app/ai/router.py per-task-type, but we keep the per-provider
+    # default here too so the router code can fall back when the
+    # caller doesn't pin a model.
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    gemini_default_model: str = "gemini-2.5-flash"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_default_model: str = "deepseek/deepseek-chat:free"
+    openrouter_http_referer: str = "https://pagepay.ng"
+    openrouter_app_title: str = "PagePay Study"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_default_model: str = "llama-3.3-70b-versatile"
+
+    # ── AI provider circuit breaker ──────────────────────────────────
+
+    # ── Nitter mirrors (Twitter follow verification fallback) ───────
+    # The Twitter API is paid and rate-limited; Nitter is an open
+    # frontend that anyone can self-host. We try the public mirrors
+    # in order until one returns "is_following=true". Uptime is
+    # volatile so we list multiple. Stored as a comma-separated string
+    # so the env override is straightforward (`NITTER_INSTANCES=
+    # https://nitter.net,https://nitter.poast.org`). The router
+    # reads it via `settings.nitter_instances_list` which splits and
+    # strips. Default below is the three public mirrors we test
+    # against in CI; swap freely in dev/staging.
+    nitter_instances: str = (
+        "https://nitter.net,"
+        "https://nitter.space,"
+        "https://lightbrd.com,"
+        "https://nitter.catsarch.com"
+    )
+
+    @property
+    def nitter_instances_list(self) -> list[str]:
+        """Nitter mirrors as a list of trimmed, non-empty URLs.
+
+        Order = priority. Caller iterates and stops at the first
+        mirror that answers. We never reorder at runtime — the
+        env-supplied order is the contract.
+        """
+        return [u.strip() for u in self.nitter_instances.split(",") if u.strip()]
+
+    # ── Hive blockchain blog sync ───────────────────────────────────
+    # Hive's official JSON-RPC endpoint for fetching posts. Phase 5
+    # adds the cron job that pulls community blogs into our catalog.
+    hive_api_url: str = "https://api.hive.blog"
+    # Base URL used to build the canonical post URL we store in
+    # content_catalog.source_url. Override via env `HIVE_BASE_URL`.
+    hive_post_base_url: str = "https://hive.blog"
+    # After this many consecutive failures from a single provider the
+    # circuit opens for `ai_circuit_open_seconds` seconds and the
+    # router skips that provider. Survives process restarts (state is
+    # in `ai_provider_health`). 3 failures / 5 min is the default —
+    # loose enough to ride out a single bad batch, tight enough to
+    # avoid burning 30s/model timeouts on a dead provider.
+    ai_circuit_breaker_threshold: int = 3
+    ai_circuit_open_seconds: int = 300
+
+    # Default `max_tokens` for `ai.router.route_ai` when the caller
+    # doesn't pin a value. 4000 tokens ≈ 3000 words ≈ ~10 pages of
+    # plain prose — enough for any MCQ/flashcard/essay generator.
+    # Override via env `AI_DEFAULT_MAX_TOKENS`.
+    ai_default_max_tokens: int = 4000
+
+    # Minimum effective reading duration (seconds) before a session is
+    # considered "verified" and eligible for the slice bonus. The
+    # session state machine sets `verified=True` only after the user
+    # has both scrolled AND read for at least this many seconds.
+    # 30s is intentionally shorter than the 60s post-read modal
+    # threshold so the bonus settles even when a user skips the
+    # post-read ad (the whole point of the bonus).
+    session_verified_min_seconds: int = 30
+
+    # ── AI verification confidence thresholds ─────────────────────────
+    # Platform-wide gates for "is this submission verified by AI". The
+    # same value is used across all social/URL/screenshot verifiers
+    # (Instagram, TikTok, YouTube, Twitter, etc.) so the user-facing
+    # trust floor is consistent.
+    #
+    # Notes on values:
+    #   - 0.7 (= "the verifier is at least 70% sure") is the floor
+    #     for a verified=true return from social channels.
+    #   - 0.95 is the "high quality" gate in task_processor that grants
+    #     a bonus 5 XP on top of the base 10 XP.
+    ai_verification_confidence_floor: float = 0.7
+    ai_high_quality_confidence_floor: float = 0.95
+
+    # ── Task reputation / XP ─────────────────────────────────────────
+    # Base XP awarded per *approved* task submission, plus the bonus
+    # when the AI reports "high quality" (≥ ai_high_quality_confidence_floor).
+    # Override via env `TASK_XP_BASE` / `TASK_XP_HIGH_QUALITY_BONUS`.
+    task_xp_base: int = 10
+    task_xp_high_quality_bonus: int = 5
+    # XP curve steepness: each level-up multiplies the XP-to-next-level
+    # by this factor. 1.5 = 50% more XP per level (classic RPG curve).
+    task_xp_level_multiplier: float = 1.5
+
+    # ── Study unlock costs ───────────────────────────────────────────
+    # Points the user must spend to unlock a study asset. Videos cost
+    # more because they require AI generation (expensive) and the
+    # user gets longer-form content. Asset rows default to these
+    # values when the row is created; the per-row `points_to_unlock`
+    # column overrides per-asset if needed (i.e. for premium content).
+    study_unlock_points_cost: int = 50
+    study_video_unlock_points_cost: int = 200
+
+    # ── Database connection pool ─────────────────────────────────────
+    # Async engine pool tuning. Production runs behind uvicorn workers
+    # so the total open connections is roughly
+    # (workers × (pool_size + max_overflow)). The defaults
+    # (20+10=30 per worker, pool_recycle 1800s = 30 min) match
+    # asyncpg's recommended idle-window to dodge stale-connection
+    # errors on managed Postgres (RDS, Supabase, Neon).
+    db_pool_size: int = 20
+    db_max_overflow: int = 10
+    db_pool_recycle_seconds: int = 1800
+
+    # ── HTTP request body cap ────────────────────────────────────────
+    # The RequestSizeLimitMiddleware rejects anything bigger than these
+    # to keep a single client from DoS'ing the process. JSON/API
+    # payloads default to 1 MB; multipart (file uploads) get 10 MB
+    # because the SOW upload is a multipart POST of an image + PDF.
+    # Override via env `MAX_JSON_BODY_BYTES` / `MAX_MULTIPART_BODY_BYTES`.
+    max_json_body_bytes: int = 1 * 1024 * 1024         # 1 MB
+    max_multipart_body_bytes: int = 10 * 1024 * 1024   # 10 MB
+
+    # ── Content slicer tuning ────────────────────────────────────────
+    # Casual-reader slicer (slicer.py): target chars per slice, hard
+    # cap, and "don't bother slicing if shorter than this" threshold.
+    # The defaults give a ~1-minute read at ~3,000 chars/min.
+    # Override via env `SLICE_TARGET_CHARS` / `SLICE_MAX_CHARS` /
+    # `SLICE_NO_SLICE_THRESHOLD_CHARS`.
+    slice_target_chars: int = 3_000
+    slice_max_chars: int = 3_900     # = TARGET × 1.30
+    slice_no_slice_threshold_chars: int = 3_600
+
+    # Topic-aware slicer (topic_slicer.py): same idea but for
+    # OpenStax/education content, where we chunk by topic boundary
+    # rather than raw char count. Defaults mirror the casual slicer.
+    topic_slice_target_chars: int = 3_000
+    topic_slice_max_chars: int = 3_600
+    topic_slice_single_unit_threshold: int = 3_000
+
+    # ── TTS (edge-tts) ───────────────────────────────────────────────
+    # Default voice and rate applied to every TTS generation. Voice
+    # can be any edge-tts 6.x voice — see
+    # https://github.com/rany2/edge-tts#voices. Rate is the edge-tts
+    # rate string ("+0%", "+10%", "-25%", etc.). The batch concurrency
+    # bounds parallel TTS calls so we don't get rate-limited by
+    # Microsoft (5 is the sweet spot for free tier).
+    tts_default_voice: str = "en-US-AriaNeural"
+    tts_default_rate: str = "+0%"
+    tts_batch_concurrency: int = 5
+
+    # ── Content fetcher User-Agents ──────────────────────────────────
+    # Both Gutendex and OpenStax require an identifying UA — the
+    # default `python-httpx/x.y` gets 403'd. We default to a
+    # "PagePay/<ver>" UA with the public contact URL. Override via
+    # env `USER_AGENT_GUTENDEX` / `USER_AGENT_OPENSTAX` if you want to
+    # identify a specific deployment (staging, fork, etc.).
+    user_agent_gutendex: str = "PagePay/1.0 (+https://pagepay.app)"
+    user_agent_openstax: str = "PagePay/1.0 (+https://pagepay.app) Education-Ingest"
+
+    # ── Seed: bootstrap admin credentials ─────────────────────────────
+    # Used by `app/seed.py` to create the very first admin row on an
+    # empty DB. Defaults are the dev "admin@pagepay.app / admin123"
+    # pair; in production both MUST be overridden via env. (Don't
+    # ship a real prod seed with the dev defaults — the seed script
+    # is idempotent and won't re-run if any AdminUser already exists,
+    # so a misconfigured prod seed silently leaves you with no admin
+    # login. Always run `python -m app.seed` interactively once with
+    # the right env vars set.)
+    seed_admin_email: str = "admin@pagepay.app"
+    seed_admin_password: str = "admin123"
+
+    # ── Background task processor toggle ─────────────────────────────
+    # When True the FastAPI lifespan starts the Phase 7 background
+    # task processor (`services.task_processor.task_processor.start`).
+    # Set to True ONLY on a single instance — running on every
+    # uvicorn worker makes every submission get processed N times
+    # (the processor is single-flight in DB but the row-locking
+    # contention is real). The standard pattern is one dedicated
+    # worker container with `RUN_TASK_PROCESSOR=true` and the rest
+    # of the API containers with it unset.
+    run_task_processor: bool = False
+
+    # ── Wallet deposit fee (Paystack top-ups) ─────────────────────────
+    # Platform fee charged on every wallet deposit. Computed as
+    # `min(ceil(deposit_kobo × fee_percent), max_fee_kobo)` so the
+    # fee scales with deposit size but is capped — a 1.5% / ₦20 cap
+    # means small top-ups (₦100) pay ₦1.50, large ones (₦10k+) hit
+    # the ₦20 ceiling.
+    #
+    # Both knobs are env-overridable (WALLET_DEPOSIT_FEE_PERCENT,
+    # WALLET_DEPOSIT_MAX_FEE_KOBO) so ops can A/B the fee structure.
+    wallet_deposit_fee_percent: float = 0.015     # 1.5%
+    wallet_deposit_max_fee_kobo: int = 2000       # ₦20
+
+    # Default platform fee percent used when a Sponsor / Task row is
+    # created without an explicit value. Stored on the row (not
+    # resolved per-credit) so the value at task-creation time freezes
+    # the worker reward — changing this default only affects newly
+    # created tasks, never in-flight ones. 30% = platform keeps 30%
+    # of the gross reward, workers split 70%.
+    default_platform_fee_percent: int = 30
 
     # AES-256-GCM encryption key for sensitive data at rest (e.g. NUBAN).
     # Must be a 32-byte (256-bit) base64-encoded key. Generate with:
@@ -241,6 +513,40 @@ class Settings(BaseSettings):
     # Tasks: platform fee added on top of worker reward.
     # 0.30 = platform keeps 30% of total escrow, worker gets 70%.
     platform_task_revenue_percent: float = 0.30
+
+    # ── Points ↔ Naira conversion (single source of truth) ───────────
+    # How many points a worker earns per ₦1 of reward. The mobile
+    # client mirrors this via EXPO_PUBLIC_POINTS_PER_NAIRA so both
+    # sides always agree on the conversion — change one number in
+    # both env files (or just in the backend, if you accept that the
+    # client displays stale values until its next build) and every
+    # task reward / wallet credit / display label updates in lockstep.
+    # Default 10 = "10 points per ₦1" (1 point = ₦0.10). Override via
+    # env `POINTS_PER_NAIRA`.
+    #
+    # Conversion helpers (used by task credit + display logic):
+    #   kobo → points = kobo / 100 * POINTS_PER_NAIRA   (i.e. naira × POINTS_PER_NAIRA)
+    #   points → naira = points / POINTS_PER_NAIRA
+    #   points → kobo  = (points / POINTS_PER_NAIRA) * 100
+    points_per_naira: int = 10
+
+    # ── Premium subscription pricing ──────────────────────────────────
+    # Stored in kobo so we never deal with floats for money. ₦500/month
+    # and ₦5,000/year are the launch prices; ops can A/B test price
+    # points by overriding either env var without a deploy. Paystack
+    # charge amounts are derived from these via services.subscription.
+    #
+    #   premium_monthly_price_kobo: env PREMIUM_MONTHLY_PRICE_KOBO
+    #   premium_yearly_price_kobo:  env PREMIUM_YEARLY_PRICE_KOBO
+    premium_monthly_price_kobo: int = 50_000    # ₦500
+    premium_yearly_price_kobo: int = 500_000    # ₦5,000
+
+    # Points multiplier granted to active premium subscribers. Premium
+    # users earn `premium_points_multiplier` × the base rate on every
+    # activity that runs through `services.subscription.get_points_multiplier`
+    # (reading time, ad rewards, task payouts). 2.0 = "earn double".
+    # Override via env PREMIUM_POINTS_MULTIPLIER.
+    premium_points_multiplier: float = 2.0
 
     @property
     def cors_origins_list(self) -> list[str]:

@@ -208,7 +208,8 @@
     "remaining": "{{count}} left",
     "expires": "Expires",
     "empty_title": "No tasks available",
-    "empty_subtitle": "Check back later for new opportunities"
+    "empty_subtitle": "Check back later for new opportunities",
+    "points_unit": "pts"
   },
   "study": {
     "title": "Study",
@@ -798,6 +799,7 @@
   "task_detail": {
     "title": "Task Details",
     "you_earn": "You'll Earn",
+    "points_unit": "pts",
     "after_fee": "After {{percent}}% platform fee",
     "description_title": "Description",
     "instructions_title": "Instructions",
@@ -874,6 +876,7 @@
   },
   "task_history": {
     "title": "Submission History",
+    "points_unit": "pts",
     "filter_all": "All",
     "filter_pending": "Pending",
     "filter_validating": "Validating",

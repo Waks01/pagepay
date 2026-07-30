@@ -25,11 +25,17 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.config import settings
+
 
 # open.er-api.com — public, no key. Returns latest rates keyed off base USD.
-_FX_URL = "https://open.er-api.com/v6/latest/USD"
-_CACHE_TTL_SECONDS = 60
-_HTTP_TIMEOUT_SECONDS = 5.0
+# Both the URL and TTL are env-controlled (FX_URL, FX_CACHE_TTL_SECONDS,
+# FX_HTTP_TIMEOUT_SECONDS) so tests/staging can point at a mock server
+# without patching code, and ops can tune the cache window without a
+# deploy. Defaults match the open.er-api.com production endpoint.
+_FX_URL = settings.fx_url
+_CACHE_TTL_SECONDS = settings.fx_cache_ttl_seconds
+_HTTP_TIMEOUT_SECONDS = settings.fx_http_timeout_seconds
 
 
 @dataclass

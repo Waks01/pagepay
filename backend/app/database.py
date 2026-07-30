@@ -27,9 +27,11 @@ if DATABASE_URL.startswith("postgresql+asyncpg://"):
 
 engine = create_async_engine(
     DATABASE_URL,
-    pool_size=20,
-    max_overflow=10,
-    pool_recycle=1800,
+    # Pool tuning lives in settings (env-overridable). See config.py:
+    # DB_POOL_SIZE / DB_MAX_OVERFLOW / DB_POOL_RECYCLE_SECONDS.
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
+    pool_recycle=settings.db_pool_recycle_seconds,
     connect_args=connect_args,
     pool_pre_ping=False,
     echo=False,

@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective Date:** January 1, 2025  
+**Effective Date:** August 1, 2026
 **Last Updated:** July 6, 2026
 
 ## 1. Introduction
@@ -14,6 +14,7 @@ By using PagePay, you consent to the data practices described in this Privacy Po
 ### 2.1 Information You Provide
 
 **Account Information:**
+
 - Email address or phone number
 - Display name
 - Password (encrypted)
@@ -21,37 +22,44 @@ By using PagePay, you consent to the data practices described in this Privacy Po
 - Profile picture (optional)
 
 **Payment Information:**
+
 - Bank account details (account number, bank name, account holder name)
 - Mobile money wallet details (where applicable)
 - We use secure third-party payment processors; we do not store full card or bank details
 
 **Study Content:**
+
 - Educational materials you upload (text, images, PDFs)
 - Study session data (quiz answers, flashcard progress, essay responses)
 - Chat messages with AI tutor
 
 **Task Content:**
+
 - Social media usernames (Twitter, Instagram, TikTok, etc.)
 - Proof of task completion (screenshots, links)
 - Task submissions and feedback
 
 **Referral Information:**
+
 - Referral codes you generate
 - Users referred by you
 
 **Support Communications:**
+
 - Messages sent to customer support
 - Feedback and bug reports
 
 ### 2.2 Information Collected Automatically
 
 **Device Information:**
+
 - Device type, model, and operating system
 - Unique device identifiers
 - Screen resolution and app version
 - IP address and general location (city, country)
 
 **Usage Information:**
+
 - App interactions (screens viewed, buttons clicked)
 - Ad views (impressions, clicks, completions)
 - Study session duration and performance
@@ -59,29 +67,36 @@ By using PagePay, you consent to the data practices described in this Privacy Po
 - Time spent in the App
 
 **Advertising Identifiers:**
+
 - Device advertising identifiers
 - These are used for ad targeting and attribution
 
 **Push Notification Tokens:**
+
 - Tokens for sending alerts and notifications
 
 **Cookies and Tracking Technologies:**
+
 - We use cookies and similar technologies to track app usage and preferences
 
 ### 2.3 Information from Third Parties
 
 **Social Media Platforms:**
+
 - Public profile information when you complete social media tasks (username, follower count, post engagement)
 
 **Advertising Partners:**
+
 - Ad performance data (views, clicks, conversions)
 - Fraud detection signals
 
 **Payment Processors:**
+
 - Transaction status and payment confirmations
 - Bank account verification results
 
 **AI Providers:**
+
 - Usage metrics and API response times (no raw content is shared beyond processing)
 
 ## 3. How We Use Your Information
@@ -89,6 +104,7 @@ By using PagePay, you consent to the data practices described in this Privacy Po
 We use your information for the following purposes:
 
 ### 3.1 Provide and Improve the App
+
 - Create and manage your account
 - Process point earnings and withdrawals
 - Deliver study materials and AI-generated content
@@ -96,28 +112,33 @@ We use your information for the following purposes:
 - Send push notifications (with your consent)
 
 ### 3.2 Advertising
+
 - Display personalized ads based on your interests
 - Measure ad performance and engagement
 - Detect and prevent ad fraud
 - Optimize ad delivery and revenue
 
 ### 3.3 Analytics and Optimization
+
 - Understand how users interact with the App
 - Identify bugs, crashes, and performance issues
 - Improve features and user experience
 - Conduct A/B testing and experiments
 
 ### 3.4 Security and Fraud Prevention
+
 - Detect and prevent fraudulent activity (fake accounts, bot usage, click fraud)
 - Monitor for Terms of Service violations
 - Protect against unauthorized access
 
 ### 3.5 Legal and Compliance
+
 - Comply with legal obligations (tax reporting, government requests)
 - Enforce our Terms of Service
 - Resolve disputes and legal claims
 
 ### 3.6 Communications
+
 - Send transactional emails and SMS (account updates, withdrawal confirmations)
 - Respond to support requests
 - Send promotional messages (with your consent; opt-out anytime)
@@ -131,22 +152,27 @@ We do not sell your personal information. We share your information only in the 
 We share information with third-party service providers who perform services on our behalf:
 
 **Advertising Partners:**
+
 - Advertising networks that deliver and measure ads
 - These partners receive advertising identifiers and usage data
 
 **Payment Processors:**
+
 - Secure payment processors for bank transfers and withdrawals
 - These processors receive payment details necessary to process transactions
 
 **AI Technology Providers:**
+
 - AI services that generate study content (flashcards, quizzes, chat responses)
 - Content is processed to generate materials but not stored or used beyond processing
 
 **Cloud Infrastructure:**
+
 - Cloud hosting and database services
 - Authentication and push notification services
 
 **Analytics Services:**
+
 - Usage analytics and error tracking services
 
 ### 4.2 Business Transfers
@@ -203,29 +229,36 @@ You may request deletion of your data at any time by contacting support@pagepay.
 Depending on your location, you may have the following rights:
 
 ### 6.1 Access and Portability
+
 - Request a copy of your personal data
 - Export your data in a machine-readable format
 
 ### 6.2 Correction
+
 - Update or correct inaccurate information
 - Complete incomplete information
 
 ### 6.3 Deletion
+
 - Request deletion of your personal data
 - Close your account
 
 ### 6.4 Objection and Restriction
+
 - Object to certain processing activities (e.g., marketing)
 - Restrict how we process your data
 
 ### 6.5 Withdraw Consent
+
 - Withdraw consent for data processing based on consent (e.g., push notifications, location tracking)
 
 ### 6.6 Opt-Out of Marketing
+
 - Unsubscribe from promotional emails and SMS
 - Disable push notifications in device settings
 
 ### 6.7 Do Not Sell My Information
+
 - We do not sell personal information. If our practices change, we will provide an opt-out mechanism.
 
 **How to Exercise Your Rights:**
@@ -241,10 +274,12 @@ Response Time: We will respond within 30 days
 PagePay is intended for users aged 13 and older. We do not knowingly collect personal information from children under 13.
 
 **If a child under 13 has provided us with personal information:**
+
 - Parents or guardians should contact us at privacy@pagepay.app
 - We will delete the information promptly
 
 **For users aged 13-17:**
+
 - We recommend parental or guardian supervision
 - Parents may request access to or deletion of their child's information
 
@@ -264,17 +299,20 @@ We take steps to ensure that your data receives adequate protection, including:
 We implement industry-standard security measures to protect your information:
 
 **Technical Safeguards:**
+
 - Encryption in transit and at rest
 - Encryption at rest for sensitive data (passwords, payment details)
 - Secure authentication with password hashing
 - Firewalls and intrusion detection systems
 
 **Organizational Safeguards:**
+
 - Access controls (limited employee access to personal data)
 - Regular security audits and penetration testing
 - Incident response procedures
 
 **Third-Party Security:**
+
 - We vet service providers for security practices
 - Require service providers to maintain adequate security
 
@@ -326,9 +364,11 @@ Ads are delivered by our advertising partners, who may use your advertising iden
 ### 11.2 Opt-Out of Personalized Ads
 
 **Android:**
+
 - Settings → Google → Ads → Opt out of Ads Personalization
 
 **iOS:**
+
 - Settings → Privacy → Advertising → Limit Ad Tracking
 
 After opting out, you will still see ads, but they will be less relevant.
@@ -348,6 +388,7 @@ For their privacy practices, please review your device's privacy settings and th
 The App may contain links to third-party websites, social media platforms, or services. We are not responsible for the privacy practices of these third parties. We encourage you to review their privacy policies.
 
 **Examples:**
+
 - Social media platforms (when completing tasks)
 - Sponsor websites or apps
 - Payment processor portals
@@ -375,12 +416,14 @@ If you are a California resident, you have additional rights under the Californi
 If you are in the European Economic Area (EEA) or United Kingdom, you have rights under the General Data Protection Regulation (GDPR):
 
 **Legal Basis for Processing:**
+
 - Consent: Push notifications, marketing communications
 - Contract: Providing the App and processing payments
 - Legitimate Interests: Fraud prevention, analytics, security
 - Legal Obligation: Tax reporting, compliance with laws
 
 **Your Rights:**
+
 - Right to access, rectify, erase, restrict processing, data portability, and object
 
 **Data Protection Officer:** You may contact our Data Protection Officer at dpo@pagepay.app
@@ -392,6 +435,7 @@ If you are in the European Economic Area (EEA) or United Kingdom, you have right
 We may update this Privacy Policy from time to time. Changes will be effective upon posting the updated policy in the App.
 
 We will notify you of material changes via:
+
 - In-app notification
 - Email (if provided)
 - Banner notice on the App

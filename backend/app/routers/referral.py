@@ -15,14 +15,20 @@ from app.database import get_db
 from app.models import User, Referral, ReadingSession
 from app.routers.auth import get_current_user
 from app.schemas import ReferralGenerateResponse, ReferralStats, ReferralValidateResponse
+from app.config import settings
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/referral", tags=["referral"])
 
-REFERRER_REWARD = 500
-REFEREE_REWARD = 200
-DAILY_CAP = 10
-APP_BASE_URL = "https://pagepay.app/ref"
+# All four knobs read from settings (env-overridable). See config.py:
+#   REFERRAL_REFERRER_REWARD  →  settings.referral_referrer_reward
+#   REFERRAL_REFEREE_REWARD   →  settings.referral_referee_reward
+#   REFERRAL_DAILY_CAP        →  settings.referral_daily_cap
+#   REFERRAL_APP_BASE_URL     →  settings.referral_app_base_url
+REFERRER_REWARD = settings.referral_referrer_reward
+REFEREE_REWARD = settings.referral_referee_reward
+DAILY_CAP = settings.referral_daily_cap
+APP_BASE_URL = settings.referral_app_base_url
 
 
 @router.post("/generate", response_model=ReferralGenerateResponse)

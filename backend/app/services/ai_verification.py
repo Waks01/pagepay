@@ -246,7 +246,7 @@ class AIVerificationService:
         
         checks = {"screenshot": result}
         
-        if result.get("valid") and result.get("confidence", 0) >= 0.7:
+        if result.get("valid") and result.get("confidence", 0) >= settings.ai_verification_confidence_floor:
             return {
                 "verified": True,
                 "confidence": result["confidence"],
@@ -288,7 +288,7 @@ class AIVerificationService:
         
         checks = {"screenshot": result}
         
-        if result.get("valid") and result.get("confidence", 0) >= 0.7:
+        if result.get("valid") and result.get("confidence", 0) >= settings.ai_verification_confidence_floor:
             return {
                 "verified": True,
                 "confidence": result["confidence"],
@@ -618,12 +618,12 @@ Respond in JSON format:
                 "error": "Invalid target username",
             }
 
-        nitter_instances = [
-            "https://nitter.net",           # 95% uptime (verified July 2026)
-            "https://nitter.space",         # 95% uptime
-            "https://lightbrd.com",         # 94% uptime
-            "https://nitter.catsarch.com",  # 71% uptime
-        ]
+        # Nitter mirror list comes from settings (env NITTER_INSTANCES,
+        # comma-separated). Ops can drop dead mirrors / add new ones
+        # without a redeploy. Uptime percentages are approximate from
+        # the July 2026 health check — order matters, the loop stops
+        # at the first mirror that returns a hit.
+        nitter_instances = settings.nitter_instances_list
 
         for instance in nitter_instances:
             try:
@@ -679,7 +679,7 @@ Respond in JSON format:
             f"Instagram profile showing 'Following' or 'Message' button for {requirements.get('target_username')}"
         )
         
-        if result.get("valid") and result.get("confidence", 0) >= 0.7:
+        if result.get("valid") and result.get("confidence", 0) >= settings.ai_verification_confidence_floor:
             return {"verified": True, "confidence": result["confidence"], "details": "Instagram follow verified", "fraud_score": 0.0, "checks": {"screenshot": result}}
         return {"verified": False, "confidence": result.get("confidence", 0.0), "details": "Could not verify Instagram follow", "fraud_score": 0.3, "checks": {"screenshot": result}}
     
@@ -717,7 +717,7 @@ Respond in JSON format:
             f"TikTok profile showing 'Following' button or 'Message' option for {requirements.get('target_username')}"
         )
         
-        if result.get("valid") and result.get("confidence", 0) >= 0.7:
+        if result.get("valid") and result.get("confidence", 0) >= settings.ai_verification_confidence_floor:
             return {"verified": True, "confidence": result["confidence"], "details": "TikTok follow verified", "fraud_score": 0.0, "checks": {"screenshot": result}}
         return {"verified": False, "confidence": result.get("confidence", 0.0), "details": "Could not verify TikTok follow", "fraud_score": 0.3, "checks": {"screenshot": result}}
     
@@ -740,7 +740,7 @@ Respond in JSON format:
             f"YouTube channel showing 'Subscribed' button with bell icon for {requirements.get('target_username')}"
         )
         
-        if result.get("valid") and result.get("confidence", 0) >= 0.7:
+        if result.get("valid") and result.get("confidence", 0) >= settings.ai_verification_confidence_floor:
             return {"verified": True, "confidence": result["confidence"], "details": "YouTube subscription verified", "fraud_score": 0.0, "checks": {"screenshot": result}}
         return {"verified": False, "confidence": result.get("confidence", 0.0), "details": "Could not verify YouTube subscription", "fraud_score": 0.3, "checks": {"screenshot": result}}
     

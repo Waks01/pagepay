@@ -24,6 +24,7 @@ from datetime import date, datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models import User, UserTier, ContentCatalog
 from app.services.content.gutendex import import_gutendex
@@ -93,8 +94,12 @@ async def sync_hive_posts(db: AsyncSession, limit: int = 50) -> int:
     """
     try:
         import httpx
-        
-        HIVE_API = "https://api.hive.blog"
+
+        # Hive API endpoint and post URL prefix come from settings
+        # (env HIVE_API_URL / HIVE_POST_BASE_URL). The default points
+        # at hive.blog; ops can override to a local Hive node for
+        # testing without code changes.
+        HIVE_API = settings.hive_api_url
         query = """
         query GetPosts($limit: Int!) {
           get_discussions_by_created(limit: $limit, tag: "pagepay") {
@@ -121,7 +126,9 @@ async def sync_hive_posts(db: AsyncSession, limit: int = 50) -> int:
 
     imported = 0
     for post in posts:
-        source_url = f"https://hive.blog/{post.get('author', '')}/@{post.get('author', '')}/{post.get('url', '').split('/')[-1]}"
+        # Post URL prefix from settings — keeps the link generation
+        # consistent with the API we just hit.
+        source_url = f"{settings.hive_post_base_url}/{post.get('author', '')}/@{post.get('author', '')}/{post.get('url', '').split('/')[-1]}"
         existing = await db.execute(
             select(ContentCatalog).where(ContentCatalog.source_url == source_url)
         )

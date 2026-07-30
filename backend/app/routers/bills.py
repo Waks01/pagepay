@@ -43,10 +43,8 @@ from app.services.peyflex import get_client, get_public_client, PeyflexError
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/bills", tags=["bills"])
 
-_USER_SHARE = 0.70  # User gets 70%, platform keeps 30%
-
-# Points conversion: 10 points = ₦1
-_POINTS_PER_NAIRA = 10
+_USER_SHARE = settings.bills_user_share  # User share of Peyflex commission; rest is platform profit.
+_POINTS_PER_NAIRA = settings.points_per_naira
 
 
 def _compute_points(commission_kobo: int) -> int:

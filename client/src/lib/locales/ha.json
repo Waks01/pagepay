@@ -172,7 +172,8 @@
     "remaining": "{{count}} ya rage",
     "expires": "Zai ƙare",
     "empty_title": "Babu ayyuka",
-    "empty_subtitle": "Dawo daga baya don sabbin damammaki"
+    "empty_subtitle": "Dawo daga baya don sabbin damammaki",
+    "points_unit": "pts"
   },
   "study": {
     "title": "Karatu",
@@ -749,6 +750,7 @@
   "task_detail": {
     "title": "Bayanan Aiki",
     "you_earn": "Za Ku Sami",
+    "points_unit": "pts",
     "after_fee": "Bayan {{percent}}% kuɗin dandamali",
     "description_title": "Bayani",
     "instructions_title": "Jagororin",
@@ -825,6 +827,7 @@
   },
   "task_history": {
     "title": "Tarihin Ƙaddamarwa",
+    "points_unit": "pts",
     "filter_all": "Duka",
     "filter_pending": "Ana Jira",
     "filter_validating": "Ana Tantancewa",

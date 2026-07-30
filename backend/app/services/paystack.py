@@ -39,9 +39,9 @@ import httpx
 from app.config import settings
 
 
-PAYSTACK_BASE_URL = "https://api.paystack.co"
-_HTTP_TIMEOUT_SECONDS = 10.0
-_BANKS_CACHE_TTL_SECONDS = 3600  # 1h — Nigerian bank list changes rarely
+PAYSTACK_BASE_URL = settings.paystack_base_url
+_HTTP_TIMEOUT_SECONDS = settings.paystack_http_timeout_seconds
+_BANKS_CACHE_TTL_SECONDS = settings.paystack_banks_cache_ttl_seconds
 
 
 class PaystackError(Exception):

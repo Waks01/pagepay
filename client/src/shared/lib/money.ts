@@ -1,31 +1,51 @@
 /**
- * Money formatting for PagePay.
+ * Money formatting + points ↔ naira conversion for PagePay.
  *
- * The wallet's points balance, the server's `amount_kobo` field, and the
- * UI's Naira display all round-trip through the same unit: 1 point = 1
- * kobo = ₦0.01. The server is the source of truth for the rate
- * (see `compute_withdrawal_fee` / `withdrawal_fee_tiers` in
- * `backend/app/routers/payouts.py`); these helpers are pure presentation.
+ * Three units in play throughout the app:
+ *   - kobo     : smallest NGN unit (100 kobo = ₦1)
+ *   - naira    : NGN whole unit (1 naira = 100 kobo)
+ *   - points   : in-app wallet unit (POINTS_PER_NAIRA points = ₦1)
  *
- * NOTE: the project's spec at `.kilo/command/phase4-payments.md` Step 4
- * says prices will eventually be OTA-served via `GET /api/v1/config/public`.
- * When that endpoint lands, the per-impression math and tier fees move
- * server-side and these constants become display-only.
+ * The conversion rate `POINTS_PER_NAIRA` is configured once per
+ * environment (`.env` files) so a future revaluation is a one-line
+ * change:
+ *   backend/.env     → POINTS_PER_NAIRA=10
+ *   client/.env      → EXPO_PUBLIC_POINTS_PER_NAIRA=10
+ *
+ * Both sides must agree, otherwise the worker will see one number in
+ * the wallet header and a different number on the task card. The
+ * helpers below guarantee both display paths use the same number.
  */
 
-/** Naira value of a single point. With 10 pts = ₦1, this is 0.1. */
-export const NGN_PER_POINT = 0.1;
+/** Read the points-per-naira rate from the Expo public env. Default 10. */
+const POINTS_PER_NAIRA = parseInt(
+  // EXPO_PUBLIC_* is inlined at build time; falls back to 10 if the
+  // env var is missing (e.g. local dev before .env was copied).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (typeof process !== 'undefined' ? process.env?.EXPO_PUBLIC_POINTS_PER_NAIRA : null) ?? '10',
+  10,
+);
+
+/** NGN value of one wallet point. Derived from the env rate, not hardcoded. */
+export const NGN_PER_POINT = 1 / POINTS_PER_NAIRA;
+
+/** Points value of one whole NGN. Derived from the env rate, not hardcoded. */
+export const POINTS_PER_NAIRA_VALUE = POINTS_PER_NAIRA;
 
 /**
  * Format a kobo amount as a Naira string with two decimal places and
- * thousands separators. Examples:
+ * thousands separators. Examples (with POINTS_PER_NAIRA=10):
  *   formatKobo(0)        → "₦0.00"
  *   formatKobo(1500)     → "₦15.00"
  *   formatKobo(123456)   → "₦1,234.56"
  *   formatKobo(1_000_000) → "₦10,000.00"
+ *
+ * 1 kobo = ₦0.01 (a fixed NGN convention, NOT derived from
+ * POINTS_PER_NAIRA — kobo is a currency sub-unit, independent of the
+ * in-app points rate).
  */
 export function formatKobo(kobo: number): string {
-  const ngn = kobo * NGN_PER_POINT;
+  const ngn = kobo / 100;
   // toFixed(2) is locale-independent and always emits "123456.78" — we
   // split on "." and add the thousands separator manually so the output
   // is stable across Hermes versions.
@@ -43,6 +63,36 @@ export function formatKobo(kobo: number): string {
  */
 export function formatPoints(points: number): string {
   return points.toLocaleString();
+}
+
+/**
+ * Convert a kobo-denominated reward (e.g. `task.reward_amount` from
+ * the API, or `submission.reward_paid`) into the wallet points the
+ * worker will be credited. With POINTS_PER_NAIRA=10:
+ *   koboToPoints(10000)   → 1000    (₦100 reward = 1,000 pts)
+ *   koboToPoints(50000)   → 5000    (₦500 reward = 5,000 pts)
+ */
+export function koboToPoints(kobo: number): number {
+  return Math.round((kobo / 100) * POINTS_PER_NAIRA);
+}
+
+/**
+ * Convert a kobo-denominated reward into the naira string the worker
+ * sees on the task card. Thin wrapper around `formatKobo` kept here
+ * so call sites read like the rest of the conversions.
+ */
+export function koboToNairaString(kobo: number): string {
+  return formatKobo(kobo);
+}
+
+/**
+ * Convert wallet points back to the naira string. With
+ * POINTS_PER_NAIRA=10:
+ *   pointsToNairaString(1000) → "₦100.00"
+ *   pointsToNairaString(5000) → "₦500.00"
+ */
+export function pointsToNairaString(points: number): string {
+  return formatKobo(points * (100 / POINTS_PER_NAIRA));
 }
 
 /**

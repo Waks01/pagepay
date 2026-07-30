@@ -312,11 +312,15 @@ export function TasksPage() {
   // Task management mutations
   const createTaskMutation = useMutation({
     mutationFn: async (payload: TaskCreateForm) => {
-      // Backend reuses the sponsor TaskCreateRequest schema — see
-      // `backend/app/schemas/__init__.py`. The schema requires:
+      // Backend uses AdminTaskCreateRequest (see
+      // `backend/app/schemas/__init__.py`). That schema intentionally
+      // diverges from the sponsor TaskCreateRequest — admin tasks are
+      // funded from an internal pool so business-policy bounds (₦50
+      // floor on reward, 500-completion minimum) don't apply. Schema
+      // still enforces:
       //   - `title` ≥ 5 chars, `description`/`instructions` ≥ 20 chars
-      //   - `reward_amount_kobo` (NOT naira), in [5000, 5_000_000]
-      //   - `max_completions` ≥ 500
+      //   - `reward_amount_kobo` (NOT naira), ≥ 100 kobo (₦1)
+      //   - `max_completions` ≥ 1
       //   - `task_type` / `platform` / `proof_type` from Literal lists
       // The form's NGN input gets multiplied by 100 here.
       const naira = parseInt(payload.reward_amount, 10);
@@ -406,6 +410,71 @@ export function TasksPage() {
     }
   };
 
+  // Per-field validators — mirror the backend AdminTaskCreateRequest
+  // schema bounds (see `backend/app/schemas/__init__.py`). Returns an
+  // object whose keys are field names and values are the human-readable
+  // error string for that field, or undefined if the field is valid.
+  //
+  // Notes vs the sponsor flow:
+  //   - reward has NO ceiling and only a ₦1 floor (any positive integer).
+  //   - max_completions has a 1 floor, not 500.
+  //
+  // Live on every keystroke (the modal binds `form` straight to the
+  // fields); the resulting object drives both the red border / inline
+  // helper text on each field and the submit-button disabled state.
+  const formErrors: Partial<Record<keyof TaskCreateForm, string>> = (() => {
+    const errs: Partial<Record<keyof TaskCreateForm, string>> = {};
+
+    const title = form.title.trim();
+    if (title.length === 0) errs.title = 'Title is required';
+    else if (title.length < 5) errs.title = `Title needs ${5 - title.length} more character${5 - title.length === 1 ? '' : 's'} (min 5)`;
+
+    const desc = form.description.trim();
+    if (desc.length === 0) errs.description = 'Description is required';
+    else if (desc.length < 20) errs.description = `Description needs ${20 - desc.length} more character${20 - desc.length === 1 ? '' : 's'} (min 20)`;
+
+    const instr = form.instructions.trim();
+    if (instr.length === 0) errs.instructions = 'Instructions are required';
+    else if (instr.length < 20) errs.instructions = `Instructions need ${20 - instr.length} more character${20 - instr.length === 1 ? '' : 's'} (min 20)`;
+
+    const nairaRaw = form.reward_amount.trim();
+    if (nairaRaw.length === 0) errs.reward_amount = 'Reward is required';
+    else if (!/^\d+$/.test(nairaRaw)) errs.reward_amount = 'Reward must be a whole number (₦)';
+    else {
+      const naira = parseInt(nairaRaw, 10);
+      if (naira < 1) errs.reward_amount = 'Reward must be at least ₦1';
+    }
+
+    const maxRaw = form.max_completions.trim();
+    if (maxRaw.length === 0) errs.max_completions = 'Max completions is required';
+    else if (!/^\d+$/.test(maxRaw)) errs.max_completions = 'Must be a whole number';
+    else {
+      const max = parseInt(maxRaw, 10);
+      if (max < 1) errs.max_completions = 'Must be at least 1';
+      else if (max > 10_000) errs.max_completions = 'Must be at most 10,000';
+    }
+
+    const daysRaw = form.expires_in_days.trim();
+    if (daysRaw.length === 0) errs.expires_in_days = 'Expiry is required';
+    else if (!/^\d+$/.test(daysRaw)) errs.expires_in_days = 'Must be a whole number of days';
+    else {
+      const days = parseInt(daysRaw, 10);
+      if (days < 1) errs.expires_in_days = 'Must be at least 1 day';
+      else if (days > 365) errs.expires_in_days = 'Cannot exceed 365 days';
+    }
+
+    return errs;
+  })();
+
+  const errorCount = Object.keys(formErrors).length;
+  // Count "valid" against the six user-input fields. Selects are always
+  // valid (they have a non-empty default), and target_url is optional.
+  const fieldsToTrack: Array<keyof TaskCreateForm> = [
+    'title', 'description', 'instructions', 'reward_amount', 'max_completions', 'expires_in_days',
+  ];
+  const validCount = fieldsToTrack.filter((k) => !formErrors[k]).length;
+  const formValid = errorCount === 0;
+
   // Called from the modal's "Create Task" submit button (no React.FormEvent
   // available — that pattern was broken because the Button component drops
   // the `form` attribute, so type="submit" never associated the button with
@@ -413,44 +482,41 @@ export function TasksPage() {
   // onSubmit={handleCreateSubmit} too, so Enter-key inside an input still
   // submits; the optional event lets `e.preventDefault()` work in that path.
   //
-  // Validation mirrors the backend TaskCreateRequest schema so the user gets
-  // a friendly error before the request 422s. Bounds lifted verbatim from
-  // backend/app/schemas/__init__.py:TaskCreateRequest.
+  // Validation runs live per-field via `formErrors` above — by the time the
+  // user can click submit (button is disabled while `!formValid`), there
+  // should be no work for this function to do. The defensive check stays
+  // in case the button is enabled through a keyboard edge case.
   const handleCreateSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (form.title.trim().length < 5) {
-      toast.error('Title must be at least 5 characters');
-      return;
-    }
-    if (form.description.trim().length < 20) {
-      toast.error('Description must be at least 20 characters');
-      return;
-    }
-    if (form.instructions.trim().length < 20) {
-      toast.error('Instructions must be at least 20 characters');
-      return;
-    }
-    const naira = parseInt(form.reward_amount, 10);
-    if (Number.isNaN(naira) || naira < 50) {
-      toast.error('Reward must be at least ₦50');
-      return;
-    }
-    if (naira > 50_000) {
-      toast.error('Reward cannot exceed ₦50,000');
-      return;
-    }
-    const max = parseInt(form.max_completions, 10);
-    if (Number.isNaN(max) || max < 500) {
-      toast.error('Max completions must be at least 500');
-      return;
-    }
-    const days = parseInt(form.expires_in_days, 10);
-    if (Number.isNaN(days) || days < 1 || days > 365) {
-      toast.error('Expiry must be between 1 and 365 days');
-      return;
-    }
+    if (!formValid) return;
     createTaskMutation.mutate(form);
   };
+
+  // Exact JSON the mutation will send to /admin/tasks/admin/create.
+  // Recomputed every render (cheap) so the preview panel updates live
+  // as the user edits. Helps the admin verify what the network call
+  // actually looks like before clicking submit.
+  const payloadPreview = JSON.stringify(
+    {
+      title: form.title,
+      description: form.description,
+      instructions: form.instructions,
+      task_type: form.task_type,
+      platform: form.platform,
+      category: 'social_media',
+      target_url: form.target_url || undefined,
+      proof_type: form.proof_type,
+      reward_amount_kobo: (() => {
+        const n = parseInt(form.reward_amount, 10);
+        return Number.isFinite(n) && n >= 0 ? n * 100 : 0;
+      })(),
+      reward_multiplier: 1.0,
+      max_completions: parseInt(form.max_completions, 10) || 0,
+      expires_in_days: parseInt(form.expires_in_days, 10) || 0,
+    },
+    null,
+    2,
+  );
 
   return (
     <>
@@ -792,10 +858,15 @@ export function TasksPage() {
             <Button
               type="button"
               variant="primary"
-              disabled={createTaskMutation.isPending}
+              disabled={!formValid || createTaskMutation.isPending}
               onClick={() => handleCreateSubmit()}
+              title={!formValid ? `Fix ${errorCount} field${errorCount === 1 ? '' : 's'} before submitting` : undefined}
             >
-              {createTaskMutation.isPending ? 'Creating...' : 'Create Task'}
+              {createTaskMutation.isPending
+                ? 'Creating...'
+                : !formValid
+                  ? `${errorCount} issue${errorCount === 1 ? '' : 's'} to fix`
+                  : 'Create Task'}
             </Button>
           </>
         }
@@ -807,6 +878,7 @@ export function TasksPage() {
             onChange={(e) => setForm({ ...form, title: e.target.value })}
             placeholder="e.g. Subscribe to PagePay on YouTube"
             disabled={createTaskMutation.isPending}
+            error={formErrors.title}
           />
           <div>
             <label className="mb-1.5 block text-sm font-medium text-text-main">Description *</label>
@@ -816,8 +888,16 @@ export function TasksPage() {
               placeholder="Short description shown on the task card"
               rows={3}
               disabled={createTaskMutation.isPending}
-              className="w-full rounded-lg border border-border bg-bg-main px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 disabled:opacity-50"
+              aria-invalid={!!formErrors.description}
+              className={`w-full rounded-lg border bg-bg-main px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 disabled:opacity-50 ${
+                formErrors.description
+                  ? 'border-error focus:border-error'
+                  : 'border-border hover:border-border-hover focus:border-primary'
+              }`}
             />
+            <p className={`mt-1.5 text-xs ${formErrors.description ? 'text-error' : 'text-text-muted'}`}>
+              {formErrors.description ?? `${form.description.trim().length} / 20 characters`}
+            </p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-text-main">Instructions *</label>
@@ -827,8 +907,16 @@ export function TasksPage() {
               placeholder="Step-by-step instructions for the worker"
               rows={4}
               disabled={createTaskMutation.isPending}
-              className="w-full rounded-lg border border-border bg-bg-main px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 disabled:opacity-50"
+              aria-invalid={!!formErrors.instructions}
+              className={`w-full rounded-lg border bg-bg-main px-3 py-2 text-sm text-text-main placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1 disabled:opacity-50 ${
+                formErrors.instructions
+                  ? 'border-error focus:border-error'
+                  : 'border-border hover:border-border-hover focus:border-primary'
+              }`}
             />
+            <p className={`mt-1.5 text-xs ${formErrors.instructions ? 'text-error' : 'text-text-muted'}`}>
+              {formErrors.instructions ?? `${form.instructions.trim().length} / 20 characters`}
+            </p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-text-main">Platform</label>
@@ -887,6 +975,7 @@ export function TasksPage() {
               value={form.reward_amount}
               onChange={(e) => setForm({ ...form, reward_amount: e.target.value })}
               disabled={createTaskMutation.isPending}
+              error={formErrors.reward_amount}
             />
             <Input
               label="Max Completions *"
@@ -895,6 +984,7 @@ export function TasksPage() {
               value={form.max_completions}
               onChange={(e) => setForm({ ...form, max_completions: e.target.value })}
               disabled={createTaskMutation.isPending}
+              error={formErrors.max_completions}
             />
             <Input
               label="Expires (days) *"
@@ -903,7 +993,35 @@ export function TasksPage() {
               value={form.expires_in_days}
               onChange={(e) => setForm({ ...form, expires_in_days: e.target.value })}
               disabled={createTaskMutation.isPending}
+              error={formErrors.expires_in_days}
             />
+          </div>
+
+          {/* Live payload preview — shows the exact JSON the next submit
+              will POST. Collapsed by default so it doesn't crowd the
+              form; admins can expand it to verify what hits the wire. */}
+          <details className="rounded-lg border border-border bg-bg-muted">
+            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold uppercase tracking-wider text-text-muted hover:text-text-main">
+              Preview request payload
+            </summary>
+            <pre className="overflow-x-auto px-3 pb-3 pt-1 font-mono text-xs text-text-main">
+              {payloadPreview}
+            </pre>
+          </details>
+
+          {/* Per-field status — gives the admin an at-a-glance sense of
+              what's left to fill. Updates live as formErrors recompute. */}
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-bg-muted px-3 py-2 text-xs">
+            <span
+              className={`font-semibold ${errorCount === 0 ? 'text-success' : 'text-text-main'}`}
+            >
+              {validCount} / {fieldsToTrack.length} fields valid
+            </span>
+            {errorCount > 0 && (
+              <span className="text-error">
+                {errorCount} {errorCount === 1 ? 'issue' : 'issues'} to fix
+              </span>
+            )}
           </div>
         </form>
       </Modal>

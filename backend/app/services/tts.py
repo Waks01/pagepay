@@ -47,11 +47,15 @@ logger = logging.getLogger("uvicorn.error")
 # but as of edge-tts 6.1.18 have rougher prosody and occasional
 # mispronunciation on technical terms. Revisit when Microsoft
 # ships the next Edge TTS model update.
-DEFAULT_VOICE = "en-US-AriaNeural"
+#
+# All three knobs read from settings (TTS_DEFAULT_VOICE,
+# TTS_DEFAULT_RATE, TTS_BATCH_CONCURRENCY) so ops can A/B test
+# voices or relax concurrency in dev without a deploy.
+DEFAULT_VOICE = settings.tts_default_voice
 
 # Rate +0% (normal speed). The client's player UI offers 0.75x / 1x /
 # 1.25x / 1.5x controls; we don't pre-render at multiple speeds.
-SPEECH_RATE = "+0%"
+SPEECH_RATE = settings.tts_default_rate
 
 
 def _audio_cache_dir() -> Path:
@@ -154,7 +158,7 @@ async def batch_generate_audio_for_work(
     voice: str = DEFAULT_VOICE,
     rate: str = SPEECH_RATE,
     force: bool = False,
-    concurrency: int = 5,
+    concurrency: int = settings.tts_batch_concurrency,
 ) -> int:
     """Batch-generate TTS audio for all units in a work.
 
@@ -224,7 +228,7 @@ async def batch_generate_audio_for_all_works(
     voice: str = DEFAULT_VOICE,
     rate: str = SPEECH_RATE,
     force: bool = False,
-    concurrency: int = 5,
+    concurrency: int = settings.tts_batch_concurrency,
 ) -> int:
     """Batch-generate TTS audio for ALL works in the catalog.
 

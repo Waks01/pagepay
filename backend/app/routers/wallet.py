@@ -201,8 +201,13 @@ async def initiate_wallet_deposit(
     # Generate unique reference with project prefix "pp_"
     reference = f"pp_wallet_{current_user.id}_{uuid.uuid4().hex[:16]}"
     
-    # Calculate fee
-    processing_fee = min(ceil(payload.deposit_amount_kobo * 0.015), 2000)
+    # Calculate fee (env-overridable via WALLET_DEPOSIT_FEE_PERCENT /
+    # WALLET_DEPOSIT_MAX_FEE_KOBO). Scales linearly with deposit size
+    # up to the cap, so ₦100 pays ₦1.50 and ₦10,000 still pays ₦20.
+    processing_fee = min(
+        ceil(payload.deposit_amount_kobo * settings.wallet_deposit_fee_percent),
+        settings.wallet_deposit_max_fee_kobo,
+    )
     total_amount = payload.deposit_amount_kobo + processing_fee
     
     # Initialize Paystack transaction

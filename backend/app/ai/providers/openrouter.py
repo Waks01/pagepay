@@ -12,8 +12,8 @@ import httpx
 
 from app.config import settings
 
-OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL = "deepseek/deepseek-chat:free"
+OPENROUTER_BASE = settings.openrouter_base_url
+DEFAULT_MODEL = settings.openrouter_default_model
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -27,8 +27,12 @@ async def call_openrouter(prompt: str, model: str = DEFAULT_MODEL, max_tokens: i
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://pagepay.ng",
-        "X-Title": "PagePay Study",
+        # OpenRouter ranks/links free-tier traffic by these — make
+        # sure they point at the deploying org's own domain + title.
+        # Both read from settings (env OPENROUTER_HTTP_REFERER /
+        # OPENROUTER_APP_TITLE) so a fork can rebrand without code.
+        "HTTP-Referer": settings.openrouter_http_referer,
+        "X-Title": settings.openrouter_app_title,
     }
     body = {
         "model": model,

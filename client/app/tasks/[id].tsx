@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchTaskDetail, startTask } from '@/src/features/tasks/api';
 import { usePlatformConfig } from '@/src/shared/hooks/use-platform-config';
 import { SkeletonDetailPage } from '@/components/skeletons';
+import { koboToPoints, koboToNairaString } from '@/src/shared/lib/money';
 
 export default function TaskDetailScreen() {
   const { t } = useTranslation();
@@ -65,9 +66,16 @@ export default function TaskDetailScreen() {
     );
   }
 
-  const netReward = Math.floor(task.reward_amount * (task.reward_multiplier ?? 1) * (1 - (platformConfig?.task_revenue_platform_percent ?? 0.30)));
+  const netRewardKobo = Math.floor(task.reward_amount * (task.reward_multiplier ?? 1) * (1 - (platformConfig?.task_revenue_platform_percent ?? 0.30)));
   const remaining = task.max_completions - task.completed_count;
   const expiresDate = new Date(task.expires_at);
+  // Worker-facing display follows the JumpTask pattern: the big number
+  // is the points they'll earn (matches the wallet unit shown
+  // everywhere else), and the smaller naira line underneath tells
+  // them the real-money value. Both conversions read from the same
+  // env rate via money.ts.
+  const points = koboToPoints(netRewardKobo);
+  const naira = koboToNairaString(netRewardKobo);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -90,7 +98,8 @@ export default function TaskDetailScreen() {
 
       <View style={styles.rewardCard}>
         <Text style={styles.rewardLabel}>{t('task_detail.you_earn')}</Text>
-        <Text style={styles.rewardAmount}>₦{(netReward / 100).toFixed(2)}</Text>
+        <Text style={styles.rewardAmount}>+{points.toLocaleString()} {t('task_detail.points_unit')}</Text>
+        <Text style={styles.rewardNaira}>≈ {naira}</Text>
         <Text style={styles.rewardNote}>{t('task_detail.after_fee', { percent: taskPlatformFeePercent })}</Text>
       </View>
 
@@ -266,6 +275,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 48,
     fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  rewardNaira: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    opacity: 0.85,
     marginBottom: 4,
   },
   rewardNote: {

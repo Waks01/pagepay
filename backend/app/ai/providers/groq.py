@@ -11,8 +11,8 @@ import httpx
 
 from app.config import settings
 
-GROQ_BASE = "https://api.groq.com/openai/v1"
-DEFAULT_MODEL = "llama-3.3-70b-versatile"
+GROQ_BASE = settings.groq_base_url
+DEFAULT_MODEL = settings.groq_default_model
 
 logger = logging.getLogger("uvicorn.error")
 

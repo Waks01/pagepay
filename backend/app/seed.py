@@ -278,14 +278,14 @@ async def seed_admin_users(db: AsyncSession) -> int:
     Idempotent: skips insert when any admin row already exists.
     """
     from app.services.admin_auth import hash_password
-    import os
+    from app.config import settings
 
     existing = (await db.execute(select(AdminUser).limit(1))).scalar_one_or_none()
     if existing is not None:
         return 0
 
-    email = os.getenv("PAGEADMIN_EMAIL", "admin@pagepay.app")
-    password = os.getenv("PAGEADMIN_PASSWORD", "admin123")
+    email = settings.seed_admin_email
+    password = settings.seed_admin_password
     db.add(AdminUser(
         email=email,
         password_hash=hash_password(password),

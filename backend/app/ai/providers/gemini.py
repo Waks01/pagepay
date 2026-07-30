@@ -13,8 +13,8 @@ from app.config import settings
 
 logger = logging.getLogger("uvicorn.error")
 
-GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
-DEFAULT_MODEL = "gemini-2.5-flash"
+GEMINI_BASE = settings.gemini_base_url
+DEFAULT_MODEL = settings.gemini_default_model
 
 
 async def call_gemini(prompt: str, model: str = DEFAULT_MODEL, max_tokens: int = 4000) -> str:

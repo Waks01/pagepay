@@ -26,7 +26,7 @@ async def import_gutendex(
     """
     url = f"{settings.gutendex_base_url}/books"
     params: dict[str, int | str] = {"copyright": "false", "limit": min(limit, 32)}
-    headers = {"User-Agent": "PagePay/1.0 (+https://pagepay.app)"}
+    headers = {"User-Agent": settings.user_agent_gutendex}
     imported_parents: list[ContentCatalog] = []
     MAX_BODY_BYTES = 60_000
 

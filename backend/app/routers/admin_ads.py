@@ -12,6 +12,7 @@ from sqlalchemy import select, func, and_, or_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.config import settings
 from app.models import AdEvent, User, AdSsvLog, AdFillRateEvent
 from app.schemas import (
     UserDailyAdStat, AdDailyTotals, AdUnitDailyStat, 
@@ -277,7 +278,7 @@ async def get_ecpm_trending(
     results = await db.execute(stmt)
     rows = results.all()
     
-    POINTS_PER_NAIRA = 10
+    POINTS_PER_NAIRA = settings.points_per_naira
     
     return [
         {

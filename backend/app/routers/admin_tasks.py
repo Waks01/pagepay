@@ -17,8 +17,9 @@ from app.models import (
     SponsorKYC, User, TaskSubmission, Task, UserReputation,
     AdminUser, AdminAuditLog,
 )
-from app.schemas import TaskCreateRequest
+from app.schemas import AdminTaskCreateRequest
 from app.services.admin_auth import require_permission
+from app.services.money import kobo_to_points
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/tasks", tags=["admin-tasks"])
@@ -303,10 +304,13 @@ async def admin_approve_submission(
     worker = worker_result.scalar_one_or_none()
 
     if worker:
-        net_reward = int(
+        net_reward_kobo = int(
             task.reward_amount * task.reward_multiplier * (100 - task.platform_fee_percent) / 100
         )
-        worker.points_balance += net_reward
+        # task.reward_amount is kobo (100 kobo = ₦1); points_balance
+        # is in points. Convert via the centralized rate so admin and
+        # mobile clients always agree.
+        worker.points_balance += kobo_to_points(net_reward_kobo)
         submission.reward_paid = net_reward
         submission.payment_status = "paid"
         submission.paid_at = datetime.utcnow()
@@ -602,17 +606,24 @@ async def admin_list_tasks(
 @router.post("/admin/create", status_code=201)
 async def admin_create_task(
     request: Request,
-    payload: TaskCreateRequest,
+    payload: AdminTaskCreateRequest,
     current_admin: AdminUser = Depends(require_permission("tasks.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """Admin creates a new task.
 
-    Reuses the sponsor TaskCreateRequest schema for body validation
-    (title/description/instructions length, platform/proof_type/task_type
-    Literal, reward bounds, max_completions minimum). Admin-specific
-    overrides — task_source="admin", manual review required, status="active"
-    instead of "draft" — are applied after validation.
+    Uses the dedicated AdminTaskCreateRequest schema: same title/
+    description/instructions length limits and same Literal enums as
+    the sponsor flow, but with relaxed business bounds — reward can be
+    any positive kobo amount (min ₦1, no ceiling) and max_completions
+    can be as low as 1. Sponsors' business-policy bounds do NOT apply
+    here because admins fund tasks from an internal pool rather than
+    per-task escrow, and admin tasks are commonly one-off campaigns
+    (micro-engagements, segmented test launches).
+
+    Admin-specific overrides — task_source="admin", manual review
+    required, status="active" instead of "draft", no escrow — are
+    applied after validation.
     """
     from datetime import timedelta
     expires_at = datetime.utcnow() + timedelta(days=payload.expires_in_days)
@@ -629,7 +640,7 @@ async def admin_create_task(
         platform=payload.platform,
         category=payload.category,
         task_source="admin",
-        reward_type="points",
+        reward_type="cash",  # admin tasks are denominated in naira; only workers see this number as points
         reward_amount=payload.reward_amount_kobo,  # stored in kobo
         reward_multiplier=payload.reward_multiplier,
         max_completions=payload.max_completions,
@@ -858,7 +869,9 @@ async def admin_approve_submission_v2(
     worker = worker_result.scalar_one_or_none()
     
     if worker:
-        worker.points_balance = (worker.points_balance or 0) + task.reward_amount
+        # task.reward_amount is kobo; convert to points so the wallet
+        # column matches the in-app unit the mobile client displays.
+        worker.points_balance = (worker.points_balance or 0) + kobo_to_points(task.reward_amount)
     
     # Update task stats
     task.completed_count += 1

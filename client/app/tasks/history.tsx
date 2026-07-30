@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { fetchMySubmissions, type TaskSubmission } from '@/src/features/tasks/api';
 import { SkeletonPage } from '@/components/skeletons';
+import { koboToPoints, koboToNairaString } from '@/src/shared/lib/money';
 
 const StatusBadge = ({ status }: { status: TaskSubmission['status'] }) => {
   const { t } = useTranslation();
@@ -47,9 +48,14 @@ export default function SubmissionHistoryScreen() {
   );
 
   const renderSubmission = ({ item }: { item: TaskSubmission }) => {
-    const netReward = Math.floor(item.reward_amount * 0.85);
+    const netRewardKobo = Math.floor(item.reward_amount * 0.85);
     const submittedDate = new Date(item.submitted_at);
     const verifiedDate = item.verified_at ? new Date(item.verified_at) : null;
+    // Same JumpTask-style display: points first (the in-app unit),
+    // naira equivalent alongside so the worker sees real value. Both
+    // conversions read from the same env rate via money.ts.
+    const points = koboToPoints(netRewardKobo);
+    const naira = koboToNairaString(netRewardKobo);
 
     return (
       <View style={styles.submissionCard}>
@@ -68,7 +74,12 @@ export default function SubmissionHistoryScreen() {
         <View style={styles.submissionBody}>
           <View style={styles.rewardRow}>
             <Ionicons name="cash-outline" size={20} color="#00B894" />
-            <Text style={styles.rewardText}>₦{(netReward / 100).toFixed(2)}</Text>
+            <View>
+              <Text style={styles.rewardText}>
+                +{points.toLocaleString()} {t('task_history.points_unit')}
+              </Text>
+              <Text style={styles.rewardNairaText}>≈ {naira}</Text>
+            </View>
           </View>
 
           <View style={styles.dateRow}>
@@ -348,6 +359,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#00B894',
+  },
+  rewardNairaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#00B894',
+    opacity: 0.8,
+    marginTop: 1,
   },
   dateRow: {
     flexDirection: 'row',

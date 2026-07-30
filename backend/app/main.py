@@ -202,10 +202,12 @@ async def lifespan(app: FastAPI):
         )
     
     # Start Phase 7 background task processor
-    # Only start if explicitly enabled via environment variable
-    # Render free tier can't reliably run background tasks due to connection pooling
-    should_run_processor = os.getenv("RUN_TASK_PROCESSOR", "false").lower() == "true"
-    
+    # Only start if explicitly enabled via settings.run_task_processor
+    # (env RUN_TASK_PROCESSOR). Render free tier can't reliably run
+    # background tasks due to connection pooling — leave the flag
+    # False there.
+    should_run_processor = settings.run_task_processor
+
     if should_run_processor:
         logger.info("Starting Phase 7 task processor...")
         processor_task = asyncio.create_task(task_processor.start())
@@ -300,15 +302,20 @@ def _rate_limit_handler(request, exc):
 class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
     """Reject requests with body larger than the configured limit.
 
-    JSON/API payloads: 1 MB
-    Multipart (file uploads): 10 MB
+    JSON/API payloads: settings.max_json_body_bytes (default 1 MB)
+    Multipart (file uploads): settings.max_multipart_body_bytes
+    (default 10 MB). Both are env-overridable — see config.py.
     """
     async def dispatch(self, request: Request, call_next):
         content_length = request.headers.get("content-length")
         if content_length:
             size = int(content_length)
             content_type = request.headers.get("content-type", "")
-            limit = 10 * 1024 * 1024 if "multipart" in content_type else 1 * 1024 * 1024
+            limit = (
+                settings.max_multipart_body_bytes
+                if "multipart" in content_type
+                else settings.max_json_body_bytes
+            )
             if size > limit:
                 return JSONResponse(
                     status_code=413,

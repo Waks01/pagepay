@@ -21,7 +21,10 @@ from app.config import settings
 
 logger = logging.getLogger("uvicorn.error")
 
-_API_BASE = "https://client.peyflex.com.ng/api"
+# Base URL is env-controlled (PEYFLEX_BASE_URL) so ops can flip to a
+# sandbox / staging instance without a deploy. Default points at the
+# production endpoint documented at the top of this file.
+_API_BASE = settings.peyflex_base_url
 _HTTP_TIMEOUT_SECONDS = 15.0
 
 

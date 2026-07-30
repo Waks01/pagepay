@@ -172,7 +172,8 @@
     "remaining": "{{count}} remain",
     "expires": "Go expire",
     "empty_title": "No work dey",
-    "empty_subtitle": "Come back later, new work go drop"
+    "empty_subtitle": "Come back later, new work go drop",
+    "points_unit": "pts"
   },
   "study": {
     "title": "Study",
@@ -749,6 +750,7 @@
   "task_detail": {
     "title": "Work Details",
     "you_earn": "You Go Collect",
+    "points_unit": "pts",
     "after_fee": "After {{percent}}% platform fee",
     "description_title": "Description",
     "instructions_title": "Instructions",
@@ -825,6 +827,7 @@
   },
   "task_history": {
     "title": "Submission History",
+    "points_unit": "pts",
     "filter_all": "All",
     "filter_pending": "Dey Wait",
     "filter_validating": "Dey Check",

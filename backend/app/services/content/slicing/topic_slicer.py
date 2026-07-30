@@ -73,6 +73,7 @@ from typing import Iterable
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
+from app.config import settings
 from app.models import ContentCatalog, ReadingUnit
 
 logger = logging.getLogger("uvicorn.error")
@@ -80,15 +81,17 @@ logger = logging.getLogger("uvicorn.error")
 # Target size for a single reading unit. Same target as the casual-reader
 # slicer (slicer.py), but applied per topic. The full-stop rule means
 # actual unit size will vary between ~1,200 and ~3,600 chars.
-TARGET_CHARS_PER_UNIT = 3_000
+# All three knobs read from settings so topic-slicer granularity can
+# be retuned without a deploy (env TOPIC_SLICE_*).
+TARGET_CHARS_PER_UNIT = settings.topic_slice_target_chars
 
 # Soft cap: prefer to break before this. A unit can grow up to 1.2 × this
 # if the previous sentence end is just past the soft cap.
-MAX_CHARS_PER_UNIT = 3_600
+MAX_CHARS_PER_UNIT = settings.topic_slice_max_chars
 
 # Below this, a topic's entire body fits in one free unit. No further
 # chunking. This is the "small section" threshold.
-SINGLE_UNIT_THRESHOLD = TARGET_CHARS_PER_UNIT
+SINGLE_UNIT_THRESHOLD = settings.topic_slice_single_unit_threshold
 
 # ── HTML parsing ─────────────────────────────────────────────────────
 # OpenStax uses the xhtml style. We tolerate either case, single or

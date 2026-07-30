@@ -49,6 +49,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models import ContentCatalog
 from app.services.content.slicing.topic_slicer import (
     PageTopic,
@@ -67,7 +68,9 @@ OPENSTAX_BOOK_BASE = "https://openstax.org/books"
 
 # User-Agent string. OpenStax is OK with reasonable scraping from
 # academic-style user agents; the default httpx one gets 403'd.
-USER_AGENT = "PagePay/1.0 (+https://pagepay.app) Education-Ingest"
+# Reads from settings (env USER_AGENT_OPENSTAX) so deployments can
+# identify themselves (staging vs prod vs partner fork).
+USER_AGENT = settings.user_agent_openstax
 
 # License allowlist. Anything outside this set is REJECTED before the
 # row reaches content_catalog. CC BY and CC BY-SA are commercial-use

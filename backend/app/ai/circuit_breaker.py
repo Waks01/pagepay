@@ -1,9 +1,10 @@
 """AI provider circuit breaker.
 
 Stores per-provider failure state in `ai_provider_health` so the
-breaker survives process restarts. After `CIRCUIT_BREAKER_THRESHOLD`
-consecutive failures the circuit opens for `CIRCUIT_OPEN_COOLDOWN`
-seconds; during that window the router skips the provider.
+breaker survives process restarts. After
+`settings.ai_circuit_breaker_threshold` consecutive failures the
+circuit opens for `settings.ai_circuit_open_seconds` seconds;
+during that window the router skips the provider.
 """
 
 from datetime import datetime
@@ -11,10 +12,11 @@ from datetime import datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models import AiProviderHealth
 
-CIRCUIT_BREAKER_THRESHOLD = 3
-CIRCUIT_OPEN_COOLDOWN_SECONDS = 300  # 5 minutes
+CIRCUIT_BREAKER_THRESHOLD = settings.ai_circuit_breaker_threshold
+CIRCUIT_OPEN_COOLDOWN_SECONDS = settings.ai_circuit_open_seconds
 
 
 async def mark_failed(db: AsyncSession, provider_name: str) -> None:

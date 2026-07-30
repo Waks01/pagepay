@@ -131,7 +131,7 @@ async def end_session(
     bonus_credited = 0
     bonus_eligible = False
 
-    if session.scroll_events > 0 and effective_duration >= 30:
+    if session.scroll_events > 0 and effective_duration >= settings.session_verified_min_seconds:
         # Treat scroll + at least 30s of effective reading as a verified
         # slice. The 30s floor is shorter than the 60s mark that triggers
         # the post-read modal so the bonus can settle even if the user

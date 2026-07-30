@@ -38,6 +38,7 @@ from app.models import (
 )
 from app.database import get_db
 from app.routers.auth import get_current_user
+from app.config import settings
 from app.services.sanitize import (
     safe_filename,
     sanitize_for_display,
@@ -85,8 +86,8 @@ ALLOWED_IMAGE_TYPES: frozenset[str] = frozenset({
     "image/heif",
 })
 
-UNLOCK_POINTS_COST = 50
-VIDEO_UNLOCK_POINTS_COST = 200
+UNLOCK_POINTS_COST = settings.study_unlock_points_cost
+VIDEO_UNLOCK_POINTS_COST = settings.study_video_unlock_points_cost
 
 
 # ── POST /study/sow/upload ──────────────────────────────────────────

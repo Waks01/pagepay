@@ -172,7 +172,8 @@
     "remaining": "{{count}} fọdụrụ",
     "expires": "Ga-agwụ",
     "empty_title": "Enweghị ọrụ",
-    "empty_subtitle": "Laghachi azụ maka ohere ọhụrụ"
+    "empty_subtitle": "Laghachi azụ maka ohere ọhụrụ",
+    "points_unit": "pts"
   },
   "study": {
     "title": "Ọmụmụ Ihe",
@@ -750,6 +751,7 @@
   "task_detail": {
     "title": "Nkọwa Ọrụ",
     "you_earn": "Ị Ga-enweta",
+    "points_unit": "pts",
     "after_fee": "Mgbe ụgwọ ikpo okwu {{percent}}%",
     "description_title": "Nkọwa",
     "instructions_title": "Ntụziaka",
@@ -826,6 +828,7 @@
   },
   "task_history": {
     "title": "Akụkọ Nnyefe",
+    "points_unit": "pts",
     "filter_all": "Ha Niile",
     "filter_pending": "Na-eche",
     "filter_validating": "Na-enyocha",

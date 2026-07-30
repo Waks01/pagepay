@@ -16,6 +16,7 @@ from app.schemas import (
 )
 from app.services.auth import hash_password, create_access_token, get_current_user
 from app.services.sanitize import sanitize_for_log
+from app.services.money import kobo_to_points
 
 router = APIRouter(prefix="/sponsor", tags=["sponsor"])
 logger = logging.getLogger("uvicorn.error")
@@ -471,11 +472,13 @@ async def sponsor_approve_submission(
     worker_result = await db.execute(worker_stmt)
     worker = worker_result.scalar_one_or_none()
     
-    net_reward = 0
+    net_reward_kobo = 0
     if worker:
-        net_reward = int(task.reward_amount * task.reward_multiplier * (100 - task.platform_fee_percent) / 100)
-        worker.points_balance += net_reward
-        submission.reward_paid = net_reward
+        net_reward_kobo = int(task.reward_amount * task.reward_multiplier * (100 - task.platform_fee_percent) / 100)
+        # task.reward_amount is kobo; convert to points (10 pts / ₦1
+        # by default) so the wallet column matches the in-app unit.
+        worker.points_balance += kobo_to_points(net_reward_kobo)
+        submission.reward_paid = net_reward_kobo
         submission.payment_status = "paid"
         submission.paid_at = datetime.utcnow()
     
@@ -501,7 +504,7 @@ async def sponsor_approve_submission(
     
     reputation.tasks_approved += 1
     reputation.tasks_completed += 1
-    reputation.total_earnings += net_reward
+    reputation.total_earnings += net_reward_kobo
     
     if reputation.tasks_completed > 0:
         reputation.approval_rate = reputation.tasks_approved / reputation.tasks_completed
@@ -525,12 +528,12 @@ async def sponsor_approve_submission(
     
     await db.commit()
     
-    logger.info(f"Sponsor {current_user.id} approved submission {submission_id}, credited {net_reward} to worker {worker.id if worker else 'N/A'}")
+    logger.info(f"Sponsor {current_user.id} approved submission {submission_id}, credited {net_reward_kobo} kobo to worker {worker.id if worker else 'N/A'}")
     
     return {
         "success": True,
         "message": "Submission approved successfully",
-        "reward_paid": net_reward,
+        "reward_paid": net_reward_kobo,
         "worker_id": submission.worker_id,
     }
 

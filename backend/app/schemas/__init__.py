@@ -1187,6 +1187,61 @@ class TaskCreateRequest(BaseModel):
     min_approval_rate: float = Field(default=0.0, ge=0, le=100)
 
 
+class AdminTaskCreateRequest(BaseModel):
+    """POST /admin/tasks/admin/create - Admin creates a task.
+
+    Mirrors TaskCreateRequest but with relaxed business bounds. Sponsor
+    flows enforce a ₦50 floor on reward and a 500-completion minimum so
+    marketplace quality is preserved; admins operate a separate budget
+    (internal pool / manual payout) and need flexibility for promos,
+    micro-tasks (₦1 per micro-engagement), and one-off campaigns that
+    intentionally target a small audience.
+
+    Title/description/instructions length, the Literal enums, and
+    expires_in_days upper bound (365) still apply — those guard against
+    XSS / storage-DoS, not business policy.
+    """
+    title: str = Field(min_length=5, max_length=255)
+    description: str = Field(min_length=20, max_length=5_000)
+    instructions: str = Field(min_length=20, max_length=5_000)
+    task_type: Literal[
+        "twitter_follow", "instagram_follow", "tiktok_follow", "youtube_subscribe",
+        "youtube_like", "youtube_watch", "youtube_comment", "youtube_share",
+        "twitter_like", "instagram_like", "twitter_retweet", "instagram_comment", "instagram_repost",
+        "twitter_comment", "twitter_share",
+        "tiktok_comment", "tiktok_share",
+        "facebook_follow", "facebook_like",
+        "linkedin_follow", "linkedin_like", "linkedin_comment",
+        "pinterest_follow", "pinterest_like", "pinterest_repin", "pinterest_comment",
+        "telegram_join", "telegram_view",
+        "snapchat_add_friend", "snapchat_view_story",
+        "reddit_follow", "reddit_upvote", "reddit_comment",
+        "discord_join_server", "discord_verify", "discord_message",
+        "website_visit", "website_signup", "app_download", "app_review",
+        "photo_upload", "video_upload", "written_review", "survey", "custom"
+    ]
+    platform: Literal["twitter", "instagram", "tiktok", "youtube", "facebook", "linkedin", "pinterest", "telegram", "snapchat", "reddit", "discord", "web", "android", "ios", "custom"]
+    category: Literal["social_media", "engagement", "website", "app", "content_creation", "surveys", "data_collection", "other"] = "social_media"
+    target_url: str | None = None
+    proof_type: Literal["screenshot", "link", "text", "photo", "video", "none"]
+    proof_instructions: str | None = Field(default=None, max_length=2_000)
+    # Any positive kobo amount: 100 kobo (₦1) minimum, no ceiling.
+    reward_amount_kobo: int = Field(ge=100, description="Min ₦1; no ceiling for admin tasks.")
+    reward_multiplier: float = Field(default=1.0, ge=1.0, le=5.0, description="1.0 = base rate, up to 5.0x for boosted visibility")
+    # No 500-completion floor for admins — they can publish smaller
+    # targeted tasks (test launches, segmented promos).
+    max_completions: int = Field(ge=1, le=10000)
+    expires_in_days: int = Field(default=7, ge=1, le=365, description="Days from now until task expires")
+    time_limit_minutes: int | None = Field(default=None, ge=5, le=1440)
+    target_countries: list[str] | None = None
+    target_cities: list[str] | None = None
+    target_gender: Literal["male", "female", "any"] | None = "any"
+    target_age_min: int | None = Field(default=None, ge=13, le=100)
+    target_age_max: int | None = Field(default=None, ge=13, le=100)
+    min_worker_level: int = Field(default=1, ge=1, le=50)
+    min_approval_rate: float = Field(default=0.0, ge=0, le=100)
+
+
 class TaskResponse(BaseModel):
     """Task detail response."""
     id: int
