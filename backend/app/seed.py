@@ -317,12 +317,26 @@ async def run_migrations(db: AsyncSession) -> bool:
     Returns True if a migration was applied, False if the schema
     was already at head (or migration was skipped on error).
     """
+    from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
     from alembic import command as alembic_command
     from alembic.config import Config as AlembicConfig
     from alembic.runtime.migration import MigrationContext
     from alembic.script import ScriptDirectory
 
-    database_url = os.environ.get("DATABASE_URL")
+    # Use the same cleaned URL we hand to the asyncpg engine. Strip
+    # `sslmode` / `channel_binding` / etc. — Alembic's asyncpg dialect
+    # auto-unpacks the URL's query string into asyncpg.connect() kwargs,
+    # and asyncpg rejects those. SSL is handled by connect_args in
+    # alembic/env.py.
+    raw_url = settings.database_url
+    if raw_url.startswith("postgresql://"):
+        raw_url = raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    parsed = urlparse(raw_url)
+    qs = parse_qs(parsed.query)
+    unsupported = {"sslmode", "sslrootcert", "channel_binding", "sslcert", "sslkey"}
+    qs = {k: v for k, v in qs.items() if k not in unsupported}
+    database_url = urlunparse(parsed._replace(query=urlencode(qs, doseq=True)))
+
     if not database_url:
         logger.warning("Migrations skipped: DATABASE_URL not set.")
         return False
@@ -349,6 +363,9 @@ async def run_migrations(db: AsyncSession) -> bool:
 
     # `alembic upgrade` is sync (it drives its own engine). Run it
     # off the event loop so the seed background task doesn't block.
+    # Note: alembic/env.py is async (uses asyncio.run internally), so we
+    # MUST run it in a thread to avoid "asyncio.run() cannot be called
+    # from a running event loop" errors.
     import asyncio
     try:
         await asyncio.to_thread(alembic_command.upgrade, cfg, "head")
