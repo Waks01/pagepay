@@ -201,6 +201,18 @@ export function setupNotificationListeners() {
   let unsubscribeForeground: (() => void) | undefined;
   let unsubscribeTokenRefresh: (() => void) | undefined;
 
+  if (Platform.OS === 'android') {
+    Notifications.setNotificationChannelAsync('default', {
+      name: 'Default',
+      importance: Notifications.AndroidImportance.MAX,
+      sound: 'default',
+      showBadge: true,
+      bypassDnd: false,
+    }).catch((error) => {
+      console.error('[notifications] Failed to create notification channel:', error);
+    });
+  }
+
   getFirebaseMessaging().then((messagingInstance) => {
     if (!messagingInstance) return;
 

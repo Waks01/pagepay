@@ -66,12 +66,14 @@ from app.schemas import (
     WithdrawalResponse,
 )
 from app.services.encryption import decrypt, encrypt
+from app.services.fcm import send_wallet_update
 from app.services.paystack import (
     PaystackError,
     get_client as get_paystack_client,
 )
 from app.services.money import kobo_to_points
 from app.services.money_caps import record_amount_v2
+from app.services.notifications import create_notification
 from app.services.subscription import calculate_subscription_end_date
 
 
@@ -726,6 +728,26 @@ async def paystack_webhook(
                         "Wallet deposit credited: user=%s ref=%s amount_kobo=%s points=%d new_balance=%s",
                         payment.user_id, reference, deposit_amount_kobo, deposit_points, user_row.points_balance,
                     )
+                    deposit_naira = deposit_amount_kobo / 100
+                    asyncio.create_task(
+                        send_wallet_update(
+                            db,
+                            payment.user_id,
+                            amount_naira=deposit_naira,
+                            transaction_type="credit",
+                            reason="wallet_deposit",
+                        )
+                    )
+                    asyncio.create_task(
+                        create_notification(
+                            db,
+                            payment.user_id,
+                            title="Wallet Funded",
+                            body=f"Your wallet has been credited with ₦{deposit_naira:.2f} ({deposit_points} points)",
+                            category="wallet_updates",
+                            data={"type": "wallet_deposit", "points": str(deposit_points)},
+                        )
+                    )
                 else:
                     logger.error("Wallet deposit webhook: user %s not found for ref=%s", payment.user_id, reference)
 
@@ -791,6 +813,25 @@ async def paystack_webhook(
         # Pull the live transfer_code off the event if we don't have one.
         if not txn.paystack_transfer_code:
             txn.paystack_transfer_code = str(data.get("transfer_code") or "") or None
+        asyncio.create_task(
+            send_wallet_update(
+                db,
+                txn.user_id,
+                amount_naira=-(txn.amount_kobo / 100),
+                transaction_type="debit",
+                reason="withdrawal",
+            )
+        )
+        asyncio.create_task(
+            create_notification(
+                db,
+                txn.user_id,
+                title="Withdrawal Successful",
+                body=f"Your withdrawal of ₦{txn.amount_kobo / 100:.2f} has been processed",
+                category="wallet_updates",
+                data={"type": "withdrawal_success", "amount_kobo": str(txn.amount_kobo)},
+            )
+        )
     else:  # transfer.failed or transfer.reversed
         # Reverse the debit ONLY if we haven't already (idempotent
         # webhooks — Paystack may retry).
@@ -820,6 +861,26 @@ async def paystack_webhook(
                     txn.reference,
                     event_name,
                 )
+                refund_naira = refund_kobo / 100
+                asyncio.create_task(
+                    send_wallet_update(
+                        db,
+                        txn.user_id,
+                        amount_naira=refund_naira,
+                        transaction_type="credit",
+                        reason="withdrawal_reversal",
+                    )
+                )
+                asyncio.create_task(
+                    create_notification(
+                        db,
+                        txn.user_id,
+                        title="Withdrawal Reversed",
+                        body=f"Your withdrawal of ₦{refund_naira:.2f} was reversed and refunded to your wallet",
+                        category="wallet_updates",
+                        data={"type": "withdrawal_reversed", "amount_kobo": str(refund_kobo)},
+                    )
+                )
             else:
                 # User row deleted — log and continue. We still flip
                 # the txn row so the audit trail is consistent.
@@ -828,8 +889,8 @@ async def paystack_webhook(
                     txn.user_id,
                     txn.reference,
                 )
-            txn.status = "failed"
-            txn.settled_at = settled
+        txn.status = "failed"
+        txn.settled_at = settled
 
     await db.commit()
     return {"received": True, "handled": True, "event": event_name}

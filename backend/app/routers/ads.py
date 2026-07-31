@@ -825,12 +825,23 @@ async def admob_ssv_callback(
     # the user isn't currently logged in on a device).
     if points > 0:
         from app.services.fcm import send_ad_reward
+        from app.services.notifications import create_notification
         asyncio.create_task(
             send_ad_reward(
                 db,
                 user_id,
                 points_earned=points,
                 ad_unit=req.ad_unit,
+            )
+        )
+        asyncio.create_task(
+            create_notification(
+                db,
+                user_id,
+                title="Ad Reward",
+                body=f"You earned {points} points for watching an ad!",
+                category="ad_rewards",
+                data={"type": "ad_reward", "points": str(points)},
             )
         )
     

@@ -39,6 +39,7 @@ from app.schemas import (
     SessionEndResponse, SessionClaimResponse,
 )
 from app.routers.auth import get_current_user
+from app.services.notifications import create_notification
 
 router = APIRouter(prefix="/session", tags=["session"])
 logger = logging.getLogger("uvicorn.error")
@@ -162,6 +163,16 @@ async def end_session(
                 amount_naira=bonus_naira,
                 transaction_type="credit",
                 reason="slice_bonus",
+            )
+        )
+        asyncio.create_task(
+            create_notification(
+                db,
+                current_user.id,
+                title="Reading Reward",
+                body=f"You earned {bonus_credited} points for finishing this slice!",
+                category="reading_rewards",
+                data={"type": "reading_reward", "points": str(bonus_credited)},
             )
         )
 
