@@ -52,17 +52,7 @@ import { NotificationSettingsModal } from '@/components/NotificationSettingsModa
 import { useReferralStats, useGenerateReferral } from '@/src/features/community/hooks/use-community';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-
-type UserMe = {
-  id: number;
-  email: string | null;
-  phone: string | null;
-  username: string | null;
-  points_balance: number;
-  tier: string;
-  is_worker: boolean;
-  is_sponsor: boolean;
-};
+import type { UserMe } from '@/src/shared/types';
 
 const languageOptions: { value: LanguagePref; label: string; available: boolean }[] = [
   { value: 'en', label: 'English', available: true },
@@ -1349,10 +1339,6 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-  },
-  rowLabel: {
-    fontSize: 15,
-    fontWeight: '600',
   },
   rowHint: {
     fontSize: 13,

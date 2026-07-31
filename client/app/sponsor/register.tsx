@@ -15,6 +15,7 @@ export default function SponsorRegisterScreen() {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
+  const [username, setUsername] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
@@ -45,7 +46,14 @@ export default function SponsorRegisterScreen() {
       return;
     }
 
-    registerMutation.mutate({ email, password, display_name: displayName, phone: phone || undefined });
+    const cleanUsername = username.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 12).toLowerCase();
+    registerMutation.mutate({
+      email,
+      password,
+      display_name: displayName,
+      phone: phone || undefined,
+      username: cleanUsername || undefined,
+    });
   };
 
   return (
@@ -76,6 +84,20 @@ export default function SponsorRegisterScreen() {
             value={displayName}
             onChangeText={setDisplayName}
             autoCapitalize="words"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, { color: tokens.ink }]}>Username (optional)</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: tokens.paper, color: tokens.ink, borderColor: tokens.border }]}
+            placeholder="johndoe"
+            placeholderTextColor={tokens.inkMuted}
+            value={username}
+            onChangeText={(v) => setUsername(v.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 12).toLowerCase())}
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={12}
           />
         </View>
 

@@ -1138,9 +1138,15 @@ class SponsorRegisterRequest(BaseModel):
     email: EmailStr
     phone: str | None = None
     password: str = Field(min_length=8)
+    username: str | None = Field(default=None, max_length=12, description="Public username, max 12 chars")
     display_name: str = Field(min_length=2, max_length=255, description="Your name or brand name")
     business_name: str | None = Field(default=None, max_length=255, description="Optional: Company name if representing a business")
     business_registration_number: str | None = None
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str | None) -> str | None:
+        return _validate_username(v)
 
 
 class SponsorKYCSubmitRequest(BaseModel):
@@ -1459,12 +1465,14 @@ class ForgotPasswordRequest(BaseModel):
     """Request a password reset token."""
     email: str | None = None
     phone: str | None = None
+    username: str | None = None
 
 
 class ForgotPasswordVerifyOtpRequest(BaseModel):
     """Verify OTP for forgot-password flow."""
     email: str | None = None
     phone: str | None = None
+    username: str | None = None
     otp: str = Field(min_length=6, max_length=6)
 
 

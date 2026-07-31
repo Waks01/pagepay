@@ -43,10 +43,13 @@ export default function ForgotPasswordOtpScreen() {
       setError(null);
       setMessage(null);
       try {
-        const isEmail = identifier.includes('@');
+        const trimmed = identifier.trim();
+        const isEmail = trimmed.includes('@');
+        const isPhone = /^\d+$/.test(trimmed);
         const body: Record<string, string> = { otp: fullCode };
-        if (isEmail) body.email = identifier;
-        else body.phone = identifier;
+        if (isEmail) body.email = trimmed;
+        else if (isPhone) body.phone = trimmed;
+        else body.username = trimmed.toLowerCase();
 
         const res = await apiFetch('/api/v1/auth/forgot-password/verify-otp', {
           method: 'POST',
@@ -98,10 +101,14 @@ export default function ForgotPasswordOtpScreen() {
     setMessage(null);
     setResending(true);
     try {
-      const isEmail = identifier.includes('@');
-      const body: Record<string, string> = isEmail
-        ? { email: identifier }
-        : { phone: identifier };
+      const trimmed = identifier.trim();
+      const isEmail = trimmed.includes('@');
+      const isPhone = /^\d+$/.test(trimmed);
+      const body: Record<string, string> = {};
+      if (isEmail) body.email = trimmed;
+      else if (isPhone) body.phone = trimmed;
+      else body.username = trimmed.toLowerCase();
+
       const res = await apiFetch('/api/v1/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

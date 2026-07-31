@@ -8,11 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/src/shared/api/client';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-
-type UserMe = {
-  tier: string;
-  points_balance: number;
-};
+import type { UserMe } from '@/src/shared/types';
 
 export default function SubscriptionManagementScreen() {
   const { t } = useTranslation();

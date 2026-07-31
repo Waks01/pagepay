@@ -28,16 +28,9 @@ import NotificationBell from '@/components/NotificationBell';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
 import { PagePay } from '@/constants/theme';
 import { SkeletonPage } from '@/components/skeletons';
+import type { UserMe } from '@/src/shared/types';
 
 const CATEGORIES = ['Fiction', 'Classics', 'News', 'Study'] as const;
-
-type UserMe = {
-  id: number;
-  email: string | null;
-  phone: string | null;
-  points_balance: number;
-  tier: string;
-};
 
 export default function HomeScreen() {
   const router = useRouter();

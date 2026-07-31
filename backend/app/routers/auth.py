@@ -441,12 +441,17 @@ async def forgot_password(
     payload: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    if not payload.email and not payload.phone:
-        raise HTTPException(status_code=400, detail="Email or phone required")
+    if not payload.email and not payload.phone and not payload.username:
+        raise HTTPException(status_code=400, detail="Email, phone, or username required")
 
-    query = select(User).where(
-        (User.email == payload.email) if payload.email else (User.phone == payload.phone)
-    )
+    query = select(User)
+    if payload.email:
+        query = query.where(User.email == payload.email)
+    elif payload.phone:
+        query = query.where(User.phone == payload.phone)
+    elif payload.username:
+        query = query.where(User.username == payload.username)
+
     result = await db.execute(query)
     user = result.scalar_one_or_none()
 
@@ -465,7 +470,7 @@ async def forgot_password(
 
     otp = f"{secrets.randbelow(1_000_000):06d}"
     _cleanup_expired_otps()
-    key = payload.email or payload.phone or ""
+    key = payload.email or payload.phone or payload.username or ""
     _dev_otps[key] = (otp, raw_token, datetime.utcnow() + timedelta(minutes=15))
 
     try:
@@ -476,7 +481,7 @@ async def forgot_password(
     except Exception as exc:
         logger.error("Failed to send password reset OTP: %s", exc)
 
-    logger.info("Password reset OTP requested for email=%s phone=%s user_id=%s", payload.email, payload.phone, user.id if user else None)
+    logger.info("Password reset OTP requested for email=%s phone=%s username=%s user_id=%s", payload.email, payload.phone, payload.username, user.id if user else None)
     return {
         "ok": True,
         "dev_otp": otp,
@@ -489,7 +494,7 @@ async def verify_forgot_password_otp(
     payload: ForgotPasswordVerifyOtpRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    key = payload.email or payload.phone or ""
+    key = payload.email or payload.phone or payload.username or ""
     stored = _dev_otps.get(key)
     if not stored:
         raise HTTPException(status_code=400, detail="No OTP request found. Request a new code.")
@@ -705,10 +710,25 @@ async def google_auth(
     user = result.scalar_one_or_none()
 
     if not user:
-        # Create new user from Google
+        # Auto-generate username from email prefix
+        base_username = email.split("@")[0].lower().replace(".", "_").replace("-", "_")
+        base_username = "".join(c for c in base_username if c.isalnum() or c == "_")[:12]
+        username = base_username or "user"
+        counter = 1
+        while True:
+            candidate = f"{username}{counter}" if counter > 1 else username
+            if len(candidate) > 12:
+                candidate = candidate[:12]
+            dup = await db.execute(select(User).where(User.username == candidate))
+            if not dup.scalar_one_or_none():
+                username = candidate
+                break
+            counter += 1
+
         user = User(
             email=email,
             password_hash=None,  # OAuth users don't have password
+            username=username,
             email_verified=True,
             is_worker=True,
             is_sponsor=False,

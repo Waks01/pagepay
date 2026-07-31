@@ -50,10 +50,17 @@ export default function ForgotPasswordScreen() {
 
     setLoading(true);
     try {
-      const isEmail = identifier.includes('@');
-      const body: Record<string, string> = isEmail
-        ? { email: identifier.trim() }
-        : { phone: identifier.trim() };
+      const trimmed = identifier.trim();
+      const isEmail = trimmed.includes('@');
+      const isPhone = /^\d+$/.test(trimmed);
+      const body: Record<string, string> = {};
+      if (isEmail) {
+        body.email = trimmed;
+      } else if (isPhone) {
+        body.phone = trimmed;
+      } else {
+        body.username = trimmed.toLowerCase();
+      }
 
       const res = await apiFetch('/api/v1/auth/forgot-password', {
         method: 'POST',
@@ -71,7 +78,7 @@ export default function ForgotPasswordScreen() {
 
       const data = await res.json();
       setSuccess(true);
-      router.replace({ pathname: '/forgot-password-otp', params: { identifier: identifier.trim() } });
+      router.replace({ pathname: '/forgot-password-otp', params: { identifier: trimmed } });
     } catch {
       setFormError(t('forgot_password.errors.connection_error'));
       setErrorTrigger(true);
@@ -79,7 +86,7 @@ export default function ForgotPasswordScreen() {
     } finally {
       setLoading(false);
     }
-  }, [identifier, router, validate, t]);
+  }, [identifier, router, t, validate]);
 
   return (
     <View style={[styles.root, { backgroundColor: tokens.paper }]}>

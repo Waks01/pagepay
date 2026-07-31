@@ -22,14 +22,7 @@ import {
 } from '@/components/LinkPayoutAccountModal';
 import { SkeletonBalanceCard, SkeletonTransactionRow } from '@/components/skeletons';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
-
-type UserMe = {
-  id: number;
-  email: string | null;
-  phone: string | null;
-  points_balance: number;
-  tier: string;
-};
+import type { UserMe } from '@/src/shared/types';
 
 type Transaction = {
   id: number;

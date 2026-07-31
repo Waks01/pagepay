@@ -48,11 +48,20 @@ async def register_sponsor(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    # Check duplicate username if provided
+    if payload.username:
+        dup = await db.execute(
+            select(User).where(User.username == payload.username)
+        )
+        if dup.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Username already taken")
+    
     # Create user with sponsor flags
     user = User(
         email=payload.email,
         phone=payload.phone,
         password_hash=hash_password(payload.password),
+        username=payload.username,
         is_worker=True,  # Sponsors can also be workers
         is_sponsor=True,
         business_name=payload.display_name,  # Use display_name as business_name
