@@ -39,6 +39,7 @@ from typing import Sequence
 
 from app.config import settings
 from app.models import ContentCatalog
+from app.services.ads import points_for_rewarded_ad
 
 
 def _seeded_shuffle(items: Sequence[ContentCatalog], user_id: int) -> list[ContentCatalog]:
@@ -56,6 +57,31 @@ def _seeded_shuffle(items: Sequence[ContentCatalog], user_id: int) -> list[Conte
     indexed = list(items)
     rng.shuffle(indexed)
     return indexed
+
+
+async def _calc_estimated_earn_points(db: AsyncSession, item: ContentCatalog) -> int:
+    """Backend-owned estimate of total points a user can earn from this work.
+
+    Slice-based: each verified slice credits `reading_slice_bonus_points`
+    (default 2) plus two rewarded ads at `points_for_rewarded_ad()`
+    (default 16 each = 32). Frontend never guesses — this function is
+    the single source of truth so a malicious client can't inflate
+    the displayed number.
+    """
+    if item.parent_work_id is None:
+        # Parent work — count child slices.
+        slice_count_row = await db.execute(
+            select(func.count(ContentCatalog.id)).where(
+                ContentCatalog.parent_work_id == item.id
+            )
+        )
+        slice_count = slice_count_row.scalar_one() or 1
+    else:
+        # Standalone slice (no parent) — counts as 1 slice.
+        slice_count = 1
+
+    per_slice = settings.reading_slice_bonus_points + 2 * points_for_rewarded_ad()
+    return slice_count * per_slice
 
 
 def build_feed_with_sponsored(
@@ -289,6 +315,7 @@ async def get_content_feed(
             author=item.author,
             estimated_read_minutes=item.estimated_read_minutes,
             is_sponsored=item.is_sponsored,
+            estimated_earn_points=await _calc_estimated_earn_points(db, item),
             source=item.source,
             education_level=item.education_level,
             subject=item.subject,
@@ -402,6 +429,7 @@ async def list_catalog(
             author=item.author,
             estimated_read_minutes=item.estimated_read_minutes,
             is_sponsored=item.is_sponsored,
+            estimated_earn_points=await _calc_estimated_earn_points(db, item),
             source=item.source,
             education_level=item.education_level,
             subject=item.subject,

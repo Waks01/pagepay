@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
@@ -20,6 +19,8 @@ import { PLATFORM_ENV } from '@/src/shared/lib/ads';
 import { useCatalogFilter } from '@/src/shared/lib/catalog-filter';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { useStreak } from '@/src/features/community/hooks/use-community';
+import { displayName } from '@/src/shared/lib/display-name';
+import { formatPointsCompact } from '@/src/shared/lib/money';
 import { PageMark } from '@/components/PageMark';
 import { CategoryChip } from '@/components/CategoryChip';
 import { ContentCard, ContentItem } from '@/components/ContentCard';
@@ -28,6 +29,7 @@ import NotificationBell from '@/components/NotificationBell';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
 import { PagePay } from '@/constants/theme';
 import { SkeletonPage } from '@/components/skeletons';
+import { StateBlock } from '@/components/StateBlock';
 import type { UserMe } from '@/src/shared/types';
 
 const CATEGORIES = ['Fiction', 'Classics', 'News', 'Study'] as const;
@@ -187,31 +189,9 @@ export default function HomeScreen() {
   return (
     <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: tokens.paper }]}>
       <View style={styles.header}>
-        {/* Top row: greeting + balance chip */}
-        <View style={styles.topRow}>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={[styles.greeting, { color: tokens.inkMuted, fontFamily: 'SpaceGrotesk_500Medium' }]}
-            >
-              {greeting},
-            </Text>
-          </View>
-
-          {meError && (
-            <View style={[styles.stateBlock, { borderColor: tokens.signal }]}>
-              <Ionicons name="cloud-offline-outline" size={20} color={tokens.signal} />
-              <Text style={[styles.stateText, { color: tokens.signal }]}>
-                {t('home.feed_error')}
-              </Text>
-              <TouchableOpacity
-                onPress={() => meQuery.refetch()}
-                style={[styles.retry, { borderColor: tokens.signal }]}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.retryText, { color: tokens.signal }]}>{t('home.try_again')}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+        {/* Row 1: app mark + streak + points + bell */}
+        <View style={styles.iconsRow}>
+          <PageMark width={28} height={2} />
           {streakData && streakData.current_streak > 0 && (
             <View style={[styles.streakBadge, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
               <Text style={styles.streakEmoji}>🔥</Text>
@@ -235,12 +215,32 @@ export default function HomeScreen() {
                 { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' },
               ]}
             >
-              {meQuery.isLoading ? '—' : points.toLocaleString()}
+              {meQuery.isLoading ? '—' : formatPointsCompact(points)}
             </Text>
             <Text style={[styles.balanceLabel, { color: tokens.inkMuted }]}>{t('home.points_label')}</Text>
           </TouchableOpacity>
 
           <NotificationBell />
+        </View>
+
+        {meError && (
+          <StateBlock
+            message={t('home.feed_error')}
+            onRetry={() => meQuery.refetch()}
+            tokens={tokens}
+          />
+        )}
+
+        {/* Row 2: greeting + username */}
+        <View style={styles.greetingRow}>
+          <Text
+            style={[styles.greeting, { color: tokens.inkMuted, fontFamily: 'SpaceGrotesk_500Medium' }]}
+          >
+            {greeting},
+          </Text>
+          <Text style={[styles.greeting, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+            {meQuery.data?.username || displayName(meQuery.data)}
+          </Text>
         </View>
       </View>
 
@@ -277,19 +277,11 @@ export default function HomeScreen() {
             >
               {t('home.keep_reading')}
             </Text>
-            <View style={[styles.stateBlock, { borderColor: tokens.signal }]}>
-              <Ionicons name="cloud-offline-outline" size={20} color={tokens.signal} />
-              <Text style={[styles.stateText, { color: tokens.signal }]}>
-                {t('home.feed_error')}
-              </Text>
-              <TouchableOpacity
-                onPress={() => inProgressQuery.refetch()}
-                style={[styles.retry, { borderColor: tokens.signal }]}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.retryText, { color: tokens.signal }]}>{t('home.try_again')}</Text>
-              </TouchableOpacity>
-            </View>
+            <StateBlock
+              message={t('home.feed_error')}
+              onRetry={() => inProgressQuery.refetch()}
+              tokens={tokens}
+            />
           </View>
         ) : resumes.length > 0 ? (
           <View style={styles.section}>
@@ -331,11 +323,11 @@ export default function HomeScreen() {
             >
               {t('home.keep_reading')}
             </Text>
-            <View style={[styles.stateBlock, { borderColor: tokens.border }]}>
-              <Text style={[styles.stateText, { color: tokens.inkMuted }]}>
-                {t('home.empty_feed')}
-              </Text>
-            </View>
+            <StateBlock
+              message={t('home.empty_feed')}
+              tokens={tokens}
+              variant="empty"
+            />
           </View>
         )}
 
@@ -381,25 +373,17 @@ export default function HomeScreen() {
           {feedQuery.isLoading && items.length === 0 ? (
             <SkeletonPage count={2} header={false} />
           ) : feedQuery.isError ? (
-            <View style={[styles.stateBlock, { borderColor: tokens.signal }]}>
-              <Ionicons name="cloud-offline-outline" size={20} color={tokens.signal} />
-              <Text style={[styles.stateText, { color: tokens.signal }]}>
-                {t('home.feed_error')}
-              </Text>
-              <TouchableOpacity
-                onPress={() => feedQuery.refetch()}
-                style={[styles.retry, { borderColor: tokens.signal }]}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.retryText, { color: tokens.signal }]}>{t('home.try_again')}</Text>
-              </TouchableOpacity>
-            </View>
+            <StateBlock
+              message={t('home.feed_error')}
+              onRetry={() => feedQuery.refetch()}
+              tokens={tokens}
+            />
           ) : items.length === 0 ? (
-            <View style={[styles.stateBlock, { borderColor: tokens.border }]}>
-              <Text style={[styles.stateText, { color: tokens.inkMuted }]}>
-                {t('home.empty_feed')}
-              </Text>
-            </View>
+            <StateBlock
+              message={t('home.empty_feed')}
+              tokens={tokens}
+              variant="empty"
+            />
           ) : (
             <View style={styles.feed}>
               {items.map((item, index) => {
@@ -443,17 +427,27 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     gap: 24,
   },
-  topRow: {
+  iconsRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    marginTop: 4,
+  },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    marginTop: 10,
   },
   greeting: {
     fontSize: 13,
     lineHeight: 18,
     letterSpacing: 0.2,
+  },
+  username: {
+    fontSize: 15,
+    lineHeight: 20,
+    letterSpacing: -0.2,
   },
   balanceChip: {
     flexDirection: 'row',
@@ -508,30 +502,6 @@ const styles = StyleSheet.create({
   },
   feed: {
     gap: 12,
-  },
-  stateBlock: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    gap: 8,
-  },
-  stateText: {
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-  retry: {
-    marginTop: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  retryText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
   streakBadge: {
     flexDirection: 'row',

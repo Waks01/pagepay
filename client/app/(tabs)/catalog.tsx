@@ -26,6 +26,7 @@ import { SkeletonContentCard } from '@/components/skeletons';
 import { CategoryChip } from '@/components/CategoryChip';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { StateBlock } from '@/components/StateBlock';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 
@@ -521,54 +522,51 @@ export default function CatalogScreen() {
             ))}
           </View>
         ) : isError ? (
-          <View style={[styles.stateBlock, { borderColor: tokens.signal }]}>
-            <Ionicons name="cloud-offline-outline" size={20} color={tokens.signal} />
-            <Text style={[styles.stateText, { color: tokens.signal }]}>
-              {t('catalog.error_load')}
-            </Text>
-            <TouchableOpacity
-              onPress={() => refetch()}
-              style={[styles.retry, { borderColor: tokens.signal }]}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.retryText, { color: tokens.signal }]}>{t('catalog.try_again')}</Text>
-            </TouchableOpacity>
-          </View>
+          <StateBlock
+            message={t('catalog.error_load')}
+            onRetry={() => refetch()}
+            tokens={tokens}
+          />
         ) : items.length === 0 ? (
-          <View style={[styles.stateBlock, { borderColor: tokens.border }]}>
-            <Ionicons name="library-outline" size={28} color={tokens.mint} />
-            <Text style={[styles.stateText, { color: tokens.inkMuted }]}>
-              {storeCategory
-                ? t('catalog.empty_filtered', { category: storeCategory })
-                : t('catalog.empty_finished')}
-            </Text>
-            <TouchableOpacity
-              onPress={() => refreshMutation.mutate()}
-              disabled={refreshMutation.isPending}
-              accessibilityRole="button"
-              accessibilityLabel={t('catalog.refresh_catalog')}
-              activeOpacity={0.9}
-              style={[
-                styles.refreshBtn,
-                {
-                  backgroundColor: refreshMutation.isPending ? tokens.border : tokens.mint,
-                },
-              ]}
-            >
-              {refreshMutation.isPending ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.refreshBtnText}>
-                  {storeCategory ? t('catalog.pull_more') : t('catalog.refresh_catalog')}
+          <StateBlock
+            message={storeCategory
+              ? t('catalog.empty_filtered', { category: storeCategory })
+              : t('catalog.empty_finished')}
+            tokens={tokens}
+            variant="empty"
+            icon="library-outline"
+            iconColor={tokens.mint}
+          action={
+            <View>
+              <TouchableOpacity
+                onPress={() => refreshMutation.mutate()}
+                disabled={refreshMutation.isPending}
+                accessibilityRole="button"
+                accessibilityLabel={t('catalog.refresh_catalog')}
+                activeOpacity={0.9}
+                style={[
+                  styles.refreshBtn,
+                  {
+                    backgroundColor: refreshMutation.isPending ? tokens.border : tokens.mint,
+                  },
+                ]}
+              >
+                {refreshMutation.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.refreshBtnText}>
+                    {storeCategory ? t('catalog.pull_more') : t('catalog.refresh_catalog')}
+                  </Text>
+                )}
+              </TouchableOpacity>
+              {refreshMutation.isError ? (
+                <Text style={[styles.refreshError, { color: tokens.signal }]}>
+                  {t('catalog.refresh_error')}
                 </Text>
-              )}
-            </TouchableOpacity>
-            {refreshMutation.isError ? (
-              <Text style={[styles.stateText, { color: tokens.signal, fontSize: 12 }]}>
-                {t('catalog.refresh_error')}
-              </Text>
-            ) : null}
-          </View>
+              ) : null}
+            </View>
+          }
+          />
         ) : (
           <View style={styles.list}>
             {items.map((item, index) => {
@@ -718,30 +716,6 @@ const styles = StyleSheet.create({
   list: {
     gap: 12,
   },
-  stateBlock: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    gap: 8,
-  },
-  stateText: {
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-  retry: {
-    marginTop: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  retryText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
   refreshBtn: {
     marginTop: 8,
     paddingHorizontal: 22,
@@ -756,5 +730,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  refreshError: {
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

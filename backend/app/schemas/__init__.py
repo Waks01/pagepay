@@ -166,6 +166,7 @@ class ContentItem(BaseModel):
     author: str | None
     estimated_read_minutes: int
     is_sponsored: bool
+    estimated_earn_points: int | None = None
     # Education + attribution fields. Optional so existing callers
     # (e.g. the casual reader feed) keep working when these are NULL
     # on a non-education row.

@@ -24,6 +24,7 @@ import { CommentsSection } from '@/components/CommentsSection';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { SkeletonDetailPage } from '@/components/skeletons';
+import { StateBlock } from '@/components/StateBlock';
 import { useWorkSocial, useLogWorkShare } from '@/src/features/works/hooks/use-works';
 
 type SliceSummary = {
@@ -213,18 +214,11 @@ export default function BookDetailScreen() {
       {loading ? (
         <SkeletonDetailPage />
       ) : errored ? (
-        <View style={[styles.stateBlock, { borderColor: tokens.signal }]}>
-          <Ionicons name="cloud-offline-outline" size={20} color={tokens.signal} />
-          <Text style={[styles.stateText, { color: tokens.signal }]}>
-            {t('book_detail.load_error')}
-          </Text>
-          <TouchableOpacity
-            onPress={onRefreshAll}
-            style={[styles.retry, { borderColor: tokens.signal }]}
-          >
-            <Text style={[styles.retryText, { color: tokens.signal }]}>{t('book_detail.try_again')}</Text>
-          </TouchableOpacity>
-        </View>
+        <StateBlock
+          message={t('book_detail.load_error')}
+          onRetry={onRefreshAll}
+          tokens={tokens}
+        />
       ) : bookQuery.data ? (
         <View>
         <ScrollView
@@ -450,22 +444,6 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     gap: 16,
   },
-  stateBlock: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 24,
-  },
-  stateText: { fontSize: 14, textAlign: 'center' },
-  retry: {
-    marginTop: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  retryText: { fontSize: 13, fontWeight: '600' },
   titleBlock: { gap: 6, marginBottom: 8 },
   category: {
     fontSize: 11,

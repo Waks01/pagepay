@@ -66,6 +66,29 @@ export function formatPoints(points: number): string {
 }
 
 /**
+ * Compact points formatter for tight UI like the home header chip.
+ * Rounds to one decimal and appends k / m. Examples:
+ *   formatPointsCompact(0)       → "0"
+ *   formatPointsCompact(999)     → "999"
+ *   formatPointsCompact(1000)    → "1k"
+ *   formatPointsCompact(1100)    → "1.1k"
+ *   formatPointsCompact(10_000)  → "10k"
+ *   formatPointsCompact(1_200_000) → "1.2m"
+ */
+export function formatPointsCompact(points: number): string {
+  const abs = Math.abs(points);
+  if (abs >= 1_000_000) {
+    const val = points / 1_000_000;
+    return `${val.toFixed(2)}m`;
+  }
+  if (abs >= 1000) {
+    const val = points / 1000;
+    return `${val.toFixed(2)}k`;
+  }
+  return String(points);
+}
+
+/**
  * Convert a kobo-denominated reward (e.g. `task.reward_amount` from
  * the API, or `submission.reward_paid`) into the wallet points the
  * worker will be credited. With POINTS_PER_NAIRA=10:

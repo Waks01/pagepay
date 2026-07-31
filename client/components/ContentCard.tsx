@@ -12,23 +12,13 @@ export type ContentItem = {
   author: string | null;
   estimated_read_minutes: number;
   is_sponsored: boolean;
+  estimated_earn_points: number | null;
 };
 
 type ContentCardProps = {
   item: ContentItem;
   onPress: () => void;
 };
-
-/**
- * Phase-1 base reading rate (5 pts per 10 minutes verified). Surfacing this on
- * the card makes the value prop legible without a tooltip — the user can scan
- * the feed and instantly see what each piece is worth.
- */
-const POINTS_PER_MINUTE = 0.5;
-
-function estimatePoints(item: ContentItem): number {
-  return Math.max(1, Math.round(item.estimated_read_minutes * POINTS_PER_MINUTE));
-}
 
 /**
  * Map a category to a soft cover band color. We don't have real cover images
@@ -60,22 +50,21 @@ function getTokens(scheme: 'light' | 'dark' | 'sepia') {
  *     the right
  *   - Sponsored rows add a tiny "Sponsored" label in the band
  *
- * No images, no cover art, no sponsored-stock photo. The band is the visual
- * anchor — keeps the card honest in Phase 1 and easy to swap to real covers in
- * Phase 2 without a layout reflow.
+ * The points estimate is calculated server-side (`estimated_earn_points`)
+ * so the frontend never guesses or exposes reward math to the client.
  */
 export function ContentCard({ item, onPress }: ContentCardProps) {
   const scheme = useEffectiveScheme();
   const tokens = getTokens(scheme);
 
   const bandColor = coverBand(item.category, item.is_sponsored, tokens);
-  const points = estimatePoints(item);
+  const points = item.estimated_earn_points;
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${item.title}, ${item.estimated_read_minutes} minute read, earn about ${points} points`}
+      accessibilityLabel={`${item.title}, ${item.estimated_read_minutes} minute read, earn about ${points ?? 0} points`}
       style={({ pressed }) => [
         styles.card,
         {
@@ -115,7 +104,7 @@ export function ContentCard({ item, onPress }: ContentCardProps) {
           <View style={[styles.pointsPill, { backgroundColor: tokens.mintSoft }]}>
             <Ionicons name="wallet-outline" size={12} color={tokens.mint} />
             <Text style={[styles.pointsText, { color: tokens.mint, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-              Earn ~{points} pts
+              {points != null ? `Earn ~${points} pts` : 'Earn pts'}
             </Text>
           </View>
 
