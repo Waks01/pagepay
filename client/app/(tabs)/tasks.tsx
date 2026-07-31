@@ -1,30 +1,170 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
-import { useState, useCallback } from 'react';
-import { router } from 'expo-router';
+import { useMemo, useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl,
+  ActivityIndicator, TextInput, ScrollView,
+} from 'react-native';
+import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { fetchTasks, type Task } from '@/src/features/tasks/api';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { fetchTasks, type TaskListItem } from '@/src/features/tasks/api';
 import { PagePay } from '@/constants/theme';
+import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import AppHeader from '@/components/AppHeader';
-import { SkeletonPage } from '@/components/skeletons';
+import { Skeleton } from '@/components/Skeleton';
 import { koboToPoints, koboToNairaString } from '@/src/shared/lib/money';
 
+const CATEGORIES = [
+  { key: 'all', labelKey: 'tasks.categories.all', icon: 'apps-outline' },
+  { key: 'social_media', labelKey: 'tasks.categories.social_media', icon: 'people-outline' },
+  { key: 'engagement', labelKey: 'tasks.categories.engagement', icon: 'heart-outline' },
+  { key: 'website', labelKey: 'tasks.categories.website', icon: 'globe-outline' },
+  { key: 'app', labelKey: 'tasks.categories.app', icon: 'phone-portrait-outline' },
+  { key: 'content_creation', labelKey: 'tasks.categories.content_creation', icon: 'create-outline' },
+  { key: 'surveys', labelKey: 'tasks.categories.surveys', icon: 'clipboard-outline' },
+  { key: 'data_collection', labelKey: 'tasks.categories.data_collection', icon: 'server-outline' },
+  { key: 'other', labelKey: 'tasks.categories.other', icon: 'ellipsis-horizontal-circle-outline' },
+] as const;
+
+const SORT_OPTIONS = [
+  { key: 'newest', labelKey: 'tasks.sort.newest', icon: 'time-outline' },
+  { key: 'highest_reward', labelKey: 'tasks.sort.highest_reward', icon: 'cash-outline' },
+  { key: 'quickest', labelKey: 'tasks.sort.quickest', icon: 'flash-outline' },
+  { key: 'popular', labelKey: 'tasks.sort.popular', icon: 'trending-up-outline' },
+] as const;
+
+const PLATFORM_ICONS: Record<string, string> = {
+  twitter: 'logo-twitter',
+  x: 'logo-twitter',
+  instagram: 'logo-instagram',
+  tiktok: 'logo-tiktok',
+  youtube: 'logo-youtube',
+  facebook: 'logo-facebook',
+  linkedin: 'logo-linkedin',
+  pinterest: 'logo-pinterest',
+  telegram: 'send-outline',
+  snapchat: 'logo-snapchat',
+  reddit: 'logo-reddit',
+  discord: 'logo-discord',
+  website: 'globe-outline',
+  app: 'phone-portrait-outline',
+  web: 'globe-outline',
+  android: 'logo-android',
+  ios: 'logo-apple',
+};
+
+const TASK_TYPE_LABELS: Record<string, string> = {
+  twitter_follow: 'Follow',
+  twitter_like: 'Like',
+  twitter_retweet: 'Retweet',
+  twitter_comment: 'Comment',
+  twitter_share: 'Share',
+  instagram_follow: 'Follow',
+  instagram_like: 'Like',
+  instagram_comment: 'Comment',
+  instagram_repost: 'Repost',
+  tiktok_follow: 'Follow',
+  tiktok_like: 'Like',
+  tiktok_comment: 'Comment',
+  tiktok_share: 'Share',
+  youtube_subscribe: 'Subscribe',
+  youtube_like: 'Like',
+  youtube_watch: 'Watch',
+  youtube_comment: 'Comment',
+  youtube_share: 'Share',
+  facebook_follow: 'Follow',
+  facebook_like: 'Like',
+  linkedin_follow: 'Follow',
+  linkedin_like: 'Like',
+  linkedin_comment: 'Comment',
+  pinterest_follow: 'Follow',
+  pinterest_like: 'Like',
+  pinterest_repin: 'Repin',
+  pinterest_comment: 'Comment',
+  telegram_join: 'Join',
+  telegram_view: 'View',
+  snapchat_add_friend: 'Add Friend',
+  snapchat_view_story: 'View Story',
+  reddit_follow: 'Follow',
+  reddit_upvote: 'Upvote',
+  reddit_comment: 'Comment',
+  discord_join_server: 'Join Server',
+  discord_verify: 'Verify',
+  discord_message: 'Message',
+  website_visit: 'Visit',
+  website_signup: 'Sign Up',
+  app_download: 'Download',
+  app_review: 'Review',
+  photo_upload: 'Upload Photo',
+  video_upload: 'Upload Video',
+  written_review: 'Write Review',
+  survey: 'Survey',
+  custom: 'Custom',
+};
+
 export default function TasksScreen() {
-  const [refreshing, setRefreshing] = useState(false);
+  const { t } = useTranslation();
+  const router = useRouter();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
-  const { t } = useTranslation();
 
-  const { data: tasksData, isLoading, refetch } = useQuery({
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('newest');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const { data: tasks = [], isLoading, refetch } = useQuery({
     queryKey: ['tasks'],
     queryFn: fetchTasks,
   });
 
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const categories = useMemo(() => {
+    const cats = Array.from(new Set(tasks.map((t) => t.category).filter(Boolean)));
+    return ['all', ...cats];
+  }, [tasks]);
+
+  const filteredTasks = useMemo(() => {
+    let result = [...tasks];
+
+    if (activeCategory !== 'all') {
+      result = result.filter((t) => t.category === activeCategory);
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter((t) =>
+        t.title.toLowerCase().includes(q) ||
+        t.description.toLowerCase().includes(q) ||
+        t.task_type.toLowerCase().includes(q) ||
+        t.platform.toLowerCase().includes(q)
+      );
+    }
+
+    switch (sortBy) {
+      case 'highest_reward':
+        result.sort((a, b) => b.reward_amount - a.reward_amount);
+        break;
+      case 'quickest':
+        result.sort((a, b) => (a.time_estimate_minutes || 999) - (b.time_estimate_minutes || 999));
+        break;
+      case 'popular':
+        result.sort((a, b) => b.completed_count - a.completed_count);
+        break;
+      default:
+        result.sort((a, b) => new Date(b.expires_at).getTime() - new Date(a.expires_at).getTime());
+    }
+
+    return result;
+  }, [tasks, activeCategory, searchQuery, sortBy]);
+
+  const totalPotentialEarnings = useMemo(() => {
+    return filteredTasks.reduce((sum, t) => {
+      const netKobo = Math.floor(t.reward_amount * (t.reward_multiplier ?? 1) * 0.85);
+      return sum + koboToPoints(netKobo);
+    }, 0);
+  }, [filteredTasks]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -32,164 +172,308 @@ export default function TasksScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  const categories = Array.from(
-    new Set((tasksData?.items || []).map((t) => t.category).filter(Boolean))
+  const renderSkeleton = () => (
+    <View style={{ padding: 16, gap: 16 }}>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <View
+          key={i}
+          style={{
+            backgroundColor: tokens.card,
+            borderRadius: 16,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: tokens.border,
+            gap: 12,
+          }}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Skeleton height={14} width="35%" borderRadius={6} />
+            <Skeleton height={32} width={100} borderRadius={8} />
+          </View>
+          <Skeleton height={20} width="90%" />
+          <Skeleton height={14} width="100%" />
+          <Skeleton height={14} width="75%" />
+          <View style={{ flexDirection: 'row', gap: 16, marginTop: 4 }}>
+            <Skeleton height={14} width={70} />
+            <Skeleton height={14} width={90} />
+            <Skeleton height={14} width={80} />
+          </View>
+        </View>
+      ))}
+    </View>
   );
 
-  const getPlatformIcon = (platform: string): any => {
-    const platformLower = platform.toLowerCase();
-    switch (platformLower) {
-      case 'twitter':
-      case 'x':
-        return 'logo-twitter';
-      case 'instagram':
-        return 'logo-instagram';
-      case 'tiktok':
-        return 'logo-tiktok';
-      case 'youtube':
-        return 'logo-youtube';
-      case 'facebook':
-        return 'logo-facebook';
-      case 'linkedin':
-        return 'logo-linkedin';
-      case 'pinterest':
-        return 'logo-pinterest';
-      case 'telegram':
-        return 'logo-telegram';
-      case 'snapchat':
-        return 'logo-snapchat';
-      case 'reddit':
-        return 'logo-reddit';
-      case 'discord':
-        return 'logo-discord';
-      case 'website':
-        return 'globe-outline';
-      case 'app':
-        return 'phone-portrait-outline';
-      default:
-        return 'briefcase-outline';
-    }
-  };
-
-  const renderTask = ({ item }: { item: Task }) => {
+  const renderTask = ({ item }: { item: TaskListItem }) => {
     const netRewardKobo = Math.floor(item.reward_amount * (item.reward_multiplier ?? 1) * 0.85);
     const remaining = item.max_completions - item.completed_count;
-    const taskTypeKey = item.task_type as keyof typeof t extends `tasks.task_types.${infer K}` ? K : string;
-    // Worker display follows the JumpTask pattern: primary unit is the
-    // in-app points balance (which the user sees everywhere else in
-    // the app), with the actual naira equivalent shown alongside so
-    // they understand the real-world value.
-    //
-    // Both conversions read from the same env rate via money.ts, so a
-    // revaluation only needs updating POINTS_PER_NAIRA in
-    // backend/.env AND EXPO_PUBLIC_POINTS_PER_NAIRA in client/.env.
     const points = koboToPoints(netRewardKobo);
     const naira = koboToNairaString(netRewardKobo);
+    const platformIcon = PLATFORM_ICONS[item.platform.toLowerCase()] || 'briefcase-outline';
+    const taskLabel = TASK_TYPE_LABELS[item.task_type] || item.task_type.replace(/_/g, ' ');
+    const remainingPercent = Math.round((item.completed_count / Math.max(1, item.max_completions)) * 100);
+    const isAlmostFull = remainingPercent > 80;
+    const expiresDate = new Date(item.expires_at);
+    const isExpiringSoon = expiresDate.getTime() - Date.now() < 86400000 * 2;
 
     return (
       <TouchableOpacity
         style={[styles.taskCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}
         onPress={() => router.push(`/tasks/${item.id}`)}
+        activeOpacity={0.7}
       >
+        {/* Top row: badge + reward */}
         <View style={styles.taskHeader}>
-          <View style={[styles.taskTypeBadge, { backgroundColor: tokens.mint }]}>
-            <Text style={[styles.taskTypeBadgeText, { color: tokens.mintText }]}>
-              {t(`tasks.task_types.${item.task_type}`, { defaultValue: item.task_type.replace('_', ' ') })}
-            </Text>
+          <View style={styles.taskHeaderLeft}>
+            <View style={[styles.taskTypeBadge, { backgroundColor: tokens.mintSoft }]}>
+              <Ionicons name={platformIcon as any} size={12} color={tokens.mint} />
+              <Text style={[styles.taskTypeBadgeText, { color: tokens.mint }]}>
+                {taskLabel}
+              </Text>
+            </View>
+            {item.task_source === 'admin' && (
+              <View style={[styles.sourceBadge, { backgroundColor: tokens.signalSoft }]}>
+                <Text style={[styles.sourceBadgeText, { color: tokens.signal }]}>Official</Text>
+              </View>
+            )}
           </View>
-          <View style={[styles.rewardBadge, { backgroundColor: tokens.mintSoft }]}>
-            <Text style={[styles.rewardPointsText, { color: tokens.mint }]}>
-              +{points.toLocaleString()} {t('tasks.points_unit')}
+
+          <View style={[styles.rewardBadge, { backgroundColor: tokens.mint }]}>
+            <Text style={[styles.rewardPointsText, { color: tokens.mintText }]}>
+              +{points.toLocaleString()}
             </Text>
-            <Text style={[styles.rewardNairaText, { color: tokens.mint }]}>
+            <Text style={[styles.rewardNairaText, { color: tokens.mintText }]}>
               ≈ {naira}
             </Text>
           </View>
         </View>
 
+        {/* Title + description */}
         <Text style={[styles.taskTitle, { color: tokens.ink }]} numberOfLines={2}>
           {item.title}
         </Text>
-
         <Text style={[styles.taskDescription, { color: tokens.inkMuted }]} numberOfLines={2}>
           {item.description}
         </Text>
 
+        {/* Progress bar */}
+        <View style={styles.progressContainer}>
+          <View style={[styles.progressBar, { backgroundColor: tokens.border }]}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  backgroundColor: isAlmostFull ? tokens.signal : tokens.mint,
+                  width: `${Math.min(remainingPercent, 100)}%`,
+                },
+              ]}
+            />
+          </View>
+          <Text style={[styles.progressText, { color: tokens.inkMuted }]}>
+            {remaining} {t('tasks.remaining', { count: remaining })}
+          </Text>
+        </View>
+
+        {/* Footer meta */}
         <View style={styles.taskFooter}>
-          <View style={styles.taskMeta}>
-            <Ionicons name={getPlatformIcon(item.platform)} size={14} color={tokens.inkMuted} />
-            <Text style={[styles.taskMetaText, { color: tokens.inkMuted }]}>
-              {t(`tasks.platforms.${item.platform.toLowerCase()}`, { defaultValue: item.platform })}
-            </Text>
-          </View>
-
-          <View style={styles.taskMeta}>
-            <Ionicons name="people-outline" size={14} color={tokens.inkMuted} />
-            <Text style={[styles.taskMetaText, { color: tokens.inkMuted }]}>
-              {t('tasks.remaining', { count: remaining })}
-            </Text>
-          </View>
-
           <View style={styles.taskMeta}>
             <Ionicons name="time-outline" size={14} color={tokens.inkMuted} />
             <Text style={[styles.taskMetaText, { color: tokens.inkMuted }]}>
-              {new Date(item.expires_at).toLocaleDateString()}
+              {item.time_estimate_minutes} min
             </Text>
           </View>
+
+          <View style={styles.taskMeta}>
+            <Ionicons name="calendar-outline" size={14} color={isExpiringSoon ? tokens.signal : tokens.inkMuted} />
+            <Text style={[styles.taskMetaText, { color: isExpiringSoon ? tokens.signal : tokens.inkMuted }]}>
+              {expiresDate.toLocaleDateString()}
+            </Text>
+          </View>
+
+          {item.sponsor_business_name && (
+            <View style={styles.taskMeta}>
+              <Ionicons name="business-outline" size={14} color={tokens.inkMuted} />
+              <Text style={[styles.taskMetaText, { color: tokens.inkMuted }]} numberOfLines={1}>
+                {item.sponsor_business_name}
+              </Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     );
   };
 
+  const renderEmpty = () => (
+    <View style={styles.emptyContainer}>
+      <View style={[styles.emptyIconContainer, { backgroundColor: tokens.mintSoft }]}>
+        <Ionicons name="briefcase-outline" size={48} color={tokens.mint} />
+      </View>
+      <Text style={[styles.emptyTitle, { color: tokens.ink }]}>
+        {searchQuery ? t('tasks.empty_search_title') : t('tasks.empty_title')}
+      </Text>
+      <Text style={[styles.emptySubtitle, { color: tokens.inkMuted }]}>
+        {searchQuery ? t('tasks.empty_search_subtitle') : t('tasks.empty_subtitle')}
+      </Text>
+      {!searchQuery && (
+        <TouchableOpacity
+          style={[styles.emptyCta, { backgroundColor: tokens.mint }]}
+          onPress={() => router.push('/tasks/profile')}
+        >
+          <Text style={[styles.emptyCtaText, { color: tokens.mintText }]}>
+            {t('tasks.empty_cta')}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
   if (isLoading) {
     return (
-      <View style={[styles.centerContainer, { backgroundColor: tokens.paper }]}>
-        <ActivityIndicator size="large" color={tokens.mint} />
-      </View>
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
+        <AppHeader title={t('tasks.title')} />
+        <View style={{ padding: 16, gap: 12 }}>
+          <Skeleton height={20} width="60%" borderRadius={8} />
+          <Skeleton height={44} width="100%" borderRadius={12} />
+          <Skeleton height={40} width="100%" borderRadius={20} />
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Skeleton height={36} width={80} borderRadius={18} />
+            <Skeleton height={36} width={100} borderRadius={18} />
+            <Skeleton height={36} width={90} borderRadius={18} />
+          </View>
+        </View>
+        {renderSkeleton()}
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: tokens.paper }]}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
       <AppHeader title={t('tasks.title')} />
-      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-        <Text style={[styles.headerTitle, { color: tokens.ink }]}>{t('tasks.title')}</Text>
-        <TouchableOpacity onPress={() => router.push('/tasks/profile')}>
-          <Ionicons name="stats-chart" size={24} color={tokens.mint} />
+
+      {/* Stats summary */}
+      <View style={[styles.statsRow, { borderBottomColor: tokens.border }]}>
+        <View style={styles.statItem}>
+          <Text style={[styles.statValue, { color: tokens.mint }]}>
+            {filteredTasks.length}
+          </Text>
+          <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>
+            {t('tasks.stats.available')}
+          </Text>
+        </View>
+        <View style={[styles.statDivider, { backgroundColor: tokens.border }]} />
+        <View style={styles.statItem}>
+          <Text style={[styles.statValue, { color: tokens.mint }]}>
+            {totalPotentialEarnings.toLocaleString()}
+          </Text>
+          <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>
+            {t('tasks.stats.potential_earnings')}
+          </Text>
+        </View>
+        <View style={[styles.statDivider, { backgroundColor: tokens.border }]} />
+        <TouchableOpacity
+          style={styles.statItem}
+          onPress={() => router.push('/tasks/profile')}
+        >
+          <Ionicons name="stats-chart-outline" size={20} color={tokens.mint} />
+          <Text style={[styles.statLabel, { color: tokens.mint }]}>
+            {t('tasks.stats.my_stats')}
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {categories.length > 0 && (
-        <View style={styles.filterRow}>
-          <TouchableOpacity
-            style={[styles.filterPill, !categoryFilter && styles.filterPillActive]}
-            onPress={() => setCategoryFilter(null)}
-          >
-            <Text style={[styles.filterPillText, !categoryFilter && styles.filterPillTextActive]}>
-              All
-            </Text>
-          </TouchableOpacity>
-          {categories.map((cat) => (
+      {/* Search + Sort row */}
+      <View style={[styles.controlsRow, { borderBottomColor: tokens.border }]}>
+        <View style={[styles.searchBar, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <Ionicons name="search-outline" size={18} color={tokens.inkMuted} />
+          <TextInput
+            style={[styles.searchInput, { color: tokens.ink }]}
+            placeholder={t('tasks.search_placeholder')}
+            placeholderTextColor={tokens.inkMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color={tokens.inkMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortRow}>
+          {SORT_OPTIONS.map((opt) => (
             <TouchableOpacity
-              key={cat}
-              style={[styles.filterPill, categoryFilter === cat && styles.filterPillActive]}
-              onPress={() => setCategoryFilter(cat)}
+              key={opt.key}
+              style={[
+                styles.sortPill,
+                sortBy === opt.key && [styles.sortPillActive, { backgroundColor: tokens.mint }],
+                sortBy !== opt.key && { backgroundColor: tokens.card, borderColor: tokens.border },
+              ]}
+              onPress={() => setSortBy(opt.key)}
             >
-              <Text style={[styles.filterPillText, categoryFilter === cat && styles.filterPillTextActive]}>
-                {cat}
+              <Ionicons
+                name={opt.icon as any}
+                size={14}
+                color={sortBy === opt.key ? tokens.mintText : tokens.inkMuted}
+              />
+              <Text
+                style={[
+                  styles.sortPillText,
+                  sortBy === opt.key ? { color: tokens.mintText } : { color: tokens.inkMuted },
+                ]}
+              >
+                {t(opt.labelKey)}
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
-      )}
+        </ScrollView>
+      </View>
 
+      {/* Category chips - horizontal scroll */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.categoryScroll}
+        contentContainerStyle={styles.categoryContent}
+      >
+        {CATEGORIES.map((cat) => {
+          const isActive = activeCategory === cat.key;
+          return (
+            <TouchableOpacity
+              key={cat.key}
+              style={[
+                styles.categoryChip,
+                isActive && { backgroundColor: tokens.mint },
+                !isActive && { backgroundColor: tokens.card, borderColor: tokens.border },
+              ]}
+              onPress={() => setActiveCategory(cat.key)}
+            >
+              <Ionicons
+                name={cat.icon as any}
+                size={16}
+                color={isActive ? tokens.mintText : tokens.inkMuted}
+              />
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  isActive ? { color: tokens.mintText } : { color: tokens.inkMuted },
+                ]}
+              >
+                {t(cat.labelKey)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* Task list */}
       <FlatList
-        data={(tasksData?.items || []).filter(
-          (t) => !categoryFilter || t.category === categoryFilter
-        )}
+        data={filteredTasks}
         renderItem={renderTask}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          filteredTasks.length === 0 && styles.listContentEmpty,
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -197,134 +481,214 @@ export default function TasksScreen() {
             tintColor={tokens.mint}
           />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="briefcase-outline" size={64} color={tokens.border} />
-            <Text style={[styles.emptyText, { color: tokens.ink }]}>{t('tasks.empty_title')}</Text>
-            <Text style={[styles.emptySubtext, { color: tokens.inkMuted }]}>
-              {t('tasks.empty_subtitle')}
-            </Text>
-          </View>
-        }
+        ListEmptyComponent={renderEmpty}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    backgroundColor: '#fff',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 28,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: 'SpaceGrotesk_700Bold',
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  controlsRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+    borderBottomWidth: 1,
+    backgroundColor: '#fff',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'SpaceGrotesk_400',
+  },
+  sortRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  sortPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  sortPillActive: {
+    borderColor: 'transparent',
+  },
+  sortPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'SpaceGrotesk_600',
+  },
+  categoryScroll: {
+    maxHeight: 44,
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    fontFamily: 'SpaceGrotesk_700Bold',
+  categoryContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
+    alignItems: 'center',
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'SpaceGrotesk_600',
   },
   listContent: {
     padding: 16,
   },
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  filterPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E5E2DA',
-  },
-  filterPillActive: {
-    backgroundColor: '#0E7C66',
-    borderColor: '#0E7C66',
-  },
-  filterPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-    fontFamily: 'SpaceGrotesk_600',
-  },
-  filterPillTextActive: {
-    color: '#fff',
+  listContentEmpty: {
+    flex: 1,
   },
   taskCard: {
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
     elevation: 2,
+    gap: 10,
   },
   taskHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+  },
+  taskHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
   },
   taskTypeBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   taskTypeBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontFamily: 'SpaceGrotesk_700Bold',
     textTransform: 'capitalize',
+  },
+  sourceBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  sourceBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: 'SpaceGrotesk_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   rewardBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: 10,
     alignItems: 'flex-end',
   },
   rewardPointsText: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '700',
     fontFamily: 'SpaceGrotesk_700Bold',
+    lineHeight: 18,
   },
   rewardNairaText: {
     fontSize: 11,
-    opacity: 0.8,
-    marginTop: 1,
-  },
-  rewardText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    fontFamily: 'SpaceGrotesk_700Bold',
+    fontWeight: '600',
+    opacity: 0.9,
+    lineHeight: 14,
   },
   taskTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     fontFamily: 'SpaceGrotesk_700Bold',
-    marginBottom: 6,
+    lineHeight: 22,
   },
   taskDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 12,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  progressContainer: {
+    gap: 6,
+  },
+  progressBar: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'SpaceGrotesk_600',
   },
   taskFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 16,
+    flexWrap: 'wrap',
   },
   taskMeta: {
     flexDirection: 'row',
@@ -333,20 +697,43 @@ const styles = StyleSheet.create({
   },
   taskMetaText: {
     fontSize: 12,
+    fontWeight: '500',
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 48,
+    paddingVertical: 64,
+    paddingHorizontal: 32,
+    gap: 12,
   },
-  emptyText: {
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  emptyTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     fontFamily: 'SpaceGrotesk_700Bold',
-    marginTop: 16,
+    textAlign: 'center',
   },
-  emptySubtext: {
+  emptySubtitle: {
     fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  emptyCta: {
     marginTop: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  emptyCtaText: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: 'SpaceGrotesk_700Bold',
   },
 });

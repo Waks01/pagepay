@@ -2,20 +2,24 @@ import { apiFetch } from '@/src/shared/api/client';
 
 // ==================== Types ====================
 
-export type Task = {
+export type TaskListItem = {
   id: number;
   title: string;
   description: string;
   task_type: string;
   platform: string;
   category: string;
+  task_source: string;
   reward_amount: number;
   reward_multiplier: number;
   max_completions: number;
   completed_count: number;
   expires_at: string;
-  sponsor_display_name?: string;
+  sponsor_business_name: string | null;
+  time_estimate_minutes: number;
 };
+
+export type TaskListResponse = TaskListItem[];
 
 export type TaskDetail = {
   id: number;
@@ -90,11 +94,6 @@ export type WorkerStats = {
   badges: string[];
   created_at: string;
   updated_at: string;
-};
-
-export type TaskListResponse = {
-  items: Task[];
-  total: number;
 };
 
 // ==================== API Functions ====================

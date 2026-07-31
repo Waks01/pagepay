@@ -106,4 +106,5 @@ async def get_platform_config(db: AsyncSession = Depends(get_db)) -> dict[str, f
         "task_revenue_platform_percent": settings.platform_task_revenue_percent,
         "task_revenue_worker_percent": 1.0 - settings.platform_task_revenue_percent,
         "task_base_rates_kobo": task_rates,
+        "paystack_public_key": settings.paystack_public_key or "",
     }

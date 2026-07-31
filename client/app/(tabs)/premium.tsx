@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
@@ -64,7 +64,9 @@ export default function PremiumScreen() {
       }
       const data = await res.json();
       if (data.payment_url) {
-        await Linking.openURL(data.payment_url);
+        await WebBrowser.openBrowserAsync(data.payment_url, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
+        });
         qc.invalidateQueries({ queryKey: ['payments', 'subscription'] });
       }
     } catch (e) {

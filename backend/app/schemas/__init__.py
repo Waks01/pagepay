@@ -1327,8 +1327,11 @@ class TaskListItem(BaseModel):
     """Shortened task for list views."""
     id: int
     title: str
+    description: str
     task_type: str
     platform: str
+    category: str
+    task_source: str
     reward_amount: int
     reward_multiplier: float
     max_completions: int

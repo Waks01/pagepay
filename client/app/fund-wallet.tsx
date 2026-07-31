@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet, Linking,
+  Alert, ActivityIndicator, StyleSheet, Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import * as WebBrowser from 'expo-web-browser';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
@@ -54,27 +55,18 @@ export default function FundWalletScreen() {
       return (await res.json()) as DepositResponse;
     },
     onSuccess: async (data) => {
-      const canOpen = await Linking.canOpenURL(data.payment_url);
-      if (!canOpen) {
-        throw new Error('Could not open payment link');
+      try {
+        await WebBrowser.openBrowserAsync(data.payment_url, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
+        });
+      } catch (e) {
+        console.error('Failed to open payment browser:', e);
+        Alert.alert(t('fund_wallet.errors.deposit_failed'), 'Could not open payment page');
+        return;
       }
-      
-      await Linking.openURL(data.payment_url);
-      
-      // Show success message
-      Alert.alert(
-        'Payment Initiated',
-        `Complete payment of ₦${(data.amount_kobo / 100).toLocaleString()}. You'll receive ₦${(data.deposit_amount_kobo / 100).toLocaleString()} in your wallet.`,
-        [
-          { 
-            text: 'Done', 
-            onPress: () => {
-              qc.invalidateQueries({ queryKey: ['me'] });
-              router.back();
-            }
-          }
-        ],
-      );
+
+      qc.invalidateQueries({ queryKey: ['me'] });
+      router.back();
     },
     onError: (error: Error) => {
       Alert.alert(t('fund_wallet.errors.deposit_failed'), error.message);

@@ -120,9 +120,13 @@ async def list_tasks(
         response.append(TaskListItem(
             id=task.id,
             title=task.title,
+            description=task.description,
             task_type=task.task_type,
             platform=task.platform,
+            category=task.category,
+            task_source=task.task_source,
             reward_amount=task.reward_amount,
+            reward_multiplier=task.reward_multiplier,
             max_completions=task.max_completions,
             completed_count=task.completed_count,
             expires_at=task.expires_at,
