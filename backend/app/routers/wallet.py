@@ -179,7 +179,7 @@ async def paystack_webhook(
       - POST /api/v1/wallet/deposit/webhook
 
     The Paystack signature is verified once, inside the dispatcher —
-    no separate verification per route. See payouts.py:599.
+    no separate verification per route. See payouts.py:613.
     """
     return await _payouts_paystack_webhook(request=request, db=db)
 
@@ -272,6 +272,15 @@ async def initiate_wallet_deposit(
         raise HTTPException(status_code=502, detail="Payment provider unavailable")
     
     # Create Payment record to track deposit
+    #
+    # The Payment ORM column is `payment_metadata` (NOT `metadata`).
+    # Using the wrong kwarg here silently drops the dict — SQLAlchemy
+    # ignores unknown kwargs at construction, so no error is raised,
+    # but the dispatcher at app/routers/payouts.py:701 reads
+    # `payment.payment_metadata` to credit points_balance, and that
+    # branch never fires if the dict is missing. That bug surfaced as
+    # "the webhook returns handled:true but the wallet balance stays
+    # at 0" — the dispatcher thought everything was fine.
     payment = Payment(
         user_id=current_user.id,
         tier="wallet_deposit",
@@ -279,7 +288,7 @@ async def initiate_wallet_deposit(
         provider="paystack",
         provider_tx_ref=reference,
         status="pending",
-        metadata={
+        payment_metadata={
             "deposit_amount_kobo": payload.deposit_amount_kobo,
             "processing_fee_kobo": processing_fee,
             "total_amount_kobo": total_amount,
