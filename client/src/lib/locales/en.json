@@ -449,13 +449,13 @@
     "custom_amount": "Enter custom amount",
     "processing_fee": "Processing fee (1.5%): ₦{{fee}}",
     "total_payment": "Total payment: ₦{{total}}",
-    "minimum": "Minimum ₦500",
+    "minimum": "Minimum ₦100",
     "fund_button": "Proceed to Payment",
     "funding": "Opening payment...",
     "payment_note": "You'll be redirected to Paystack to complete payment",
     "errors": {
       "amount_required": "Select or enter amount",
-      "amount_min": "Minimum deposit is ₦500",
+      "amount_min": "Minimum deposit is ₦100",
       "amount_max": "Maximum deposit is ₦100,000",
       "deposit_failed": "Deposit failed. Please try again."
     }

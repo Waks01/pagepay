@@ -413,13 +413,13 @@
     "custom_amount": "Put your own amount",
     "processing_fee": "Processing fee (1.5%): ₦{{fee}}",
     "total_payment": "Total wey you go pay: ₦{{total}}",
-    "minimum": "Minimum ₦500",
+    "minimum": "Minimum ₦100",
     "fund_button": "Go Pay",
     "funding": "Dey open payment...",
     "payment_note": "We go take you go Paystack make you pay",
     "errors": {
       "amount_required": "Choose amount or put your own",
-      "amount_min": "Minimum deposit na ₦500",
+      "amount_min": "Minimum deposit na ₦100",
       "amount_max": "Maximum deposit na ₦100,000",
       "deposit_failed": "E no work. Try again."
     }

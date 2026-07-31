@@ -20,7 +20,7 @@ type DepositResponse = {
   deposit_amount_kobo: number;
 };
 
-const AMOUNTS = [500, 1000, 2000, 5000, 10000, 20000];
+const AMOUNTS = [100, 1000, 2000, 5000, 10000, 20000];
 
 export default function FundWalletScreen() {
   const { t } = useTranslation();
@@ -35,7 +35,7 @@ export default function FundWalletScreen() {
   const depositMutation = useMutation({
     mutationFn: async () => {
       const finalAmount = amount ?? (parseInt(customAmount) || 0);
-      if (finalAmount < 500) throw new Error(t('fund_wallet.errors.amount_min'));
+      if (finalAmount < 100) throw new Error(t('fund_wallet.errors.amount_min'));
 
       const res = await apiFetch('/api/v1/wallet/deposit', {
         method: 'POST',
@@ -82,9 +82,9 @@ export default function FundWalletScreen() {
   });
 
   const finalAmount = amount ?? (parseInt(customAmount) || 0);
-  const processingFee = finalAmount >= 500 ? Math.min(Math.ceil(finalAmount * 0.015), 2000) : 0;
+  const processingFee = finalAmount >= 100 ? Math.min(Math.ceil(finalAmount * 0.015), 2000) : 0;
   const totalPayment = finalAmount + processingFee;
-  const canSubmit = finalAmount >= 500;
+  const canSubmit = finalAmount >= 100;
   const pointsToReceive = finalAmount * 10; // Points based on deposit amount (not including fee)
 
   return (

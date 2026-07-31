@@ -413,13 +413,13 @@
     "custom_amount": "Tinye ego gị",
     "processing_fee": "Ụgwọ nhazi (1.5%): ₦{{fee}}",
     "total_payment": "Ngụkọta ịkwụ ụgwọ: ₦{{total}}",
-    "minimum": "Opekempe ₦500",
+    "minimum": "Opekempe ₦100",
     "fund_button": "Gaa n'ihu kwụọ ụgwọ",
     "funding": "Na-emepe ịkwụ ụgwọ...",
     "payment_note": "A ga-eduzi gị na Paystack iji mechaa ịkwụ ụgwọ",
     "errors": {
       "amount_required": "Họrọ ma ọ bụ tinye ego",
-      "amount_min": "Opekempe itinye bụ ₦500",
+      "amount_min": "Opekempe itinye bụ ₦100",
       "amount_max": "Oke itinye bụ ₦100,000",
       "deposit_failed": "Itinye dara. Biko gbalịa ọzọ."
     }

@@ -413,13 +413,13 @@
     "custom_amount": "Shigar da adadin ku",
     "processing_fee": "Kuɗin aiki (1.5%): ₦{{fee}}",
     "total_payment": "Jimlar biyan kuɗi: ₦{{total}}",
-    "minimum": "Mafi ƙaranci ₦500",
+    "minimum": "Mafi ƙaranci ₦100",
     "fund_button": "Ci gaba da Biyan Kuɗi",
     "funding": "Ana buɗe biyan kuɗi...",
     "payment_note": "Za a kai ku Paystack don kammala biyan kuɗi",
     "errors": {
       "amount_required": "Zaɓi ko shigar da adadin",
-      "amount_min": "Mafi ƙarancin ajiya shine ₦500",
+      "amount_min": "Mafi ƙarancin ajiya shine ₦100",
       "amount_max": "Mafi yawan ajiya shine ₦100,000",
       "deposit_failed": "Ajiya ta kasa. Don Allah sake gwadawa."
     }

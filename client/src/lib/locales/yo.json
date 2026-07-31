@@ -413,13 +413,13 @@
     "custom_amount": "Tẹ iye owo tirẹ sii",
     "processing_fee": "Owo sisẹ (1.5%): ₦{{fee}}",
     "total_payment": "Lapapọ isanwo: ₦{{total}}",
-    "minimum": "Iye kekere ₦500",
+    "minimum": "Iye kekere ₦100",
     "fund_button": "Lọ si Isanwo",
     "funding": "N ṣii isanwo...",
     "payment_note": "A yoo darí ọ lọ si Paystack lati pari isanwo",
     "errors": {
       "amount_required": "Yan tabi tẹ iye owo sii",
-      "amount_min": "Ifun kekere ni ₦500",
+      "amount_min": "Ifun kekere ni ₦100",
       "amount_max": "Ifun ti o pọ julọ ni ₦100,000",
       "deposit_failed": "Ifun ko ṣiṣẹ. Jọwọ gbiyanju lẹẹkansi."
     }

@@ -1,6 +1,7 @@
 import logging
 import uuid
 from datetime import datetime
+from math import ceil
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -136,7 +137,11 @@ async def list_transactions(
 
 class WalletDepositRequest(BaseModel):
     """Request to fund wallet via Paystack."""
-    deposit_amount_kobo: int = Field(ge=50000, description="Deposit amount in kobo (minimum ₦500)")
+    # Minimum is ₦100 (10,000 kobo). Below that the per-tx fee starts
+    # to feel punitive as a percentage of the deposit. The cap-check
+    # at /wallet/deposit still rejects anything above
+    # settings.max_deposit_kobo_per_tx before talking to Paystack.
+    deposit_amount_kobo: int = Field(ge=10000, description="Deposit amount in kobo (minimum ₦100)")
     custom_amount: bool = Field(default=False, description="Whether this is a custom deposit amount")
 
 
@@ -156,10 +161,10 @@ async def initiate_wallet_deposit(
 ):
     """
     Initiate Paystack payment to fund user wallet.
-    
-    Minimum deposit: ₦500 (50,000 kobo)
+
+    Minimum deposit: ₦100 (10,000 kobo)
     Conversion: 10 points = ₦1 (amount_kobo = points to credit)
-    
+
     After successful payment, webhook will credit user's points_balance.
     """
     if not settings.paystack_secret_key:
@@ -167,6 +172,19 @@ async def initiate_wallet_deposit(
             status_code=503,
             detail="Wallet funding temporarily unavailable. Please try again later.",
         )
+
+    # Calculate fee (env-overridable via WALLET_DEPOSIT_FEE_PERCENT /
+    # WALLET_DEPOSIT_MAX_FEE_KOBO). Scales linearly with deposit size
+    # up to the cap, so ₦100 pays ₦1.50 and ₦10,000 still pays ₦20.
+    # Compute the fee + total BEFORE the cap check so the cap compares
+    # the full amount the user is actually moving through the system,
+    # not just the deposit slice. Order matters: record_amount_v2
+    # references `total_amount`, so it must be defined first.
+    processing_fee = min(
+        ceil(payload.deposit_amount_kobo * settings.wallet_deposit_fee_percent),
+        settings.wallet_deposit_max_fee_kobo,
+    )
+    total_amount = payload.deposit_amount_kobo + processing_fee
 
     # M1 audit fix: enforce per-tx + 24h-rolling deposit caps BEFORE
     # talking to Paystack. A stolen-card deposit or a compromised
@@ -197,18 +215,9 @@ async def initiate_wallet_deposit(
                 f"{settings.max_deposit_kobo_per_day} kobo allowed per day."
             ),
         )
-    
+
     # Generate unique reference with project prefix "pp_"
     reference = f"pp_wallet_{current_user.id}_{uuid.uuid4().hex[:16]}"
-    
-    # Calculate fee (env-overridable via WALLET_DEPOSIT_FEE_PERCENT /
-    # WALLET_DEPOSIT_MAX_FEE_KOBO). Scales linearly with deposit size
-    # up to the cap, so ₦100 pays ₦1.50 and ₦10,000 still pays ₦20.
-    processing_fee = min(
-        ceil(payload.deposit_amount_kobo * settings.wallet_deposit_fee_percent),
-        settings.wallet_deposit_max_fee_kobo,
-    )
-    total_amount = payload.deposit_amount_kobo + processing_fee
     
     # Initialize Paystack transaction
     paystack = get_client()

@@ -27,6 +27,7 @@ import { useStudyStore } from '@/src/shared/lib/studyStore';
 import { usePreferences } from '@/src/shared/lib/preferences';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { useAdSlot } from '@/src/shared/contexts/AdSlot';
 import { SkeletonDetailPage } from '@/components/skeletons';
 
 type ContentDetail = {
@@ -122,7 +123,24 @@ export default function ReaderScreen() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [adUnit, setAdUnit] = useState('');
   // Pre-read gate: unlocks the session timer.
-  const [preReadOpen, setPreReadOpen] = useState(true);
+  const [preReadOpen, setPreReadOpen] = useState(false);
+  const { state: adSlotState } = useAdSlot();
+
+  // Open the pre-read modal as soon as we have a ready ad (from the
+  // slot or from the RewardedAd preload's onReady callback). If the
+  // ad never becomes ready, open the modal after 10 s so the user
+  // can see the error/retry UI instead of a blank screen.
+  useEffect(() => {
+    if (adSlotState === 'ready') {
+      setPreReadOpen(true);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setPreReadOpen(true);
+    }, 10000);
+    return () => clearTimeout(timeout);
+  }, [adSlotState]);
   // Post-read gate: sits BEFORE /session/end, not after. The user has
   // read for the 1-minute floor — now they watch (or skip) a second ad
   // to "fire" the end-of-session sequence. The slice-completion bonus is
@@ -802,6 +820,7 @@ export default function ReaderScreen() {
         onClaimed={onPreReadClaimed}
         onSkipped={onPreReadSkipped}
         onClose={() => setPreReadOpen(false)}
+        preload
       />
 
       {/* Post-read gate (the second ad). Sits BEFORE /session/end: the

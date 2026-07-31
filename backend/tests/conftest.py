@@ -41,6 +41,18 @@ async def setup_db():
     from app.services import paystack as _ps
     _ps._client = None
     _ps._BANKS_CACHE = None
+    # Clear the rolling 24h money-cap ledger so per-day caps don't
+    # leak between tests. The bucket is process-global (single Render
+    # instance in prod); in tests it survives the per-test DB drop
+    # and would otherwise accumulate "withdrawn" amounts across the
+    # whole suite, eventually tripping 429 on a test that registers
+    # a fresh user (since user_ids auto-increment, by the time the
+    # last few tests run, the cumulative kobo across all earlier
+    # test users — keyed in the dict — gets re-counted when an old
+    # user_id is reused; even with fresh ids, the dict keeps growing
+    # and slows every call).
+    from app.services import money_caps as _mc
+    _mc._AMOUNT_BUCKET.clear()
     async with engine_test.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
