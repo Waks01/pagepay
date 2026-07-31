@@ -4,6 +4,8 @@
 
 PAYSTACK_SECRET_KEY=sk_test_xxx
 
-# Optional: override webhook URLs for local testing
-# PAGEPAY_WEBHOOK_URL=http://localhost:8000/payouts/webhook
+# Optional: override webhook URLs for local testing.
+# PagePay's FastAPI mounts every router under /api/v1 — include the
+# full path or the request will 404 at the backend.
+# PAGEPAY_WEBHOOK_URL=http://localhost:8000/api/v1/payouts/webhook
 # SALON_WEBHOOK_URL=http://localhost:4000/webhooks/paystack

@@ -20,6 +20,7 @@ import { useCommunityFeed, useToggleLike, useUploadCommunityNote } from '@/src/f
 import type { CommunityFeedItem } from '@/src/features/community/api';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import AppHeader from '@/components/AppHeader';
 import { SkeletonPage } from '@/components/skeletons';
 
 type Filters = 'all' | 'my_courses' | 'popular' | 'recent';
@@ -92,6 +93,7 @@ export default function CommunityScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
+      <AppHeader title={t('community.title')} />
       <ScrollView
         style={{ flex: 1 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={tokens.mint} />}

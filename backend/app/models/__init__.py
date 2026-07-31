@@ -23,6 +23,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     phone: Mapped[str | None] = mapped_column(String(20), unique=True, index=True)
+    username: Mapped[str | None] = mapped_column(String(12), unique=True, index=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255))
     points_balance: Mapped[int] = mapped_column(BigInteger, default=0)
     tier: Mapped[UserTier] = mapped_column(Enum(UserTier), default=UserTier.FREE)

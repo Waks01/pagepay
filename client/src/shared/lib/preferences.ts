@@ -71,20 +71,18 @@ export async function bootstrapPreferences(): Promise<void> {
 
 async function loadPreferences(): Promise<Partial<PreferencesState>> {
   try {
-    const raw = await readPref('theme');
-    const lang = await readPref('language');
-    const onboarded = await readPref('onboarding_completed');
-    const biometric = await readPref('biometric_enabled');
-    const readerModeRaw = await readPref('reader_mode');
+    const [raw, lang, onboarded, biometric, readerModeRaw] = await Promise.all([
+      readPref('theme'),
+      readPref('language'),
+      readPref('onboarding_completed'),
+      readPref('biometric_enabled'),
+      readPref('reader_mode'),
+    ]);
     return {
       theme: isThemePref(raw) ? raw : DEFAULTS.theme,
       language: isLanguagePref(lang) ? lang : DEFAULTS.language,
       onboardingCompleted: onboarded === 'true',
       biometricEnabled: biometric === 'true',
-      // Defensive parse: an attacker who can write the secure
-      // store could set the mode to something invalid. We
-      // silently fall back to 'read' rather than crashing the
-      // reader on mount.
       readerMode: isReaderMode(readerModeRaw) ? readerModeRaw : DEFAULTS.readerMode,
     };
   } catch {
@@ -152,13 +150,21 @@ export async function persistReaderMode(mode: ReaderMode): Promise<void> {
 // reuse them without renaming.
 
 const isWeb = Platform.OS === 'web';
+let cachedSecureStore: any = null;
+
+async function getSecureStore() {
+  if (cachedSecureStore) return cachedSecureStore;
+  const mod = await import('expo-secure-store');
+  cachedSecureStore = mod;
+  return mod;
+}
 
 async function readPref(key: string): Promise<string | null> {
   if (isWeb) {
     if (typeof localStorage === 'undefined') return null;
     return localStorage.getItem(`pagepay_pref_${key}`);
   }
-  const SecureStore = await import('expo-secure-store');
+  const SecureStore = await getSecureStore();
   return await SecureStore.getItemAsync(`pagepay_pref_${key}`);
 }
 
@@ -169,6 +175,6 @@ async function writePref(key: string, value: string): Promise<void> {
     }
     return;
   }
-  const SecureStore = await import('expo-secure-store');
+  const SecureStore = await getSecureStore();
   await SecureStore.setItemAsync(`pagepay_pref_${key}`, value);
 }

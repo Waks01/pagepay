@@ -25,7 +25,7 @@ import { AuthScreenEntrance, AnimatedSubmitButton, ErrorShake, SuccessRedirect, 
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 
-type FieldErrors = Partial<Record<'email' | 'password' | 'confirm' | 'referralCode', string>>;
+type FieldErrors = Partial<Record<'email' | 'username' | 'password' | 'confirm' | 'referralCode', string>>;
 
 /**
  * Returns 0..4 — strength of a password. Used to fill the 4-segment bar.
@@ -58,6 +58,7 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
   const tokens = PagePay[scheme];
 
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [referralCode, setReferralCode] = useState('');
@@ -96,6 +97,9 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
         else if (v.length < 6) e.password = t('auth.register.errors.password_too_short');
       } else if (field === 'email') {
         if (!v.trim()) e.email = t('auth.register.errors.enter_email');
+      } else if (field === 'username') {
+        if (!v.trim()) e.username = t('auth.register.errors.enter_username');
+        else if (v.length > 12) e.username = t('auth.register.errors.username_too_long');
       } else if (field === 'confirm') {
         if (!v) e.confirm = t('auth.register.errors.enter_confirm');
         else if (v !== password) e.confirm = t('auth.register.errors.passwords_mismatch');
@@ -110,6 +114,11 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
   const onChangeEmail = useCallback((v: string) => {
     setEmail(v);
     validateField('email', v);
+  }, [validateField]);
+  const onChangeUsername = useCallback((v: string) => {
+    const cleaned = v.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 12).toLowerCase();
+    setUsername(cleaned);
+    validateField('username', cleaned);
   }, [validateField]);
   const onChangePassword = useCallback((v: string) => {
     setPassword(v);
@@ -128,6 +137,7 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
   const validate = useCallback((): FieldErrors => {
     const e: FieldErrors = {};
     if (!email.trim()) e.email = t('auth.register.errors.enter_email');
+    if (!username.trim()) e.username = t('auth.register.errors.enter_username');
     if (!password) e.password = t('auth.register.errors.enter_password');
     else if (password.length < 6) e.password = t('auth.register.errors.password_too_short');
     if (!confirm) e.confirm = t('auth.register.errors.enter_confirm');
@@ -136,7 +146,7 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
       e.referralCode = t('auth.register.errors.referral_length');
     }
     return e;
-  }, [email, password, confirm, referralCode, t]);
+  }, [email, username, password, confirm, referralCode, t]);
 
   const isEmail = useCallback((v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), []);
 
@@ -164,6 +174,7 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
       const fingerprint = await getDeviceFingerprint();
       const payload: Record<string, string | undefined> = {
         password,
+        username: username.trim() || undefined,
         referral_code: referralCode || undefined,
       };
       if (isEmail(email)) {
@@ -302,6 +313,18 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
                     textContentType="username"
                     returnKeyType="next"
                     error={errors.email}
+                  />
+
+                  <Field
+                    label={t('auth.register.username_label', { defaultValue: 'Username' })}
+                    value={username}
+                    onChangeText={onChangeUsername}
+                    placeholder={t('auth.register.username_placeholder', { defaultValue: 'johndoe' })}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="username"
+                    returnKeyType="next"
+                    error={errors.username}
                   />
 
                   <View style={{ gap: 8 }}>

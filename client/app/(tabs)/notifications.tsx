@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiFetch } from '@/src/shared/api/client';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import AppHeader from '@/components/AppHeader';
 
 type NotificationItem = {
   id: number;
@@ -55,12 +56,6 @@ export default function NotificationsScreen() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
-
-  useFocusEffect(
-    useCallback(() => {
-      qc.invalidateQueries({ queryKey: ['notifications'] });
-    }, [qc])
-  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -158,6 +153,7 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
+      <AppHeader title="Notifications" />
       <View style={[styles.header, { borderBottomColor: tokens.border }]}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>

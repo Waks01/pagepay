@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import { useState } from 'react';
-import { useFocusEffect } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +11,7 @@ import { apiFetch } from '@/src/shared/api/client';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { SkeletonPage } from '@/components/skeletons';
+import AppHeader from '@/components/AppHeader';
 import { PrimaryButton } from '@/components/PrimaryButton';
 
 type Tier = {
@@ -47,12 +47,6 @@ export default function PremiumScreen() {
     },
   });
 
-  useFocusEffect(
-    useCallback(() => {
-      qc.invalidateQueries({ queryKey: ['payments', 'subscription'] });
-    }, [qc])
-  );
-
   const handleSelectTier = (tierId: string) => {
     setSelectedTier(tierId);
   };
@@ -86,15 +80,8 @@ export default function PremiumScreen() {
   if (tiersQ.isLoading) {
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
+        <AppHeader title={t('premium.title')} subtitle={t('premium.subtitle')} />
         <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={styles.header}>
-            <Text style={[styles.headline, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-              {t('premium.title')}
-            </Text>
-            <Text style={[styles.subline, { color: tokens.inkMuted }]}>
-              {t('premium.subtitle')}
-            </Text>
-          </View>
           <SkeletonPage count={3} header={false} />
         </ScrollView>
       </SafeAreaView>
@@ -104,6 +91,7 @@ export default function PremiumScreen() {
   if (tiersQ.error) {
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+        <AppHeader title={t('premium.title')} />
         <Ionicons name="alert-circle-outline" size={48} color={tokens.error} />
         <Text style={[styles.errorTitle, { color: tokens.ink }]}>{t('premium.load_error')}</Text>
         <Text style={[styles.errorText, { color: tokens.inkMuted }]}>
@@ -118,16 +106,8 @@ export default function PremiumScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
+      <AppHeader title={t('premium.title')} subtitle={t('premium.subtitle')} />
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
-          <Text style={[styles.headline, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-            {t('premium.title')}
-          </Text>
-          <Text style={[styles.subline, { color: tokens.inkMuted }]}>
-            {t('premium.subtitle')}
-          </Text>
-        </View>
-
         {isPremium && userTier ? (
           <View style={[styles.currentTierBadge, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
             <Ionicons name="checkmark-circle" size={20} color={tokens.mint} />

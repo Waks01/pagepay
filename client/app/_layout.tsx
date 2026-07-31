@@ -65,13 +65,6 @@ function useAuthGate() {
       } else if (token && inAuthGroup && segments[1] !== 'verify-email-code') {
         (router as any).replace('/(tabs)');
       }
-      // else: already on /onboarding, /auth/*, or a public route
-      // (legal, forgot-password flow) — leave alone.
-
-      // Small delay to let the scheduled navigation take effect before
-      // we allow the layout to render. Prevents a flash of the wrong
-      // screen when the initial route doesn't match the auth state.
-      await new Promise((r) => setTimeout(r, 50));
       setIsReady(true);
     })();
   }, [hydrated, segments, router, onboardingCompleted]);

@@ -27,10 +27,16 @@ interface Env {
 
 // ── Routing table ─────────────────────────────────────────────────────
 // Add a new project here. The router forwards to the first matching prefix.
+//
+// IMPORTANT: PagePay's FastAPI mounts every router under the /api/v1
+// prefix (see backend/app/main.py:360 `API_PREFIX = "/api/v1"`).
+// Without that prefix the request lands on a 404 path — every
+// Paystack event would 404 at FastAPI, get wrapped as 200 by the
+// router, and silently drop. Always include the full backend path.
 const ROUTES: { prefix: string; url: string }[] = [
   {
     prefix: "pp_",
-    url: "https://pagepay-fff6.onrender.com/payouts/webhook",
+    url: "https://pagepay-fff6.onrender.com/api/v1/payouts/webhook",
   },
   // {
   //   prefix: "salon_",
@@ -74,73 +80,94 @@ async function verifySignature(
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // Paystack sends signed POSTs. GET/HEAD/OPTIONS reach this URL
-    // whenever the dashboard "verifies" a pasted webhook URL (the
-    // dashboard pings the URL with a non-POST before saving it).
-    // Returning 405 on those breaks the dashboard flow with a
-    // confusing "Method Not Allowed" error. Returning 200 + a short
-    // explanation lets Paystack confirm the URL is reachable and
-    // tells the operator where to POST signed events.
     if (request.method !== "POST") {
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          message:
-            "Paystack webhook router is live. POST signed events here.",
-          allowed_methods: ["POST"],
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
+      // No placeholder echo — the only valid method for this router
+      // is POST. Reject everything else with the literal 405 + body
+      // Paystack (or any other caller) can read to understand what
+      // went wrong. If you need to test reachability, POST a sample
+      // event signed with the same secret the router verifies against.
+      return new Response("Method Not Allowed: POST required", {
+        status: 405,
+        headers: { Allow: "POST" },
+      });
     }
 
     const signature = request.headers.get("x-paystack-signature");
     const rawBody = await request.text();
 
-    // Verify HMAC-SHA512 signature using Paystack secret key.
+    // Verify HMAC-SHA512 signature using Paystack secret key. If the
+    // secret is not configured on this Worker, refuse with 500 — that's
+    // an operator misconfiguration, not a forged request, and the
+    // operator needs to see it (a 401 here would silently mask it).
+    if (!env.PAYSTACK_SECRET_KEY) {
+      console.error("PAYSTACK_SECRET_KEY is not configured on this Worker");
+      return new Response("Router misconfigured: PAYSTACK_SECRET_KEY not set", {
+        status: 500,
+      });
+    }
+
     const valid = await verifySignature(rawBody, signature, env.PAYSTACK_SECRET_KEY);
     if (!valid) {
-      console.warn("Invalid Paystack webhook signature");
-      return new Response("Invalid signature", { status: 401 });
+      console.warn(`Invalid Paystack webhook signature (ref hint in body if available)`);
+      return new Response("Invalid webhook signature", {
+        status: 401,
+      });
     }
 
     let event: { event?: string; data?: { reference?: string } };
     try {
       event = JSON.parse(rawBody);
-    } catch {
-      console.warn("Invalid webhook JSON");
-      return new Response("Invalid JSON", { status: 400 });
+    } catch (err) {
+      console.warn(`Invalid webhook JSON: ${err}`);
+      return new Response(`Invalid JSON body: ${err}`, {
+        status: 400,
+      });
     }
 
     const eventName = event.event || "";
     const reference = event?.data?.reference || "";
 
-    // Log non-routable events so you can debug missing prefixes.
+    // Surface routing misses to Paystack (and the operator's logs) as
+    // 502. Returning 200 here would silently swallow real Paystack
+    // events — Paystack would stop retrying, the credit would never
+    // land, and the operator would have no signal that the ROUTES
+    // table needs updating.
     const route = findRoute(reference);
     if (!route) {
-      console.log(`No route for reference: ${reference} (event: ${eventName})`);
-      // Still return 200 so Paystack stops retrying.
-      return new Response(JSON.stringify({ received: true, handled: false, reason: "no_route" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      console.error(`No route for reference=${reference} (event=${eventName}). Update ROUTES in src/index.ts.`);
+      return new Response(
+        `No route configured for reference prefix of "${reference}"`,
+        {
+          status: 502,
+          headers: { "Content-Type": "text/plain" },
+        },
+      );
     }
 
     console.log(`Routing ${eventName} ref=${reference} → ${route.url}`);
 
     // Forward to the project's webhook endpoint with the original
-    // signature intact so the backend can verify it again if needed.
-    const projectRes = await fetch(route.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Paystack-Signature": signature || "",
-        "X-Forwarded-Event": eventName,
-      },
-      body: rawBody,
-    });
+    // signature intact so the backend can verify it again.
+    let projectRes: Response;
+    try {
+      projectRes = await fetch(route.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Paystack-Signature": signature || "",
+          "X-Forwarded-Event": eventName,
+        },
+        body: rawBody,
+      });
+    } catch (err) {
+      // Network/DNS/timeout to the backend. Surface as 502 so Paystack
+      // retries and the operator sees the upstream failure in logs.
+      console.error(`fetch to ${route.url} threw: ${err}`);
+      return new Response(`Upstream fetch failed: ${err}`, {
+        status: 502,
+        headers: { "Content-Type": "text/plain" },
+      });
+    }
 
     const responseData = await projectRes.text();
     console.log(`Project responded ${projectRes.status}: ${responseData}`);

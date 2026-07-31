@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchTasks, type Task } from '@/src/features/tasks/api';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
+import AppHeader from '@/components/AppHeader';
 import { SkeletonPage } from '@/components/skeletons';
 import { koboToPoints, koboToNairaString } from '@/src/shared/lib/money';
 
@@ -150,6 +151,7 @@ export default function TasksScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: tokens.paper }]}>
+      <AppHeader title={t('tasks.title')} />
       <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
         <Text style={[styles.headerTitle, { color: tokens.ink }]}>{t('tasks.title')}</Text>
         <TouchableOpacity onPress={() => router.push('/tasks/profile')}>

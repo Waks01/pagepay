@@ -38,7 +38,9 @@ import { useBiometricAuth } from '@/src/shared/hooks/use-biometric-auth';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
 import { PageMark } from '@/components/PageMark';
+import AppHeader from '@/components/AppHeader';
 import { Skeleton } from '@/components/Skeleton';
+import { AnimatedInput } from '@/components/AnimatedInput';
 import { ChangePasswordModal } from '@/components/ChangePasswordModal';
 import {
   LinkPayoutAccountModal,
@@ -55,6 +57,7 @@ type UserMe = {
   id: number;
   email: string | null;
   phone: string | null;
+  username: string | null;
   points_balance: number;
   tier: string;
   is_worker: boolean;
@@ -96,6 +99,10 @@ export default function ProfileScreen() {
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [usernameValue, setUsernameValue] = useState('');
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [savingUsername, setSavingUsername] = useState(false);
 
   // Fetch ad config for native unit
   const [nativeAdUnit, setNativeAdUnit] = useState('');
@@ -145,16 +152,48 @@ export default function ProfileScreen() {
     },
   });
 
-  useFocusEffect(
-    useCallback(() => {
-      qc.invalidateQueries({ queryKey: ['pin', 'status'] });
-    }, [qc]),
-  );
-
   const getTierLabel = (tier: string) => {
     const key = tier as 'free' | 'premium_monthly' | 'premium_yearly';
     return t(`profile.tier.${key}`, { defaultValue: tier });
   };
+
+  const handleSaveUsername = useCallback(async () => {
+    setUsernameError(null);
+    const trimmed = usernameValue.trim().toLowerCase();
+    if (!trimmed) {
+      setUsernameError(t('profile.username.empty', { defaultValue: 'Username cannot be empty' }));
+      return;
+    }
+    if (trimmed.length > 12) {
+      setUsernameError(t('profile.username.too_long', { defaultValue: 'Username must be 12 characters or less' }));
+      return;
+    }
+    const allowed = /^[a-z0-9_]+$/;
+    if (!allowed.test(trimmed)) {
+      setUsernameError(t('profile.username.invalid_chars', { defaultValue: 'Only letters, numbers, and underscores allowed' }));
+      return;
+    }
+
+    setSavingUsername(true);
+    try {
+      const res = await apiFetch('/api/v1/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: trimmed }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(typeof data?.detail === 'string' ? data.detail : 'Failed to update username');
+      }
+      await qc.invalidateQueries({ queryKey: ['me'] });
+      setEditingUsername(false);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      setUsernameError(e instanceof Error ? e.message : 'Failed to update username');
+    } finally {
+      setSavingUsername(false);
+    }
+  }, [usernameValue, qc, t]);
 
   const handleThemeChange = useCallback(
     (next: ThemePref) => {
@@ -279,6 +318,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: tokens.paper }]}>
+      <AppHeader title={t('profile.title')} />
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* ── Header ───────────────────────────────────────────── */}
         <View style={styles.header}>
@@ -306,6 +346,81 @@ export default function ProfileScreen() {
               )}
             </View>
           </View>
+        </View>
+
+        {/* ── Username ─────────────────────────────────────────── */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: tokens.inkMuted }]}>{t('profile.username.section', { defaultValue: 'Username' })}</Text>
+          {editingUsername ? (
+            <View style={{ gap: 10 }}>
+              <AnimatedInput
+                label={t('profile.username.label', { defaultValue: 'Choose a username' })}
+                value={usernameValue}
+                onChangeText={(v) => {
+                  setUsernameValue(v.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 12).toLowerCase());
+                  setUsernameError(null);
+                }}
+                placeholder={t('profile.username.placeholder', { defaultValue: 'johndoe' })}
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="username"
+                error={usernameError || undefined}
+              />
+              <Text style={[styles.helper, { color: tokens.inkMuted }]}>
+                {t('profile.username.helper', { defaultValue: 'Max 12 characters. Letters, numbers, underscores only.' })}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <Pressable
+                  onPress={handleSaveUsername}
+                  disabled={savingUsername}
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    { backgroundColor: tokens.mint, opacity: pressed || savingUsername ? 0.7 : 1 },
+                  ]}
+                >
+                  <Text style={[styles.primaryBtnText, { color: tokens.mintText }]}>
+                    {savingUsername ? t('common.saving', { defaultValue: 'Saving...' }) : t('common.save', { defaultValue: 'Save' })}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setEditingUsername(false);
+                    setUsernameValue(meQuery.data?.username || '');
+                    setUsernameError(null);
+                  }}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    { borderColor: tokens.border, opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <Text style={[styles.secondaryBtnText, { color: tokens.inkMuted }]}>
+                    {t('common.cancel', { defaultValue: 'Cancel' })}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => {
+                setUsernameValue(meQuery.data?.username || '');
+                setEditingUsername(true);
+              }}
+              style={({ pressed }) => [
+                styles.rowCard,
+                { backgroundColor: tokens.card, borderColor: tokens.border, opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowLabel, { color: tokens.ink }]}>
+                  {meQuery.data?.username || t('profile.username.not_set', { defaultValue: 'Not set' })}
+                </Text>
+                <Text style={[styles.rowHint, { color: tokens.inkMuted }]}>
+                  {t('profile.username.edit_hint', { defaultValue: 'Tap to set your username' })}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={tokens.inkMuted} />
+            </Pressable>
+          )}
         </View>
 
         {/* ── Phase 7 Roles ───────────────────────────────────── */}
@@ -1219,5 +1334,55 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 11,
+  },
+  // Username
+  sectionTitle: {
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 6,
+  },
+  rowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  rowLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  rowHint: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  primaryBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  secondaryBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  secondaryBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  helper: {
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

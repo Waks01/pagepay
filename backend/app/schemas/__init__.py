@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from datetime import datetime
 from typing import Literal
 
@@ -15,9 +15,27 @@ def _validate_password_strength(v: str) -> str:
     return v
 
 
+def _validate_username(v: str | None) -> str | None:
+    if v is None or v == "":
+        return None
+    v = v.strip().lower()
+    if len(v) > 12:
+        raise ValueError("Username must be 12 characters or less")
+    if not v:
+        return None
+    allowed = set("abcdefghijklmnopqrstuvwxyz0123456789_")
+    if not all(c in allowed for c in v):
+        raise ValueError("Username can only contain letters, numbers, and underscores")
+    return v
+
+
+RESERVED_USERNAMES = {"admin", "support", "system", "help", "info", "null", "undefined", "pagepay"}
+
+
 class UserRegister(BaseModel):
     email: EmailStr | None = None
     phone: str | None = None
+    username: str | None = Field(default=None, max_length=12, description="Public username, max 12 chars")
     password: str = Field(min_length=6)
     referral_code: str | None = Field(default=None, max_length=12, description="6-char referral code from inviter")
 
@@ -26,11 +44,24 @@ class UserRegister(BaseModel):
     def strong_password(cls, v: str) -> str:
         return _validate_password_strength(v)
 
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str | None) -> str | None:
+        return _validate_username(v)
+
 
 class UserLogin(BaseModel):
+    username: str | None = None
     email: EmailStr | None = None
     phone: str | None = None
     password: str
+
+    @field_validator("username", "email", "phone")
+    @classmethod
+    def strip_identity(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return v.strip()
 
 
 class TokenResponse(BaseModel):
@@ -43,14 +74,24 @@ class UserMe(BaseModel):
     id: int
     email: str | None
     phone: str | None
+    username: str | None
     points_balance: int
     tier: str
     created_at: datetime
     is_worker: bool = True
     is_sponsor: bool = False
     email_verified: bool = False
-    
-    model_config = {"from_attributes": True}
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserUpdate(BaseModel):
+    username: str | None = None
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str | None) -> str | None:
+        return _validate_username(v)
 
 
 # ══════════════════════════════════════════════════════════════════════

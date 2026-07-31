@@ -21,6 +21,7 @@ import { PLATFORM_ENV } from '@/src/shared/lib/ads';
 import { useCatalogFilter } from '@/src/shared/lib/catalog-filter';
 import { ContentCard, ContentItem } from '@/components/ContentCard';
 import { ResumeCard } from '@/components/ResumeCard';
+import AppHeader from '@/components/AppHeader';
 import { SkeletonContentCard } from '@/components/skeletons';
 import { CategoryChip } from '@/components/CategoryChip';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
@@ -266,20 +267,10 @@ export default function CatalogScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: tokens.paper }]}>
-      <View style={styles.header}>
-        <Text
-          style={[
-            styles.headline,
-            { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' },
-          ]}
-        >
-          {t('catalog.title')}
-        </Text>
-        <Text style={[styles.subline, { color: tokens.inkMuted }]}>
-          {storeCategory ? t('catalog.subtitle_filtered', { category: storeCategory }) : t('catalog.subtitle_default')}
-        </Text>
-      </View>
-
+      <AppHeader
+        title={t('catalog.title')}
+        subtitle={storeCategory ? t('catalog.subtitle_filtered', { category: storeCategory }) : t('catalog.subtitle_default')}
+      />
       {/* Search bar (v3 §4.3). Server-side filtered on
           (education_level, class_level, subject, search). Debounced
           300ms in the parent state. Empty + blur = no filter. */}

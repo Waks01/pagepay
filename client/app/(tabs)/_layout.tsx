@@ -316,7 +316,7 @@ function MoreDrawer({
 
   const handleItemPress = (name: string) => {
     onClose();
-    setTimeout(() => router.push(`/(tabs)/${name}` as any), 200);
+    router.push(`/(tabs)/${name}` as any);
   };
 
   const itemsWithBadge = DRAWER_ITEMS.map((item) => {

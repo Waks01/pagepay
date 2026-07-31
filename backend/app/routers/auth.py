@@ -11,7 +11,7 @@ from sqlalchemy import select, insert
 from jose import JWTError, jwt
 from app.database import get_db
 from app.models import User, PasswordResetToken, RefreshToken
-from app.schemas import UserRegister, TokenResponse, UserMe, ChangePasswordRequest, ForgotPasswordRequest, ForgotPasswordVerifyOtpRequest, ResetPasswordRequest, LegalPageResponse, EmailVerificationRequest, EmailVerificationCodeRequest, GoogleAuthRequest
+from app.schemas import UserRegister, TokenResponse, UserMe, UserUpdate, ChangePasswordRequest, ForgotPasswordRequest, ForgotPasswordVerifyOtpRequest, ResetPasswordRequest, LegalPageResponse, EmailVerificationRequest, EmailVerificationCodeRequest, GoogleAuthRequest
 from app.services.auth import hash_password, verify_password, create_access_token, create_refresh_token, get_current_user, revoke_jwt
 from app.services.sanitize import sanitize_for_log
 from app.services.email import send_verification_email, send_password_reset_email, send_password_reset_otp_email
@@ -82,9 +82,10 @@ async def register(payload: UserRegister, request: Request, db: AsyncSession = D
     # error all look identical from the client.
     client_ip = request.client.host if request.client else "unknown"
     logger.info(
-        "register attempt: email=%s phone=%s ip=%s ua=%s",
+        "register attempt: email=%s phone=%s username=%s ip=%s ua=%s",
         sanitize_for_log(payload.email),
         sanitize_for_log(payload.phone),
+        sanitize_for_log(payload.username),
         client_ip,
         sanitize_for_log(request.headers.get("user-agent", "")),
     )
@@ -93,16 +94,25 @@ async def register(payload: UserRegister, request: Request, db: AsyncSession = D
         logger.info("register rejected: no email/phone provided")
         raise HTTPException(status_code=400, detail="Email or phone required")
 
-    query = select(User).where(
+    # Check for existing email/phone
+    identity_query = select(User).where(
         (User.email == payload.email) if payload.email else (User.phone == payload.phone)
     )
-    result = await db.execute(query)
+    result = await db.execute(identity_query)
     if result.scalar_one_or_none():
         logger.info(
             "register rejected: user already exists (%s)",
             sanitize_for_log(payload.email or payload.phone),
         )
         raise HTTPException(status_code=400, detail="User already exists")
+
+    # Check for existing username
+    if payload.username:
+        username_query = select(User).where(User.username == payload.username.lower())
+        username_result = await db.execute(username_query)
+        if username_result.scalar_one_or_none():
+            logger.info("register rejected: username already exists (%s)", sanitize_for_log(payload.username))
+            raise HTTPException(status_code=400, detail="Username already taken")
 
     # Validate referral code if provided
     referred_by_code = payload.referral_code
@@ -127,6 +137,7 @@ async def register(payload: UserRegister, request: Request, db: AsyncSession = D
     user = User(
         email=payload.email,
         phone=payload.phone,
+        username=payload.username.lower() if payload.username else None,
         password_hash=hash_password(payload.password),
         referred_by=referred_by_code,
         referral_code=unique_referral_code,
@@ -188,6 +199,52 @@ async def me(current_user: User = Depends(get_current_user)):
         id=current_user.id,
         email=current_user.email,
         phone=current_user.phone,
+        username=current_user.username,
+        points_balance=current_user.points_balance,
+        tier=current_user.tier.value,
+        created_at=current_user.created_at,
+        is_worker=current_user.is_worker,
+        is_sponsor=current_user.is_sponsor,
+        email_verified=current_user.email_verified,
+    )
+
+
+@router.patch("/me", response_model=UserMe)
+async def update_profile(
+    payload: UserUpdate,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if payload.username is not None:
+        if payload.username == "":
+            current_user.username = None
+        else:
+            # Check for duplicate username (excluding current user)
+            existing = await db.execute(
+                select(User).where(User.username == payload.username.lower(), User.id != current_user.id)
+            )
+            if existing.scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Username already taken")
+            current_user.username = payload.username.lower()
+
+    await db.commit()
+    await db.refresh(current_user)
+
+    await log_user_action(
+        db,
+        current_user.id,
+        "profile_update",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        device_fingerprint=request.headers.get("x-device-fingerprint"),
+    )
+
+    return UserMe(
+        id=current_user.id,
+        email=current_user.email,
+        phone=current_user.phone,
+        username=current_user.username,
         points_balance=current_user.points_balance,
         tier=current_user.tier.value,
         created_at=current_user.created_at,
@@ -207,8 +264,11 @@ async def login(
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
+    identity = form.username.strip()
     query = select(User).where(
-        (User.email == form.username) | (User.phone == form.username)
+        (User.email == identity)
+        | (User.phone == identity)
+        | (User.username == identity.lower())
     )
     result = await db.execute(query)
     user = result.scalar_one_or_none()

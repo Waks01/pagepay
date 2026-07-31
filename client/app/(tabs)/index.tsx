@@ -18,13 +18,13 @@ import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/src/shared/api/client';
 import { PLATFORM_ENV } from '@/src/shared/lib/ads';
 import { useCatalogFilter } from '@/src/shared/lib/catalog-filter';
-import { displayName } from '@/src/shared/lib/display-name';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { useStreak } from '@/src/features/community/hooks/use-community';
 import { PageMark } from '@/components/PageMark';
 import { CategoryChip } from '@/components/CategoryChip';
 import { ContentCard, ContentItem } from '@/components/ContentCard';
 import { ResumeCard } from '@/components/ResumeCard';
+import NotificationBell from '@/components/NotificationBell';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
 import { PagePay } from '@/constants/theme';
 import { SkeletonPage } from '@/components/skeletons';
@@ -175,14 +175,6 @@ export default function HomeScreen() {
     }
   }, [meQuery, feedQuery, inProgressQuery]);
 
-  useFocusEffect(
-    useCallback(() => {
-      meQuery.refetch();
-      feedQuery.refetch();
-      inProgressQuery.refetch();
-    }, [meQuery, feedQuery, inProgressQuery])
-  );
-
   const greeting = useMemo(() => {
     const h = new Date().getHours();
     if (h < 5) return t('home.greeting_still_up');
@@ -193,7 +185,6 @@ export default function HomeScreen() {
   }, [t]);
 
   const points = meQuery.data?.points_balance ?? 0;
-  const name = displayName(meQuery.data);
   const items = feedQuery.data ?? [];
   const streakData = streakQuery.data as { current_streak: number } | undefined;
 
@@ -202,17 +193,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: tokens.paper }]}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={tokens.mint}
-          />
-        }
-      >
+      <View style={styles.header}>
         {/* Top row: greeting + balance chip */}
         <View style={styles.topRow}>
           <View style={{ flex: 1 }}>
@@ -220,11 +201,6 @@ export default function HomeScreen() {
               style={[styles.greeting, { color: tokens.inkMuted, fontFamily: 'SpaceGrotesk_500Medium' }]}
             >
               {greeting},
-            </Text>
-            <Text
-              style={[styles.name, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}
-            >
-              {name}.
             </Text>
           </View>
 
@@ -270,8 +246,22 @@ export default function HomeScreen() {
             </Text>
             <Text style={[styles.balanceLabel, { color: tokens.inkMuted }]}>{t('home.points_label')}</Text>
           </TouchableOpacity>
-        </View>
 
+          <NotificationBell />
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={tokens.mint}
+          />
+        }
+      >
         {/* Brand mark */}
         <View style={styles.markRow}>
           <PageMark />
@@ -450,9 +440,13 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: {
+  header: {
     paddingHorizontal: 16,
     paddingTop: 8,
+    paddingBottom: 16,
+  },
+  scroll: {
+    paddingHorizontal: 16,
     paddingBottom: 24,
     gap: 24,
   },
@@ -467,12 +461,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     letterSpacing: 0.2,
-  },
-  name: {
-    fontSize: 26,
-    lineHeight: 32,
-    letterSpacing: -0.4,
-    marginTop: 2,
   },
   balanceChip: {
     flexDirection: 'row',

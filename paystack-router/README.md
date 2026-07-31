@@ -20,7 +20,7 @@ sequenceDiagram
     User->>Paystack: Pays
     Paystack->>Router: POST /<br/>event=charge.success<br/>reference=pp_wallet_42_abc123
     Router->>Router: Matches "pp_" prefix
-    Router->>Project: POST /payouts/webhook
+    Router->>Project: POST /api/v1/payouts/webhook
     Project-->>Router: 200 OK
     Router-->>Paystack: 200 OK
 ```
@@ -35,7 +35,7 @@ Edit `src/index.ts` and add each project to the `ROUTES` array:
 const ROUTES: { prefix: string; url: string }[] = [
   {
     prefix: "pp_",
-    url: "https://pagepay-fff6.onrender.com/payouts/webhook",
+    url: "https://pagepay-fff6.onrender.com/api/v1/payouts/webhook",
   },
   {
     prefix: "salon_",

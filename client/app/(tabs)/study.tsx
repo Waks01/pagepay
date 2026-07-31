@@ -16,6 +16,7 @@ import { ProgressDashboard } from '@/components/study/ProgressDashboard';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import AppHeader from '@/components/AppHeader';
 import { SkeletonPage } from '@/components/skeletons';
 import { Skeleton } from '@/components/Skeleton';
 import { cacheAsset, getCachedAsset } from '@/src/features/study/storage';
@@ -484,6 +485,10 @@ export default function StudyScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
+      <AppHeader
+        title={selectedMaterial ? selectedMaterial.title : t('study.title')}
+        subtitle={selectedMaterial ? t('study.assets_generated', { count: selectedMaterial.assets.length }) : undefined}
+      />
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={

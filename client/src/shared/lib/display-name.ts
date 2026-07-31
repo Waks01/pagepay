@@ -10,10 +10,12 @@
 export type DisplayNameUser = {
   email?: string | null;
   phone?: string | null;
+  username?: string | null;
 };
 
 export function displayName(me: DisplayNameUser | null | undefined): string {
   if (!me) return 'there';
+  if (me.username) return me.username;
   const raw = me.email || me.phone || '';
   if (!raw) return 'there';
   // Email: take the part before '@', capitalize first letter.
@@ -28,12 +30,21 @@ export function displayName(me: DisplayNameUser | null | undefined): string {
 
 /**
  * Two-letter avatar fallback for the Profile header. Takes the first
- * non-empty letter from the email local-part (or the phone's last two
- * digits) and uppercases both. Falls back to "PP" (PagePay) if there's
- * nothing to derive from.
+ * non-empty letter from the username (or the email local-part, or the
+ * phone's last two digits) and uppercases both. Falls back to "PP" (PagePay)
+ * if there's nothing to derive from.
  */
 export function initials(me: DisplayNameUser | null | undefined): string {
   if (!me) return 'PP';
+  if (me.username) {
+    const letters = me.username.replace(/[^a-zA-Z0-9]/g, '');
+    if (letters.length >= 2) {
+      return (letters[0] + letters[1]).toUpperCase();
+    }
+    if (letters.length === 1) {
+      return (letters[0] + letters[0]).toUpperCase();
+    }
+  }
   const source = (me.email || me.phone || '').trim();
   if (!source) return 'PP';
   const head = source.includes('@') ? source.split('@')[0] : source;
