@@ -38,6 +38,7 @@ from app.schemas import (
     TelevisionPurchaseRequest,
     BillsPurchaseResponse,
 )
+from app.services.money import kobo_to_points
 from app.services.peyflex import get_client, get_public_client, PeyflexError
 
 logger = logging.getLogger("uvicorn.error")
@@ -94,13 +95,13 @@ async def buy_airtime(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < amount_kobo:
+    if user_row.points_balance < kobo_to_points(amount_kobo):
         raise HTTPException(status_code=402, detail="Insufficient balance")
 
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - amount_kobo)
+        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
     )
 
     # 2. Call Peyflex
@@ -145,7 +146,7 @@ async def buy_airtime(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - amount_kobo + points
+    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -215,13 +216,13 @@ async def buy_data(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < amount_kobo:
+    if user_row.points_balance < kobo_to_points(amount_kobo):
         raise HTTPException(status_code=402, detail="Insufficient balance")
 
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - amount_kobo)
+        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
     )
 
     try:
@@ -263,7 +264,7 @@ async def buy_data(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - amount_kobo + points
+    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -308,13 +309,13 @@ async def buy_electricity(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < amount_kobo:
+    if user_row.points_balance < kobo_to_points(amount_kobo):
         raise HTTPException(status_code=402, detail="Insufficient balance")
 
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - amount_kobo)
+        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
     )
 
     try:
@@ -366,7 +367,7 @@ async def buy_electricity(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - amount_kobo + points
+    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -430,13 +431,13 @@ async def buy_tv(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < amount_kobo:
+    if user_row.points_balance < kobo_to_points(amount_kobo):
         raise HTTPException(status_code=402, detail="Insufficient balance")
 
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - amount_kobo)
+        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
     )
 
     try:
@@ -488,7 +489,7 @@ async def buy_tv(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - amount_kobo + points
+    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)

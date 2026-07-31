@@ -70,6 +70,7 @@ from app.services.paystack import (
     PaystackError,
     get_client as get_paystack_client,
 )
+from app.services.money import kobo_to_points
 from app.services.money_caps import record_amount_v2
 from app.services.subscription import calculate_subscription_end_date
 
@@ -464,6 +465,11 @@ async def withdraw(
     # can tell the user exactly how much more they need.
     fee_kobo = compute_withdrawal_fee(payload.amount_kobo)
     total_debit_kobo = payload.amount_kobo + fee_kobo
+    # points_balance is denominated in POINTS (per POINTS_PER_NAIRA).
+    # Convert the gross kobo debit to points via the canonical
+    # helper in app/services/money.py so the balance check + debit
+    # below use the same unit as reading slice bonuses and ad credits.
+    total_debit_points = kobo_to_points(total_debit_kobo)
 
     # M2 audit fix: enforce per-tx + 24h-rolling withdrawal caps BEFORE
     # talking to Paystack. The cap is on the user-visible withdrawal
@@ -523,16 +529,16 @@ async def withdraw(
             detail="Withdrawals temporarily unavailable. Please try again later.",
         )
 
-    if user_row.points_balance < total_debit_kobo:
+    if user_row.points_balance < total_debit_points:
         # Surface the exact shortfall so the client can show
         # "you need ₦X more to cover the fee" instead of a generic
         # "insufficient balance" error.
-        shortfall_kobo = total_debit_kobo - user_row.points_balance
+        shortfall_points = total_debit_points - user_row.points_balance
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Insufficient points balance. You need {shortfall_kobo} more "
-                f"kobo to cover the {fee_kobo} kobo withdrawal fee."
+                f"Insufficient points balance. You need {shortfall_points} more "
+                f"points to cover the {fee_kobo} kobo withdrawal fee."
             ),
         )
 
@@ -548,12 +554,13 @@ async def withdraw(
         recipient_code=payout_row.recipient_code,
         reason=payload.reason,
         status="pending",
-        balance_after_debit=user_row.points_balance - total_debit_kobo,
+        balance_after_debit=user_row.points_balance - total_debit_points,
     )
     db.add(txn)
 
-    # Step 5: debit the wallet by the GROSS amount (withdrawal + fee).
-    user_row.points_balance -= total_debit_kobo
+    # Step 5: debit the wallet by the GROSS amount (withdrawal + fee),
+    # converted from kobo → points via POINTS_PER_NAIRA.
+    user_row.points_balance -= total_debit_points
 
     # Step 6: call Paystack with the NET amount (just the withdrawal —
     # the user paid the fee separately and it stays in our balance).
@@ -588,7 +595,7 @@ async def withdraw(
     await db.refresh(user_row)
 
     logger.info(
-        "User %s withdrew %d kobo (fee=%d) → ref=%s status=%s new_balance=%d",
+        "User %s withdrew %d kobo (fee=%d) → ref=%s status=%s new_balance_points=%d",
         user_row.id,
         payload.amount_kobo,
         fee_kobo,
@@ -702,16 +709,22 @@ async def paystack_webhook(
             metadata = payment.payment_metadata if isinstance(payment.payment_metadata, dict) else {}
             deposit_amount_kobo = metadata.get("deposit_amount_kobo")
             if deposit_amount_kobo and deposit_amount_kobo > 0:
+                # points_balance is denominated in POINTS (per
+                # POINTS_PER_NAIRA — 10 points = ₦1). Convert the
+                # kobo deposit to points via the canonical helper
+                # so the wallet balance stays in the same unit as
+                # reading slice bonuses and ad credits.
+                deposit_points = kobo_to_points(deposit_amount_kobo)
                 user_row = (
                     await db.execute(
                         select(User).where(User.id == payment.user_id)
                     )
                 ).scalar_one_or_none()
                 if user_row is not None:
-                    user_row.points_balance = (user_row.points_balance or 0) + deposit_amount_kobo
+                    user_row.points_balance = (user_row.points_balance or 0) + deposit_points
                     logger.info(
-                        "Wallet deposit credited: user=%s ref=%s amount_kobo=%s new_balance=%s",
-                        payment.user_id, reference, deposit_amount_kobo, user_row.points_balance,
+                        "Wallet deposit credited: user=%s ref=%s amount_kobo=%s points=%d new_balance=%s",
+                        payment.user_id, reference, deposit_amount_kobo, deposit_points, user_row.points_balance,
                     )
                 else:
                     logger.error("Wallet deposit webhook: user %s not found for ref=%s", payment.user_id, reference)
@@ -792,13 +805,17 @@ async def paystack_webhook(
                 # lands at the same balance they had before the
                 # withdraw call. The fee stays in our balance on
                 # success, leaves with the refund on failure.
+                # Convert kobo → points via kobo_to_points so the
+                # reversal lands in the same unit the debit used.
                 refund_kobo = txn.amount_kobo + (txn.fee_kobo or 0)
-                user_row.points_balance = user_row.points_balance + refund_kobo
+                refund_points = kobo_to_points(refund_kobo)
+                user_row.points_balance = user_row.points_balance + refund_points
                 logger.info(
-                    "Reversed %d kobo debit (amount=%d + fee=%d) for user=%s ref=%s (event=%s)",
+                    "Reversed %d kobo debit (amount=%d + fee=%d, %d points) for user=%s ref=%s (event=%s)",
                     refund_kobo,
                     txn.amount_kobo,
                     txn.fee_kobo or 0,
+                    refund_points,
                     txn.user_id,
                     txn.reference,
                     event_name,
