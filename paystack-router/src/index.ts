@@ -145,9 +145,19 @@ export default {
     const responseData = await projectRes.text();
     console.log(`Project responded ${projectRes.status}: ${responseData}`);
 
+    // Forward the project's actual status code so Paystack sees
+    // real outcomes: 200 on success, 401 on signature mismatch, 500
+    // on backend failure, etc. Hardcoding 200 here would hide
+    // backend errors from Paystack (it interprets 200 as "received"
+    // and never retries) — and from the operator's logs.
+    // Forward the upstream Content-Type when present; default to
+    // JSON for FastAPI's standard {"detail": ...} envelope.
+    const upstreamType = projectRes.headers.get("Content-Type");
     return new Response(responseData, {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
+      status: projectRes.status,
+      headers: {
+        "Content-Type": upstreamType ?? "application/json",
+      },
     });
   },
 };
