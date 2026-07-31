@@ -6,13 +6,14 @@ Users upgrade from FREE → PREMIUM_MONTHLY or PREMIUM_YEARLY.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import User, UserTier, Payment
 from app.routers.auth import get_current_user
+from app.routers.payouts import paystack_webhook as _payouts_paystack_webhook
 from app.schemas import (
     PaymentInitiateRequest,
     PaymentInitiateResponse,
@@ -180,6 +181,33 @@ async def initiate_payment(
     
     else:
         raise HTTPException(status_code=400, detail=f"Provider {payload.provider} not supported")
+
+
+@router.post("/webhook")
+async def paystack_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Universal Paystack webhook alias for premium subscription events.
+
+    Paystack's dashboard accepts ONE webhook URL per API key. Many
+    operators point it at `/api/v1/payments/webhook` (the canonical
+    "subscriptions" endpoint) but configure it for a different product
+    elsewhere — the result is a stream of `charge.success` and
+    `transfer.success` events hitting a URL that 405s. The real
+    dispatcher lives in `app/routers/payouts.py:paystack_webhook`,
+    which already handles BOTH `transfer.*` (withdrawal settlement)
+    AND `charge.success` (wallet deposits + premium upgrades). We
+    re-export it here so any of these paths reach the same handler:
+
+      - POST /api/v1/payouts/webhook
+      - POST /api/v1/payments/webhook
+      - POST /api/v1/wallet/deposit/webhook
+
+    The Paystack signature is verified once, inside the dispatcher —
+    no separate verification per route.
+    """
+    return await _payouts_paystack_webhook(request=request, db=db)
 
 
 @router.get("/history", response_model=list[dict])

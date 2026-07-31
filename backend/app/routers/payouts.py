@@ -20,6 +20,18 @@ Phase 4 — Payments (Paystack). The endpoints here:
                                     payout_transactions.status and
                                     reverses debits on transfer.failed
 
+Note: the same `paystack_webhook` handler is also re-exported under:
+
+  POST  /payments/webhook         — for operators who configured
+                                    Paystack's "universal" callback
+                                    URL to point at the subscription
+                                    surface instead of payouts.
+  POST  /wallet/deposit/webhook   — for operators who pointed it at
+                                    the wallet-deposit surface.
+
+All three routes share one signature-verified handler — see the
+docstring on `paystack_webhook` below.
+
 Behavior when `PAYSTACK_SECRET_KEY` is unset: we fall back to the v1
 stub path on `/account` and `/resolve-account` (verified=False,
 account_name=None, recipient_code=None). The wallet surfaces this as

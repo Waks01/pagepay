@@ -73,9 +73,27 @@ async function verifySignature(
 // ── Handler ───────────────────────────────────────────────────────────
 
 export default {
-  async fetch(request: Request, env: PAYSTACK_SECRET_KEY extends string ? Env : never): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Paystack sends signed POSTs. GET/HEAD/OPTIONS reach this URL
+    // whenever the dashboard "verifies" a pasted webhook URL (the
+    // dashboard pings the URL with a non-POST before saving it).
+    // Returning 405 on those breaks the dashboard flow with a
+    // confusing "Method Not Allowed" error. Returning 200 + a short
+    // explanation lets Paystack confirm the URL is reachable and
+    // tells the operator where to POST signed events.
     if (request.method !== "POST") {
-      return new Response("Method Not Allowed", { status: 405 });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          message:
+            "Paystack webhook router is live. POST signed events here.",
+          allowed_methods: ["POST"],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     const signature = request.headers.get("x-paystack-signature");
@@ -125,7 +143,7 @@ export default {
     });
 
     const responseData = await projectRes.text();
-    console.log(`Project responded ${project.status}: ${responseData}`);
+    console.log(`Project responded ${projectRes.status}: ${responseData}`);
 
     return new Response(responseData, {
       status: 200,

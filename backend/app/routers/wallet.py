@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import datetime
 from math import ceil
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from pydantic import BaseModel, Field
@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.database import get_db
 from app.models import ReadingSession, ContentCatalog, AdEvent, User, Payment
 from app.routers.auth import get_current_user
+from app.routers.payouts import paystack_webhook as _payouts_paystack_webhook
 from app.services.paystack import get_client
 from app.config import settings
 from app.services.money_caps import record_amount_v2
@@ -151,6 +152,36 @@ class WalletDepositResponse(BaseModel):
     reference: str
     amount_kobo: int
     deposit_amount_kobo: int
+
+
+@router.post("/deposit/webhook")
+async def paystack_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Universal Paystack webhook alias for wallet deposit events.
+
+    Paystack's dashboard accepts ONE webhook URL per API key. Many
+    operators point it at `/api/v1/wallet/deposit/webhook` because
+    that's the surface that "funds the wallet", but configure the
+    same key for premium subscription products elsewhere — the
+    result is a stream of `charge.success` events (the only event
+    Paystack sends for charges) hitting a URL that 405s.
+
+    The real dispatcher lives in `app/routers/payouts.py:paystack_webhook`
+    and already handles `charge.success` (wallet deposits +
+    subscription tier upgrades) AND `transfer.*` (withdrawal
+    settlement). We re-export it under the conventional wallet path
+    so any of these paths reaches the same handler:
+
+      - POST /api/v1/payouts/webhook
+      - POST /api/v1/payments/webhook
+      - POST /api/v1/wallet/deposit/webhook
+
+    The Paystack signature is verified once, inside the dispatcher —
+    no separate verification per route. See payouts.py:599.
+    """
+    return await _payouts_paystack_webhook(request=request, db=db)
 
 
 @router.post("/deposit", response_model=WalletDepositResponse)
