@@ -158,20 +158,24 @@ export function RewardedAd(props: RewardedAdProps) {
   // IMPORTANT: a loaded AdMob RewardedAd instance is ONE-SHOT — once it
   // has been shown and closed, that object is consumed and can never be
   // shown again. So on every `visible`/`preload` transition we MUST
-  // tear down any prior instance and create a brand-new one. The old
-  // guard that skipped reloading when `rewardedRef.current` was set
-  // caused the 2nd ad (and every ad after an app reopen) to never load:
-  // `adState` stayed stuck and `show()` was called on a dead instance.
+  // tear down any prior instance and create a brand-new one.
   //
-  // We now always destroy + recreate, and reset `adState` to 'loading'
-  // at the top so the UI can't get wedged in a stale 'ready'/'error'.
+  // We guard against the slot's own state change (ready → busy after
+  // acquire()) re-triggering this effect: once we have an `acquiredRef`
+  // we keep it until the modal actually closes, so the slot ad is not
+  // orphaned and replaced with a fresh network load.
   useEffect(() => {
     const shouldLoad = visible || preload;
     if (!shouldLoad) {
+      acquiredRef.current = null;
       return;
     }
 
     if (Platform.OS === 'web' || !adUnit || !userId) {
+      return;
+    }
+
+    if (acquiredRef.current) {
       return;
     }
 
@@ -327,7 +331,10 @@ export function RewardedAd(props: RewardedAdProps) {
         }
         rewardedRef.current = null;
       }
-      acquiredRef.current = null;
+      // acquiredRef is intentionally NOT cleared here — it may still
+      // be valid if this cleanup is running only because the slot
+      // state changed (ready → busy) after acquire(). It gets cleared
+      // when the modal closes (visible becomes false) above.
     };
   }, [preload, visible, adUnit, userId, sessionId, adUnitName, slot]);
 

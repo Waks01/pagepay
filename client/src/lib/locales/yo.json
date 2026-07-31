@@ -580,7 +580,7 @@
     "session_one": "{{count}} ipade",
     "session_other": "{{count}} awọn ipade",
     "sessions_title": "Awọn Ipade",
-    "sessions_hint": "Ka iṣẹju 1 → wo ipolowo → ṣii ọkan ti o tẹle",
+    "sessions_hint": "Ka iṣẹju 1 · wo ipolowo · ṣii ọkan ti o tẹle",
     "session_label": "Ipade {{order}} ti {{total}}, {{minutes}} iṣẹju",
     "session_label_plural": "Ipade {{order}} ti {{total}}, {{minutes}} awọn iṣẹju",
     "locked_session": "Ipade {{order}} ti tiipa. Pari ipade ti o ṣaaju lati ṣii.",

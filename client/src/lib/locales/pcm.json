@@ -580,7 +580,7 @@
     "session_one": "{{count}} session",
     "session_other": "{{count}} sessions",
     "sessions_title": "Sessions",
-    "sessions_hint": "Read 1 minute → watch ad → unlock the next",
+    "sessions_hint": "Read 1 minute · watch ad · unlock the next",
     "session_label": "Session {{order}} of {{total}}, {{minutes}} minute",
     "session_label_plural": "Session {{order}} of {{total}}, {{minutes}} minutes",
     "locked_session": "Lock session {{order}}. Finish the one before am make you unlock.",

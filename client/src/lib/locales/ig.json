@@ -580,7 +580,7 @@
     "session_one": "{{count}} nzukọ",
     "session_other": "{{count}} nzukọ",
     "sessions_title": "Nzukọ",
-    "sessions_hint": "Gụọ nkeji 1 → lee mgbasa ozi → mepee nke ọzọ",
+    "sessions_hint": "Gụọ nkeji 1 · lee mgbasa ozi · mepee nke ọzọ",
     "session_label": "Nzukọ {{order}} nke {{total}}, {{minutes}} nkeji",
     "session_label_plural": "Nzukọ {{order}} nke {{total}}, {{minutes}} nkeji",
     "locked_session": "Nzukọ {{order}} akpọchiri. Rụchaa nzukọ gara aga ka ị mepee.",

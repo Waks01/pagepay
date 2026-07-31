@@ -580,7 +580,7 @@
     "session_one": "{{count}} zama",
     "session_other": "{{count}} zamanni",
     "sessions_title": "Zamanni",
-    "sessions_hint": "Karanta minti 1 → kalli talla → buɗe na gaba",
+    "sessions_hint": "Karanta minti 1 · kalli talla · buɗe na gaba",
     "session_label": "Zama {{order}} na {{total}}, {{minutes}} minti",
     "session_label_plural": "Zama {{order}} na {{total}}, {{minutes}} mintuna",
     "locked_session": "An kulle zama {{order}}. Kammala zaman da ya gabata don buɗewa.",

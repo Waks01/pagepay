@@ -146,7 +146,6 @@ export default function ReaderScreen() {
   // to "fire" the end-of-session sequence. The slice-completion bonus is
   // settled at /session/end (no separate claim needed).
   const [postReadAdOpen, setPostReadAdOpen] = useState(false);
-  const [preloadPostRead, setPreloadPostRead] = useState(false);
 
   // Fetch native ad unit for in-content placement
   const [nativeAdUnit, setNativeAdUnit] = useState('');
@@ -527,7 +526,6 @@ export default function ReaderScreen() {
   }) => {
     queryClient.invalidateQueries({ queryKey: ['me'] });
     queryClient.invalidateQueries({ queryKey: ['wallet'] });
-    setPreloadPostRead(true);
   };
 
   const onPreReadSkipped = () => {
@@ -820,7 +818,6 @@ export default function ReaderScreen() {
         onClaimed={onPreReadClaimed}
         onSkipped={onPreReadSkipped}
         onClose={() => setPreReadOpen(false)}
-        preload
       />
 
       {/* Post-read gate (the second ad). Sits BEFORE /session/end: the
@@ -845,8 +842,7 @@ export default function ReaderScreen() {
         skipLabel={t('reader.ad_pre_skip')}
         onClaimed={onPostReadAdClaimed}
         onSkipped={onPostReadAdSkipped}
-        onClose={() => setPreloadPostRead(false)}
-        preload={preloadPostRead}
+        onClose={() => {}}
       />
 
       {/* v3 §3.2 — Share-as-image for highlights. Renders an
