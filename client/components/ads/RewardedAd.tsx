@@ -171,7 +171,7 @@ export function RewardedAd(props: RewardedAdProps) {
       return;
     }
 
-    if (Platform.OS === 'web' || !adUnit || !userId) {
+    if (Platform.OS === 'web' || !adUnit || !userId || !sessionId) {
       return;
     }
 
@@ -196,9 +196,18 @@ export function RewardedAd(props: RewardedAdProps) {
       setAdState('ready');
       setErrorMessage(null);
       rewardDataRef.current = null;
-      // Release the slot's claim but don't trigger a re-load yet —
-      // we want the ad to remain loaded while the user is on this
-      // modal. Release happens on close.
+      return;
+    }
+
+    // If the slot is still loading the next ad, just wait — the
+    // effect will re-run when the slot flips to ready and we'll
+    // acquire it then. Falling through to a fresh network load here
+    // would create a second ad instance while the slot's load is
+    // still in flight, which is the double-load bug.
+    if (slot.state === 'loading') {
+      setAdState('loading');
+      setErrorMessage(null);
+      rewardDataRef.current = null;
       return;
     }
 

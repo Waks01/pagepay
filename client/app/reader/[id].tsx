@@ -125,12 +125,21 @@ export default function ReaderScreen() {
   // Pre-read gate: unlocks the session timer.
   const [preReadOpen, setPreReadOpen] = useState(false);
   const { state: adSlotState } = useAdSlot();
+  const preReadDismissedRef = useRef(false);
 
   // Open the pre-read modal as soon as we have a ready ad (from the
   // slot or from the RewardedAd preload's onReady callback). If the
   // ad never becomes ready, open the modal after 10 s so the user
   // can see the error/retry UI instead of a blank screen.
+  //
+  // Guard: once the user has dismissed the pre-read, never reopen it.
+  // The slot reloads the next ad in the background after release(),
+  // which flips adSlotState back to ready — without this guard the
+  // modal would pop back open and stop the session timer.
   useEffect(() => {
+    if (preReadDismissedRef.current) {
+      return;
+    }
     if (adSlotState === 'ready') {
       setPreReadOpen(true);
       return;
@@ -141,6 +150,18 @@ export default function ReaderScreen() {
     }, 10000);
     return () => clearTimeout(timeout);
   }, [adSlotState]);
+
+  // One-shot gate: timer must not start until the pre-read ad has
+  // actually been shown and dismissed. We track this with a ref so
+  // the timer effect below can key off the transition, not just the
+  // current boolean value (which is `false` on initial mount).
+  const preReadShownRef = useRef(false);
+
+  useEffect(() => {
+    if (preReadOpen) {
+      preReadShownRef.current = true;
+    }
+  }, [preReadOpen]);
   // Post-read gate: sits BEFORE /session/end, not after. The user has
   // read for the 1-minute floor — now they watch (or skip) a second ad
   // to "fire" the end-of-session sequence. The slice-completion bonus is
@@ -332,6 +353,7 @@ export default function ReaderScreen() {
         console.error('Initial session start failed', e);
       }
     })();
+    preReadDismissedRef.current = false;
 
     return () => {
       mounted = false;
@@ -357,18 +379,13 @@ export default function ReaderScreen() {
 
   // Heartbeat + elapsed timer start AFTER the pre-read gate clears.
   useEffect(() => {
-    if (!sessionId || preReadOpen) return;
+    if (!sessionId || preReadOpen || !preReadShownRef.current) return;
 
     heartbeatRef.current = setInterval(() => {
       sendHeartbeat();
     }, 10000);
 
     timerRef.current = setInterval(() => {
-      // Pause the visible timer at the 1-minute mark. The reader is
-      // meant to keep reading or tap Finish — the timer stopping
-      // signals "1 minute done, your reward is ready." We don't kill
-      // the heartbeat interval; the server keeps tracking real elapsed
-      // time and re-claims when the user finishes.
       setElapsedSeconds((s) => (s < 60 ? s + 1 : s));
     }, 1000);
 
@@ -817,7 +834,10 @@ export default function ReaderScreen() {
         skipLabel={t('reader.ad_pre_skip')}
         onClaimed={onPreReadClaimed}
         onSkipped={onPreReadSkipped}
-        onClose={() => setPreReadOpen(false)}
+        onClose={() => {
+          preReadDismissedRef.current = true;
+          setPreReadOpen(false);
+        }}
       />
 
       {/* Post-read gate (the second ad). Sits BEFORE /session/end: the
