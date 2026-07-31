@@ -206,9 +206,16 @@ async def list_in_progress(
         .where(ReadingProgress.is_finished == False)  # noqa: E712
         .order_by(ReadingProgress.last_read_at.is_(None).asc(), ReadingProgress.last_read_at.desc())
     )
+    # SQLAlchemy's `Result` is single-use — calling `.all()` twice on the
+    # same Result returns an empty list the second time. Materialize once
+    # so we can iterate for both the slice-title lookup AND the response
+    # build. Without this the keep-reading carousel on Home and Catalog
+    # silently renders empty (this was the bug behind the empty resume
+    # list the user reported).
+    data = rows.all()
     out: list[WorkProgress] = []
 
-    slice_ids = [rp.current_slice_id for rp, _, _ in rows.all() if rp.current_slice_id]
+    slice_ids = [rp.current_slice_id for rp, _, _ in data if rp.current_slice_id]
     slice_titles: dict[int, str] = {}
     if slice_ids:
         slice_rows = await db.execute(
@@ -217,7 +224,7 @@ async def list_in_progress(
         for sid, stitle in slice_rows.all():
             slice_titles[sid] = stitle
 
-    for rp, work_title, work_author in rows.all():
+    for rp, work_title, work_author in data:
         slice_title = f"{work_title} — Part {rp.current_slice_order}"
         if rp.current_slice_id and rp.current_slice_id in slice_titles:
             slice_title = slice_titles[rp.current_slice_id]
