@@ -133,11 +133,7 @@ async def end_session(
     bonus_credited = 0
     bonus_eligible = False
 
-    if session.scroll_events > 0 and effective_duration >= settings.session_verified_min_seconds:
-        # Treat scroll + at least 30s of effective reading as a verified
-        # slice. The 30s floor is shorter than the 60s mark that triggers
-        # the post-read modal so the bonus can settle even if the user
-        # skipped the post-read ad (which is the whole point of the bonus).
+    if not session.verified and session.scroll_events > 0 and effective_duration >= settings.session_verified_min_seconds:
         session.verified = True
         bonus_credited = settings.reading_slice_bonus_points
         current_user.points_balance += bonus_credited
@@ -145,17 +141,17 @@ async def end_session(
         bonus_eligible = True
         logger.info(
             "session %d settled: user=%d verified=True bonus=%d new_balance=%d",
-            session.id, current_user.id, bonus_credited,
-            current_user.points_balance,
+            session.id, current_user.id, bonus_credited, current_user.points_balance,
         )
 
-        # Fire wallet-update push. asyncio.create_task so the response
-        # returns immediately; FCM failures never block /session/end.
-        # The helper is best-effort — it short-circuits silently if the
-        # user has push_enabled=False, no FCM tokens, or is in quiet
-        # hours.
+    await db.commit()
+    await db.refresh(current_user)
+    await db.refresh(session)
+
+    if bonus_credited > 0 and session.verified and session.points_earned == bonus_credited:
         bonus_naira = bonus_credited / max(1, settings.points_per_naira)
         from app.services.fcm import send_wallet_update
+        from app.services.notifications import create_notification
         asyncio.create_task(
             send_wallet_update(
                 db,
@@ -175,9 +171,6 @@ async def end_session(
                 data={"type": "reading_reward", "points": str(bonus_credited)},
             )
         )
-
-    await db.commit()
-    await db.refresh(current_user)
 
     return SessionEndResponse(
         session_id=session.id,
