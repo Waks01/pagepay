@@ -11,7 +11,7 @@ import {
 import { apiFetch } from '@/src/shared/api/client';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
-import { Field } from '@/components/Field';
+import { Field, PasswordToggle } from '@/components/Field';
 import { PrimaryButton } from '@/components/PrimaryButton';
 
 type ChangePasswordModalProps = {
@@ -39,6 +39,7 @@ export function ChangePasswordModal({ visible, onClose }: ChangePasswordModalPro
   const [confirm, setConfirm] = useState('');
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNext, setShowNext] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState<{
     current?: string;
@@ -54,6 +55,7 @@ export function ChangePasswordModal({ visible, onClose }: ChangePasswordModalPro
     setFieldErrors({});
     setShowCurrent(false);
     setShowNext(false);
+    setShowConfirm(false);
   }
 
   function handleClose() {
@@ -148,11 +150,7 @@ export function ChangePasswordModal({ visible, onClose }: ChangePasswordModalPro
               }}
               error={fieldErrors.current ?? null}
               rightIcon={
-                <Pressable onPress={() => setShowCurrent((s) => !s)} hitSlop={8}>
-                  <Text style={[styles.eyeIcon, { color: tokens.inkMuted }]}>
-                    {showCurrent ? 'Hide' : 'Show'}
-                  </Text>
-                </Pressable>
+                <PasswordToggle visible={showCurrent} onToggle={() => setShowCurrent((s) => !s)} />
               }
             />
             <Field
@@ -168,16 +166,12 @@ export function ChangePasswordModal({ visible, onClose }: ChangePasswordModalPro
               }}
               error={fieldErrors.next ?? null}
               rightIcon={
-                <Pressable onPress={() => setShowNext((s) => !s)} hitSlop={8}>
-                  <Text style={[styles.eyeIcon, { color: tokens.inkMuted }]}>
-                    {showNext ? 'Hide' : 'Show'}
-                  </Text>
-                </Pressable>
+                <PasswordToggle visible={showNext} onToggle={() => setShowNext((s) => !s)} />
               }
             />
             <Field
               label="Confirm new password"
-              secureTextEntry={!showNext}
+              secureTextEntry={!showConfirm}
               autoCapitalize="none"
               autoCorrect={false}
               value={confirm}
@@ -186,6 +180,9 @@ export function ChangePasswordModal({ visible, onClose }: ChangePasswordModalPro
                 setFieldErrors((p) => (p.confirm ? { ...p, confirm: undefined } : p));
               }}
               error={fieldErrors.confirm ?? null}
+              rightIcon={
+                <PasswordToggle visible={showConfirm} onToggle={() => setShowConfirm((s) => !s)} />
+              }
             />
           </View>
 
@@ -248,10 +245,6 @@ const styles = StyleSheet.create({
   form: {
     gap: 14,
     marginBottom: 18,
-  },
-  eyeIcon: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   actions: {
     gap: 10,

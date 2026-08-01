@@ -1,18 +1,25 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet, Platform,
-} from 'react-native';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
-import * as WebBrowser from 'expo-web-browser';
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  StyleSheet,
+  Platform,
+} from "react-native";
+import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import * as WebBrowser from "expo-web-browser";
 
-import { apiFetch } from '@/src/shared/api/client';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { PagePay } from '@/constants/theme';
+import { apiFetch } from "@/src/shared/api/client";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import { PagePay } from "@/constants/theme";
 
 type DepositResponse = {
   payment_url: string;
@@ -31,82 +38,233 @@ export default function FundWalletScreen() {
   const qc = useQueryClient();
 
   const [amount, setAmount] = useState<number | null>(null);
-  const [customAmount, setCustomAmount] = useState('');
+  const [customAmount, setCustomAmount] = useState("");
+  const [checkingPayment, setCheckingPayment] = useState(false);
+
+  const pollPaymentStatus = async (reference: string) => {
+    console.log(
+      "🔍 [PAYMENT] Starting payment verification for reference:",
+      reference,
+    );
+    setCheckingPayment(true);
+    let attempts = 0;
+
+    const checkStatus = async (): Promise<boolean> => {
+      try {
+        attempts++;
+        console.log(`🔄 [PAYMENT] Polling attempt ${attempts}/10...`);
+
+        console.log("📊 [PAYMENT] Refetching user data...");
+        await qc.refetchQueries({ queryKey: ["me"] });
+        console.log("✅ [PAYMENT] User data refetched");
+
+        console.log("💰 [PAYMENT] Fetching transaction history...");
+        const txRes = await apiFetch("/api/v1/wallet/transactions?limit=1", {
+          method: "GET",
+        });
+        console.log(
+          "📥 [PAYMENT] Transaction API response status:",
+          txRes.status,
+        );
+
+        if (txRes.ok) {
+          const transactions = await txRes.json();
+          console.log("📋 [PAYMENT] Transactions received:", transactions);
+
+          if (transactions.length > 0) {
+            const latestTx = transactions[0];
+            const txDate = new Date(latestTx.date);
+            const secondsAgo = (new Date().getTime() - txDate.getTime()) / 1000;
+
+            console.log("🕐 [PAYMENT] Latest transaction:", {
+              id: latestTx.id,
+              type: latestTx.type,
+              points: latestTx.points,
+              secondsAgo: secondsAgo.toFixed(1),
+            });
+
+            if (secondsAgo < 60) {
+              console.log(
+                "✅ [PAYMENT] Payment CONFIRMED! Recent transaction found",
+              );
+              return true;
+            }
+            console.log("⏰ [PAYMENT] Transaction too old, continuing...");
+          } else {
+            console.log("❌ [PAYMENT] No transactions found yet");
+          }
+        } else {
+          console.error("❌ [PAYMENT] Transaction API error:", txRes.status);
+        }
+
+        if (attempts < 10) {
+          console.log(`⏳ [PAYMENT] Waiting 2s before next attempt...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          return checkStatus();
+        }
+
+        console.log("⚠️ [PAYMENT] Max attempts reached");
+        return false;
+      } catch (e) {
+        console.error("❌ [PAYMENT] Error during check:", e);
+        return false;
+      }
+    };
+
+    const success = await checkStatus();
+    setCheckingPayment(false);
+
+    console.log("🏁 [PAYMENT] Polling complete. Success:", success);
+
+    Alert.alert(
+      success ? "✅ Payment Successful" : "⏳ Processing Payment",
+      success
+        ? "Your wallet has been funded!"
+        : "Payment is processing. Balance will update shortly.",
+    );
+
+    console.log("🔄 [PAYMENT] Final query invalidation...");
+    await qc.invalidateQueries({ queryKey: ["me"] });
+    console.log("🏠 [PAYMENT] Navigating back...");
+    router.back();
+  };
 
   const depositMutation = useMutation({
     mutationFn: async () => {
       const finalAmount = amount ?? (parseInt(customAmount) || 0);
-      if (finalAmount < 100) throw new Error(t('fund_wallet.errors.amount_min'));
+      console.log(
+        "💳 [DEPOSIT] Starting deposit request, amount:",
+        finalAmount,
+      );
 
-      const res = await apiFetch('/api/v1/wallet/deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      if (finalAmount < 100) {
+        console.log("❌ [DEPOSIT] Amount too low:", finalAmount);
+        throw new Error(t("fund_wallet.errors.amount_min"));
+      }
+
+      console.log("🌐 [DEPOSIT] Calling backend /api/v1/wallet/deposit...");
+      const res = await apiFetch("/api/v1/wallet/deposit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           deposit_amount_kobo: finalAmount * 100,
           custom_amount: !AMOUNTS.includes(finalAmount),
         }),
       });
 
+      console.log("📥 [DEPOSIT] Backend response status:", res.status);
+
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.detail || t('fund_wallet.errors.deposit_failed'));
+        console.error("❌ [DEPOSIT] Backend error:", err);
+        throw new Error(err.detail || t("fund_wallet.errors.deposit_failed"));
       }
 
-      return (await res.json()) as DepositResponse;
+      const data = await res.json();
+      console.log("✅ [DEPOSIT] Backend success, response:", data);
+      console.log("   Payment URL:", data.payment_url);
+      console.log("   Reference:", data.reference);
+      console.log("   Amount:", data.amount_kobo);
+
+      // Show "Payment initiated" alert
+      Alert.alert(
+        "💳 Payment Initiated",
+        "Opening payment page... Complete the payment and return to see your updated balance.",
+        [{ text: "OK" }],
+      );
+
+      return data as DepositResponse;
     },
     onSuccess: async (data) => {
+      console.log("🚀 [DEPOSIT] Opening payment browser...");
       try {
-        await WebBrowser.openBrowserAsync(data.payment_url, {
+        const result = await WebBrowser.openBrowserAsync(data.payment_url, {
           presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
         });
+
+        console.log("👤 [DEPOSIT] Browser closed, result:", result);
+
+        // After payment browser closes, poll for payment confirmation
+        if (result.type === "dismiss" || result.type === "cancel") {
+          console.log(
+            "🔍 [DEPOSIT] User returned from payment - checking status...",
+          );
+          // User returned from payment page - check if payment succeeded
+          pollPaymentStatus(data.reference);
+        } else {
+          console.log(
+            "⚠️ [DEPOSIT] Unexpected browser result type:",
+            result.type,
+          );
+        }
       } catch (e) {
-        console.error('Failed to open payment browser:', e);
-        Alert.alert(t('fund_wallet.errors.deposit_failed'), 'Could not open payment page');
+        console.error("❌ [DEPOSIT] Failed to open payment browser:", e);
+        Alert.alert(
+          t("fund_wallet.errors.deposit_failed"),
+          "Could not open payment page",
+        );
         return;
       }
-
-      qc.invalidateQueries({ queryKey: ['me'] });
-      router.back();
     },
     onError: (error: Error) => {
-      Alert.alert(t('fund_wallet.errors.deposit_failed'), error.message);
+      console.error("❌ [DEPOSIT] Mutation error:", error);
+      Alert.alert(t("fund_wallet.errors.deposit_failed"), error.message);
     },
   });
 
   const finalAmount = amount ?? (parseInt(customAmount) || 0);
-  const processingFee = finalAmount >= 100 ? Math.min(Math.ceil(finalAmount * 0.015), 2000) : 0;
+  const processingFee =
+    finalAmount >= 100 ? Math.min(Math.ceil(finalAmount * 0.015), 2000) : 0;
   const totalPayment = finalAmount + processingFee;
   const canSubmit = finalAmount >= 100;
   const pointsToReceive = finalAmount * 10; // Points based on deposit amount (not including fee)
 
   return (
-    <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
+    <View
+      style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}
+    >
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={24} color={tokens.ink} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: tokens.ink }]}>{t('fund_wallet.title')}</Text>
+          <Text style={[styles.title, { color: tokens.ink }]}>
+            {t("fund_wallet.title")}
+          </Text>
         </View>
 
         {/* Info */}
-        <View style={[styles.infoCard, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
-          <Ionicons name="information-circle-outline" size={20} color={tokens.mint} />
+        <View
+          style={[
+            styles.infoCard,
+            { backgroundColor: tokens.mintSoft, borderColor: tokens.mint },
+          ]}
+        >
+          <Ionicons
+            name="information-circle-outline"
+            size={20}
+            color={tokens.mint}
+          />
           <View style={{ flex: 1 }}>
             <Text style={[styles.infoText, { color: tokens.ink }]}>
-              {t('fund_wallet.payment_note')}
+              {t("fund_wallet.payment_note")}
             </Text>
           </View>
         </View>
 
         {/* Quick amounts */}
-        <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('fund_wallet.amount_label')}</Text>
-        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        <Text style={[styles.label, { color: tokens.inkMuted }]}>
+          {t("fund_wallet.amount_label")}
+        </Text>
+        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           {AMOUNTS.map((a) => (
             <TouchableOpacity
               key={a}
-              onPress={() => { setAmount(a); setCustomAmount(''); }}
+              onPress={() => {
+                setAmount(a);
+                setCustomAmount("");
+              }}
               style={[
                 styles.amtBtn,
                 {
@@ -115,23 +273,40 @@ export default function FundWalletScreen() {
                 },
               ]}
             >
-              <Text style={[
-                styles.amtText,
-                { color: amount === a ? tokens.mintText : tokens.ink },
-              ]}>₦{a.toLocaleString()}</Text>
-              <Text style={[
-                styles.ptsText,
-                { color: amount === a ? tokens.mintText : tokens.mint },
-              ]}>{(a * 10).toLocaleString()} pts</Text>
+              <Text
+                style={[
+                  styles.amtText,
+                  { color: amount === a ? tokens.mintText : tokens.ink },
+                ]}
+              >
+                ₦{a.toLocaleString()}
+              </Text>
+              <Text
+                style={[
+                  styles.ptsText,
+                  { color: amount === a ? tokens.mintText : tokens.mint },
+                ]}
+              >
+                {(a * 10).toLocaleString()} pts
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Custom amount */}
-        <Text style={[styles.label, { color: tokens.inkMuted, marginTop: 8 }]}>{t('fund_wallet.custom_amount')}</Text>
+        <Text style={[styles.label, { color: tokens.inkMuted, marginTop: 8 }]}>
+          {t("fund_wallet.custom_amount")}
+        </Text>
         <TextInput
-          style={[styles.input, { backgroundColor: tokens.card, color: tokens.ink, borderColor: tokens.border }]}
-          placeholder={t('fund_wallet.minimum')}
+          style={[
+            styles.input,
+            {
+              backgroundColor: tokens.card,
+              color: tokens.ink,
+              borderColor: tokens.border,
+            },
+          ]}
+          placeholder={t("fund_wallet.minimum")}
           placeholderTextColor={tokens.inkMuted}
           value={customAmount}
           onChangeText={(text) => {
@@ -144,31 +319,68 @@ export default function FundWalletScreen() {
 
         {/* Summary */}
         {canSubmit && (
-          <View style={[styles.summaryCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <View
+            style={[
+              styles.summaryCard,
+              { backgroundColor: tokens.card, borderColor: tokens.border },
+            ]}
+          >
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: tokens.inkMuted }]}>{t('fund_wallet.amount_label')}</Text>
-              <Text style={[styles.summaryValue, { color: tokens.ink }]}>₦{finalAmount.toLocaleString()}</Text>
+              <Text style={[styles.summaryLabel, { color: tokens.inkMuted }]}>
+                {t("fund_wallet.amount_label")}
+              </Text>
+              <Text style={[styles.summaryValue, { color: tokens.ink }]}>
+                ₦{finalAmount.toLocaleString()}
+              </Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: tokens.inkMuted }]}>{t('fund_wallet.processing_fee', { fee: processingFee })}</Text>
-              <Text style={[styles.summaryValue, { color: tokens.inkMuted }]}>₦{processingFee.toLocaleString()}</Text>
+              <Text style={[styles.summaryLabel, { color: tokens.inkMuted }]}>
+                {t("fund_wallet.processing_fee", { fee: processingFee })}
+              </Text>
+              <Text style={[styles.summaryValue, { color: tokens.inkMuted }]}>
+                ₦{processingFee.toLocaleString()}
+              </Text>
             </View>
-            <View style={[styles.divider, { backgroundColor: tokens.border }]} />
+            <View
+              style={[styles.divider, { backgroundColor: tokens.border }]}
+            />
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: tokens.ink, fontWeight: '600' }]}>{t('fund_wallet.total_payment', { total: totalPayment })}</Text>
-              <Text style={[styles.summaryValue, { color: tokens.ink, fontWeight: '700', fontSize: 18 }]}>
+              <Text
+                style={[
+                  styles.summaryLabel,
+                  { color: tokens.ink, fontWeight: "600" },
+                ]}
+              >
+                {t("fund_wallet.total_payment", { total: totalPayment })}
+              </Text>
+              <Text
+                style={[
+                  styles.summaryValue,
+                  { color: tokens.ink, fontWeight: "700", fontSize: 18 },
+                ]}
+              >
                 ₦{totalPayment.toLocaleString()}
               </Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: tokens.mint }]}>You'll receive</Text>
-              <Text style={[styles.summaryValue, { color: tokens.mint, fontWeight: '700' }]}>
+              <Text style={[styles.summaryLabel, { color: tokens.mint }]}>
+                You'll receive
+              </Text>
+              <Text
+                style={[
+                  styles.summaryValue,
+                  { color: tokens.mint, fontWeight: "700" },
+                ]}
+              >
                 {pointsToReceive.toLocaleString()} pts
               </Text>
             </View>
-            <View style={[styles.divider, { backgroundColor: tokens.border }]} />
+            <View
+              style={[styles.divider, { backgroundColor: tokens.border }]}
+            />
             <Text style={[styles.noteText, { color: tokens.inkMuted }]}>
-              💳 Pay securely via Paystack. Wallet credited instantly after payment.
+              💳 Pay securely via Paystack. Wallet credited instantly after
+              payment.
             </Text>
           </View>
         )}
@@ -176,22 +388,38 @@ export default function FundWalletScreen() {
         {/* Pay button */}
         <TouchableOpacity
           onPress={() => depositMutation.mutate()}
-          disabled={!canSubmit || depositMutation.isPending}
+          disabled={!canSubmit || depositMutation.isPending || checkingPayment}
           style={[
             styles.payBtn,
             {
               backgroundColor: canSubmit ? tokens.mint : tokens.border,
-              opacity: depositMutation.isPending ? 0.7 : 1,
+              opacity: depositMutation.isPending || checkingPayment ? 0.7 : 1,
             },
           ]}
         >
-          {depositMutation.isPending ? (
-            <ActivityIndicator color={tokens.mintText} />
+          {depositMutation.isPending || checkingPayment ? (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <ActivityIndicator color={tokens.mintText} />
+              {checkingPayment && (
+                <Text
+                  style={[
+                    styles.payText,
+                    { color: tokens.mintText, fontSize: 14 },
+                  ]}
+                >
+                  Verifying payment...
+                </Text>
+              )}
+            </View>
           ) : (
             <>
               <Ionicons name="card-outline" size={20} color={tokens.mintText} />
               <Text style={[styles.payText, { color: tokens.mintText }]}>
-                {canSubmit ? t('fund_wallet.fund_button') : t('fund_wallet.minimum')}
+                {canSubmit
+                  ? t("fund_wallet.fund_button")
+                  : t("fund_wallet.minimum")}
               </Text>
             </>
           )}
@@ -202,11 +430,15 @@ export default function FundWalletScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  label: { fontSize: 13, fontWeight: '500' },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    fontFamily: "SpaceGrotesk_700Bold",
+  },
+  label: { fontSize: 13, fontWeight: "500" },
   infoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     borderRadius: 12,
     padding: 14,
@@ -217,7 +449,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     borderWidth: 1,
   },
   amtBtn: {
@@ -225,11 +457,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    alignItems: 'center',
+    alignItems: "center",
     minWidth: 110,
   },
-  amtText: { fontSize: 16, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  ptsText: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+  amtText: {
+    fontSize: 16,
+    fontWeight: "700",
+    fontFamily: "SpaceGrotesk_700Bold",
+  },
+  ptsText: { fontSize: 11, fontWeight: "600", marginTop: 2 },
   summaryCard: {
     borderRadius: 12,
     padding: 16,
@@ -237,23 +473,27 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
   summaryLabel: { fontSize: 14 },
-  summaryValue: { fontSize: 16, fontWeight: '600' },
+  summaryValue: { fontSize: 16, fontWeight: "600" },
   divider: { height: 1, marginVertical: 12 },
   noteText: { fontSize: 12, lineHeight: 16 },
   payBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     borderRadius: 14,
     padding: 16,
     marginTop: 8,
   },
-  payText: { fontSize: 16, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  payText: {
+    fontSize: 16,
+    fontWeight: "700",
+    fontFamily: "SpaceGrotesk_700Bold",
+  },
 });

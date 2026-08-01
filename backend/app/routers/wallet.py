@@ -2,6 +2,7 @@ import logging
 import uuid
 from datetime import datetime
 from math import ceil
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -192,13 +193,18 @@ async def initiate_wallet_deposit(
 ):
     """
     Initiate Paystack payment to fund user wallet.
-
-    Minimum deposit: ₦100 (10,000 kobo)
-    Conversion: 10 points = ₦1 (amount_kobo = points to credit)
-
-    After successful payment, webhook will credit user's points_balance.
+    
+    DEBUG: Added extensive logging to trace payment initiation.
     """
+    logger.info("=" * 80)
+    logger.info("💳 WALLET DEPOSIT INITIATED")
+    logger.info("User ID: %s", current_user.id)
+    logger.info("Email: %s", current_user.email)
+    logger.info("Deposit amount (kobo): %s", payload.deposit_amount_kobo)
+    logger.info("Custom amount: %s", payload.custom_amount)
+    
     if not settings.paystack_secret_key:
+        logger.error("❌ PAYSTACK_SECRET_KEY not configured!")
         raise HTTPException(
             status_code=503,
             detail="Wallet funding temporarily unavailable. Please try again later.",
@@ -249,8 +255,10 @@ async def initiate_wallet_deposit(
 
     # Generate unique reference with project prefix "pp_"
     reference = f"pp_wallet_{current_user.id}_{uuid.uuid4().hex[:16]}"
+    logger.info("📝 Generated reference: %s", reference)
     
     # Initialize Paystack transaction
+    logger.info("🌐 Calling Paystack to initialize transaction...")
     paystack = get_client()
     try:
         result = await paystack.initialize_transaction(
@@ -267,8 +275,10 @@ async def initiate_wallet_deposit(
                 "custom_amount": payload.custom_amount,
             }
         )
+        logger.info("✅ Paystack initialization successful!")
+        logger.info("   Authorization URL: %s", result.get("authorization_url"))
     except Exception as exc:
-        logger.error("Paystack initialization failed for wallet deposit: %s", exc)
+        logger.error("❌ Paystack initialization FAILED: %s", exc)
         raise HTTPException(status_code=502, detail="Payment provider unavailable")
     
     # Create Payment record to track deposit
@@ -281,6 +291,8 @@ async def initiate_wallet_deposit(
     # branch never fires if the dict is missing. That bug surfaced as
     # "the webhook returns handled:true but the wallet balance stays
     # at 0" — the dispatcher thought everything was fine.
+    
+    logger.info("💾 Creating Payment record in database...")
     payment = Payment(
         user_id=current_user.id,
         tier="wallet_deposit",
@@ -297,11 +309,33 @@ async def initiate_wallet_deposit(
     )
     db.add(payment)
     await db.commit()
+    logger.info("✅ Payment record created: ID=%s", payment.id)
     
-    logger.info(
-        "Wallet deposit initiated: user_id=%d, amount=%d, ref=%s",
-        current_user.id, payload.deposit_amount_kobo, reference
+    # Send push notification: Payment initiated
+    logger.info("📲 Sending payment initiated notification...")
+    from app.services.fcm import send_push_notification
+    asyncio.create_task(
+        send_push_notification(
+            db=db,
+            user_id=current_user.id,
+            title="💳 Payment Initiated",
+            body=f"Processing your ₦{payload.deposit_amount_kobo / 100:.2f} wallet deposit...",
+            data={
+                "type": "payment_initiated",
+                "reference": reference,
+                "amount_kobo": str(payload.deposit_amount_kobo),
+                "total_kobo": str(total_amount),
+            },
+            category="wallet_updates",
+        )
     )
+    
+    logger.info("🎉 Wallet deposit initiated successfully!")
+    logger.info("   Reference: %s", reference)
+    logger.info("   Amount: %s kobo", payload.deposit_amount_kobo)
+    logger.info("   Fee: %s kobo", processing_fee)
+    logger.info("   Total: %s kobo", total_amount)
+    logger.info("=" * 80)
     
     return WalletDepositResponse(
         payment_url=result["authorization_url"],

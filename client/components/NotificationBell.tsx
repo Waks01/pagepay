@@ -1,12 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useRouter, usePathname } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
-import { PagePay } from '@/constants/theme';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { apiFetch } from '@/src/shared/api/client';
-import { onNotification, offNotification } from '@/src/lib/socket';
+import { useEffect, useState, useCallback } from "react";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useRouter, usePathname } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import { apiFetch } from "@/src/shared/api/client";
+import { onNotification, offNotification } from "@/src/lib/socket";
 
 type Props = {
   onPress?: () => void;
@@ -19,12 +19,12 @@ export default function NotificationBell({ onPress }: Props) {
   const pathname = usePathname();
   const [socketUnreadExtra, setSocketUnreadExtra] = useState(0);
 
-  const isNotificationsScreen = pathname.includes('/(tabs)/notifications');
+  const isNotificationsScreen = pathname.includes("/(tabs)/notifications");
 
-  const { data: notifData } = useQuery({
-    queryKey: ['notifications-unread-count'],
+  const { data: notifData, refetch } = useQuery({
+    queryKey: ["notifications-unread-count"],
     queryFn: async () => {
-      const res = await apiFetch('/api/v1/notifications?limit=1');
+      const res = await apiFetch("/api/v1/notifications?limit=1");
       if (!res.ok) return { unread_count: 0 };
       return res.json();
     },
@@ -35,11 +35,14 @@ export default function NotificationBell({ onPress }: Props) {
 
   useEffect(() => {
     const handler = () => {
+      console.log("📬 [BELL] Socket notification received, incrementing badge");
       setSocketUnreadExtra((prev) => prev + 1);
+      // Also refetch to get accurate count from backend
+      refetch();
     };
     onNotification(handler);
     return () => offNotification(handler);
-  }, []);
+  }, [refetch]);
 
   const handlePress = useCallback(() => {
     if (onPress) {
@@ -47,21 +50,21 @@ export default function NotificationBell({ onPress }: Props) {
     } else if (isNotificationsScreen) {
       router.back();
     } else {
-      router.push('/(tabs)/notifications');
+      router.push("/(tabs)/notifications");
     }
   }, [onPress, isNotificationsScreen, router]);
 
   return (
     <TouchableOpacity onPress={handlePress} style={styles.bellBtn} hitSlop={8}>
       <Ionicons
-        name={isNotificationsScreen ? 'notifications' : 'notifications-outline'}
+        name={isNotificationsScreen ? "notifications" : "notifications-outline"}
         size={22}
         color={tokens.ink}
       />
       {unreadCount > 0 && (
         <View style={[styles.badge, { backgroundColor: tokens.signal }]}>
-          <Text style={[styles.badgeText, { color: '#fff' }]}>
-            {unreadCount > 9 ? '9+' : unreadCount}
+          <Text style={[styles.badgeText, { color: "#fff" }]}>
+            {unreadCount > 9 ? "9+" : unreadCount}
           </Text>
         </View>
       )}
@@ -73,23 +76,23 @@ const styles = StyleSheet.create({
   bellBtn: {
     width: 36,
     height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
   },
   badge: {
-    position: 'absolute',
+    position: "absolute",
     top: -2,
     right: -2,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 4,
   },
   badgeText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

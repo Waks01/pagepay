@@ -645,9 +645,10 @@
     "empty": "No payment history yet",
     "subscription": "Premium Subscription",
     "payment": "Payment",
-    "completed": "completed",
-    "pending": "pending",
-    "failed": "failed"
+    "success": "Completed",
+    "completed": "Completed",
+    "pending": "Pending",
+    "failed": "Failed"
   },
   "subscription": {
     "title": "Subscription",

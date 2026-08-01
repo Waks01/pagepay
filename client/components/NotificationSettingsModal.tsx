@@ -172,7 +172,9 @@ export function NotificationSettingsModal({ visible, onClose }: Props) {
           <Pressable onPress={onClose} hitSlop={12}>
             <Ionicons name="close" size={28} color={tokens.ink} />
           </Pressable>
-          <Text style={[styles.headerTitle, { color: tokens.ink }]}>Notification Settings</Text>
+          <View style={styles.headerTitleArea}>
+            <Text style={[styles.headerTitle, { color: tokens.ink }]}>Notification Settings</Text>
+          </View>
           <Pressable
             onPress={handleSave}
             disabled={updateMutation.isPending}
@@ -426,6 +428,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     fontFamily: 'SpaceGrotesk_700Bold',
+  },
+  headerTitleArea: {
+    flex: 1,
+    alignItems: 'center',
   },
   saveButton: {
     fontSize: 16,

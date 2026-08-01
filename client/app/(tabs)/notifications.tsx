@@ -1,14 +1,24 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Image,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { apiFetch } from '@/src/shared/api/client';
-import { PagePay } from '@/constants/theme';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import NotificationBell from '@/components/NotificationBell';
+import { apiFetch } from "@/src/shared/api/client";
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import NotificationBell from "@/components/NotificationBell";
+import { onNotification, offNotification } from "@/src/lib/socket";
 
 type NotificationItem = {
   id: number;
@@ -33,68 +43,92 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const notificationsQ = useQuery({
-    queryKey: ['notifications'],
+    queryKey: ["notifications"],
     queryFn: async (): Promise<NotificationsResponse> => {
-      const res = await apiFetch('/api/v1/notifications?limit=50');
-      if (!res.ok) throw new Error('Failed');
+      const res = await apiFetch("/api/v1/notifications?limit=50");
+      if (!res.ok) throw new Error("Failed");
       return res.json();
     },
   });
 
+  // Listen for new notifications via socket and refresh
+  useEffect(() => {
+    const handler = (notification: any) => {
+      console.log(
+        "📬 [NOTIFICATIONS] New notification received via socket:",
+        notification,
+      );
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: ["notifications-unread-count"] });
+    };
+    onNotification(handler);
+    return () => offNotification(handler);
+  }, [qc]);
+
   const markReadMutation = useMutation({
     mutationFn: async (notificationId: number) => {
-      const res = await apiFetch(`/api/v1/notifications/${notificationId}/read`, { method: 'POST' });
-      if (!res.ok) throw new Error('Failed');
+      const res = await apiFetch(
+        `/api/v1/notifications/${notificationId}/read`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error("Failed");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: ["notifications-unread-count"] });
+    },
   });
 
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiFetch('/api/v1/notifications/read-all', { method: 'POST' });
-      if (!res.ok) throw new Error('Failed');
+      const res = await apiFetch("/api/v1/notifications/read-all", {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await qc.invalidateQueries({ queryKey: ['notifications'] });
+    await qc.invalidateQueries({ queryKey: ["notifications"] });
     setRefreshing(false);
   }, [qc]);
 
   const notifications = notificationsQ.data?.notifications ?? [];
   const unreadCount = notificationsQ.data?.unread_count ?? 0;
 
-  const getCategoryIcon = (category: string | null): keyof typeof Ionicons.glyphMap => {
+  const getCategoryIcon = (
+    category: string | null,
+  ): keyof typeof Ionicons.glyphMap => {
     switch (category) {
-      case 'study_reminders':
-        return 'school-outline';
-      case 'task_alerts':
-        return 'clipboard-outline';
-      case 'referral_bonuses':
-        return 'people-outline';
-      case 'wallet_updates':
-        return 'wallet-outline';
-      case 'ad_rewards':
-        return 'gift-outline';
+      case "study_reminders":
+        return "school-outline";
+      case "task_alerts":
+        return "clipboard-outline";
+      case "referral_bonuses":
+        return "people-outline";
+      case "wallet_updates":
+        return "wallet-outline";
+      case "ad_rewards":
+        return "gift-outline";
       default:
-        return 'notifications-outline';
+        return "notifications-outline";
     }
   };
 
   const getCategoryColor = (category: string | null): string => {
     switch (category) {
-      case 'study_reminders':
-        return '#007AFF';
-      case 'task_alerts':
-        return '#FF9500';
-      case 'referral_bonuses':
-        return '#34C759';
-      case 'wallet_updates':
-        return '#FF2D55';
-      case 'ad_rewards':
-        return '#AF52DE';
+      case "study_reminders":
+        return "#007AFF";
+      case "task_alerts":
+        return "#FF9500";
+      case "referral_bonuses":
+        return "#34C759";
+      case "wallet_updates":
+        return "#FF2D55";
+      case "ad_rewards":
+        return "#AF52DE";
       default:
         return tokens.mint;
     }
@@ -120,20 +154,32 @@ export default function NotificationsScreen() {
           },
         ]}
       >
-        <View style={[styles.iconBadge, { backgroundColor: iconColor + '20' }]}>
+        <View style={[styles.iconBadge, { backgroundColor: iconColor + "20" }]}>
           <Ionicons name={icon} size={20} color={iconColor} />
         </View>
         <View style={styles.itemBody}>
           <View style={styles.itemHeader}>
-            <Text style={[styles.itemTitle, { color: tokens.ink }]} numberOfLines={1}>
+            <Text
+              style={[styles.itemTitle, { color: tokens.ink }]}
+              numberOfLines={1}
+            >
               {item.title}
             </Text>
-            {!item.read && <View style={[styles.unreadDot, { backgroundColor: tokens.mint }]} />}
+            {!item.read && (
+              <View
+                style={[styles.unreadDot, { backgroundColor: tokens.mint }]}
+              />
+            )}
           </View>
-          <Text style={[styles.itemBody, { color: tokens.inkMuted }]} numberOfLines={2}>
+          <Text
+            style={[styles.itemBody, { color: tokens.inkMuted }]}
+            numberOfLines={2}
+          >
             {item.body}
           </Text>
-          <Text style={[styles.itemTime, { color: tokens.inkMuted }]}>{time}</Text>
+          <Text style={[styles.itemTime, { color: tokens.inkMuted }]}>
+            {time}
+          </Text>
         </View>
       </TouchableOpacity>
     );
@@ -141,7 +187,11 @@ export default function NotificationsScreen() {
 
   const ListEmpty = () => (
     <View style={styles.empty}>
-      <Ionicons name="notifications-off-outline" size={48} color={tokens.inkMuted} />
+      <Ionicons
+        name="notifications-off-outline"
+        size={48}
+        color={tokens.inkMuted}
+      />
       <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>
         No notifications yet
       </Text>
@@ -152,16 +202,32 @@ export default function NotificationsScreen() {
   );
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+    <SafeAreaView
+      edges={["top"]}
+      style={{ flex: 1, backgroundColor: tokens.paper }}
+    >
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: tokens.card, borderBottomColor: tokens.border },
+        ]}
+      >
         <View style={styles.headerRow}>
-          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+          <Image
+            source={require("@/assets/images/icon.png")}
+            style={styles.headerIcon}
+          />
           <View style={styles.headerTitleArea}>
-            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+            <Text
+              style={[
+                styles.headerTitle,
+                { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+              ]}
+            >
               Notifications
             </Text>
             <Text style={[styles.headerSubtitle, { color: tokens.inkMuted }]}>
-              {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+              {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
             </Text>
           </View>
           <NotificationBell />
@@ -173,9 +239,14 @@ export default function NotificationsScreen() {
           <TouchableOpacity
             onPress={() => markAllReadMutation.mutate()}
             disabled={markAllReadMutation.isPending}
-            style={[styles.markAllBtn, { opacity: markAllReadMutation.isPending ? 0.6 : 1 }]}
+            style={[
+              styles.markAllBtn,
+              { opacity: markAllReadMutation.isPending ? 0.6 : 1 },
+            ]}
           >
-            <Text style={[styles.markAllText, { color: tokens.mint }]}>Mark all read</Text>
+            <Text style={[styles.markAllText, { color: tokens.mint }]}>
+              Mark all read
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -184,9 +255,15 @@ export default function NotificationsScreen() {
         data={notifications}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
-        contentContainerStyle={notifications.length === 0 ? styles.emptyList : styles.list}
+        contentContainerStyle={
+          notifications.length === 0 ? styles.emptyList : styles.list
+        }
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={tokens.mint} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={tokens.mint}
+          />
         }
         ListEmptyComponent={ListEmpty}
       />
@@ -202,9 +279,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   headerIcon: {
     width: 28,
@@ -213,7 +290,7 @@ const styles = StyleSheet.create({
   },
   headerTitleArea: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
   },
   headerTitle: {
     fontSize: 17,
@@ -229,7 +306,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   markAllBtn: {
     paddingHorizontal: 12,
@@ -239,7 +316,7 @@ const styles = StyleSheet.create({
   },
   markAllText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   list: {
     padding: 12,
@@ -249,19 +326,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   item: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     padding: 14,
     borderRadius: 14,
     borderWidth: 1,
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
   },
   iconBadge: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     flexShrink: 0,
   },
   itemBody: {
@@ -269,14 +346,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   itemTitle: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   unreadDot: {
     width: 8,
@@ -289,17 +366,17 @@ const styles = StyleSheet.create({
   },
   empty: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     paddingTop: 80,
   },
   emptyText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   emptySub: {
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });

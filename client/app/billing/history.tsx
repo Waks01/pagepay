@@ -10,11 +10,14 @@ import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 
 type Payment = {
   id: number;
-  amount: number;
+  amount_naira: number;
+  amount_kobo: number;
   status: string;
-  type: string;
+  tier: string;
+  tier_name: string;
+  provider: string;
   created_at: string;
-  subscription_tier?: string;
+  confirmed_at: string | null;
 };
 
 export default function BillingHistoryScreen() {
@@ -73,16 +76,16 @@ export default function BillingHistoryScreen() {
               <View style={styles.cardHeader}>
                 <View>
                   <Text style={[styles.type, { color: tokens.ink }]}>
-                    {item.type === 'subscription' ? t('billing_history.subscription') : t('billing_history.payment')}
+                    {item.tier === 'wallet_deposit' ? t('billing_history.payment') : t('billing_history.subscription')}
                   </Text>
-                  {item.subscription_tier && (
+                  {item.tier_name && (
                     <Text style={[styles.tier, { color: tokens.inkMuted }]}>
-                      {item.subscription_tier}
+                      {item.tier_name}
                     </Text>
                   )}
                 </View>
                 <Text style={[styles.amount, { color: tokens.mint, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-                  ₦{item.amount.toLocaleString()}
+                  ₦{item.amount_naira.toLocaleString()}
                 </Text>
               </View>
               <View style={styles.cardFooter}>
@@ -93,7 +96,7 @@ export default function BillingHistoryScreen() {
                     day: 'numeric',
                   })}
                 </Text>
-                <View style={[styles.statusBadge, { backgroundColor: item.status === 'completed' ? tokens.mintSoft : tokens.signalSoft }]}>
+                <View style={[styles.statusBadge, { backgroundColor: item.status === 'success' ? tokens.mintSoft : tokens.signalSoft }]}>
                   <Text style={[styles.status, { color: item.status === 'completed' ? tokens.mint : tokens.signal }]}>
                     {t(`billing_history.${item.status}`)}
                   </Text>

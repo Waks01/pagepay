@@ -3,9 +3,9 @@
  * Handles permission requests, token registration, and notification listening.
  * Phase 3 feature.
  */
-import { Platform, Linking } from 'react-native';
-import * as Notifications from 'expo-notifications';
-import { getApp } from '@react-native-firebase/app';
+import { Platform, Linking } from "react-native";
+import * as Notifications from "expo-notifications";
+import { getApp } from "@react-native-firebase/app";
 import {
   getMessaging,
   onMessage,
@@ -13,9 +13,9 @@ import {
   setBackgroundMessageHandler,
   requestPermission,
   AuthorizationStatus,
-} from '@react-native-firebase/messaging';
-import { apiFetch } from '@/src/shared/api/client';
-import { router } from 'expo-router';
+} from "@react-native-firebase/messaging";
+import { apiFetch } from "@/src/shared/api/client";
+import { router } from "expo-router";
 
 let messaging: ReturnType<typeof getMessaging> | null = null;
 let initError: Error | null = null;
@@ -26,7 +26,7 @@ async function getFirebaseMessaging() {
       const app = getApp();
       messaging = getMessaging(app);
     } catch (error) {
-      console.error('[notifications] Firebase init failed:', error);
+      console.error("[notifications] Firebase init failed:", error);
       initError = error instanceof Error ? error : new Error(String(error));
     }
   }
@@ -51,25 +51,28 @@ Notifications.setNotificationHandler({
 export async function requestNotificationPermissions(): Promise<boolean> {
   try {
     // Check if permissions are already granted
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    const { status: existingStatus } =
+      await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
     // Request permissions if not already granted
-    if (existingStatus !== 'granted') {
+    if (existingStatus !== "granted") {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
 
-    if (finalStatus !== 'granted') {
-      console.log('Notification permissions denied by user');
+    if (finalStatus !== "granted") {
+      console.log("Notification permissions denied by user");
       return false;
     }
 
     // For iOS, also request Firebase messaging authorization
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === "ios") {
       const messagingInstance = await getFirebaseMessaging();
       if (!messagingInstance) {
-        console.log('Firebase messaging unavailable, skipping iOS auth request');
+        console.log(
+          "Firebase messaging unavailable, skipping iOS auth request",
+        );
         return false;
       }
       const authStatus = await requestPermission(messagingInstance);
@@ -78,14 +81,14 @@ export async function requestNotificationPermissions(): Promise<boolean> {
         authStatus === AuthorizationStatus.PROVISIONAL;
 
       if (!enabled) {
-        console.log('iOS Firebase messaging authorization denied');
+        console.log("iOS Firebase messaging authorization denied");
         return false;
       }
     }
 
     return true;
   } catch (error) {
-    console.error('Error requesting notification permissions:', error);
+    console.error("Error requesting notification permissions:", error);
     return false;
   }
 }
@@ -102,17 +105,18 @@ export async function getFCMToken(): Promise<string | null> {
     }
     const messagingInstance = await getFirebaseMessaging();
     if (!messagingInstance) return null;
-    const { getToken: getFCMTokenFromModule } = await import('@react-native-firebase/messaging');
+    const { getToken: getFCMTokenFromModule } =
+      await import("@react-native-firebase/messaging");
     const token = await getFCMTokenFromModule(messagingInstance);
-    
+
     if (!token) {
-      console.warn('No FCM token available');
+      console.warn("No FCM token available");
       return null;
     }
 
     return token;
   } catch (error) {
-    console.error('Error getting FCM token:', error);
+    console.error("Error getting FCM token:", error);
     return null;
   }
 }
@@ -124,20 +128,25 @@ export async function getFCMToken(): Promise<string | null> {
 export async function registerFCMToken(): Promise<boolean> {
   try {
     const token = await getFCMToken();
-    
+
     if (!token) {
-      console.warn('Cannot register: no FCM token available');
+      console.warn("Cannot register: no FCM token available");
       return false;
     }
 
     // Determine device platform
-    const platform = Platform.OS === 'android' ? 'android' : Platform.OS === 'ios' ? 'ios' : 'web';
+    const platform =
+      Platform.OS === "android"
+        ? "android"
+        : Platform.OS === "ios"
+          ? "ios"
+          : "web";
 
     // Send token to backend
-    const response = await apiFetch('/api/v1/notifications/fcm-token', {
-      method: 'POST',
+    const response = await apiFetch("/api/v1/notifications/fcm-token", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         token,
@@ -147,14 +156,17 @@ export async function registerFCMToken(): Promise<boolean> {
     });
 
     if (!response.ok) {
-      console.error('Failed to register FCM token with backend:', response.status);
+      console.error(
+        "Failed to register FCM token with backend:",
+        response.status,
+      );
       return false;
     }
 
-    console.log('FCM token registered successfully');
+    console.log("FCM token registered successfully");
     return true;
   } catch (error) {
-    console.error('Error registering FCM token:', error);
+    console.error("Error registering FCM token:", error);
     return false;
   }
 }
@@ -169,26 +181,29 @@ export async function deregisterFCMToken(): Promise<boolean> {
     if (!messagingInstance) {
       return true;
     }
-    const { getToken } = await import('@react-native-firebase/messaging');
+    const { getToken } = await import("@react-native-firebase/messaging");
     const token = await getToken(messagingInstance);
-    
+
     if (!token) {
       return true; // No token to deregister
     }
 
-    const response = await apiFetch(`/api/v1/notifications/fcm-token/${encodeURIComponent(token)}`, {
-      method: 'DELETE',
-    });
+    const response = await apiFetch(
+      `/api/v1/notifications/fcm-token/${encodeURIComponent(token)}`,
+      {
+        method: "DELETE",
+      },
+    );
 
     if (!response.ok && response.status !== 404) {
-      console.error('Failed to deregister FCM token:', response.status);
+      console.error("Failed to deregister FCM token:", response.status);
       return false;
     }
 
-    console.log('FCM token deregistered successfully');
+    console.log("FCM token deregistered successfully");
     return true;
   } catch (error) {
-    console.error('Error deregistering FCM token:', error);
+    console.error("Error deregistering FCM token:", error);
     return false;
   }
 }
@@ -201,74 +216,95 @@ export function setupNotificationListeners() {
   let unsubscribeForeground: (() => void) | undefined;
   let unsubscribeTokenRefresh: (() => void) | undefined;
 
-  if (Platform.OS === 'android') {
-    Notifications.setNotificationChannelAsync('default', {
-      name: 'Default',
+  if (Platform.OS === "android") {
+    Notifications.setNotificationChannelAsync("default", {
+      name: "Default",
       importance: Notifications.AndroidImportance.MAX,
-      sound: 'default',
+      sound: "default",
       showBadge: true,
       bypassDnd: false,
     }).catch((error) => {
-      console.error('[notifications] Failed to create notification channel:', error);
+      console.error(
+        "[notifications] Failed to create notification channel:",
+        error,
+      );
     });
   }
 
-  getFirebaseMessaging().then((messagingInstance) => {
-    if (!messagingInstance) return;
+  getFirebaseMessaging()
+    .then((messagingInstance) => {
+      if (!messagingInstance) return;
 
-    unsubscribeTokenRefresh = onTokenRefresh(messagingInstance, async (newToken) => {
-      console.log('FCM token refreshed, re-registering:', newToken);
-      try {
-        await registerFCMToken();
-      } catch (error) {
-        console.error('Failed to re-register refreshed FCM token:', error);
-      }
-    });
-
-    unsubscribeForeground = onMessage(messagingInstance, async (remoteMessage) => {
-      console.log('Foreground notification received:', remoteMessage);
-      
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: remoteMessage.notification?.title || 'PagePay',
-          body: remoteMessage.notification?.body || '',
-          data: remoteMessage.data || {},
-          sound: 'default',
+      unsubscribeTokenRefresh = onTokenRefresh(
+        messagingInstance,
+        async (newToken) => {
+          console.log("FCM token refreshed, re-registering:", newToken);
+          try {
+            await registerFCMToken();
+          } catch (error) {
+            console.error("Failed to re-register refreshed FCM token:", error);
+          }
         },
-        trigger: null,
-      });
-    });
+      );
 
-    setBackgroundMessageHandler(messagingInstance, async (remoteMessage) => {
-      console.log('Background notification received:', remoteMessage);
+      unsubscribeForeground = onMessage(
+        messagingInstance,
+        async (remoteMessage) => {
+          console.log("Foreground notification received:", remoteMessage);
+
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: remoteMessage.notification?.title || "PagePay",
+              body: remoteMessage.notification?.body || "",
+              data: remoteMessage.data || {},
+              sound: "default",
+            },
+            trigger: null,
+          });
+        },
+      );
+
+      setBackgroundMessageHandler(messagingInstance, async (remoteMessage) => {
+        console.log("Background notification received:", remoteMessage);
+      });
+    })
+    .catch((error) => {
+      console.error(
+        "[notifications] setupNotificationListeners failed:",
+        error,
+      );
     });
-  }).catch((error) => {
-    console.error('[notifications] setupNotificationListeners failed:', error);
-  });
 
   // Listen for notification taps (when user opens app from notification)
-  const notificationListener = Notifications.addNotificationReceivedListener((notification) => {
-    console.log('Notification received while app open:', notification);
-  });
+  const notificationListener = Notifications.addNotificationReceivedListener(
+    (notification) => {
+      console.log("Notification received while app open:", notification);
+    },
+  );
 
-  const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
-    console.log('User tapped notification:', response);
-    
-    // Handle navigation based on notification data
-    const data = response.notification.request.content.data;
-    
-    if (data?.type === 'study_reminder') {
-      router.push('/(tabs)/study' as any);
-    } else if (data?.type === 'task_alert') {
-      router.push('/(tabs)/tasks' as any);
-    } else if (data?.type === 'referral_bonus') {
-      router.push('/(tabs)/profile' as any);
-    } else if (data?.type === 'wallet_update') {
-      router.push('/(tabs)/wallet' as any);
-    } else if (data?.type === 'ad_reward') {
-      router.push('/(tabs)/home' as any);
-    }
-  });
+  const responseListener =
+    Notifications.addNotificationResponseReceivedListener((response) => {
+      console.log("User tapped notification:", response);
+
+      // Handle navigation based on notification data
+      const data = response.notification.request.content.data;
+
+      if (data?.type === "study_reminder") {
+        router.push("/(tabs)/study" as any);
+      } else if (data?.type === "task_alert") {
+        router.push("/(tabs)/tasks" as any);
+      } else if (data?.type === "referral_bonus") {
+        router.push("/(tabs)/profile" as any);
+      } else if (
+        data?.type === "wallet_update" ||
+        data?.type === "payment_initiated" ||
+        data?.type === "payment_success"
+      ) {
+        router.push("/(tabs)/wallet" as any);
+      } else if (data?.type === "ad_reward") {
+        router.push("/(tabs)/home" as any);
+      }
+    });
 
   // Return cleanup function
   return () => {
@@ -289,9 +325,9 @@ export function setupNotificationListeners() {
 export async function areNotificationsEnabled(): Promise<boolean> {
   try {
     const { status } = await Notifications.getPermissionsAsync();
-    return status === 'granted';
+    return status === "granted";
   } catch (error) {
-    console.error('Error checking notification status:', error);
+    console.error("Error checking notification status:", error);
     return false;
   }
 }
@@ -304,6 +340,6 @@ export async function openNotificationSettings(): Promise<void> {
   try {
     await Linking.openSettings();
   } catch (error) {
-    console.error('Error opening notification settings:', error);
+    console.error("Error opening notification settings:", error);
   }
 }

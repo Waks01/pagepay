@@ -624,6 +624,8 @@ async def paystack_webhook(
     db: AsyncSession = Depends(get_db),
 ):
     """Receive Paystack events.
+    
+    DEBUG: Added extensive logging to trace webhook flow.
 
     Auth: HMAC-SHA512(secret, raw_body) compared to the
     `X-Paystack-Signature` header in constant time. Mismatch → 401.
@@ -651,21 +653,30 @@ async def paystack_webhook(
     # Paystack signs with your secret key, not a separate webhook secret
     secret = settings.paystack_secret_key
 
+    logger.info("=" * 80)
+    logger.info("🔔 WEBHOOK RECEIVED - Starting processing")
+    logger.info("Signature present: %s", bool(signature))
+    logger.info("Secret configured: %s", bool(secret))
+    logger.info("Body size: %d bytes", len(raw_body))
+
     if not _verify_webhook_signature(raw_body, signature, secret):
         logger.warning(
-            "Paystack webhook rejected: bad signature (had=%r, secret_set=%s)",
+            "❌ Paystack webhook REJECTED: bad signature (had=%r, secret_set=%s)",
             bool(signature),
             bool(secret),
         )
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    
+    logger.info("✅ Signature verified successfully")
 
     try:
         event = json.loads(raw_body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        logger.warning("Paystack webhook body was not valid JSON: %s", exc)
+        logger.warning("❌ Paystack webhook body was not valid JSON: %s", exc)
         raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
 
     if not isinstance(event, dict):
+        logger.warning("❌ Webhook payload must be a JSON object")
         raise HTTPException(status_code=400, detail="Webhook payload must be a JSON object")
 
     event_name = event.get("event")
@@ -673,17 +684,22 @@ async def paystack_webhook(
     if not isinstance(data, dict):
         data = {}
 
+    logger.info("📦 Event parsed: %s", event_name)
+    logger.info("📝 Reference: %s", data.get("reference"))
+    logger.info("💰 Amount: %s", data.get("amount"))
+    logger.info("📊 Status: %s", data.get("status"))
+
     # We only care about transfer events for Phase 4. Charges
     # (premium subscriptions) are Phase 3 — log and move on so
     # Paystack doesn't retry.
     if event_name not in ("transfer.success", "transfer.failed", "transfer.reversed", "charge.success"):
-        logger.info("Paystack webhook: ignoring event=%s", event_name)
+        logger.info("ℹ️  Ignoring event=%s (not handled by this endpoint)", event_name)
         return {"received": True, "handled": False}
 
     reference = str(data.get("reference") or "").strip()
     if not reference:
         logger.warning(
-            "Paystack webhook %s arrived with no reference; cannot reconcile",
+            "⚠️  Paystack webhook %s arrived with no reference; cannot reconcile",
             event_name,
         )
         # Still return 200 — Paystack would retry forever otherwise.
@@ -691,25 +707,40 @@ async def paystack_webhook(
 
     # ── charge.success: wallet deposit credit ─────────────────────────
     if event_name == "charge.success":
+        logger.info("💳 Processing charge.success for reference=%s", reference)
+        
         payment = (
             await db.execute(
                 select(Payment).where(Payment.provider_tx_ref == reference)
             )
         ).scalar_one_or_none()
+        
         if payment is None:
-            logger.warning("Paystack charge.success for unknown reference=%s; ignoring", reference)
+            logger.warning("❌ Paystack charge.success for UNKNOWN reference=%s; ignoring", reference)
+            logger.warning("   This means Payment record doesn't exist in database!")
+            logger.warning("   Check if /api/v1/wallet/deposit endpoint created the Payment record")
             return {"received": True, "handled": False, "reason": "unknown_reference"}
 
+        logger.info("✅ Payment record FOUND: id=%s, user_id=%s, tier=%s, amount=%s", 
+                   payment.id, payment.user_id, payment.tier, payment.amount_kobo)
+
         if payment.webhook_confirmed:
+            logger.info("⚠️  Payment already processed (duplicate webhook)")
             return {"received": True, "handled": True, "event": event_name, "reason": "duplicate_event"}
 
+        logger.info("🔄 Updating payment status to success...")
         payment.status = "success"
         payment.webhook_confirmed = True
         payment.confirmed_at = datetime.utcnow()
 
         if payment.tier == "wallet_deposit" and payment.payment_metadata:
+            logger.info("💰 Processing WALLET DEPOSIT...")
             metadata = payment.payment_metadata if isinstance(payment.payment_metadata, dict) else {}
+            logger.info("📋 Metadata: %s", metadata)
+            
             deposit_amount_kobo = metadata.get("deposit_amount_kobo")
+            logger.info("💵 Deposit amount from metadata: %s kobo", deposit_amount_kobo)
+            
             if deposit_amount_kobo and deposit_amount_kobo > 0:
                 # points_balance is denominated in POINTS (per
                 # POINTS_PER_NAIRA — 10 points = ₦1). Convert the
@@ -717,18 +748,24 @@ async def paystack_webhook(
                 # so the wallet balance stays in the same unit as
                 # reading slice bonuses and ad credits.
                 deposit_points = kobo_to_points(deposit_amount_kobo)
+                logger.info("🎯 Converting %s kobo → %d points", deposit_amount_kobo, deposit_points)
+                
                 user_row = (
                     await db.execute(
                         select(User).where(User.id == payment.user_id)
                     )
                 ).scalar_one_or_none()
+                
                 if user_row is not None:
-                    user_row.points_balance = (user_row.points_balance or 0) + deposit_points
+                    old_balance = user_row.points_balance or 0
+                    user_row.points_balance = old_balance + deposit_points
                     logger.info(
-                        "Wallet deposit credited: user=%s ref=%s amount_kobo=%s points=%d new_balance=%s",
-                        payment.user_id, reference, deposit_amount_kobo, deposit_points, user_row.points_balance,
+                        "✅ WALLET CREDITED: user=%s ref=%s amount_kobo=%s points_added=%d old_balance=%d new_balance=%d",
+                        payment.user_id, reference, deposit_amount_kobo, deposit_points, old_balance, user_row.points_balance,
                     )
                     deposit_naira = deposit_amount_kobo / 100
+                    
+                    # Send FCM notification: Wallet funded successfully
                     asyncio.create_task(
                         send_wallet_update(
                             db,
@@ -738,18 +775,27 @@ async def paystack_webhook(
                             reason="wallet_deposit",
                         )
                     )
+                    
+                    # Send in-app notification
                     asyncio.create_task(
                         create_notification(
                             db,
                             payment.user_id,
-                            title="Wallet Funded",
-                            body=f"Your wallet has been credited with ₦{deposit_naira:.2f} ({deposit_points} points)",
+                            title="✅ Payment Successful",
+                            body=f"Your wallet has been credited with ₦{deposit_naira:.2f} ({deposit_points:,} points). Start reading to earn more!",
                             category="wallet_updates",
-                            data={"type": "wallet_deposit", "points": str(deposit_points)},
+                            data={
+                                "type": "payment_success",
+                                "reference": reference,
+                                "points": str(deposit_points),
+                                "amount_naira": str(deposit_naira),
+                            },
                         )
                     )
                 else:
-                    logger.error("Wallet deposit webhook: user %s not found for ref=%s", payment.user_id, reference)
+                    logger.error("❌ Wallet deposit webhook: USER %s NOT FOUND for ref=%s", payment.user_id, reference)
+            else:
+                logger.warning("⚠️  No deposit_amount_kobo in metadata or amount is 0")
 
         elif payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value):
             try:
@@ -771,6 +817,8 @@ async def paystack_webhook(
                 logger.error("Failed to upgrade subscription for user=%s ref=%s: %s", payment.user_id, reference, exc)
 
         await db.commit()
+        logger.info("✅ DATABASE COMMITTED - Webhook processing complete!")
+        logger.info("=" * 80)
         return {"received": True, "handled": True, "event": event_name}
 
     txn = (

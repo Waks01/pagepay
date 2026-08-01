@@ -545,6 +545,7 @@ export default function ReaderScreen() {
   }) => {
     queryClient.invalidateQueries({ queryKey: ['me'] });
     queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    setPreReadOpen(false);
   };
 
   const onPreReadSkipped = () => {

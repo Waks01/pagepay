@@ -716,65 +716,43 @@ Hawkit pays ₦100 (66.7% split) vs their usual 50% because personal timeline is
 
 ---
 
-## � Google Services Pricing
+## � ## 📷 Google Services Pricing
 
-**Important:** Google has strictest compliance penalties & geolocation tracking. Fake profiles = instant deletion, direct impact on real business listings & search rankings. Based on verified Hawkit data: Standard tasks (50% margin), Reviews (60% margin - requires high-quality earners). All tasks require GPS verification + Nigerian IP match.
+**Important:** Google carries the absolute strictest real-world compliance penalties and commands a massive price premium. Unlike social media platforms where a fake profile simply gets banned, manipulating Google metrics directly alters real-world business listings, search engine results, and mapping navigation tools. Google uses highly advanced geolocation tracking, device fingerprinting, and account history checks.
 
-### Google Task Pricing
+Because empty burner accounts or rapid bulk actions face instant deletion by Google's spam filters, platforms maintain a 50% profit margin split on basic clicks but scale up to a 60% margin on localized reviews to ensure high-quality earners are properly incentivized.
 
-| Service                   | Sponsor Pays | User Earns | PagePay Keeps | Margin | Requirements                                              |
-| ------------------------- | ------------ | ---------- | ------------- | ------ | --------------------------------------------------------- |
-| **Google Search Click**   | ₦15          | ₦7         | ₦8            | 53%    | Search keyword + find link + 60sec page stay + screenshot |
-| **Maps Business Follow**  | ₦10          | ₦5         | ₦5            | 50%    | Open Google Maps, hit Follow bookmark                     |
-| **Business Text Review**  | ₦100         | ₦40        | ₦60           | 60%    | 5-star + 2-sentence unique review (72hr escrow)           |
-| **Business Review+Photo** | ₦150         | ₦60        | ₦90           | 60%    | 5-star review + industry-related photo (72hr escrow)      |
-| **Map Route Request**     | ₦30          | ₦15        | ₦15           | 50%    | Open Maps, enter location, request directions             |
-| **Play Store Download**   | ₦100         | ₦50        | ₦50           | 50%    | Download app + keep 48 hours minimum + screenshot         |
+### Google App Pricing Master Matrix (Per Single Action)
 
-**Why This Pricing Model?**
+| Google Service | What You Charge Sponsor (Per Action) | What You Pay User (Per Action) | Your Platform's Profit | Task Mechanics & Engine Verification Rules |
+|---------------|-------------------------------------|-------------------------------|------------------------|-------------------------------------------|
+| **Google Search Click (CTR)** | ₦15.00 | ₦7.00 | ₦8.00 (53%) | SEO Booster. Earner searches a specific keyword on Google, scrolls to find the sponsor website link, clicks it, and stays on the page for 60 seconds. |
+| **Maps Business Follow** | ₦10.00 | ₦5.00 | ₦5.00 (50%) | Earner opens Google Maps and hits the Follow bookmark button on a local corporate business profile. |
+| **Business Text Review (5-Star)** | ₦100.00 | ₦40.00 | ₦60.00 (60%) | High-Value Local Task. Earner leaves a 5-star rating along with a highly descriptive, unique 2-sentence review about the business. |
+| **Business Review with Photo** | ₦150.00 | ₦60.00 | ₦90.00 (60%) | Premium Trust Action. Earner posts a 5-star text review and uploads a clear photo related to the store industry (e.g., a storefront or food item). |
+| **Google Map Route Request** | ₦30.00 | ₦15.00 | ₦15.00 (50%) | Local SEO Trick. Earner opens Google Maps, enters their actual location, and requests directions to the sponsor store to trigger local traffic algorithm weight. |
+| **Play Store App Download** | ₦100.00 | ₦50.00 | ₦50.00 (50%) | App Store Optimization (ASO). Earner downloads an Android app, opens it, and keeps it on their smartphone for a mandatory 48-hour period. |
 
-- **Search Click (53%):** Hawkit market rate. SEO booster, requires 60sec engagement
-- **Maps Follow (50%):** Hawkit market rate. Quick engagement metric
-- **Text Review (60%):** HIGHER margin. Requires unique 2-sentence writing, 72hr escrow for verification
-- **Review+Photo (60%):** HIGHEST margin. Premium trust action, industry-specific photo proof, 72hr escrow
-- **Route Request (50%):** Hawkit market rate. Local SEO algorithm weight
-- **Play Store (50%):** Hawkit market rate. Requires 48-hour retention on device
+### Wholesale Package Bundles for Your Interface
 
-### Google Bulk Packages
+Local business owners (restaurants, hotels, logistics companies), tech startups, and SEO agencies in cities like Lagos, Abuja, and Port Harcourt buy these actions in bulk to dominate regional search results:
 
-**Google Search Clicks:**
+- 1,000 Organic Google Search Clicks: Sponsor pays ₦15,000 | You pay users ₦7,000 | Your profit: ₦8,000
+- 100 Custom Business Text Reviews: Sponsor pays ₦10,000 | You pay users ₦4,000 | Your profit: ₦6,000
+- 50 Premium Reviews with Photos: Sponsor pays ₦7,500 | You pay users ₦3,000 | Your profit: ₦4,500
+- 200 Play Store App Downloads: Sponsor pays ₦20,000 | You pay users ₦10,000 | Your profit: ₦10,000
 
-- 1,000 clicks: ₦15,000 → Users ₦7,000, You keep ₦8,000
-- 5,000 clicks: ₦75,000 → Users ₦35,000, You keep ₦40,000
+### Non-Negotiable System Requirements For Your Google Backend
 
-**Maps Business Follows:**
+Google automated spam engine filters out millions of reviews and clicks every day. If your platform dumps unverified or rapid traffic onto a business profile, Google will shadow-delete the reviews (making them visible to the earner but hidden from the public), wipe out the store search rankings, or completely suspend their Google Business Profile. Your platform backend architecture must enforce these strict guardrails:
 
-- 1,000 follows: ₦10,000 → Users ₦5,000, You keep ₦5,000
-- 5,000 follows: ₦50,000 → Users ₦25,000, You keep ₦25,000
+1. **The Device GPS Geolocation Match:** Google checks where the reviewer is physically located. For tasks like Map Route Requests or Business Reviews, your app must request device GPS permissions. The system must verify that the earner physical IP address and GPS coordinates match the target operational country (Nigeria). VPNs must be heavily blocked via strict IP-reputation checks at login.
 
-**Business Text Reviews:**
+2. **The 48-Hour Review Deletion Escrow Lock:** Google frequently deletes suspicious reviews within 24 to 48 hours of posting. For this reason, Google Review tasks must have a mandatory 3-day (72-hour) wallet escrow lock. The user is not paid instantly. After 72 hours, your backend must run a scraping script or require a secondary public view screenshot check to confirm the review is still live before releasing the ₦40 or ₦60 payout.
 
-- 100 reviews: ₦10,000 → Users ₦4,000, You keep ₦6,000
-- 500 reviews: ₦50,000 → Users ₦20,000, You keep ₦30,000
+3. **Severe Localized Drip Limits:** If a small business in Abuja suddenly receives 50 five-star reviews in a single afternoon after months of silence, Google will flag it instantly for platform manipulation. Your platform distribution engine must queue Google tasks aggressively capping execution at a maximum of 2 to 5 user actions per day per individual business link, stretching a 100-review package over several weeks to look perfectly organic.
 
-**Business Reviews with Photos:**
-
-- 50 reviews: ₦7,500 → Users ₦3,000, You keep ₦4,500
-- 100 reviews: ₦15,000 → Users ₦6,000, You keep ₦9,000
-
-**Map Route Requests:**
-
-- 500 requests: ₦15,000 → Users ₦7,500, You keep ₦7,500
-- 1,000 requests: ₦30,000 → Users ₦15,000, You keep ₦15,000
-
-**Play Store App Downloads:**
-
-- 200 downloads: ₦20,000 → Users ₦10,000, You keep ₦10,000
-- 500 downloads: ₦50,000 → Users ₦25,000, You keep ₦25,000
-
----
-
-## �📦 Facebook Bulk Packages
+Facebook Bulk Packages
 
 - 100 likes: ₦1,000 → Users earn ₦600, You keep ₦400
 - 1,000 likes: ₦10,000 → Users earn ₦6,000, You keep ₦4,000
@@ -1469,6 +1447,126 @@ Hawkit pays ₦100 (66.7% split) vs their usual 50% because personal timeline is
 - 50% refunded after 100 successfully completed tasks
 
 ---
+
+## 📋 Market Research & Survey Services
+
+Brands, academic researchers, and tech startups pay significantly for localized user datasets and feedback loops.
+
+### The Mechanics
+
+Users must fill out a questionnaire multi-choice form within your app. The backend must enforce a completion timer to block users who tap random answers in under 30 seconds.
+
+| | |
+|---|---|
+| **Charge Sponsor (Per Survey)** | ₦150.00 |
+| **Pay User (Per Survey)** | ₦70.00 |
+| **Platform Profit** | ₦80.00 (53%) |
+
+**Non-Negotiable System Guardrails:**
+
+- **Attention Checks:** Inject "Trap Questions" (e.g., "Select Option C to prove you are reading") to automatically auto-reject lazy users.
+
+---
+
+## 🛒 E-Commerce Product Reviews (Amazon, Jumia, Konga)
+
+Online merchants require highly visible social proof on retail marketplaces to jump to the top of product listings.
+
+### The Mechanics
+
+The user navigates to the merchant's specific product link on Jumia or Konga, bookmarks the item ("Add to Wishlist"), or leaves a 5-star rating if they have verified transaction tracking histories.
+
+| | |
+|---|---|
+| **Charge Sponsor (Per Review/Wishlist)** | ₦100.00 |
+| **Pay User (Per Review/Wishlist)** | ₦40.00 |
+| **Platform Profit** | ₦60.00 (60%) |
+
+**Non-Negotiable System Guardrails:**
+
+- **Retention Lock:** Enforce a mandatory 7-day escrow hold to ensure users do not delete items from their carts instantly.
+
+---
+
+## 💼 Professional & Business Software Reviews (G2, Capterra)
+
+B2B software-as-a-service (SaaS) companies, fintech startups, and international agencies rely heavily on G2 and Capterra platforms to close enterprise deals.
+
+### The Mechanics
+
+High-friction. Users must log in via a professional LinkedIn profile and write an extensive, detailed multi-paragraph software breakdown.
+
+| | |
+|---|---|
+| **Charge Sponsor (Per Review)** | ₦1,000.00 |
+| **Pay User (Per Review)** | ₦400.00 |
+| **Platform Profit** | ₦600.00 (60%) |
+
+**Non-Negotiable System Guardrails:**
+
+- **LinkedIn OAuth Gate:** Block any earner whose linked corporate account has fewer than 100 connections.
+
+---
+
+## ✈️ Travel & Hospitality Verification (Tripadvisor, Booking.com)
+
+Hotels, travel agencies, tour operators, and restaurants buy metrics to push their properties into the local top-tier travel recommendations.
+
+### The Mechanics
+
+The user opens Tripadvisor, finds the hospitality profile, drops a 5-star rating, and details a realistic customer service or dining narrative.
+
+| | |
+|---|---|
+| **Charge Sponsor (Per Review)** | ₦200.00 |
+| **Pay User (Per Review)** | ₦80.00 |
+| **Platform Profit** | ₦120.00 (60%) |
+
+**Non-Negotiable System Guardrails:**
+
+- **Deep Micro-Drip Engine:** Stagger delivery to a maximum of 1 to 2 reviews per week per hotel to stay under algorithmic flags.
+
+---
+
+## 🏢 Corporate Employer Reviews (Glassdoor)
+
+Companies fighting for top tier human resources talent—or looking to bury historical employee complaints—pay to improve their workplace ratings.
+
+### The Mechanics
+
+The user registers on Glassdoor, benchmarks a positive corporate environment layout, and submits an interview or salary rating data log.
+
+| | |
+|---|---|
+| **Charge Sponsor (Per Review)** | ₦300.00 |
+| **Pay User (Per Review)** | ₦120.00 |
+| **Platform Profit** | ₦180.00 (60%) |
+
+**Non-Negotiable System Guardrails:**
+
+- **IP Range Profiler:** Prevent multiple reviews from originating from the same network cluster within 48 hours.
+
+---
+
+## 📊 Expanded Ecosystem Payout Layout (Per Single Action)
+
+| Platform Metric | What You Charge Sponsor | What You Pay User | App Profit Margin | Non-Negotiable System Guardrails & Code Logic |
+|---------------|------------------------|-------------------|-------------------|---------------------------------------------|
+| Market Survey Form | ₦150.00 | ₦70.00 | 53% (₦80.00) | Attention Checks: Inject "Trap Questions" (e.g., "Select Option C to prove you are reading") to automatically auto-reject lazy users. |
+| Jumia/Konga Wishlist | ₦100.00 | ₦40.00 | 60% (₦60.00) | Retention Lock: Enforce a mandatory 7-day escrow hold to ensure users do not delete items from their carts instantly. |
+| G2 / Capterra Review | ₦1,000.00 | ₦400.00 | 60% (₦600.00) | LinkedIn OAuth Gate: Block any earner whose linked corporate account has fewer than 100 connections. |
+| Tripadvisor Review | ₦200.00 | ₦80.00 | 60% (₦120.00) | Deep Micro-Drip Engine: Stagger delivery to a maximum of 1 to 2 reviews per week per hotel to stay under algorithmic flags. |
+| Glassdoor Review | ₦300.00 | ₦120.00 | 60% (₦180.00) | IP Range Profiler: Prevent multiple reviews from originating from the same network cluster within 48 hours. |
+
+---
+
+## 📦 Wholesale Revenue Scaling Blocks
+
+When deploying your corporate client packages page, offer these high-value bundles to maximize your application's gross transaction volumes:
+
+- 500 Custom Local Market Surveys: Sponsor pays ₦75,000 | You payout users ₦35,000 | Your profit: ₦40,000
+- 100 B2B Software Reviews (G2/Capterra): Sponsor pays ₦100,000 | You payout users ₦40,000 | Your profit: ₦60,000
+- 50 Verified Premium Tripadvisor Reviews: Sponsor pays ₦10,000 | You payout users ₦4,000 | Your profit: ₦6,000
 
 ## ✅ Implementation Checklist
 

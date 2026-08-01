@@ -596,6 +596,7 @@
     "empty": "No payment history yet",
     "subscription": "Premium Subscription",
     "payment": "Payment",
+    "success": "done",
     "completed": "done",
     "pending": "dey wait",
     "failed": "no work"
