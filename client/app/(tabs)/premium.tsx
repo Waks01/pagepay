@@ -97,6 +97,7 @@ export default function PremiumScreen() {
 
     console.log("🔄 [PREMIUM] Final query invalidation...");
     await qc.invalidateQueries({ queryKey: ["payments", "subscription"] });
+    await qc.invalidateQueries({ queryKey: ["payments", "history"] });
     await qc.invalidateQueries({ queryKey: ["me"] });
   };
 
@@ -162,18 +163,13 @@ export default function PremiumScreen() {
         console.log("👤 [PREMIUM] Browser closed, result:", result);
 
         // After payment browser closes, poll for subscription activation
-        if (result.type === "dismiss" || result.type === "cancel") {
-          console.log(
-            "🔍 [PREMIUM] User returned from payment - checking status...",
-          );
-          await pollSubscriptionStatus(data.provider_tx_ref);
-        } else {
-          console.log(
-            "⚠️ [PREMIUM] Unexpected browser result type:",
-            result.type,
-          );
-          qc.invalidateQueries({ queryKey: ["payments", "subscription"] });
-        }
+        // On iOS: "dismiss" or "cancel"
+        // On Android: can also return "opened"
+        // We poll in all cases to check if payment succeeded
+        console.log(
+          "🔍 [PREMIUM] User returned from payment - checking status...",
+        );
+        await pollSubscriptionStatus(data.provider_tx_ref);
       }
     } catch (e) {
       console.error("❌ [PREMIUM] Upgrade error:", e);

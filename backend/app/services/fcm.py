@@ -10,7 +10,7 @@ from datetime import datetime, time as time_type
 
 import firebase_admin
 from firebase_admin import credentials, messaging
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings

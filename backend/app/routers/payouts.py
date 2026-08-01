@@ -41,6 +41,7 @@ set — they return 503 if not, rather than silently 200ing.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json

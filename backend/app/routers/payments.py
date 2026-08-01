@@ -4,6 +4,7 @@ Paystack-powered subscription payments for premium tiers.
 Users upgrade from FREE → PREMIUM_MONTHLY or PREMIUM_YEARLY.
 """
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -133,7 +134,6 @@ async def initiate_payment(
     
     # Send push notification: Subscription payment initiated
     logger.info("📲 Scheduling subscription payment initiated notification...")
-    import asyncio
     from app.services.fcm import send_push_notification_background
     asyncio.create_task(
         send_push_notification_background(

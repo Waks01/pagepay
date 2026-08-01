@@ -125,6 +125,7 @@ export default function FundWalletScreen() {
 
     console.log("🔄 [PAYMENT] Final query invalidation...");
     await qc.invalidateQueries({ queryKey: ["me"] });
+    await qc.invalidateQueries({ queryKey: ["payments", "history"] });
     console.log("🏠 [PAYMENT] Navigating back...");
     router.back();
   };
@@ -185,18 +186,13 @@ export default function FundWalletScreen() {
         console.log("👤 [DEPOSIT] Browser closed, result:", result);
 
         // After payment browser closes, poll for payment confirmation
-        if (result.type === "dismiss" || result.type === "cancel") {
-          console.log(
-            "🔍 [DEPOSIT] User returned from payment - checking status...",
-          );
-          // User returned from payment page - check if payment succeeded
-          pollPaymentStatus(data.reference);
-        } else {
-          console.log(
-            "⚠️ [DEPOSIT] Unexpected browser result type:",
-            result.type,
-          );
-        }
+        // On iOS: "dismiss" or "cancel"
+        // On Android: can also return "opened"
+        // We poll in all cases to check if payment succeeded
+        console.log(
+          "🔍 [DEPOSIT] User returned from payment - checking status...",
+        );
+        pollPaymentStatus(data.reference);
       } catch (e) {
         console.error("❌ [DEPOSIT] Failed to open payment browser:", e);
         Alert.alert(
