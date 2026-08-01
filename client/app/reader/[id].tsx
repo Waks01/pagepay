@@ -126,6 +126,7 @@ export default function ReaderScreen() {
   const [preReadOpen, setPreReadOpen] = useState(false);
   const { state: adSlotState } = useAdSlot();
   const preReadDismissedRef = useRef(false);
+  const [preReadHasShown, setPreReadHasShown] = useState(false);
 
   // Open the pre-read modal as soon as we have a ready ad (from the
   // slot or from the RewardedAd preload's onReady callback). If the
@@ -152,14 +153,14 @@ export default function ReaderScreen() {
   }, [adSlotState]);
 
   // One-shot gate: timer must not start until the pre-read ad has
-  // actually been shown and dismissed. We track this with a ref so
-  // the timer effect below can key off the transition, not just the
-  // current boolean value (which is `false` on initial mount).
-  const preReadShownRef = useRef(false);
+  // actually been shown and dismissed. We track this with state so
+  // the timer effect below re-runs when the ad opens/closes, not just
+  // when sessionId or preReadOpen change.
+  // preReadHasShown: false → true the moment the ad opens.
 
   useEffect(() => {
     if (preReadOpen) {
-      preReadShownRef.current = true;
+      setPreReadHasShown(true);
     }
   }, [preReadOpen]);
   // Post-read gate: sits BEFORE /session/end, not after. The user has
@@ -354,6 +355,7 @@ export default function ReaderScreen() {
       }
     })();
     preReadDismissedRef.current = false;
+    setPreReadHasShown(false);
 
     return () => {
       mounted = false;
@@ -379,7 +381,7 @@ export default function ReaderScreen() {
 
   // Heartbeat + elapsed timer start AFTER the pre-read gate clears.
   useEffect(() => {
-    if (!sessionId || preReadOpen || !preReadShownRef.current) return;
+    if (!sessionId || preReadOpen || !preReadHasShown) return;
 
     heartbeatRef.current = setInterval(() => {
       sendHeartbeat();
@@ -393,7 +395,7 @@ export default function ReaderScreen() {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [sessionId, preReadOpen]);
+  }, [sessionId, preReadOpen, preReadHasShown]);
 
   const sendHeartbeat = async () => {
     if (!sessionIdRef.current) return;

@@ -36,14 +36,14 @@ export default function AppHeader({ title, subtitle, showBack }: Props) {
         {
           backgroundColor: tokens.paper,
           borderBottomColor: tokens.border,
-          paddingTop: insets.top + 8,
+          paddingTop: insets.top + 2,
         },
       ]}
     >
       <View style={styles.row}>
         {showBack ? (
-          <TouchableOpacity onPress={handleBackPress} style={styles.iconBtn} hitSlop={8}>
-            <Ionicons name="arrow-back" size={22} color={tokens.ink} />
+          <TouchableOpacity onPress={handleBackPress} style={styles.iconBtn} hitSlop={6}>
+            <Ionicons name="arrow-back" size={18} color={tokens.ink} />
           </TouchableOpacity>
         ) : (
           <View style={styles.iconBtn} />
@@ -79,17 +79,17 @@ const styles = StyleSheet.create({
   container: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingBottom: 2,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 40,
+    height: 30,
   },
   iconBtn: {
-    width: 36,
-    height: 36,
+    width: 30,
+    height: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -99,12 +99,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '600',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 12,
-    marginTop: 1,
+    fontSize: 11,
+    marginTop: 0,
   },
 });

@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl,
-  ActivityIndicator, TextInput, ScrollView,
+  ActivityIndicator, TextInput, ScrollView, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchTasks, type TaskListItem } from '@/src/features/tasks/api';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import AppHeader from '@/components/AppHeader';
+import NotificationBell from '@/components/NotificationBell';
 import { Skeleton } from '@/components/Skeleton';
 import { koboToPoints, koboToNairaString } from '@/src/shared/lib/money';
 
@@ -25,7 +25,7 @@ const CATEGORIES = [
   { key: 'content_creation', labelKey: 'tasks.categories.content_creation', icon: 'create-outline' },
   { key: 'surveys', labelKey: 'tasks.categories.surveys', icon: 'clipboard-outline' },
   { key: 'data_collection', labelKey: 'tasks.categories.data_collection', icon: 'server-outline' },
-  { key: 'other', labelKey: 'tasks.categories.other', icon: 'ellipsis-horizontal-circle-outline' },
+  { key: 'other', labelKey: 'tasks.categories.other', icon: 'ellipsis-horizontal' },
 ] as const;
 
 const SORT_OPTIONS = [
@@ -158,13 +158,6 @@ export default function TasksScreen() {
 
     return result;
   }, [tasks, activeCategory, searchQuery, sortBy]);
-
-  const totalPotentialEarnings = useMemo(() => {
-    return filteredTasks.reduce((sum, t) => {
-      const netKobo = Math.floor(t.reward_amount * (t.reward_multiplier ?? 1) * 0.85);
-      return sum + koboToPoints(netKobo);
-    }, 0);
-  }, [filteredTasks]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -329,7 +322,25 @@ export default function TasksScreen() {
   if (isLoading) {
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <AppHeader title={t('tasks.title')} />
+        <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+          <View style={styles.headerRow}>
+            <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+              {t('tasks.title')}
+            </Text>
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={styles.headerIconBtn}
+                onPress={() => router.push('/tasks/profile')}
+                accessibilityRole="button"
+                accessibilityLabel={t('tasks.stats.my_stats')}
+              >
+                <Ionicons name="stats-chart-outline" size={22} color={tokens.ink} />
+              </TouchableOpacity>
+              <NotificationBell />
+            </View>
+          </View>
+        </View>
         <View style={{ padding: 16, gap: 12 }}>
           <Skeleton height={20} width="60%" borderRadius={8} />
           <Skeleton height={44} width="100%" borderRadius={12} />
@@ -347,41 +358,28 @@ export default function TasksScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <AppHeader title={t('tasks.title')} />
-
-      {/* Stats summary */}
-      <View style={[styles.statsRow, { borderBottomColor: tokens.border }]}>
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: tokens.mint }]}>
-            {filteredTasks.length}
+      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+        <View style={styles.headerRow}>
+          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+          <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+            {t('tasks.title')}
           </Text>
-          <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>
-            {t('tasks.stats.available')}
-          </Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.headerIconBtn}
+              onPress={() => router.push('/tasks/profile')}
+              accessibilityRole="button"
+              accessibilityLabel={t('tasks.stats.my_stats')}
+            >
+              <Ionicons name="stats-chart-outline" size={22} color={tokens.ink} />
+            </TouchableOpacity>
+            <NotificationBell />
+          </View>
         </View>
-        <View style={[styles.statDivider, { backgroundColor: tokens.border }]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: tokens.mint }]}>
-            {totalPotentialEarnings.toLocaleString()}
-          </Text>
-          <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>
-            {t('tasks.stats.potential_earnings')}
-          </Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: tokens.border }]} />
-        <TouchableOpacity
-          style={styles.statItem}
-          onPress={() => router.push('/tasks/profile')}
-        >
-          <Ionicons name="stats-chart-outline" size={20} color={tokens.mint} />
-          <Text style={[styles.statLabel, { color: tokens.mint }]}>
-            {t('tasks.stats.my_stats')}
-          </Text>
-        </TouchableOpacity>
       </View>
 
       {/* Search + Sort row */}
-      <View style={[styles.controlsRow, { borderBottomColor: tokens.border }]}>
+      <View style={[styles.controlsRow, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
         <View style={[styles.searchBar, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
           <Ionicons name="search-outline" size={18} color={tokens.inkMuted} />
           <TextInput
@@ -432,7 +430,7 @@ export default function TasksScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.categoryScroll}
+        style={[styles.categoryScroll, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}
         contentContainerStyle={styles.categoryContent}
       >
         {CATEGORIES.map((cat) => {
@@ -488,99 +486,108 @@ export default function TasksScreen() {
 }
 
 const styles = StyleSheet.create({
-  statsRow: {
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    backgroundColor: '#fff',
+    justifyContent: 'space-between',
   },
-  statItem: {
-    flex: 1,
+  headerRight: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
   },
-  statDivider: {
-    width: 1,
+  headerIcon: {
+    width: 28,
     height: 28,
+    borderRadius: 8,
   },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: 'SpaceGrotesk_700Bold',
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+  headerTitle: {
+    fontSize: 17,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+    flex: 1,
+    textAlign: 'center',
   },
   controlsRow: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 10,
+    paddingVertical: 4,
+    gap: 6,
     borderBottomWidth: 1,
-    backgroundColor: '#fff',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
     borderWidth: 1,
+    height: 36,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 13,
     fontFamily: 'SpaceGrotesk_400',
+    paddingVertical: 0,
   },
   sortRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   sortPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
     borderWidth: 1,
   },
   sortPillActive: {
     borderColor: 'transparent',
   },
   sortPillText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     fontFamily: 'SpaceGrotesk_600',
   },
   categoryScroll: {
-    maxHeight: 44,
-    backgroundColor: '#fff',
+    maxHeight: 38,
     borderBottomWidth: 1,
+    flexGrow: 0,
   },
   categoryContent: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
+    paddingRight: 20,
+    paddingVertical: 6,
+    gap: 6,
     alignItems: 'center',
   },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     borderWidth: 1,
-    marginRight: 8,
+    marginRight: 6,
+    minWidth: 60,
+    justifyContent: 'center',
   },
   categoryChipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     fontFamily: 'SpaceGrotesk_600',
   },

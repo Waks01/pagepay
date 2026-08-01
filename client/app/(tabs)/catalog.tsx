@@ -10,6 +10,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +22,7 @@ import { PLATFORM_ENV } from '@/src/shared/lib/ads';
 import { useCatalogFilter } from '@/src/shared/lib/catalog-filter';
 import { ContentCard, ContentItem } from '@/components/ContentCard';
 import { ResumeCard } from '@/components/ResumeCard';
-import AppHeader from '@/components/AppHeader';
+import NotificationBell from '@/components/NotificationBell';
 import { SkeletonContentCard } from '@/components/skeletons';
 import { CategoryChip } from '@/components/CategoryChip';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
@@ -268,10 +269,22 @@ export default function CatalogScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: tokens.paper }]}>
-      <AppHeader
-        title={t('catalog.title')}
-        subtitle={storeCategory ? t('catalog.subtitle_filtered', { category: storeCategory }) : t('catalog.subtitle_default')}
-      />
+      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+        <View style={styles.headerRow}>
+          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+          <View style={styles.headerTitleArea}>
+            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+              {t('catalog.title')}
+            </Text>
+            {storeCategory && (
+              <Text style={[styles.headerSubtitle, { color: tokens.inkMuted }]}>
+                {t('catalog.subtitle_filtered', { category: storeCategory })}
+              </Text>
+            )}
+          </View>
+          <NotificationBell />
+        </View>
+      </View>
       {/* Search bar (v3 §4.3). Server-side filtered on
           (education_level, class_level, subject, search). Debounced
           300ms in the parent state. Empty + blur = no filter. */}
@@ -600,9 +613,32 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
-    gap: 4,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+  },
+  headerTitleArea: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
   },
   headline: {
     fontSize: 28,
@@ -636,7 +672,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 4,
     paddingBottom: 4,
     gap: 8,
   },

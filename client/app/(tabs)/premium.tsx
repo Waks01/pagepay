@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
@@ -11,7 +11,7 @@ import { apiFetch } from '@/src/shared/api/client';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { SkeletonPage } from '@/components/skeletons';
-import AppHeader from '@/components/AppHeader';
+import NotificationBell from '@/components/NotificationBell';
 import { PrimaryButton } from '@/components/PrimaryButton';
 
 type Tier = {
@@ -82,7 +82,15 @@ export default function PremiumScreen() {
   if (tiersQ.isLoading) {
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <AppHeader title={t('premium.title')} subtitle={t('premium.subtitle')} />
+        <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+          <View style={styles.headerRow}>
+            <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+              {t('premium.title')}
+            </Text>
+            <NotificationBell />
+          </View>
+        </View>
         <ScrollView contentContainerStyle={styles.scroll}>
           <SkeletonPage count={3} header={false} />
         </ScrollView>
@@ -93,7 +101,15 @@ export default function PremiumScreen() {
   if (tiersQ.error) {
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-        <AppHeader title={t('premium.title')} />
+        <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+          <View style={styles.headerRow}>
+            <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+              {t('premium.title')}
+            </Text>
+            <NotificationBell />
+          </View>
+        </View>
         <Ionicons name="alert-circle-outline" size={48} color={tokens.error} />
         <Text style={[styles.errorTitle, { color: tokens.ink }]}>{t('premium.load_error')}</Text>
         <Text style={[styles.errorText, { color: tokens.inkMuted }]}>
@@ -108,7 +124,15 @@ export default function PremiumScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <AppHeader title={t('premium.title')} subtitle={t('premium.subtitle')} />
+      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+        <View style={styles.headerRow}>
+          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+          <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+            {t('premium.title')}
+          </Text>
+          <NotificationBell />
+        </View>
+      </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         {isPremium && userTier ? (
           <View style={[styles.currentTierBadge, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
@@ -203,9 +227,26 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   header: {
-    paddingTop: 12,
-    paddingBottom: 8,
-    gap: 4,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+  },
+  headerTitle: {
+    fontSize: 17,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+    flex: 1,
+    textAlign: 'center',
   },
   headline: {
     fontSize: 28,

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -29,7 +30,6 @@ import {
 } from '@/src/shared/lib/preferences';
 import { clearToken } from '@/src/shared/lib/storage';
 import { registerFCMToken } from '@/src/lib/notifications';
-import { PageMark } from '@/components/PageMark';
 import { AnimatedInput } from '@/components/AnimatedInput';
 import { PasswordToggle } from '@/components/Field';
 import { PrimaryButton } from '@/components/PrimaryButton';

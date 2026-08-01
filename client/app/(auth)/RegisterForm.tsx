@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -17,7 +18,6 @@ import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/src/shared/api/client';
 import { saveToken, saveRefreshToken } from '@/src/shared/lib/storage';
 import { getDeviceFingerprint } from '@/src/shared/lib/device-fingerprint';
-import { PageMark } from '@/components/PageMark';
 import { AnimatedInput } from '@/components/AnimatedInput';
 import { Field, PasswordToggle } from '@/components/Field';
 import { PrimaryButton } from '@/components/PrimaryButton';

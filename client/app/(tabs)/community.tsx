@@ -10,6 +10,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +21,7 @@ import { useCommunityFeed, useToggleLike, useUploadCommunityNote } from '@/src/f
 import type { CommunityFeedItem } from '@/src/features/community/api';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import AppHeader from '@/components/AppHeader';
+import NotificationBell from '@/components/NotificationBell';
 import { SkeletonPage } from '@/components/skeletons';
 
 type Filters = 'all' | 'my_courses' | 'popular' | 'recent';
@@ -93,46 +94,53 @@ export default function CommunityScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <AppHeader title={t('community.title')} />
+      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+        <View style={styles.headerRow}>
+          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+          <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+            {t('community.title')}
+          </Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={() => setShowUpload(!showUpload)}
+              style={[styles.uploadBtn, { backgroundColor: tokens.mint }]}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add" size={20} color={tokens.mintText} />
+            </TouchableOpacity>
+            <NotificationBell />
+          </View>
+        </View>
+      </View>
+
       <ScrollView
         style={{ flex: 1 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={tokens.mint} />}
       >
-        <View style={[styles.header, { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }]}>
-          <Text style={[styles.title, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-            {t('community.title')}
-          </Text>
-          <TouchableOpacity
-            onPress={() => setShowUpload(!showUpload)}
-            style={[styles.uploadBtn, { backgroundColor: tokens.mint }]}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="add" size={20} color={tokens.mintText} />
-          </TouchableOpacity>
+        <View style={[styles.filterRow, { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {FILTERS.map((f) => (
+                <TouchableOpacity
+                  key={f.key}
+                  onPress={() => setFilter(f.key)}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: filter === f.key ? tokens.mint : tokens.card,
+                      borderColor: filter === f.key ? tokens.mint : tokens.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.chipText, { color: filter === f.key ? tokens.mintText : tokens.ink }]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
         </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 16, marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {FILTERS.map((f) => (
-              <TouchableOpacity
-                key={f.key}
-                onPress={() => setFilter(f.key)}
-                activeOpacity={0.7}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: filter === f.key ? tokens.mint : tokens.card,
-                    borderColor: filter === f.key ? tokens.mint : tokens.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.chipText, { color: filter === f.key ? tokens.mintText : tokens.ink }]}>
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
 
         {showUpload && (
           <View style={[styles.uploadCard, { backgroundColor: tokens.card, borderColor: tokens.border, marginHorizontal: 16, marginBottom: 12 }]}>
@@ -232,13 +240,31 @@ export default function CommunityScreen() {
 
 const styles = StyleSheet.create({
   header: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  title: {
-    fontSize: 24,
-    letterSpacing: -0.5,
+  headerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+  },
+  headerTitle: {
+    fontSize: 17,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   uploadBtn: {
     width: 36,
@@ -246,6 +272,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  filterRow: {
+    borderBottomWidth: 1,
   },
   chip: {
     paddingHorizontal: 14,

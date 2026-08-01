@@ -38,23 +38,23 @@ export function AuthScreenEntrance({
 
   useEffect(() => {
     markTranslateX.value = withTiming(0, {
-      duration: 320,
+      duration: 180,
       easing: Easing.out(Easing.cubic),
     });
     markOpacity.value = withTiming(1, {
-      duration: 320,
+      duration: 180,
       easing: Easing.out(Easing.cubic),
     });
 
     titleOpacity.value = withDelay(
-      200,
-      withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }),
+      80,
+      withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) }),
     );
 
     if (subtitle) {
       subtitleOpacity.value = withDelay(
-        400,
-        withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }),
+        160,
+        withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) }),
       );
     }
   }, [markOpacity, markTranslateX, subtitle, subtitleOpacity, titleOpacity]);

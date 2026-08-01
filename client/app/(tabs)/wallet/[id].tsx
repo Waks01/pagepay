@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/src/shared/api/client';
 import { PagePay, Fonts } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import AppHeader from '@/components/AppHeader';
 import { formatKobo, formatPoints, pointsToNairaString } from '@/src/shared/lib/money';
 
 type TransactionItem =
@@ -61,7 +60,17 @@ export default function TransactionDetailScreen() {
   if (!item) {
     return (
       <View style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <AppHeader title="Transaction" showBack />
+        <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <Ionicons name="arrow-back" size={20} color={tokens.ink} />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
+              Transaction
+            </Text>
+            <View style={{ width: 36 }} />
+          </View>
+        </View>
         <View style={styles.center}>
           <Text style={[styles.errorText, { color: tokens.inkMuted }]}>
             Transaction not found
@@ -106,7 +115,17 @@ export default function TransactionDetailScreen() {
 
     return (
       <View style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <AppHeader title="Transaction" showBack />
+        <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <Ionicons name="arrow-back" size={20} color={tokens.ink} />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
+              Transaction
+            </Text>
+            <View style={{ width: 36 }} />
+          </View>
+        </View>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             <View style={styles.cardHeader}>
@@ -148,7 +167,17 @@ export default function TransactionDetailScreen() {
     const d = item.data;
     return (
       <View style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <AppHeader title="Payment" showBack />
+        <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <Ionicons name="arrow-back" size={20} color={tokens.ink} />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
+              Payment
+            </Text>
+            <View style={{ width: 36 }} />
+          </View>
+        </View>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             <View style={styles.cardHeader}>
@@ -191,7 +220,17 @@ export default function TransactionDetailScreen() {
     const netKobo = d.amount_kobo + d.fee_kobo;
     return (
       <View style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <AppHeader title="Withdrawal" showBack />
+        <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <Ionicons name="arrow-back" size={20} color={tokens.ink} />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
+              Withdrawal
+            </Text>
+            <View style={{ width: 36 }} />
+          </View>
+        </View>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
             <View style={styles.cardHeader}>
@@ -242,7 +281,17 @@ export default function TransactionDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <AppHeader title="Transaction" showBack />
+      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={20} color={tokens.ink} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
+            Transaction
+          </Text>
+          <View style={{ width: 36 }} />
+        </View>
+      </View>
       <View style={styles.center}>
         <Text style={[styles.errorText, { color: tokens.inkMuted }]}>
           Unknown transaction type
@@ -257,6 +306,35 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 48,
   },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+  },
+  headerTitle: {
+    fontSize: 17,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+    flex: 1,
+    textAlign: 'center',
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+  },
   center: {
     flex: 1,
     alignItems: 'center',
@@ -267,12 +345,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 12,
-  },
-  backBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: PagePay.light.mintSoft,
   },
   card: {
     borderRadius: 16,

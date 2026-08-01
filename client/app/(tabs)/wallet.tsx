@@ -1,10 +1,11 @@
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { View, Text, FlatList, RefreshControl, ActivityIndicator, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, RefreshControl, ActivityIndicator, StyleSheet, Platform, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { PLATFORM_ENV } from '@/src/shared/lib/ads';
@@ -12,9 +13,8 @@ import { consumePendingWithdrawAfterPin } from '@/src/shared/lib/pin-verify-flag
 import { formatKobo, formatPoints, pointsToNairaString } from '@/src/shared/lib/money';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay, Fonts } from '@/constants/theme';
-import { PageMark } from '@/components/PageMark';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import AppHeader from '@/components/AppHeader';
+import NotificationBell from '@/components/NotificationBell';
 import { WithdrawModal } from '@/components/WithdrawModal';
 import {
   LinkPayoutAccountModal,
@@ -86,6 +86,7 @@ export default function WalletScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ welcomeBonus?: string }>();
   const welcomeBonus = Number(params.welcomeBonus ?? 0);
+  const insets = useSafeAreaInsets();
 
   // Fetch ad config for native unit
   const [nativeAdUnit, setNativeAdUnit] = useState('');
@@ -257,7 +258,15 @@ export default function WalletScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.paper }}>
-      <AppHeader title={t('wallet.title')} />
+      <View style={[styles.header, { backgroundColor: c.card, borderBottomColor: c.border, marginTop: insets.top }]}>
+        <View style={styles.headerRow}>
+          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+          <Text style={[styles.headerTitle, { color: c.ink, fontFamily: Fonts.display }]}>
+            {t('wallet.title')}
+          </Text>
+          <NotificationBell />
+        </View>
+      </View>
       <FlatList
         data={combinedItems}
         keyExtractor={(item, index) => {
@@ -275,22 +284,6 @@ export default function WalletScreen() {
         }
         ListHeaderComponent={
           <View>
-            {/* Brand */}
-            <View style={{ alignItems: 'center', marginTop: 24, marginBottom: 32 }}>
-              <PageMark />
-              <Text
-                style={{
-                  fontFamily: Fonts.display,
-                  fontSize: 22,
-                  color: c.mint,
-                  marginTop: 8,
-                  letterSpacing: -0.5,
-                }}
-              >
-                {t('wallet.title')}
-              </Text>
-            </View>
-
             {/* One-time welcome bonus banner — appears after a fresh
                 signup+verification lands on this tab. Driven by the
                 `welcomeBonus` route param set by verify-email-code.tsx.
@@ -887,6 +880,31 @@ function BillsService({
     </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+  },
+  headerTitle: {
+    fontSize: 17,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+    flex: 1,
+    textAlign: 'center',
+  },
+});
 
 const rowStyles = StyleSheet.create({
   row: {

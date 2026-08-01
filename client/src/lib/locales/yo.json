@@ -143,6 +143,34 @@
   "tasks": {
     "title": "Awọn Iṣẹ Ti o Wa",
     "stats_button": "Wo akopọ",
+    "stats": {
+      "available": "Available",
+      "potential_earnings": "Potential Earnings",
+      "my_stats": "My Stats"
+    },
+    "search_placeholder": "Search tasks by title, type, or platform...",
+    "sort": {
+      "newest": "Newest",
+      "highest_reward": "Highest Reward",
+      "quickest": "Quickest",
+      "popular": "Popular"
+    },
+    "categories": {
+      "all": "All",
+      "social_media": "Social Media",
+      "engagement": "Engagement",
+      "website": "Website",
+      "app": "App",
+      "content_creation": "Content Creation",
+      "surveys": "Surveys",
+      "data_collection": "Data Collection",
+      "other": "Other"
+    },
+    "empty_title": "Ko si iṣẹ ti o wa",
+    "empty_subtitle": "Pada wa nigbamii fun awọn aye tuntun",
+    "empty_cta": "View My Stats",
+    "empty_search_title": "No results",
+    "empty_search_subtitle": "Try adjusting your search or filters",
     "task_types": {
       "social_follow": "tẹle",
       "social_like": "fẹran",
@@ -151,7 +179,30 @@
       "app_install": "gbe sori ẹrọ",
       "website_visit": "ṣabẹwo si oju opo wẹẹbu",
       "survey": "idahun ibeere",
-      "review": "kọ atunwo"
+      "review": "kọ atunwo",
+      "follow": "Follow",
+      "like": "Like",
+      "subscribe": "Subscribe",
+      "retweet": "Retweet",
+      "comment": "Comment",
+      "share": "Share",
+      "visit": "Visit",
+      "signup": "Sign Up",
+      "download": "Download",
+      "review": "Review",
+      "watch": "Watch",
+      "repost": "Repost",
+      "join": "Join",
+      "upvote": "Upvote",
+      "add_friend": "Add Friend",
+      "view_story": "View Story",
+      "join_server": "Join Server",
+      "verify": "Verify",
+      "message": "Message",
+      "upload_photo": "Upload Photo",
+      "upload_video": "Upload Video",
+      "written_review": "Write Review",
+      "custom": "Custom"
     },
     "platforms": {
       "twitter": "Twitter",
@@ -171,8 +222,6 @@
     },
     "remaining": "{{count}} ló kù",
     "expires": "Yoo pari",
-    "empty_title": "Ko si iṣẹ ti o wa",
-    "empty_subtitle": "Pada wa nigbamii fun awọn aye tuntun",
     "points_unit": "pts"
   },
   "study": {
@@ -694,6 +743,13 @@
   },
   "sponsor_create_task": {
     "title": "Ṣẹda Iṣẹ",
+    "template_label": "Yan awoṣe (aṣayan)",
+    "custom_template": "Custom",
+    "category_label": "Category",
+    "time_limit_label": "Time limit (minutes, optional)",
+    "platform_label": "Platform",
+    "visibility_boost_label": "Visibility boost",
+    "platform_controlled_minimum": "Platform-controlled minimum",
     "title_label": "Akọle *",
     "title_placeholder": "fun apẹẹrẹ Tẹle wa lori Twitter",
     "description_label": "Apejuwe *",

@@ -1,7 +1,7 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,7 @@ import { ProgressDashboard } from '@/components/study/ProgressDashboard';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import AppHeader from '@/components/AppHeader';
+import NotificationBell from '@/components/NotificationBell';
 import { SkeletonPage } from '@/components/skeletons';
 import { Skeleton } from '@/components/Skeleton';
 import { cacheAsset, getCachedAsset } from '@/src/features/study/storage';
@@ -485,10 +485,22 @@ export default function StudyScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <AppHeader
-        title={selectedMaterial ? selectedMaterial.title : t('study.title')}
-        subtitle={selectedMaterial ? t('study.assets_generated', { count: selectedMaterial.assets.length }) : undefined}
-      />
+      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+        <View style={styles.headerRow}>
+          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+          <View style={styles.headerTitleArea}>
+            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+              {selectedMaterial ? selectedMaterial.title : t('study.title')}
+            </Text>
+            {selectedMaterial && (
+              <Text style={[styles.headerSubtitle, { color: tokens.inkMuted }]}>
+                {t('study.assets_generated', { count: selectedMaterial.assets.length })}
+              </Text>
+            )}
+          </View>
+          <NotificationBell />
+        </View>
+      </View>
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
@@ -945,9 +957,33 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   header: {
-    paddingTop: 8,
-    paddingBottom: 16,
-    gap: 4,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+  },
+  headerTitleArea: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 1,
   },
   headline: {
     fontSize: 28,

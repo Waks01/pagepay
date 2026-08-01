@@ -58,27 +58,27 @@ export function AnimatedInput({
 
   useEffect(() => {
     focusProgress.value = withTiming(isFocused ? 1 : 0, {
-      duration: 220,
+      duration: 150,
       easing: Easing.out(Easing.cubic),
     });
     underlineScale.value = withTiming(isFocused ? 1 : 0, {
-      duration: 320,
+      duration: 200,
       easing: Easing.out(Easing.cubic),
     });
     labelScale.value = withTiming(isFocused ? 0.88 : 1, {
-      duration: 220,
+      duration: 150,
       easing: Easing.out(Easing.cubic),
     });
     labelOpacity.value = withTiming(isFocused ? 1 : 0.7, {
-      duration: 220,
+      duration: 150,
       easing: Easing.out(Easing.cubic),
     });
     bgOpacity.value = withTiming(isFocused ? 0.04 : 0, {
-      duration: 260,
+      duration: 180,
       easing: Easing.out(Easing.cubic),
     });
     glowOpacity.value = withTiming(isFocused ? 0.2 : 0, {
-      duration: 360,
+      duration: 220,
       easing: Easing.out(Easing.cubic),
     });
   }, [

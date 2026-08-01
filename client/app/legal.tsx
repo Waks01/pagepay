@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { publicApiFetch } from '@/src/shared/api/client';
-import { PageMark } from '@/components/PageMark';
 import { Skeleton } from '@/components/Skeleton';
 import { PagePay, PagePayScheme } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
@@ -263,7 +262,7 @@ export default function LegalScreen() {
           )}
         </ScrollView>
         <View style={styles.footer}>
-          <PageMark />
+          <Image source={require('@/assets/images/icon.png')} style={styles.footerIcon} />
         </View>
       </SafeAreaView>
     </View>
@@ -439,6 +438,11 @@ function makeStyles(scheme: PagePayScheme) {
     footer: {
       padding: 16,
       alignItems: 'center',
+    },
+    footerIcon: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
     },
   });
 }

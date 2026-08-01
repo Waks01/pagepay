@@ -10,6 +10,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -37,8 +38,7 @@ import { clearToken } from '@/src/shared/lib/storage';
 import { useBiometricAuth } from '@/src/shared/hooks/use-biometric-auth';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
-import { PageMark } from '@/components/PageMark';
-import AppHeader from '@/components/AppHeader';
+import NotificationBell from '@/components/NotificationBell';
 import { Skeleton } from '@/components/Skeleton';
 import { AnimatedInput } from '@/components/AnimatedInput';
 import { ChangePasswordModal } from '@/components/ChangePasswordModal';
@@ -308,10 +308,18 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: tokens.paper }]}>
-      <AppHeader title={t('profile.title')} />
+      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+        <View style={styles.headerRow}>
+          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+          <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+            {t('profile.title')}
+          </Text>
+          <NotificationBell />
+        </View>
+      </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* ── Header ───────────────────────────────────────────── */}
-        <View style={styles.header}>
+        <View style={styles.profileHeader}>
           <View style={[styles.avatar, { backgroundColor: tokens.mintSoft, borderColor: tokens.border }]}>
             <Text style={[styles.avatarText, { color: tokens.mint, fontFamily: 'SpaceGrotesk_700Bold' }]}>
               {initials(meQuery.data)}
@@ -790,7 +798,7 @@ export default function ProfileScreen() {
 
         {/* ── Footer ───────────────────────────────────────────── */}
         <View style={styles.footer}>
-          <PageMark />
+          <Image source={require('@/assets/images/icon.png')} style={styles.footerIcon} />
           <Text style={[styles.footerText, { color: tokens.inkMuted }]}>
             {t('profile.footer', { version, theme: platformLabel })}
           </Text>
@@ -1020,8 +1028,29 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
     gap: 14,
   },
-  // Header
   header: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+  },
+  headerTitle: {
+    fontSize: 17,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+    flex: 1,
+    textAlign: 'center',
+  },
+  profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
@@ -1249,6 +1278,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 18,
     gap: 6,
+  },
+  footerIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
   },
   footerText: {
     fontSize: 12,

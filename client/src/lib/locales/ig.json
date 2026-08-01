@@ -143,6 +143,34 @@
   "tasks": {
     "title": "Ọrụ Dị",
     "stats_button": "Lee akara",
+    "stats": {
+      "available": "Available",
+      "potential_earnings": "Potential Earnings",
+      "my_stats": "My Stats"
+    },
+    "search_placeholder": "Search tasks by title, type, or platform...",
+    "sort": {
+      "newest": "Newest",
+      "highest_reward": "Highest Reward",
+      "quickest": "Quickest",
+      "popular": "Popular"
+    },
+    "categories": {
+      "all": "All",
+      "social_media": "Social Media",
+      "engagement": "Engagement",
+      "website": "Website",
+      "app": "App",
+      "content_creation": "Content Creation",
+      "surveys": "Surveys",
+      "data_collection": "Data Collection",
+      "other": "Other"
+    },
+    "empty_title": "Enweghị ọrụ",
+    "empty_subtitle": "Laghachi azụ maka ohere ọhụrụ",
+    "empty_cta": "View My Stats",
+    "empty_search_title": "No results",
+    "empty_search_subtitle": "Try adjusting your search or filters",
     "task_types": {
       "social_follow": "soro",
       "social_like": "nwee mmasị",
@@ -151,7 +179,30 @@
       "app_install": "wụnye ngwa",
       "website_visit": "gaa na weebụsaịtị",
       "survey": "zaa ajụjụ",
-      "review": "dee nyocha"
+      "review": "dee nyocha",
+      "follow": "Follow",
+      "like": "Like",
+      "subscribe": "Subscribe",
+      "retweet": "Retweet",
+      "comment": "Comment",
+      "share": "Share",
+      "visit": "Visit",
+      "signup": "Sign Up",
+      "download": "Download",
+      "review": "Review",
+      "watch": "Watch",
+      "repost": "Repost",
+      "join": "Join",
+      "upvote": "Upvote",
+      "add_friend": "Add Friend",
+      "view_story": "View Story",
+      "join_server": "Join Server",
+      "verify": "Verify",
+      "message": "Message",
+      "upload_photo": "Upload Photo",
+      "upload_video": "Upload Video",
+      "written_review": "Write Review",
+      "custom": "Custom"
     },
     "platforms": {
       "twitter": "Twitter",
@@ -171,8 +222,6 @@
     },
     "remaining": "{{count}} fọdụrụ",
     "expires": "Ga-agwụ",
-    "empty_title": "Enweghị ọrụ",
-    "empty_subtitle": "Laghachi azụ maka ohere ọhụrụ",
     "points_unit": "pts"
   },
   "study": {
@@ -693,8 +742,15 @@
     }
   },
   "sponsor_create_task": {
-    "title": "Mepụta Ọrụ",
-    "title_label": "Aha *",
+     "title": "Mepụta Ọrụ",
+     "template_label": "Choose a template (optional)",
+     "custom_template": "Custom",
+     "category_label": "Category",
+     "time_limit_label": "Time limit (minutes, optional)",
+     "platform_label": "Platform",
+     "visibility_boost_label": "Visibility boost",
+     "platform_controlled_minimum": "Platform-controlled minimum",
+     "title_label": "Aha *",
     "title_placeholder": "dịka Soro anyị na Twitter",
     "description_label": "Nkọwa *",
     "description_placeholder": "Gịnị ka ndị ọrụ kwesịrị ime?",

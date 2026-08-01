@@ -21,7 +21,7 @@ import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { useStreak } from '@/src/features/community/hooks/use-community';
 import { displayName } from '@/src/shared/lib/display-name';
 import { formatPointsCompact } from '@/src/shared/lib/money';
-import { PageMark } from '@/components/PageMark';
+import { Image } from 'react-native';
 import { CategoryChip } from '@/components/CategoryChip';
 import { ContentCard, ContentItem } from '@/components/ContentCard';
 import { ResumeCard } from '@/components/ResumeCard';
@@ -191,7 +191,7 @@ export default function HomeScreen() {
       <View style={styles.header}>
         {/* Row 1: app mark + streak + points + bell */}
         <View style={styles.iconsRow}>
-          <PageMark width={28} height={2} />
+          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
           {streakData && streakData.current_streak > 0 && (
             <View style={[styles.streakBadge, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
               <Text style={styles.streakEmoji}>🔥</Text>
@@ -255,12 +255,7 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Brand mark */}
-        <View style={styles.markRow}>
-          <PageMark />
-        </View>
-
-         {/* Resume slot */}
+        {/* Resume slot */}
         {inProgressQuery.isLoading ? (
           <View style={styles.section}>
             <Text
@@ -419,8 +414,13 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 4,
     paddingBottom: 16,
+  },
+  headerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
   },
   scroll: {
     paddingHorizontal: 16,
@@ -473,9 +473,6 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
-  },
-  markRow: {
-    marginTop: -8,
   },
   section: {
     gap: 12,

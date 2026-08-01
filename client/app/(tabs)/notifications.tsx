@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import AppHeader from '@/components/AppHeader';
+import NotificationBell from '@/components/NotificationBell';
 
 type NotificationItem = {
   id: number;
@@ -153,29 +153,32 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <AppHeader title="Notifications" />
-      <View style={[styles.header, { borderBottomColor: tokens.border }]}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-            Notifications
-          </Text>
-          <Text style={[styles.subtitle, { color: tokens.inkMuted }]}>
-            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-          </Text>
+      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+        <View style={styles.headerRow}>
+          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
+          <View style={styles.headerTitleArea}>
+            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+              Notifications
+            </Text>
+            <Text style={[styles.headerSubtitle, { color: tokens.inkMuted }]}>
+              {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+            </Text>
+          </View>
+          <NotificationBell />
         </View>
-        {unreadCount > 0 && (
+      </View>
+
+      {unreadCount > 0 && (
+        <View style={[styles.markAllRow, { borderBottomColor: tokens.border }]}>
           <TouchableOpacity
             onPress={() => markAllReadMutation.mutate()}
             disabled={markAllReadMutation.isPending}
-            style={[
-              styles.markAllBtn,
-              { opacity: markAllReadMutation.isPending ? 0.6 : 1 },
-            ]}
+            style={[styles.markAllBtn, { opacity: markAllReadMutation.isPending ? 0.6 : 1 }]}
           >
             <Text style={[styles.markAllText, { color: tokens.mint }]}>Mark all read</Text>
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
 
       <FlatList
         data={notifications}
@@ -193,26 +196,46 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 4,
+    paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  title: {
-    fontSize: 17,
-    letterSpacing: -0.3,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  subtitle: {
+  headerIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+  },
+  headerTitleArea: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+  },
+  headerSubtitle: {
     fontSize: 12,
+    lineHeight: 16,
     marginTop: 1,
+  },
+  markAllRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    alignItems: 'flex-end',
   },
   markAllBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: PagePay.light.mint,
   },
   markAllText: {
     fontSize: 12,

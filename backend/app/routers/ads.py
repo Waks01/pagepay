@@ -817,12 +817,12 @@ async def admob_ssv_callback(
         points_credited=points,
     )
 
-    # Fire ad-reward push. asyncio.create_task so the response returns
-    # immediately; FCM failures never block the SSV webhook (Google
-    # retries timeouts aggressively, so we MUST respond fast).
-    # Best-effort: send_ad_reward short-circuits silently when there
-    # are no FCM tokens (common — AdMob SSV callbacks fire even when
-    # the user isn't currently logged in on a device).
+    await db.commit()
+
+    # Fire ad-reward push AFTER commit so an AdMob retry can't slip
+    # through the idempotency guard and double-fire notifications.
+    # asyncio.create_task keeps this fire-and-forget; FCM failures
+    # never block the SSV response.
     if points > 0:
         from app.services.fcm import send_ad_reward
         from app.services.notifications import create_notification
@@ -844,8 +844,6 @@ async def admob_ssv_callback(
                 data={"type": "ad_reward", "points": str(points)},
             )
         )
-    
-    await db.commit()
 
     me = (
         await db.execute(select(User.points_balance).where(User.id == user_id))

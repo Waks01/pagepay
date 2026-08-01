@@ -44,11 +44,11 @@ export default function AuthScreen() {
     if (tab === activeTab) return;
 
     contentOpacity.value = withTiming(0, {
-      duration: 150,
+      duration: 80,
       easing: Easing.out(Easing.cubic),
     });
     contentScale.value = withTiming(0.95, {
-      duration: 150,
+      duration: 80,
       easing: Easing.out(Easing.cubic),
     });
 
@@ -60,14 +60,14 @@ export default function AuthScreen() {
       if (next) setActiveTab(next);
 
       contentOpacity.value = withTiming(1, {
-        duration: 250,
+        duration: 150,
         easing: Easing.out(Easing.cubic),
       });
       contentScale.value = withTiming(1, {
-        duration: 250,
+        duration: 150,
         easing: Easing.out(Easing.cubic),
       });
-    }, 150);
+    }, 80);
   };
 
   const handleGoogleSignIn = async () => {
