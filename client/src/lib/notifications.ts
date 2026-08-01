@@ -301,6 +301,11 @@ export function setupNotificationListeners() {
         data?.type === "payment_success"
       ) {
         router.push("/(tabs)/wallet" as any);
+      } else if (
+        data?.type === "subscription_initiated" ||
+        data?.type === "subscription_success"
+      ) {
+        router.push("/(tabs)/premium" as any);
       } else if (data?.type === "ad_reward") {
         router.push("/(tabs)/home" as any);
       }

@@ -86,24 +86,39 @@ async def initiate_payment(
     """Initiate a premium subscription payment via Paystack.
     
     Returns a checkout URL for the user to complete payment.
+    
+    DEBUG: Added extensive logging to trace subscription payment flow.
     """
+    logger.info("=" * 80)
+    logger.info("🎫 PREMIUM SUBSCRIPTION INITIATED")
+    logger.info("User ID: %s", current_user.id)
+    logger.info("Email: %s", current_user.email)
+    logger.info("Tier: %s", payload.tier)
+    logger.info("Provider: %s", payload.provider)
+    
     if not settings.paystack_secret_key:
+        logger.error("❌ PAYSTACK_SECRET_KEY not configured!")
         raise HTTPException(status_code=503, detail="Payments not configured")
     
     # Parse tier enum
     try:
         tier = UserTier(payload.tier)
+        logger.info("✅ Tier parsed: %s", tier.value)
     except ValueError:
+        logger.error("❌ Invalid tier: %s", payload.tier)
         raise HTTPException(status_code=400, detail=f"Invalid tier: {payload.tier}")
     
     # Get tier price
     amount_kobo = get_tier_price_kobo(tier)
+    logger.info("💰 Subscription price: %s kobo (₦%s)", amount_kobo, amount_kobo / 100)
     
     # Generate unique reference with project prefix "pp_"
     import uuid
     tx_ref = f"pp_sub_{current_user.id}_{uuid.uuid4().hex[:12]}"
+    logger.info("📝 Generated reference: %s", tx_ref)
     
     # Create pending payment record
+    logger.info("💾 Creating Payment record for subscription...")
     payment = Payment(
         user_id=current_user.id,
         tier=tier.value,
@@ -114,11 +129,32 @@ async def initiate_payment(
     )
     db.add(payment)
     await db.commit()
+    logger.info("✅ Payment record created: ID=%s", payment.id)
+    
+    # Send push notification: Subscription payment initiated
+    logger.info("📲 Scheduling subscription payment initiated notification...")
+    import asyncio
+    from app.services.fcm import send_push_notification_background
+    asyncio.create_task(
+        send_push_notification_background(
+            user_id=current_user.id,
+            title="💳 Subscription Payment Initiated",
+            body=f"Processing your {format_tier_name(tier)} subscription (₦{amount_kobo / 100:.2f})...",
+            data={
+                "type": "subscription_initiated",
+                "reference": tx_ref,
+                "tier": tier.value,
+                "amount_kobo": str(amount_kobo),
+            },
+            category="subscriptions",
+        )
+    )
     
     # Initialize Paystack checkout
     if payload.provider == "paystack":
         import httpx
         
+        logger.info("🌐 Calling Paystack to initialize subscription checkout...")
         url = "https://api.paystack.co/transaction/initialize"
         headers = {
             "Authorization": f"Bearer {settings.paystack_secret_key}",
@@ -148,7 +184,7 @@ async def initiate_payment(
                 response = await client.post(url, json=body, headers=headers)
                 
                 if response.status_code != 200:
-                    logger.error(f"Paystack init failed: {response.text}")
+                    logger.error("❌ Paystack init failed: %s", response.text)
                     raise HTTPException(
                         status_code=502,
                         detail="Payment provider unavailable"
@@ -157,12 +193,17 @@ async def initiate_payment(
                 data = response.json()
                 
                 if not data.get("status"):
+                    logger.error("❌ Paystack returned error: %s", data.get("message"))
                     raise HTTPException(
                         status_code=502,
                         detail=data.get("message", "Payment initialization failed")
                     )
                 
                 authorization_url = data["data"]["authorization_url"]
+                logger.info("✅ Paystack initialization successful!")
+                logger.info("   Authorization URL: %s", authorization_url)
+                logger.info("🎉 Subscription payment initiated successfully!")
+                logger.info("=" * 80)
                 
                 return PaymentInitiateResponse(
                     payment_url=authorization_url,
@@ -173,7 +214,7 @@ async def initiate_payment(
                 )
                 
         except httpx.RequestError as e:
-            logger.error(f"Paystack request error: {e}")
+            logger.error("❌ Paystack request error: %s", e)
             raise HTTPException(
                 status_code=502,
                 detail="Could not reach payment provider"

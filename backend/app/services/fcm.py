@@ -226,6 +226,44 @@ async def send_push_notification(
     }
 
 
+async def send_push_notification_background(
+    user_id: int,
+    title: str,
+    body: str,
+    data: Optional[Dict[str, str]] = None,
+    category: Optional[str] = None,
+) -> None:
+    """
+    Send push notification in a background task with its own DB session.
+    
+    This is a wrapper around send_push_notification() that creates its own
+    database session, allowing it to be safely called via asyncio.create_task()
+    without conflicting with request-scoped sessions.
+    
+    Args:
+        user_id: Target user ID
+        title: Notification title
+        body: Notification body
+        data: Optional custom data payload
+        category: Notification category (study_reminders, task_alerts, etc.)
+    """
+    from app.database import AsyncSessionLocal
+    
+    async with AsyncSessionLocal() as db:
+        try:
+            await send_push_notification(
+                db=db,
+                user_id=user_id,
+                title=title,
+                body=body,
+                data=data,
+                category=category,
+            )
+        except Exception as e:
+            logger.error(f"Background push notification failed: {e}")
+            # Don't re-raise - this is a background task
+
+
 async def send_bulk_push_notification(
     db: AsyncSession,
     user_ids: List[int],
@@ -357,6 +395,28 @@ async def send_wallet_update(
         },
         category="wallet_updates",
     )
+
+
+async def send_wallet_update_background(
+    user_id: int,
+    amount_naira: float,
+    transaction_type: str = "credit",
+    reason: str = "wallet",
+) -> None:
+    """Send wallet update notification in a background task with its own DB session."""
+    from app.database import AsyncSessionLocal
+    
+    async with AsyncSessionLocal() as db:
+        try:
+            await send_wallet_update(
+                db=db,
+                user_id=user_id,
+                amount_naira=amount_naira,
+                transaction_type=transaction_type,
+                reason=reason,
+            )
+        except Exception as e:
+            logger.error(f"Background wallet update notification failed: {e}")
 
 
 async def send_ad_reward(

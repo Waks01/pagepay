@@ -1000,7 +1000,7 @@ function ReferralSection({ tokens }: { tokens: (typeof PagePay)['light'] | (type
       )}
 
       {stats && (
-        <View style={styles.statsRow}>
+        <View style={[styles.statsRow, { borderTopColor: tokens.border }]}>
           <View style={styles.stat}>
             <Text style={[styles.statValue, { color: tokens.ink }]}>{stats.signups}</Text>
             <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>{t('profile.referral.stats_signups')}</Text>
@@ -1345,7 +1345,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#e5e5e5',
     marginTop: 4,
   },
   stat: {

@@ -429,19 +429,17 @@ async def submit_task(
 
     # Send push notification for task submission (fire-and-forget)
     try:
-        from app.services.fcm import send_push_notification
-        from app.services.notifications import create_notification
+        from app.services.fcm import send_push_notification_background
+        from app.services.notifications import create_notification_background
         import asyncio
-        asyncio.create_task(send_push_notification(
-            db=db,
+        asyncio.create_task(send_push_notification_background(
             user_id=current_user.id,
             title="Task Submitted ✅",
             body=f"Your submission for '{task.title}' is pending review.",
             data={"type": "task_alert", "task_id": str(task_id), "status": "pending"},
             category="task_alerts",
         ))
-        asyncio.create_task(create_notification(
-            db=db,
+        asyncio.create_task(create_notification_background(
             user_id=current_user.id,
             title="Task Submitted ✅",
             body=f"Your submission for '{task.title}' is pending review.",

@@ -16,6 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
@@ -166,7 +167,7 @@ export function NotificationSettingsModal({ visible, onClose }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={[styles.container, { backgroundColor: tokens.paper }]}>
+      <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: tokens.paper }]}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: tokens.border }]}>
           <Pressable onPress={onClose} hitSlop={12}>
@@ -365,7 +366,7 @@ export function NotificationSettingsModal({ visible, onClose }: Props) {
             </View>
           </View>
         </ScrollView>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

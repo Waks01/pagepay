@@ -67,6 +67,17 @@
       "help": "Help & support",
       "about": "About / app version"
     },
+    "username": {
+      "section": "USERNAME",
+      "label": "Choose username",
+      "placeholder": "johndoe",
+      "empty": "Username no fit empty",
+      "too_long": "Username must reach 12 letters or less",
+      "invalid_chars": "Letters, numbers, and underscore only",
+      "helper": "Max 12 letters. Letters, numbers, underscore only.",
+      "edit_hint": "Tap to set your username",
+      "not_set": "No set"
+    },
     "sign_out": "Comot",
     "tier": {
       "free": "Free",
@@ -84,6 +95,8 @@
     "error": "Problem don show",
     "success": "E don work",
     "cancel": "Leave am",
+    "save": "Save am",
+    "saving": "Dey save...",
     "done": "Don finish",
     "retry": "Try again"
   },
@@ -558,6 +571,10 @@
     "active": "Active",
     "current_plan": "Current Plan",
     "choose": "Choose",
+    "verifying": "Dey verify...",
+    "verifying_payment": "Dey Verify Payment",
+    "verifying_subtitle": "Abeg wait make we confirm your subscription...",
+    "view_payment_history": "See Payment History",
     "load_error": "E no work to load plans",
     "connection_error": "Check your connection try again.",
     "retry": "Try again",

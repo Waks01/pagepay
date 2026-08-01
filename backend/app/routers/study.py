@@ -1033,19 +1033,17 @@ async def complete_quiz(
     # Send push notification for bonus (fire-and-forget)
     if bonus_awarded:
         try:
-            from app.services.fcm import send_push_notification
-            from app.services.notifications import create_notification
+            from app.services.fcm import send_push_notification_background
+            from app.services.notifications import create_notification_background
             import asyncio
-            asyncio.create_task(send_push_notification(
-                db=db,
+            asyncio.create_task(send_push_notification_background(
                 user_id=current_user.id,
                 title="Quiz Bonus! 🎉",
                 body=f"You scored {payload.score}% and earned +{bonus_points} points!",
                 data={"type": "quiz_bonus", "score": str(payload.score), "points": str(bonus_points)},
                 category="study_reminders",
             ))
-            asyncio.create_task(create_notification(
-                db=db,
+            asyncio.create_task(create_notification_background(
                 user_id=current_user.id,
                 title="Quiz Bonus! 🎉",
                 body=f"You scored {payload.score}% and earned +{bonus_points} points!",
@@ -1215,16 +1213,14 @@ async def end_study_session(
             from app.services.notifications import create_notification
             import asyncio
             duration_min = session["duration_seconds"] // 60
-            asyncio.create_task(send_push_notification(
-                db=db,
+            asyncio.create_task(send_push_notification_background(
                 user_id=current_user.id,
                 title="Study Milestone! 📚",
                 body=f"You studied for {duration_min} minutes. Keep it up!",
                 data={"type": "study_reminder", "duration_minutes": str(duration_min)},
                 category="study_reminders",
             ))
-            asyncio.create_task(create_notification(
-                db=db,
+            asyncio.create_task(create_notification_background(
                 user_id=current_user.id,
                 title="Study Milestone! 📚",
                 body=f"You studied for {duration_min} minutes. Keep it up!",

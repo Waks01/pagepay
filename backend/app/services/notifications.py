@@ -59,6 +59,30 @@ async def create_notification(
     return notification
 
 
+async def create_notification_background(
+    user_id: int,
+    title: str,
+    body: str,
+    category: str | None = None,
+    data: dict | None = None,
+) -> None:
+    """Create notification in a background task with its own DB session."""
+    from app.database import AsyncSessionLocal
+    
+    async with AsyncSessionLocal() as db:
+        try:
+            await create_notification(
+                db=db,
+                user_id=user_id,
+                title=title,
+                body=body,
+                category=category,
+                data=data,
+            )
+        except Exception as e:
+            logger.error(f"Background notification creation failed: {e}")
+
+
 async def create_notifications_bulk(
     db: AsyncSession,
     user_ids: list[int],

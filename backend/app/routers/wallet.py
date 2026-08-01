@@ -312,11 +312,12 @@ async def initiate_wallet_deposit(
     logger.info("✅ Payment record created: ID=%s", payment.id)
     
     # Send push notification: Payment initiated
-    logger.info("📲 Sending payment initiated notification...")
-    from app.services.fcm import send_push_notification
+    # Note: We spawn this as a background task and create a new DB session
+    # inside it to avoid session conflicts with the request-scoped session
+    logger.info("📲 Scheduling payment initiated notification...")
+    from app.services.fcm import send_push_notification_background
     asyncio.create_task(
-        send_push_notification(
-            db=db,
+        send_push_notification_background(
             user_id=current_user.id,
             title="💳 Payment Initiated",
             body=f"Processing your ₦{payload.deposit_amount_kobo / 100:.2f} wallet deposit...",

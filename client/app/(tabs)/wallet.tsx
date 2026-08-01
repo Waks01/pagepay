@@ -254,7 +254,11 @@ export default function WalletScreen() {
   for (const t of transactions) combinedItems.push({ kind: 'session', data: t });
   for (const p of paymentsQ.data ?? []) combinedItems.push({ kind: 'payment', data: p });
   for (const w of withdrawals) combinedItems.push({ kind: 'withdrawal', data: w });
-  // Both endpoints already return newest-first; we don't re-sort.
+  combinedItems.sort((a, b) => {
+    const da = a.kind === 'session' ? a.data.date : a.data.created_at ?? '';
+    const db = b.kind === 'session' ? b.data.date : b.data.created_at ?? '';
+    return db.localeCompare(da);
+  });
 
   return (
     <View style={{ flex: 1, backgroundColor: c.paper }}>

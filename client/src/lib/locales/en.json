@@ -103,6 +103,17 @@
       "required_title": "PIN Required",
       "required_message": "You must set a transaction PIN before enabling biometric login. This PIN will also be used as fallback if biometric fails."
     },
+    "username": {
+      "section": "USERNAME",
+      "label": "Choose a username",
+      "placeholder": "johndoe",
+      "empty": "Username cannot be empty",
+      "too_long": "Username must be 12 characters or less",
+      "invalid_chars": "Only letters, numbers, and underscores allowed",
+      "helper": "Max 12 characters. Letters, numbers, underscores only.",
+      "edit_hint": "Tap to set your username",
+      "not_set": "Not set"
+    },
     "sign_out": "Sign out",
     "tier": {
       "free": "Free",
@@ -120,6 +131,8 @@
     "error": "Error",
     "success": "Success",
     "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving...",
     "done": "Done",
     "retry": "Retry"
   },
@@ -607,6 +620,10 @@
     "active": "Active",
     "current_plan": "Current Plan",
     "choose": "Choose",
+    "verifying": "Verifying...",
+    "verifying_payment": "Verifying Payment",
+    "verifying_subtitle": "Please wait while we confirm your subscription...",
+    "view_payment_history": "View Payment History",
     "load_error": "Failed to load plans",
     "connection_error": "Please check your connection and try again.",
     "retry": "Retry",

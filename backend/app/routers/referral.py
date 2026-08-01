@@ -164,35 +164,31 @@ async def validate_referral(
 
     # Send push notifications for referral bonus (fire-and-forget)
     try:
-        from app.services.fcm import send_push_notification
-        from app.services.notifications import create_notification
+        from app.services.fcm import send_push_notification_background
+        from app.services.notifications import create_notification_background
         import asyncio
-        asyncio.create_task(send_push_notification(
-            db=db,
+        asyncio.create_task(send_push_notification_background(
             user_id=referrer.id,
             title="Referral Bonus! 🎉",
             body=f"Someone joined using your code! You earned +{REFERRER_REWARD} points.",
             data={"type": "referral_bonus", "points": str(REFERRER_REWARD)},
             category="referral_bonuses",
         ))
-        asyncio.create_task(create_notification(
-            db=db,
+        asyncio.create_task(create_notification_background(
             user_id=referrer.id,
             title="Referral Bonus! 🎉",
             body=f"Someone joined using your code! You earned +{REFERRER_REWARD} points.",
             category="referral_bonuses",
             data={"type": "referral_bonus", "points": REFERRER_REWARD},
         ))
-        asyncio.create_task(send_push_notification(
-            db=db,
+        asyncio.create_task(send_push_notification_background(
             user_id=referee.id,
             title="Welcome Bonus! 🎉",
             body=f"You joined with a referral code! +{REFEREE_REWARD} points for you.",
             data={"type": "referral_bonus", "points": str(REFEREE_REWARD)},
             category="referral_bonuses",
         ))
-        asyncio.create_task(create_notification(
-            db=db,
+        asyncio.create_task(create_notification_background(
             user_id=referee.id,
             title="Welcome Bonus! 🎉",
             body=f"You joined with a referral code! +{REFEREE_REWARD} points for you.",

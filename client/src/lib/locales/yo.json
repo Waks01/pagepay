@@ -67,6 +67,17 @@
       "help": "Iranlọwọ & atilẹyin",
       "about": "Nipa / ẹya app"
     },
+    "username": {
+      "section": "ORUKA ÌMỌ̀",
+      "label": "Yan orukọ olumulo",
+      "placeholder": "johndoe",
+      "empty": "Orukọ olumulo ko le jẹ ofeefee",
+      "too_long": "Orukọ olumulo gbọdọ jẹ ọmọ 12 tabi kere",
+      "invalid_chars": "Awọn lẹta, nọmba, àti underscore nikan",
+      "helper": "Ọpọ 12 lẹta. Awọn lẹta, nọmba, underscore nikan.",
+      "edit_hint": "Tẹ lati ṣeto orukọ rẹ",
+      "not_set": "Ko set"
+    },
     "sign_out": "Jade",
     "tier": {
       "free": "Ọfẹ",
@@ -84,6 +95,8 @@
     "error": "Àṣìṣe",
     "success": "Àṣeyọrí",
     "cancel": "Fagilee",
+    "save": "Fipamọ",
+    "saving": "N fi pamọ...",
     "done": "Parí",
     "retry": "Gbìyànjú lẹẹkansi"
   },
@@ -558,6 +571,10 @@
     "active": "Nṣiṣẹ",
     "current_plan": "Eto Lọwọlọwọ",
     "choose": "Yan",
+    "verifying": "N ṣayẹwo...",
+    "verifying_payment": "N Ṣayẹwo Isanwo",
+    "verifying_subtitle": "Jọwọ duro lakoko ti a ṣe idaniloju forukọsilẹ rẹ...",
+    "view_payment_history": "Wo Itan Isanwo",
     "load_error": "Ko le ṣe awọn eto",
     "connection_error": "Jọwọ ṣayẹwo isopọ rẹ ki o tun gbiyanju.",
     "retry": "Gbiyanju lẹẹkansi",

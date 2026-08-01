@@ -766,10 +766,10 @@ async def paystack_webhook(
                     deposit_naira = deposit_amount_kobo / 100
                     
                     # Send FCM notification: Wallet funded successfully
+                    from app.services.fcm import send_wallet_update_background
                     asyncio.create_task(
-                        send_wallet_update(
-                            db,
-                            payment.user_id,
+                        send_wallet_update_background(
+                            user_id=payment.user_id,
                             amount_naira=deposit_naira,
                             transaction_type="credit",
                             reason="wallet_deposit",
@@ -777,10 +777,10 @@ async def paystack_webhook(
                     )
                     
                     # Send in-app notification
+                    from app.services.notifications import create_notification_background
                     asyncio.create_task(
-                        create_notification(
-                            db,
-                            payment.user_id,
+                        create_notification_background(
+                            user_id=payment.user_id,
                             title="✅ Payment Successful",
                             body=f"Your wallet has been credited with ₦{deposit_naira:.2f} ({deposit_points:,} points). Start reading to earn more!",
                             category="wallet_updates",
@@ -798,9 +798,12 @@ async def paystack_webhook(
                 logger.warning("⚠️  No deposit_amount_kobo in metadata or amount is 0")
 
         elif payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value):
+            logger.info("🎉 Processing PREMIUM SUBSCRIPTION upgrade...")
             try:
                 tier = UserTier(payment.tier)
                 expires_at = calculate_subscription_end_date(tier)
+                tier_name = format_tier_name(tier)
+                
                 await db.execute(
                     update(User)
                     .where(User.id == payment.user_id)
@@ -810,11 +813,44 @@ async def paystack_webhook(
                     )
                 )
                 logger.info(
-                    "Subscription upgraded: user=%s tier=%s expires=%s",
+                    "✅ Subscription upgraded: user=%s tier=%s expires=%s",
                     payment.user_id, payment.tier, expires_at.isoformat(),
                 )
+                
+                # Send push notification: Premium activated
+                from app.services.fcm import send_push_notification_background
+                asyncio.create_task(
+                    send_push_notification_background(
+                        user_id=payment.user_id,
+                        title="🎉 Premium Activated!",
+                        body=f"Welcome to {tier_name}! Enjoy ad-free reading and 2x points.",
+                        data={
+                            "type": "subscription_success",
+                            "tier": tier.value,
+                            "expires_at": expires_at.isoformat(),
+                        },
+                        category="subscriptions",
+                    )
+                )
+                
+                # Send in-app notification
+                from app.services.notifications import create_notification_background
+                asyncio.create_task(
+                    create_notification_background(
+                        user_id=payment.user_id,
+                        title="🎉 Premium Activated!",
+                        body=f"Your {tier_name} subscription is now active until {expires_at.strftime('%B %d, %Y')}. Enjoy ad-free reading and 2x earning points!",
+                        category="subscriptions",
+                        data={
+                            "type": "subscription_success",
+                            "tier": tier.value,
+                            "expires_at": expires_at.isoformat(),
+                        },
+                    )
+                )
+                
             except Exception as exc:
-                logger.error("Failed to upgrade subscription for user=%s ref=%s: %s", payment.user_id, reference, exc)
+                logger.error("❌ Failed to upgrade subscription for user=%s ref=%s: %s", payment.user_id, reference, exc)
 
         await db.commit()
         logger.info("✅ DATABASE COMMITTED - Webhook processing complete!")
@@ -861,19 +897,19 @@ async def paystack_webhook(
         # Pull the live transfer_code off the event if we don't have one.
         if not txn.paystack_transfer_code:
             txn.paystack_transfer_code = str(data.get("transfer_code") or "") or None
+        from app.services.fcm import send_wallet_update_background
         asyncio.create_task(
-            send_wallet_update(
-                db,
-                txn.user_id,
+            send_wallet_update_background(
+                user_id=txn.user_id,
                 amount_naira=-(txn.amount_kobo / 100),
                 transaction_type="debit",
                 reason="withdrawal",
             )
         )
+        from app.services.notifications import create_notification_background
         asyncio.create_task(
-            create_notification(
-                db,
-                txn.user_id,
+            create_notification_background(
+                user_id=txn.user_id,
                 title="Withdrawal Successful",
                 body=f"Your withdrawal of ₦{txn.amount_kobo / 100:.2f} has been processed",
                 category="wallet_updates",
@@ -910,19 +946,19 @@ async def paystack_webhook(
                     event_name,
                 )
                 refund_naira = refund_kobo / 100
+                from app.services.fcm import send_wallet_update_background
                 asyncio.create_task(
-                    send_wallet_update(
-                        db,
-                        txn.user_id,
+                    send_wallet_update_background(
+                        user_id=txn.user_id,
                         amount_naira=refund_naira,
                         transaction_type="credit",
                         reason="withdrawal_reversal",
                     )
                 )
+                from app.services.notifications import create_notification_background
                 asyncio.create_task(
-                    create_notification(
-                        db,
-                        txn.user_id,
+                    create_notification_background(
+                        user_id=txn.user_id,
                         title="Withdrawal Reversed",
                         body=f"Your withdrawal of ₦{refund_naira:.2f} was reversed and refunded to your wallet",
                         category="wallet_updates",
