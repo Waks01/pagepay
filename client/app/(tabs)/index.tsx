@@ -25,6 +25,7 @@ import { Image } from 'react-native';
 import { CategoryChip } from '@/components/CategoryChip';
 import { ContentCard, ContentItem } from '@/components/ContentCard';
 import { ResumeCard } from '@/components/ResumeCard';
+import { VTUServiceCard } from '@/components/VTUServiceCard';
 import NotificationBell from '@/components/NotificationBell';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
 import { PagePay } from '@/constants/theme';
@@ -326,6 +327,87 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {/* VTU Services Carousel */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text
+              style={[styles.sectionTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}
+            >
+              {t('home.services_carousel')}
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/wallet')}
+              hitSlop={6}
+              accessibilityRole="link"
+            >
+              <Text style={[styles.seeAll, { color: tokens.mint }]}>{t('home.services_carousel_action')}</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 12, paddingRight: 16 }}
+            decelerationRate="fast"
+            snapToInterval={140 + 12}
+            snapToAlignment="start"
+          >
+            <VTUServiceCard
+              icon="phone-portrait-outline"
+              label={t('wallet.services.airtime')}
+              earn="3%"
+              onPress={() => router.push('/buy-airtime')}
+            />
+            <VTUServiceCard
+              icon="wifi-outline"
+              label={t('wallet.services.data')}
+              earn="4%"
+              onPress={() => router.push('/buy-data')}
+            />
+            <VTUServiceCard
+              icon="flash-outline"
+              label={t('wallet.services.electricity')}
+              earn="1%"
+              onPress={() => router.push('/buy-electricity')}
+            />
+            <VTUServiceCard
+              icon="tv-outline"
+              label={t('wallet.services.tv')}
+              earn="1.5%"
+              onPress={() => router.push('/buy-tv')}
+            />
+            <VTUServiceCard
+              icon="card-outline"
+              label={t('wallet.services.recharge_pin')}
+              earn="2%"
+              onPress={() => router.push('/buy-recharge-pin')}
+            />
+            <VTUServiceCard
+              icon="logo-bitcoin"
+              label={t('wallet.services.betting')}
+              earn="2%"
+              onPress={() => router.push('/buy-betting')}
+            />
+            <VTUServiceCard
+              icon="wifi-outline"
+              label={t('wallet.services.isp')}
+              earn="3%"
+              onPress={() => router.push('/buy-isp')}
+            />
+            <VTUServiceCard
+              icon="school-outline"
+              label={t('wallet.services.education')}
+              earn="2%"
+              onPress={() => router.push('/buy-education')}
+            />
+            <VTUServiceCard
+              icon="send-outline"
+              label={t('wallet.services.sms')}
+              earn="1%"
+              onPress={() => router.push('/buy-sms')}
+            />
+          </ScrollView>
+        </View>
+
         {/* Browse by category */}
         <View style={styles.section}>
           <Text
@@ -515,5 +597,41 @@ const styles = StyleSheet.create({
   streakText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  vtuCard: {
+    width: 140,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  vtuIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vtuName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  vtuEarn: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
 });

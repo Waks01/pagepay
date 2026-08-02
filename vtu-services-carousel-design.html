@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PagePay Home - VTU Services Carousel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .phone-frame {
+            width: 100%;
+            max-width: 390px;
+            height: 844px;
+            background: #ffffff;
+            border-radius: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .phone-content {
+            height: 100%;
+            overflow-y: auto;
+            padding-bottom: 100px;
+        }
+
+        .phone-content::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Header */
+        .header {
+            padding: 16px 20px;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .app-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        .header-icons {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .streak-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #92400e;
+        }
+
+        .balance-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 24px;
+        }
+
+        .balance-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+        }
+
+        .balance-text {
+            font-size: 14px;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .balance-label {
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        .notification-bell {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            position: relative;
+        }
+
+        .notification-dot {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ef4444;
+        }
+
+        .greeting {
+            font-size: 16px;
+            color: #6b7280;
+        }
+
+        .greeting-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111827;
+            margin-top: 2px;
+        }
+
+        /* Section Styles */
+        .section {
+            margin-top: 24px;
+            padding: 0 20px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111827;
+            letter-spacing: -0.3px;
+        }
+
+        .section-action {
+            font-size: 14px;
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        /* Keep Reading - Horizontal Scroll */
+        .horizontal-scroll {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding-right: 20px;
+            scroll-snap-type: x mandatory;
+        }
+
+        .horizontal-scroll::-webkit-scrollbar {
+            display: none;
+        }
+
+        .resume-card {
+            min-width: 260px;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 16px;
+            scroll-snap-align: start;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        .resume-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+
+        .resume-author {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 12px;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: #f3f4f6;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #059669);
+            border-radius: 3px;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        /* NEW: VTU Services Carousel */
+        .vtu-carousel {
+            margin-top: 28px;
+            padding: 0 20px;
+        }
+
+        .vtu-container {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding-right: 20px;
+            scroll-snap-type: x mandatory;
+        }
+
+        .vtu-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        .vtu-card {
+            min-width: 140px;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 16px;
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        .vtu-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .vtu-icon.airtime { background: #dbeafe; }
+        .vtu-icon.data { background: #dcfce7; }
+        .vtu-icon.electricity { background: #fef3c7; }
+        .vtu-icon.tv { background: #fce7f3; }
+        .vtu-icon.recharge { background: #e0e7ff; }
+        .vtu-icon.betting { background: #f3e8ff; }
+        .vtu-icon.isp { background: #ccfbf1; }
+        .vtu-icon.education { background: #ffedd5; }
+        .vtu-icon.sms { background: #ffe4e6; }
+
+        .vtu-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .vtu-earn {
+            font-size: 11px;
+            font-weight: 600;
+            color: #10b981;
+            background: #f0fdf4;
+            padding: 3px 8px;
+            border-radius: 8px;
+        }
+
+        /* Category Chips */
+        .chips-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .category-chip {
+            padding: 10px 18px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        /* Trending */
+        .trending-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .trending-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+
+        .trending-meta {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        /* Design Notes */
+        .design-notes {
+            max-width: 390px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .design-notes h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 16px;
+        }
+
+        .note-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .note-item:last-child {
+            border-bottom: none;
+        }
+
+        .note-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #10b981;
+            margin-bottom: 4px;
+        }
+
+        .note-text {
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <!-- Phone Mockup -->
+        <div class="phone-frame">
+            <div class="phone-content">
+                <!-- Header -->
+                <div class="header">
+                    <div class="header-top">
+                        <div class="app-icon">P</div>
+                        <div class="header-icons">
+                            <div class="streak-badge">
+                                <span>🔥</span>
+                                <span>5d</span>
+                            </div>
+                            <div class="balance-chip">
+                                <div class="balance-dot"></div>
+                                <div>
+                                    <div class="balance-text">2,450</div>
+                                    <div class="balance-label">pts</div>
+                                </div>
+                            </div>
+                            <div class="notification-bell">
+                                🔔
+                                <div class="notification-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="greeting">Good evening,</div>
+                    <div class="greeting-name">Kenik</div>
+                </div>
+
+                <!-- Keep Reading Section (EXISTING) -->
+                <div class="section">
+                    <div class="section-header">
+                        <div class="section-title">Keep Reading</div>
+                        <div class="section-action">See All</div>
+                    </div>
+                    <div class="horizontal-scroll">
+                        <div class="resume-card">
+                            <div class="resume-title">The Art of Learning</div>
+                            <div class="resume-author">by Josh Waitzkin</div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 65%"></div>
+                            </div>
+                            <div class="progress-text">65% · 12 min left</div>
+                        </div>
+                        <div class="resume-card">
+                            <div class="resume-title">Atomic Habits</div>
+                            <div class="resume-author">by James Clear</div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 30%"></div>
+                            </div>
+                            <div class="progress-text">30% · 45 min left</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW: VTU Services Carousel -->
+                <div class="vtu-carousel">
+                    <div class="section-header">
+                        <div class="section-title">Pay Bills & Earn</div>
+                        <div class="section-action">See All</div>
+                    </div>
+                    <div class="vtu-container">
+                        <!-- Airtime -->
+                        <div class="vtu-card">
+                            <div class="vtu-icon airtime">📱</div>
+                            <div class="vtu-name">Airtime</div>
+                            <div class="vtu-earn">Up to 3%</div>
+                        </div>
+
+                        <!-- Data -->
+                        <div class="vtu-card">
+                            <div class="vtu-icon data">📶</div>
+                            <div class="vtu-name">Data</div>
+                            <div class="vtu-earn">Up to 4%</div>
+                        </div>
+
+                        <!-- Electricity -->
+                        <div class="vtu-card">
+                            <div class="vtu-icon electricity">⚡</div>
+                            <div class="vtu-name">Electricity</div>
+                            <div class="vtu-earn">Up to 1%</div>
+                        </div>
+
+                        <!-- TV -->
+                        <div class="vtu-card">
+                            <div class="vtu-icon tv">📺</div>
+                            <div class="vtu-name">TV</div>
+                            <div class="vtu-earn">Up to 1.5%</div>
+                        </div>
+
+                        <!-- Recharge Pin -->
+                        <div class="vtu-card">
+                            <div class="vtu-icon recharge">🎫</div>
+                            <div class="vtu-name">Recharge Pin</div>
+                            <div class="vtu-earn">Up to 2%</div>
+                        </div>
+
+                        <!-- Betting -->
+                        <div class="vtu-card">
+                            <div class="vtu-icon betting">🎲</div>
+                            <div class="vtu-name">Betting</div>
+                            <div class="vtu-earn">Up to 2%</div>
+                        </div>
+
+                        <!-- ISP -->
+                        <div class="vtu-card">
+                            <div class="vtu-icon isp">🌐</div>
+                            <div class="vtu-name">ISP</div>
+                            <div class="vtu-earn">Up to 3%</div>
+                        </div>
+
+                        <!-- Education -->
+                        <div class="vtu-card">
+                            <div class="vtu-icon education">🎓</div>
+                            <div class="vtu-name">Education</div>
+                            <div class="vtu-earn">Up to 2%</div>
+                        </div>
+
+                        <!-- SMS -->
+                        <div class="vtu-card">
+                            <div class="vtu-icon sms">💬</div>
+                            <div class="vtu-name">SMS</div>
+                            <div class="vtu-earn">Up to 1%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Browse by Category (EXISTING) -->
+                <div class="section">
+                    <div class="section-header">
+                        <div class="section-title">Browse</div>
+                    </div>
+                    <div class="chips-row">
+                        <div class="category-chip">Fiction</div>
+                        <div class="category-chip">Classics</div>
+                        <div class="category-chip">News</div>
+                        <div class="category-chip">Study</div>
+                    </div>
+                </div>
+
+                <!-- Trending (EXISTING) -->
+                <div class="section">
+                    <div class="section-header">
+                        <div class="section-title">Trending Today</div>
+                        <div class="section-action">See All</div>
+                    </div>
+                    <div class="trending-card">
+                        <div class="trending-title">The Psychology of Money</div>
+                        <div class="trending-meta">by Morgan Housel · 12 min read</div>
+                    </div>
+                    <div class="trending-card">
+                        <div class="trending-title">Thinking, Fast and Slow</div>
+                        <div class="trending-meta">by Daniel Kahneman · 18 min read</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Design Notes -->
+        <div class="design-notes">
+            <h2>📱 VTU Services Carousel - Design Specs</h2>
+            
+            <div class="note-item">
+                <div class="note-label">Placement</div>
+                <div class="note-text">Inserted directly below "Keep Reading" horizontal carousel, before "Browse by Category" section.</div>
+            </div>
+
+            <div class="note-item">
+                <div class="note-label">Layout</div>
+                <div class="note-text">Horizontal snap-scroll carousel matching the Keep Reading pattern. Each card is 140px wide with 12px gap. Shows 3-4 cards at a time on typical phone screens.</div>
+            </div>
+
+            <div class="note-item">
+                <div class="note-label">Card Design</div>
+                <div class="note-text">Compact cards with emoji icon, service name, and earn rate badge. Each service has a unique icon background color for quick visual scanning.</div>
+            </div>
+
+            <div class="note-item">
+                <div class="note-label">Services Shown</div>
+                <div class="note-text">Airtime, Data, Electricity, TV, Recharge Pin, Betting, ISP, Education (Result Checker), SMS — all 9 VTU services from Bigisub.</div>
+            </div>
+
+            <div class="note-item">
+                <div class="note-label">Interactions</div>
+                <div class="note-text">Horizontal swipe to browse services. Tapping a card navigates to that service's buy screen. "See All" link could show full grid view.</div>
+            </div>
+
+            <div class="note-item">
+                <div class="note-label">Earn Rates</div>
+                <div class="note-text">Badge shows approximate earn rate (from Bigisub commission). These are estimates — actual points are calculated after purchase based on real commission.</div>
+            </div>
+
+            <div class="note-item">
+                <div class="note-label">Conditional Display</div>
+                <div class="note-text">Should this carousel: (a) show to everyone, (b) hide premium users, (c) only show free users? Currently shown to all.</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
