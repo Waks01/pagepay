@@ -932,5 +932,24 @@
     "empty_message": "Tambaya komai game da kayan karatun ku.",
     "send_button": "Aika",
     "error_prefix": "Matsala:"
+  },
+  "notification_detail": {
+    "title": "Sanarwa",
+    "loading": "Ana lodin sanarwa...",
+    "not_found": "Ba a sami sanarwa ba",
+    "not_found_message": "Wannan sanarwar ana iya cireta ko kuma ba ku da damar kanta.",
+    "go_back": "Koma Baya",
+    "marked_read": "An alanta ta",
+    "additional_info": "Bayanan Ƙari",
+    "view_details": "Duba Bayanai",
+    "categories": {
+      "study_reminders": "Tunarin Karatu",
+      "task_alerts": "Sanarwar Aiki",
+      "referral_bonuses": "Bonus Jajo",
+      "wallet_updates": "Sabuntawar Bada Rai",
+      "ad_rewards": "Lada Taƙi",
+      "subscriptions": "Rajista",
+      "default": "Sanarwa"
+    }
   }
 }

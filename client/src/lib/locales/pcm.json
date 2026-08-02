@@ -932,5 +932,24 @@
     "empty_message": "Ask anything about your study material.",
     "send_button": "Send",
     "error_prefix": "Problem:"
+  },
+  "notification_detail": {
+    "title": "Notification",
+    "loading": "Loading notification...",
+    "not_found": "Notification no dey",
+    "not_found_message": "This notification fit don delete or you no get access to am.",
+    "go_back": "Go Back",
+    "marked_read": "Dem mark am as read",
+    "additional_info": "More Information",
+    "view_details": "View Details",
+    "categories": {
+      "study_reminders": "Study Reminder",
+      "task_alerts": "Task Alert",
+      "referral_bonuses": "Referral Bonus",
+      "wallet_updates": "Wallet Update",
+      "ad_rewards": "Ad Reward",
+      "subscriptions": "Subscription",
+      "default": "Notification"
+    }
   }
 }

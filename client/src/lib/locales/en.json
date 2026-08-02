@@ -1063,5 +1063,24 @@
     "empty_message": "Ask anything about your study material.",
     "send_button": "Send",
     "error_prefix": "Error:"
+  },
+  "notification_detail": {
+    "title": "Notification",
+    "loading": "Loading notification...",
+    "not_found": "Notification not found",
+    "not_found_message": "This notification may have been deleted or you don't have access to it.",
+    "go_back": "Go Back",
+    "marked_read": "Marked as read",
+    "additional_info": "Additional Information",
+    "view_details": "View Details",
+    "categories": {
+      "study_reminders": "Study Reminder",
+      "task_alerts": "Task Alert",
+      "referral_bonuses": "Referral Bonus",
+      "wallet_updates": "Wallet Update",
+      "ad_rewards": "Ad Reward",
+      "subscriptions": "Subscription",
+      "default": "Notification"
+    }
   }
 }

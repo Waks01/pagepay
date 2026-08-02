@@ -932,5 +932,24 @@
     "empty_message": "Beere ohunkohun nipa ohun elo ẹkọ rẹ.",
     "send_button": "Fi Ranṣẹ",
     "error_prefix": "Iṣoro:"
+  },
+  "notification_detail": {
+    "title": "Iwifunni",
+    "loading": "N gba iwifunni...",
+    "not_found": "A ko ri iwifunni",
+    "not_found_message": "A ma ṣe nṣe afi iwifunni yi tabi o ni ẹtọ si i.",
+    "go_back": "Pada",
+    "marked_read": "A ti kà",
+    "additional_info": "Alaye Afikun",
+    "view_details": "Wo Awọn Alaye",
+    "categories": {
+      "study_reminders": "Iranti Ẹkọ",
+      "task_alerts": "Iwifunni Iṣẹ",
+      "referral_bonuses": "Ọwọn Iṣeto",
+      "wallet_updates": "Imudojuiwọn Apamọwọ",
+      "ad_rewards": "Ẹbun Iṣanwó",
+      "subscriptions": "Iforukọsilẹ",
+      "default": "Iwifunni"
+    }
   }
 }

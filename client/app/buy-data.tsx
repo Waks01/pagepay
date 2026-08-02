@@ -88,9 +88,15 @@ export default function BuyDataScreen() {
   const networksQ = useQuery({
     queryKey: ['data-networks'],
     queryFn: async () => {
+      console.log('[buy-data] Fetching networks from /api/v1/bills/data/networks');
       const res = await apiFetch('/api/v1/bills/data/networks');
-      if (!res.ok) throw new Error('Failed to load networks');
-      return (await res.json()) as DataNetwork[];
+      if (!res.ok) {
+        console.log('[buy-data] Networks fetch failed:', res.status);
+        throw new Error('Failed to load networks');
+      }
+      const data = await res.json();
+      console.log('[buy-data] Networks response:', data);
+      return data as DataNetwork[];
     },
   });
 
@@ -103,14 +109,21 @@ export default function BuyDataScreen() {
   const plansQ = useQuery({
     queryKey: ['data-plans', network],
     queryFn: async () => {
+      console.log('[buy-data] Fetching plans for network:', network);
       const res = await apiFetch(`/api/v1/bills/data/plans?network=${encodeURIComponent(network)}`);
-      if (!res.ok) throw new Error('Failed to load plans');
-      return (await res.json()) as DataPlan[];
+      if (!res.ok) {
+        console.log('[buy-data] Plans fetch failed:', res.status);
+        throw new Error('Failed to load plans');
+      }
+      const data = await res.json();
+      console.log('[buy-data] Plans response count:', data.length, 'network:', network);
+      return data as DataPlan[];
     },
     enabled: !!network,
   });
 
   const selectedPkg = plansQ.data?.find((p) => p.plan_code === selectedPlan);
+  console.log('[buy-data] State:', { network, selectedPlan, plansCount: plansQ.data?.length, selectedPkg: selectedPkg?.label });
 
   // Categorize plans by validity
   const categorizedPlans = (plansQ.data ?? []).reduce((acc, plan) => {

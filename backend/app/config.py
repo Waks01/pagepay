@@ -160,7 +160,7 @@ class Settings(BaseSettings):
     # Bigisub VTU provider (airtime, data, electricity, TV).
     # API key + PIN from bigisub.ng dashboard — never commit the real values.
     bigisub_api_key: str | None = None
-    bigisub_base_url: str = "https://api.bigisub.ng"
+    bigisub_base_url: str = "https://api.bigisub.ng/api/v2"
     bigisub_pin: str | None = None
 
     # Active VTU provider: "peyflex" or "bigisub".

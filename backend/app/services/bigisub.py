@@ -198,6 +198,7 @@ class BigisubClient:
     # ── Data ─────────────────────────────────────────────────────────
 
     async def get_data_networks(self) -> list[DataNetwork]:
+        logger.info("[Bigisub] Fetching data networks from %s", _API_BASE)
         return [
             DataNetwork({"id": 1, "name": "MTN"}),
             DataNetwork({"id": 2, "name": "GLO"}),
@@ -207,8 +208,10 @@ class BigisubClient:
 
     async def get_data_plans(self, network: str | int) -> list[DataPlan]:
         network_id = self._resolve_network_id(network)
+        logger.info("[Bigisub] Fetching data plans: network_id=%s base=%s", network_id, _API_BASE)
         body = await self._get("vtu/data/plans/", params={"network": network_id})
         plans = body.get("data", [])
+        logger.info("[Bigisub] Data plans raw count=%d", len(plans))
         return [DataPlan(p) for p in plans if not p.get("plan_disabled")]
 
     async def buy_data(

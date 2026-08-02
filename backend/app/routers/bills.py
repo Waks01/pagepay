@@ -190,18 +190,24 @@ async def buy_airtime(
 @router.get("/data/networks")
 async def list_data_networks():
     """List data networks available on VTU provider."""
+    logger.info("Fetching data networks from VTU provider: %s", settings.bills_provider)
     nets = await _get_vtu_public_client().get_data_networks()
-    return [{"identifier": n.identifier, "name": n.name} for n in nets]
+    result = [{"identifier": n.identifier, "name": n.name} for n in nets]
+    logger.info("Data networks response: %s", result)
+    return result
 
 
 @router.get("/data/plans")
 async def list_data_plans(network: str = "mtn_gifting_data"):
     """List data plans for a specific network."""
+    logger.info("Fetching data plans for network=%s provider=%s", network, settings.bills_provider)
     plans = await _get_vtu_public_client().get_data_plans(network)
-    return [
+    result = [
         {"plan_code": p.plan_code, "amount": p.amount, "label": getattr(p, "label", p.plan_code)}
         for p in plans
     ]
+    logger.info("Data plans response: count=%d network=%s", len(result), network)
+    return result
 
 
 @router.post("/data", response_model=BillsPurchaseResponse)

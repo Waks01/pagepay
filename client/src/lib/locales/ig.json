@@ -933,5 +933,24 @@
     "empty_message": "Jụọ ihe ọ bụla gbasara ihe ọmụmụ gị.",
     "send_button": "Ziga",
     "error_prefix": "Nsogbu:"
+  },
+  "notification_detail": {
+    "title": "Ịhụnanya",
+    "loading": "Ị na-ebu ịhụnanya...",
+    "not_found": "Ahụghị ịhụnanya",
+    "not_found_message": "A pụghị ịhụnanya a ma ọ bụrụ na ị nwere ike ịbanye.",
+    "go_back": "Laghachi",
+    "marked_read": "Ederela",
+    "additional_info": "Ozi Ndị ọzọ",
+    "view_details": "Lelee Ozi",
+    "categories": {
+      "study_reminders": "Ncheta Ọmụmụ",
+      "task_alerts": "Ọmụmụ Ihe",
+      "referral_bonuses": "Nketa Jako",
+      "wallet_updates": "Mmelite Ego",
+      "ad_rewards": "Nrite Nkịta",
+      "subscriptions": "Debanye",
+      "default": "Ịhụnanya"
+    }
   }
 }

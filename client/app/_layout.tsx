@@ -227,6 +227,7 @@ export default function RootLayout() {
         <Stack.Screen name="forgot-password-otp" options={{ headerShown: false, title: 'Enter OTP' }} />
         <Stack.Screen name="reset-password" options={{ headerShown: false, title: 'New Password' }} />
         <Stack.Screen name="legal" options={{ headerShown: false, title: 'Legal' }} />
+        <Stack.Screen name="notification/[id]" options={{ headerShown: false, title: 'Notification' }} />
         <Stack.Screen name="buy-airtime" options={{ headerShown: false, title: 'Buy Airtime' }} />
         <Stack.Screen name="buy-data" options={{ headerShown: false, title: 'Buy Data' }} />
         <Stack.Screen name="buy-electricity" options={{ headerShown: false, title: 'Buy Electricity' }} />
