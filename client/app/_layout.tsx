@@ -231,6 +231,11 @@ export default function RootLayout() {
         <Stack.Screen name="buy-data" options={{ headerShown: false, title: 'Buy Data' }} />
         <Stack.Screen name="buy-electricity" options={{ headerShown: false, title: 'Buy Electricity' }} />
         <Stack.Screen name="buy-tv" options={{ headerShown: false, title: 'Buy TV Subscription' }} />
+        <Stack.Screen name="buy-recharge-pin" options={{ headerShown: false, title: 'Buy Recharge Pin' }} />
+        <Stack.Screen name="buy-betting" options={{ headerShown: false, title: 'Betting' }} />
+        <Stack.Screen name="buy-isp" options={{ headerShown: false, title: 'ISP Data' }} />
+        <Stack.Screen name="buy-education" options={{ headerShown: false, title: 'Result Checker' }} />
+        <Stack.Screen name="buy-sms" options={{ headerShown: false, title: 'Bulk SMS' }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         <Stack.Screen name="pin/verify" options={{ headerShown: false, title: 'Enter PIN' }} />
         <Stack.Screen name="pin/setup" options={{ headerShown: false, title: 'Set PIN' }} />

@@ -156,6 +156,11 @@ class BillsPurchaseResponse(BaseModel):
     customer_name: str | None = None
     token: str | None = None
     units: str | None = None
+    pins: list[str] | None = None
+    transaction_id: str | None = None
+    status_detail: str | None = None
+    job_id: str | None = None
+    total_cost: int | None = None
 
 
 class ContentItem(BaseModel):

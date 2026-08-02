@@ -423,37 +423,91 @@ export default function WalletScreen() {
               <Text style={{ fontSize: 12, color: c.inkMuted, marginTop: 2, marginBottom: 12 }}>
                 {t('wallet.pay_bills_subtitle')}
               </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                  <BillsService
-                    icon="phone-portrait-outline"
-                    label={t('wallet.services.airtime')}
-                    earn="3%"
-                    color={c}
-                    onPress={() => router.push('/buy-airtime')}
-                  />
-                  <BillsService
-                    icon="wifi-outline"
-                    label={t('wallet.services.data')}
-                    earn="4%"
-                    color={c}
-                    onPress={() => router.push('/buy-data')}
-                  />
-                  <BillsService
-                    icon="flash-outline"
-                    label={t('wallet.services.electricity')}
-                    earn="1%"
-                    color={c}
-                    onPress={() => router.push('/buy-electricity')}
-                  />
-                  <BillsService
-                    icon="tv-outline"
-                    label={t('wallet.services.tv')}
-                    earn="1.5%"
-                    color={c}
-                    onPress={() => router.push('/buy-tv')}
-                  />
-                </View>
-             </View>
+
+              {/* Telecom */}
+              <Text style={{ fontSize: 12, fontWeight: '700', color: c.inkMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Telecom
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+                <BillsService
+                  icon="phone-portrait-outline"
+                  label={t('wallet.services.airtime')}
+                  earn="3%"
+                  color={c}
+                  onPress={() => router.push('/buy-airtime')}
+                />
+                <BillsService
+                  icon="wifi-outline"
+                  label={t('wallet.services.data')}
+                  earn="4%"
+                  color={c}
+                  onPress={() => router.push('/buy-data')}
+                />
+                <BillsService
+                  icon="card-outline"
+                  label={t('wallet.services.recharge_pin')}
+                  earn="2%"
+                  color={c}
+                  onPress={() => router.push('/buy-recharge-pin')}
+                />
+              </View>
+
+              {/* Bills & Utilities */}
+              <Text style={{ fontSize: 12, fontWeight: '700', color: c.inkMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Bills & Utilities
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+                <BillsService
+                  icon="flash-outline"
+                  label={t('wallet.services.electricity')}
+                  earn="1%"
+                  color={c}
+                  onPress={() => router.push('/buy-electricity')}
+                />
+                <BillsService
+                  icon="tv-outline"
+                  label={t('wallet.services.tv')}
+                  earn="1.5%"
+                  color={c}
+                  onPress={() => router.push('/buy-tv')}
+                />
+              </View>
+
+              {/* More Services */}
+              <Text style={{ fontSize: 12, fontWeight: '700', color: c.inkMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                More Services
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                <BillsService
+                  icon="logo-bitcoin"
+                  label={t('wallet.services.betting')}
+                  earn="2%"
+                  color={c}
+                  onPress={() => router.push('/buy-betting')}
+                />
+                <BillsService
+                  icon="wifi-outline"
+                  label={t('wallet.services.isp')}
+                  earn="3%"
+                  color={c}
+                  onPress={() => router.push('/buy-isp')}
+                />
+                <BillsService
+                  icon="school-outline"
+                  label={t('wallet.services.education')}
+                  earn="2%"
+                  color={c}
+                  onPress={() => router.push('/buy-education')}
+                />
+                <BillsService
+                  icon="send-outline"
+                  label={t('wallet.services.sms')}
+                  earn="1%"
+                  color={c}
+                  onPress={() => router.push('/buy-sms')}
+                />
+              </View>
+            </View>
 
             {/* Section title */}
             <Text

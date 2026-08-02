@@ -720,3 +720,581 @@ async def validate_smartcard(payload: dict, current_user: User = Depends(get_cur
             "validated": False,
             "message": "Validation temporarily unavailable - proceed with purchase",
         }
+
+
+# ── Recharge Pin ────────────────────────────────────────────────────
+
+@router.get("/recharge-pin/plans")
+async def list_recharge_pin_plans(network: str | None = None):
+    """List recharge pin denominations."""
+    plans = await _get_vtu_public_client().get_recharge_pin_plans(network)
+    return plans
+
+
+@router.post("/recharge-pin")
+async def buy_recharge_pin(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Buy recharge pins."""
+    reference = _generate_reference()
+    network = payload.get("network", "mtn")
+    size = payload.get("size")
+    quantity = int(payload.get("quantity", 1))
+
+    if not size:
+        raise HTTPException(status_code=400, detail="size is required")
+
+    try:
+        plans = await _get_vtu_public_client().get_recharge_pin_plans(network)
+    except (PeyflexError, BigisubError) as exc:
+        raise _vtu_error(exc)
+
+    plan = next((p for p in plans if p["size"] == size), None)
+    if not plan:
+        raise HTTPException(status_code=400, detail=f"Unknown pin size: {size}")
+
+    price_naira = plan["regular_price"]
+    amount_kobo = int(price_naira * 100) * quantity
+
+    user_row = (
+        await db.execute(
+            select(User).where(User.id == current_user.id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if user_row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user_row.points_balance < kobo_to_points(amount_kobo):
+        raise HTTPException(status_code=402, detail="Insufficient balance")
+
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+    )
+
+    try:
+        result = await _get_vtu_client().buy_recharge_pin(
+            network=network, size=size, quantity=quantity,
+        )
+    except (PeyflexError, BigisubError) as exc:
+        await db.rollback()
+        raise _vtu_error(exc)
+
+    commission_kobo = 0
+    try:
+        if "discount" in result and result["discount"]:
+            commission_kobo = int(float(result["discount"]) * 100)
+    except (ValueError, TypeError):
+        commission_kobo = 0
+
+    points = _compute_points(commission_kobo)
+
+    tx = BillTransaction(
+        user_id=current_user.id,
+        service="recharge_pin",
+        provider=settings.bills_provider,
+        amount_naira=int(price_naira * quantity),
+        commission_naira=commission_kobo,
+        points_earned=points,
+        reference=reference,
+        status="success",
+        external_ref=result.get("reference", result.get("transaction_id", "")),
+    )
+    db.add(tx)
+
+    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance + points)
+    )
+    await db.commit()
+
+    return {
+        "reference": reference,
+        "commission_naira": commission_kobo,
+        "points_earned": points,
+        "new_balance": new_balance,
+        "status": "success",
+        "pins": result.get("pins", []),
+    }
+
+
+# ── Betting ─────────────────────────────────────────────────────────
+
+@router.get("/betting/billers")
+async def list_betting_billers():
+    """List supported betting platforms."""
+    return await _get_vtu_public_client().get_betting_billers()
+
+
+@router.get("/betting/products")
+async def list_betting_products(biller_code: str):
+    """List products for a betting platform."""
+    return await _get_vtu_public_client().get_betting_products(biller_code)
+
+
+@router.post("/betting/validate")
+async def validate_betting_account(payload: dict):
+    """Validate betting account number."""
+    biller_code = payload.get("biller_code", "")
+    account_number = payload.get("account_number", "")
+    if not biller_code or not account_number:
+        raise HTTPException(status_code=400, detail="biller_code and account_number are required")
+    result = await _get_vtu_public_client().validate_betting_account(biller_code, account_number)
+    return result
+
+
+@router.post("/betting")
+async def fund_betting(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Fund betting wallet."""
+    reference = _generate_reference()
+    biller_code = payload.get("biller_code", "")
+    account_number = payload.get("account_number", "")
+    amount_naira = int(payload.get("amount_naira", 0))
+    customer_name = payload.get("customer_name", "")
+
+    if not biller_code or not account_number or amount_naira <= 0:
+        raise HTTPException(status_code=400, detail="biller_code, account_number, and amount_naira are required")
+
+    amount_kobo = amount_naira * 100
+
+    user_row = (
+        await db.execute(
+            select(User).where(User.id == current_user.id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if user_row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user_row.points_balance < kobo_to_points(amount_kobo):
+        raise HTTPException(status_code=402, detail="Insufficient balance")
+
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+    )
+
+    try:
+        result = await _get_vtu_client().fund_betting_wallet(
+            biller_code=biller_code,
+            account_number=account_number,
+            amount=amount_naira,
+            customer_name=customer_name,
+        )
+    except (PeyflexError, BigisubError) as exc:
+        await db.rollback()
+        raise _vtu_error(exc)
+
+    commission_kobo = 0
+    points = _compute_points(commission_kobo)
+
+    tx = BillTransaction(
+        user_id=current_user.id,
+        service="betting",
+        provider=settings.bills_provider,
+        amount_naira=amount_naira,
+        commission_naira=commission_kobo,
+        points_earned=points,
+        reference=reference,
+        status="success",
+        external_ref=result.get("transaction_id", result.get("reference", "")),
+    )
+    db.add(tx)
+
+    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance + points)
+    )
+    await db.commit()
+
+    return {
+        "reference": reference,
+        "commission_naira": commission_kobo,
+        "points_earned": points,
+        "new_balance": new_balance,
+        "status": "success",
+        "transaction_id": result.get("transaction_id", ""),
+        "status_detail": result.get("status_detail", ""),
+    }
+
+
+# ── ISP ─────────────────────────────────────────────────────────────
+
+@router.get("/isp/smile/plans")
+async def list_smile_plans():
+    """List Smile ISP plans."""
+    return await _get_vtu_public_client().get_smile_plans()
+
+
+@router.get("/isp/spectranet/plans")
+async def list_spectranet_plans():
+    """List Spectranet ISP plans."""
+    return await _get_vtu_public_client().get_spectranet_plans()
+
+
+@router.post("/isp/smile/verify")
+async def verify_smile_account(payload: dict):
+    """Verify Smile ISP account."""
+    account_number = payload.get("account_number", "")
+    if not account_number:
+        raise HTTPException(status_code=400, detail="account_number is required")
+    return await _get_vtu_public_client().verify_smile_account(account_number)
+
+
+@router.post("/isp/smile/topup")
+async def topup_smile(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Top up Smile ISP account."""
+    reference = _generate_reference()
+    account_number = payload.get("account_number", "")
+    plan_id = int(payload.get("plan_id", 0))
+
+    if not account_number or not plan_id:
+        raise HTTPException(status_code=400, detail="account_number and plan_id are required")
+
+    try:
+        plans = await _get_vtu_public_client().get_smile_plans()
+    except (PeyflexError, BigisubError) as exc:
+        raise _vtu_error(exc)
+
+    plan = next((p for p in plans if p["id"] == plan_id), None)
+    if not plan:
+        raise HTTPException(status_code=400, detail=f"Unknown Smile plan: {plan_id}")
+
+    price_naira = int(plan["plan_price"])
+    amount_kobo = price_naira * 100
+
+    user_row = (
+        await db.execute(
+            select(User).where(User.id == current_user.id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if user_row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user_row.points_balance < kobo_to_points(amount_kobo):
+        raise HTTPException(status_code=402, detail="Insufficient balance")
+
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+    )
+
+    try:
+        result = await _get_vtu_client().topup_smile(account_number, plan_id)
+    except (PeyflexError, BigisubError) as exc:
+        await db.rollback()
+        raise _vtu_error(exc)
+
+    commission_kobo = 0
+    points = _compute_points(commission_kobo)
+
+    tx = BillTransaction(
+        user_id=current_user.id,
+        service="isp_smile",
+        provider=settings.bills_provider,
+        amount_naira=price_naira,
+        commission_naira=commission_kobo,
+        points_earned=points,
+        reference=reference,
+        status="success",
+        external_ref=result.get("reference", result.get("transaction_id", "")),
+    )
+    db.add(tx)
+
+    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance + points)
+    )
+    await db.commit()
+
+    return {
+        "reference": reference,
+        "commission_naira": commission_kobo,
+        "points_earned": points,
+        "new_balance": new_balance,
+        "status": "success",
+    }
+
+
+@router.post("/isp/spectranet/topup")
+async def topup_spectranet(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Top up Spectranet ISP account."""
+    reference = _generate_reference()
+    account_number = payload.get("account_number", "")
+    plan_id = int(payload.get("plan_id", 0))
+
+    if not account_number or not plan_id:
+        raise HTTPException(status_code=400, detail="account_number and plan_id are required")
+
+    try:
+        plans = await _get_vtu_public_client().get_spectranet_plans()
+    except (PeyflexError, BigisubError) as exc:
+        raise _vtu_error(exc)
+
+    plan = next((p for p in plans if p["id"] == plan_id), None)
+    if not plan:
+        raise HTTPException(status_code=400, detail=f"Unknown Spectranet plan: {plan_id}")
+
+    price_naira = int(plan["plan_price"])
+    amount_kobo = price_naira * 100
+
+    user_row = (
+        await db.execute(
+            select(User).where(User.id == current_user.id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if user_row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user_row.points_balance < kobo_to_points(amount_kobo):
+        raise HTTPException(status_code=402, detail="Insufficient balance")
+
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+    )
+
+    try:
+        result = await _get_vtu_client().topup_spectranet(account_number, plan_id)
+    except (PeyflexError, BigisubError) as exc:
+        await db.rollback()
+        raise _vtu_error(exc)
+
+    commission_kobo = 0
+    points = _compute_points(commission_kobo)
+
+    tx = BillTransaction(
+        user_id=current_user.id,
+        service="isp_spectranet",
+        provider=settings.bills_provider,
+        amount_naira=price_naira,
+        commission_naira=commission_kobo,
+        points_earned=points,
+        reference=reference,
+        status="success",
+        external_ref=result.get("reference", result.get("transaction_id", "")),
+    )
+    db.add(tx)
+
+    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance + points)
+    )
+    await db.commit()
+
+    return {
+        "reference": reference,
+        "commission_naira": commission_kobo,
+        "points_earned": points,
+        "new_balance": new_balance,
+        "status": "success",
+    }
+
+
+# ── Education / Result Checker ──────────────────────────────────────
+
+@router.get("/education/prices")
+async def list_education_products():
+    """List exam result checker prices."""
+    return await _get_vtu_public_client().get_result_checker_prices()
+
+
+@router.post("/education")
+async def buy_result_checker(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Buy exam result checker PIN."""
+    reference = _generate_reference()
+    exam_code = payload.get("exam_code", "")
+    quantity = int(payload.get("quantity", 1))
+
+    if not exam_code:
+        raise HTTPException(status_code=400, detail="exam_code is required")
+
+    try:
+        products = await _get_vtu_public_client().get_result_checker_prices()
+    except (PeyflexError, BigisubError) as exc:
+        raise _vtu_error(exc)
+
+    product = next((p for p in products if p["code"] == exam_code), None)
+    if not product:
+        raise HTTPException(status_code=400, detail=f"Unknown exam: {exam_code}")
+
+    price_naira = product["amount"]
+    amount_kobo = price_naira * 100 * quantity
+
+    user_row = (
+        await db.execute(
+            select(User).where(User.id == current_user.id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if user_row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user_row.points_balance < kobo_to_points(amount_kobo):
+        raise HTTPException(status_code=402, detail="Insufficient balance")
+
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+    )
+
+    try:
+        result = await _get_vtu_client().buy_result_checker(exam_code, quantity)
+    except (PeyflexError, BigisubError) as exc:
+        await db.rollback()
+        raise _vtu_error(exc)
+
+    commission_kobo = 0
+    points = _compute_points(commission_kobo)
+
+    tx = BillTransaction(
+        user_id=current_user.id,
+        service="education",
+        provider=settings.bills_provider,
+        amount_naira=price_naira * quantity,
+        commission_naira=commission_kobo,
+        points_earned=points,
+        reference=reference,
+        status="success",
+        external_ref=result.get("reference", result.get("transaction_id", "")),
+    )
+    db.add(tx)
+
+    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance + points)
+    )
+    await db.commit()
+
+    return {
+        "reference": reference,
+        "commission_naira": commission_kobo,
+        "points_earned": points,
+        "new_balance": new_balance,
+        "status": "success",
+        "pins": result.get("pins", []),
+    }
+
+
+# ── SMS ─────────────────────────────────────────────────────────────
+
+@router.get("/sms/pricing")
+async def get_sms_pricing():
+    """Get SMS pricing."""
+    return await _get_vtu_public_client().get_sms_pricing()
+
+
+@router.post("/sms/send")
+async def send_sms(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Send bulk SMS."""
+    reference = _generate_reference()
+    sender_name = payload.get("sender_name", "")
+    recipients = payload.get("recipients", [])
+    message = payload.get("message", "")
+
+    if not sender_name or not recipients or not message:
+        raise HTTPException(status_code=400, detail="sender_name, recipients, and message are required")
+
+    try:
+        pricing = await _get_vtu_public_client().get_sms_pricing()
+        cost_per_page = pricing.get("cost_per_page", 5)
+        normal_chars = pricing.get("normal_chars_per_page", 160)
+        pages = max(1, (len(message) + normal_chars - 1) // normal_chars)
+        total_cost = cost_per_page * pages * len(recipients)
+    except (PeyflexError, BigisubError):
+        total_cost = 5 * len(recipients)
+
+    amount_kobo = total_cost * 100
+
+    user_row = (
+        await db.execute(
+            select(User).where(User.id == current_user.id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if user_row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user_row.points_balance < kobo_to_points(amount_kobo):
+        raise HTTPException(status_code=402, detail="Insufficient balance")
+
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+    )
+
+    try:
+        result = await _get_vtu_client().send_sms(sender_name, recipients, message)
+    except (PeyflexError, BigisubError) as exc:
+        await db.rollback()
+        raise _vtu_error(exc)
+
+    commission_kobo = 0
+    points = _compute_points(commission_kobo)
+
+    tx = BillTransaction(
+        user_id=current_user.id,
+        service="sms",
+        provider=settings.bills_provider,
+        amount_naira=total_cost,
+        commission_naira=commission_kobo,
+        points_earned=points,
+        reference=reference,
+        status="success",
+        external_ref=result.get("job_id", ""),
+    )
+    db.add(tx)
+
+    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance + points)
+    )
+    await db.commit()
+
+    return {
+        "reference": reference,
+        "commission_naira": commission_kobo,
+        "points_earned": points,
+        "new_balance": new_balance,
+        "status": "success",
+        "job_id": result.get("job_id", ""),
+        "total_pages": result.get("total_pages", 0),
+        "total_cost": total_cost,
+    }

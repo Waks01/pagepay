@@ -136,7 +136,7 @@ class BigisubClient:
     async def _get(self, path: str, params: dict | None = None) -> dict:
         url = f"{_API_BASE}/{path.lstrip('/')}"
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT_SECONDS) as client:
-            resp = await client.get(url, params=params, headers=self._public_headers)
+            resp = await client.get(url, params=params, headers=self._headers)
         if resp.status_code != 200:
             raise BigisubError(f"Bigisub GET {path} returned {resp.status_code}: {resp.text[:200]}")
         return resp.json()
@@ -354,6 +354,138 @@ class BigisubClient:
         result["discount"] = str(round(discount_pct, 2))
         result["plan_amount"] = plan_amount
         return result
+
+
+    # ── Recharge Pin ──────────────────────────────────────────────────
+
+    async def get_recharge_pin_plans(self, network: str | int | None = None) -> list[dict]:
+        params = {}
+        if network is not None:
+            params["network"] = self._resolve_network_id(network)
+        body = await self._get("vtu/recharge-pin/plans/", params=params or None)
+        plans = body.get("data", [])
+        return [
+            {
+                "id": p["id"],
+                "network": p.get("network", 0),
+                "network_name": p.get("network_name", ""),
+                "size": p.get("size", ""),
+                "regular_price": p.get("regular_price", 0),
+                "corporate_price": p.get("corporate_price", 0),
+                "info": p.get("info", ""),
+            }
+            for p in plans
+        ]
+
+    async def buy_recharge_pin(
+        self, network: str | int, size: str, quantity: int = 1,
+    ) -> dict:
+        network_id = self._resolve_network_id(network)
+        plans = await self.get_recharge_pin_plans(network_id)
+        plan = next((p for p in plans if p["size"] == size), None)
+        if not plan:
+            raise BigisubError(f"Recharge pin plan not found: {size} for network {network_id}")
+        plan_id = plan["id"]
+        body = await self._post("vtu/recharge-pin/purchase/", {
+            "network": network_id,
+            "plan": plan_id,
+            "quantity": quantity,
+            "pin": self._pin,
+        })
+        return body.get("data", {})
+
+    # ── Betting ───────────────────────────────────────────────────────
+
+    async def get_betting_billers(self) -> list[dict]:
+        body = await self._get("betting/billers/")
+        return body.get("data", [])
+
+    async def get_betting_products(self, biller_code: str) -> list[dict]:
+        body = await self._get("betting/products/", params={"biller_code": biller_code})
+        return body.get("data", [])
+
+    async def validate_betting_account(self, biller_code: str, account_number: str) -> dict:
+        body = await self._post("betting/validate/", {
+            "biller_code": biller_code,
+            "account_number": account_number,
+        })
+        return body.get("data", {})
+
+    async def fund_betting_wallet(
+        self, biller_code: str, account_number: str, amount: int, customer_name: str = "",
+    ) -> dict:
+        body = await self._post("betting/fund/", {
+            "biller_code": biller_code,
+            "account_number": account_number,
+            "amount": str(amount),
+            "customer_name": customer_name,
+        })
+        return body.get("data", {})
+
+    # ── ISP ───────────────────────────────────────────────────────────
+
+    async def get_smile_plans(self) -> list[dict]:
+        body = await self._get("isp/smile/plans/")
+        return body.get("data", [])
+
+    async def get_spectranet_plans(self) -> list[dict]:
+        body = await self._get("isp/spectranet/plans/")
+        return body.get("data", [])
+
+    async def verify_smile_account(self, account_number: str) -> dict:
+        body = await self._post("isp/smile/verify/", {
+            "account_number": account_number,
+        })
+        return body.get("data", {})
+
+    async def topup_smile(self, account_number: str, plan_id: int) -> dict:
+        body = await self._post("isp/smile/topup/", {
+            "account_number": account_number,
+            "plan": plan_id,
+            "pin": self._pin,
+        })
+        return body.get("data", {})
+
+    async def topup_spectranet(self, account_number: str, plan_id: int) -> dict:
+        body = await self._post("isp/spectranet/topup/", {
+            "account_number": account_number,
+            "plan": plan_id,
+            "pin": self._pin,
+        })
+        return body.get("data", {})
+
+    # ── Education / Result Checker ────────────────────────────────────
+
+    async def get_result_checker_prices(self) -> list[dict]:
+        body = await self._get("bills/result-checker/prices/")
+        return body.get("data", {}).get("prices", [])
+
+    async def buy_result_checker(self, exam_code: str, quantity: int = 1) -> dict:
+        body = await self._post("bills/result-checker/purchase/", {
+            "exam": exam_code,
+            "quantity": quantity,
+            "pin": self._pin,
+        })
+        return body.get("data", {})
+
+    # ── SMS ───────────────────────────────────────────────────────────
+
+    async def get_sms_pricing(self) -> dict:
+        body = await self._get("communications/sms/pricing/")
+        return body.get("data", {})
+
+    async def send_sms(
+        self, sender_name: str, recipients: list[str], message: str,
+    ) -> dict:
+        if len(recipients) > 500:
+            raise BigisubError("SMS max recipients is 500")
+        body = await self._post("communications/sms/send/", {
+            "sender_name": sender_name,
+            "recipients": recipients,
+            "message": message,
+            "pin": self._pin,
+        })
+        return body.get("data", {})
 
 
 _client: BigisubClient | None = None
