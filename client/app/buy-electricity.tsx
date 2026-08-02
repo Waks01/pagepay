@@ -44,7 +44,7 @@ export default function BuyElectricityScreen() {
 
   const [meterNumber, setMeterNumber] = useState('');
   const [phone, setPhone] = useState('');
-  const [planId, setPlanId] = useState('ikeja-electric');
+  const [planId, setPlanId] = useState<string | null>(null);
   const [meterType, setMeterType] = useState<'prepaid' | 'postpaid'>('prepaid');
   const [amount, setAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
@@ -57,6 +57,13 @@ export default function BuyElectricityScreen() {
       return (await res.json()) as Disco[];
     },
   });
+
+  useEffect(() => {
+    if (!planId && discosQ.data && discosQ.data.length > 0) {
+      const first = discosQ.data[0];
+      setPlanId(first.code || first.plan_code || '');
+    }
+  }, [discosQ.data, planId]);
 
   const purchaseMutation = useMutation({
     mutationFn: async () => {

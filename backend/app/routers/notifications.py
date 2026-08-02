@@ -76,6 +76,9 @@ class NotificationResponse(BaseModel):
         from_attributes = True
 
 
+NotificationItemResponse = NotificationResponse
+
+
 class NotificationsListResponse(BaseModel):
     """List of notifications with unread count."""
     notifications: list[NotificationResponse]

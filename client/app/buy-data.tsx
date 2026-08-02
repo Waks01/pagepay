@@ -80,7 +80,7 @@ export default function BuyDataScreen() {
   const qc = useQueryClient();
 
   const [phone, setPhone] = useState('');
-  const [network, setNetwork] = useState('mtn');
+  const [network, setNetwork] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ValidityPeriod>('monthly');
   const [showNetworkDropdown, setShowNetworkDropdown] = useState(false);
@@ -93,6 +93,12 @@ export default function BuyDataScreen() {
       return (await res.json()) as DataNetwork[];
     },
   });
+
+  useEffect(() => {
+    if (!network && networksQ.data && networksQ.data.length > 0) {
+      setNetwork(networksQ.data[0].identifier);
+    }
+  }, [networksQ.data, network]);
 
   const plansQ = useQuery({
     queryKey: ['data-plans', network],

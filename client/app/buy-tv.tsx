@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   Alert, ActivityIndicator, StyleSheet,
@@ -34,12 +34,10 @@ type PurchaseResult = {
   customer_name: string | null;
 };
 
-const PROVIDERS = [
-  { key: 'dstv', label: 'DStv' },
-  { key: 'gotv', label: 'GOtv' },
-  { key: 'startimes', label: 'Startimes' },
-  { key: 'showmax', label: 'Showmax' },
-];
+type TvProvider = {
+  cable_name: string;
+  product_name?: string;
+};
 
 export default function BuyTvScreen() {
   const { t } = useTranslation();
@@ -50,16 +48,43 @@ export default function BuyTvScreen() {
 
   const [smartcard, setSmartcard] = useState('');
   const [phone, setPhone] = useState('');
-  const [provider, setProvider] = useState('dstv');
+  const [provider, setProvider] = useState<string | null>(null);
   const [selectedBouquet, setSelectedBouquet] = useState<string | null>(null);
+
+  const providersQ = useQuery({
+    queryKey: ['tv-providers'],
+    queryFn: async () => {
+      const res = await apiFetch('/api/v1/bills/tv/providers');
+      if (!res.ok) throw new Error(t('bills.tv.load_error'));
+      const data = await res.json();
+      const providers: TvProvider[] = [];
+      const seen = new Set<string>();
+      for (const item of data) {
+        const name = String(item.cable_name || item.name || '').toLowerCase();
+        if (name && !seen.has(name)) {
+          seen.add(name);
+          providers.push({ cable_name: name, product_name: item.product_name || item.name });
+        }
+      }
+      return providers;
+    },
+  });
+
+  useEffect(() => {
+    if (!provider && providersQ.data && providersQ.data.length > 0) {
+      setProvider(providersQ.data[0].cable_name);
+    }
+  }, [providersQ.data, provider]);
 
   const bouquetsQ = useQuery({
     queryKey: ['tv-plans', provider],
     queryFn: async () => {
+      if (!provider) return [];
       const res = await apiFetch(`/api/v1/bills/tv/plans?provider=${provider}`);
       if (!res.ok) throw new Error(t('bills.tv.load_error'));
       return (await res.json()) as Bouquet[];
     },
+    enabled: !!provider,
   });
 
   const selectedPkg = bouquetsQ.data?.find((b) => (b.plan_code || b.id) === selectedBouquet);
@@ -68,6 +93,7 @@ export default function BuyTvScreen() {
     mutationFn: async () => {
       if (!selectedPkg) throw new Error(t('bills.tv.select_bouquet'));
       if (!phone) throw new Error(t('bills.tv.phone_required'));
+      if (!provider) throw new Error('Select a TV provider');
       const res = await apiFetch('/api/v1/bills/tv', {
         method: 'POST',
         body: JSON.stringify({
@@ -96,7 +122,7 @@ export default function BuyTvScreen() {
     },
   });
 
-  const canSubmit = smartcard.length >= 10 && phone.length === 11 && selectedBouquet !== null;
+  const canSubmit = smartcard.length >= 10 && phone.length === 11 && selectedBouquet !== null && provider !== null;
   const estPoints = selectedPkg
     ? Math.floor((selectedPkg.price_naira || selectedPkg.amount || 0) * 0.018 * 0.67 * 10)
     : 0;
@@ -114,27 +140,31 @@ export default function BuyTvScreen() {
 
         {/* Provider */}
         <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.tv.provider')}</Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          {PROVIDERS.map((p) => (
-            <TouchableOpacity
-              key={p.key}
-              onPress={() => { setProvider(p.key); setSelectedBouquet(null); }}
-              style={[
-                styles.providerCard,
-                {
-                  backgroundColor: provider === p.key ? tokens.mintSoft : tokens.card,
-                  borderColor: provider === p.key ? tokens.mint : tokens.border,
-                },
-              ]}
-            >
-              <Ionicons name="tv-outline" size={24} color={tokens.mint} />
-              <Text style={[
-                styles.chipText,
-                { color: provider === p.key ? tokens.mint : tokens.ink },
-              ]}>{p.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {providersQ.isLoading ? (
+          <ActivityIndicator color={tokens.mint} />
+        ) : (
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {(providersQ.data ?? []).map((p) => (
+              <TouchableOpacity
+                key={p.cable_name}
+                onPress={() => { setProvider(p.cable_name); setSelectedBouquet(null); }}
+                style={[
+                  styles.providerCard,
+                  {
+                    backgroundColor: provider === p.cable_name ? tokens.mintSoft : tokens.card,
+                    borderColor: provider === p.cable_name ? tokens.mint : tokens.border,
+                  },
+                ]}
+              >
+                <Ionicons name="tv-outline" size={24} color={tokens.mint} />
+                <Text style={[
+                  styles.chipText,
+                  { color: provider === p.cable_name ? tokens.mint : tokens.ink },
+                ]}>{p.cable_name.toUpperCase()}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Bouquets */}
         <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.tv.select_bouquet')}</Text>
@@ -143,9 +173,6 @@ export default function BuyTvScreen() {
         ) : (
           <View style={{ gap: 8 }}>
             {(bouquetsQ.data ?? []).map((b) => {
-              // Bouquet objects come from the bill-providers API and
-              // their shape isn't fully typed — fall back to '' so the
-              // rest of the closure sees `string`, not `string | undefined`.
               const id = b.plan_code ?? b.id ?? '';
               return (
               <TouchableOpacity
@@ -182,7 +209,6 @@ export default function BuyTvScreen() {
           placeholderTextColor={tokens.inkMuted}
           value={smartcard}
           onChangeText={(text) => {
-            // Only allow numbers
             const cleaned = text.replace(/[^0-9]/g, '');
             setSmartcard(cleaned);
           }}
@@ -203,7 +229,6 @@ export default function BuyTvScreen() {
           placeholderTextColor={tokens.inkMuted}
           value={phone}
           onChangeText={(text) => {
-            // Only allow numbers
             const cleaned = text.replace(/[^0-9]/g, '');
             setPhone(cleaned);
           }}

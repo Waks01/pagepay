@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   Alert, ActivityIndicator, StyleSheet,
@@ -6,7 +6,7 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
@@ -24,12 +24,10 @@ type AirtimeResult = {
   status: string;
 };
 
-const NETWORKS = [
-  { key: 'mtn', label: 'MTN' },
-  { key: 'airtel', label: 'Airtel' },
-  { key: 'glo', label: 'GLO' },
-  { key: '9mobile', label: '9mobile' },
-];
+type NetworkOption = {
+  id: number;
+  name: string;
+};
 
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 
@@ -41,12 +39,26 @@ export default function BuyAirtimeScreen() {
   const qc = useQueryClient();
 
   const [phone, setPhone] = useState('');
-  const [network, setNetwork] = useState('mtn');
+  const [network, setNetwork] = useState<string | null>(null);
   const [detectedNetwork, setDetectedNetwork] = useState<string | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
 
-  // Detect network when phone number is complete
+  const networksQ = useQuery({
+    queryKey: ['airtime-networks'],
+    queryFn: async () => {
+      const res = await apiFetch('/api/v1/bills/airtime/networks');
+      if (!res.ok) throw new Error('Failed to load networks');
+      return (await res.json()) as NetworkOption[];
+    },
+  });
+
+  useEffect(() => {
+    if (!network && networksQ.data && networksQ.data.length > 0) {
+      setNetwork(String(networksQ.data[0].id));
+    }
+  }, [networksQ.data, network]);
+
   const detectNetwork = async (phoneNumber: string) => {
     if (phoneNumber.length === 11) {
       try {
@@ -69,6 +81,7 @@ export default function BuyAirtimeScreen() {
 
   const purchaseMutation = useMutation({
     mutationFn: async () => {
+      if (!network) throw new Error('Select a network');
       const finalAmount = amount ?? (parseInt(customAmount) || 0);
       const res = await apiFetch('/api/v1/bills/airtime', {
         method: 'POST',
@@ -97,7 +110,7 @@ export default function BuyAirtimeScreen() {
     },
   });
 
-  const canSubmit = phone.length === 11 && (amount !== null || parseInt(customAmount) >= 50);
+  const canSubmit = phone.length === 11 && network !== null && (amount !== null || parseInt(customAmount) >= 50);
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
@@ -118,7 +131,6 @@ export default function BuyAirtimeScreen() {
           placeholderTextColor={tokens.inkMuted}
           value={phone}
           onChangeText={(text) => {
-            // Only allow numbers and format
             const cleaned = text.replace(/[^0-9]/g, '');
             setPhone(cleaned);
             detectNetwork(cleaned);
@@ -139,26 +151,33 @@ export default function BuyAirtimeScreen() {
 
         {/* Network */}
         <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.airtime.network_label')}</Text>
-        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          {NETWORKS.map((n) => (
-            <TouchableOpacity
-              key={n.key}
-              onPress={() => setNetwork(n.key)}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor: network === n.key ? tokens.mint : tokens.card,
-                  borderColor: network === n.key ? tokens.mint : tokens.border,
-                },
-              ]}
-            >
-              <Text style={[
-                styles.chipText,
-                { color: network === n.key ? tokens.mintText : tokens.ink },
-              ]}>{n.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {networksQ.isLoading ? (
+          <ActivityIndicator color={tokens.mint} />
+        ) : (
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            {(networksQ.data ?? []).map((n) => {
+              const key = String(n.id);
+              return (
+              <TouchableOpacity
+                key={key}
+                onPress={() => setNetwork(key)}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor: network === key ? tokens.mint : tokens.card,
+                    borderColor: network === key ? tokens.mint : tokens.border,
+                  },
+                ]}
+              >
+                <Text style={[
+                  styles.chipText,
+                  { color: network === key ? tokens.mintText : tokens.ink },
+                ]}>{n.name}</Text>
+              </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {/* Amount */}
         <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.airtime.amount_label')}</Text>
@@ -199,7 +218,6 @@ export default function BuyAirtimeScreen() {
           placeholderTextColor={tokens.inkMuted}
           value={customAmount}
           onChangeText={(text) => {
-            // Only allow numbers
             const cleaned = text.replace(/[^0-9]/g, '');
             setCustomAmount(cleaned);
             setAmount(null);
