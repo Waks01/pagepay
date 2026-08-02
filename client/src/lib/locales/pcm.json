@@ -142,7 +142,12 @@
       "airtime": "Airtime",
       "data": "Data",
       "electricity": "Light",
-      "tv": "TV"
+      "tv": "TV",
+      "recharge_pin": "Recharge Pin",
+      "betting": "Betting",
+      "isp": "ISP Data",
+      "education": "Result Checker",
+      "sms": "Bulk SMS"
     },
     "history_title": "Wetin don happen",
     "no_transactions": "Nothing yet",

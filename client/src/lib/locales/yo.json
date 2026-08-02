@@ -142,7 +142,12 @@
       "airtime": "Airtime",
       "data": "Data",
       "electricity": "Ina",
-      "tv": "TV"
+      "tv": "TV",
+      "recharge_pin": "Apọn Itunku",
+      "betting": "Bẹti",
+      "isp": "Data ISP",
+      "education": "Result Checker",
+      "sms": "Bulk SMS"
     },
     "history_title": "Itan iṣowo",
     "no_transactions": "Ko si iṣowo",

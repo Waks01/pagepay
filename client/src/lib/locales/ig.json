@@ -142,7 +142,12 @@
       "airtime": "Airtime",
       "data": "Data",
       "electricity": "Ọkụ",
-      "tv": "TV"
+      "tv": "TV",
+      "recharge_pin": "Recharge Pin",
+      "betting": "Bẹti",
+      "isp": "Data ISP",
+      "education": "Result Checker",
+      "sms": "Bulk SMS"
     },
     "history_title": "Akụkọ azụmahịa",
     "no_transactions": "Enwebeghị azụmahịa",

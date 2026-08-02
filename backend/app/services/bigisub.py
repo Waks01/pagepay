@@ -207,9 +207,18 @@ class BigisubClient:
         ]
 
     async def get_data_plans(self, network: str | int) -> list[DataPlan]:
-        network_id = self._resolve_network_id(network)
-        logger.info("[Bigisub] Fetching data plans: network_id=%s base=%s", network_id, _API_BASE)
-        body = await self._get("vtu/data/plans/", params={"network": network_id})
+        # Data plans endpoint expects plan-type strings (e.g. "mtn_gifting_data"),
+        # not numeric network IDs. Map numeric IDs to their default data plan type.
+        if isinstance(network, int) or (isinstance(network, str) and network.isdigit()):
+            _DATA_PLAN_NETWORK_MAP: dict[str, str] = {
+                "1": "mtn_gifting_data",
+                "2": "glo_data",
+                "3": "airtel_data",
+                "4": "9mobile_data",
+            }
+            network = _DATA_PLAN_NETWORK_MAP.get(str(network), str(network))
+        logger.info("[Bigisub] Fetching data plans: network=%s base=%s", network, _API_BASE)
+        body = await self._get("vtu/data/plans/", params={"network": network})
         plans = body.get("data", [])
         logger.info("[Bigisub] Data plans raw count=%d", len(plans))
         return [DataPlan(p) for p in plans if not p.get("plan_disabled")]
@@ -220,7 +229,7 @@ class BigisubClient:
         network_id = self._resolve_network_id(network)
         plan_id = int(plan_code)
 
-        plans = await self.get_data_plans(network_id)
+        plans = await self.get_data_plans(network)
         plan = next((p for p in plans if p.id == plan_id), None)
         if plan is None:
             raise BigisubError(f"Bigisub plan {plan_code} not found for network {network_id}")
