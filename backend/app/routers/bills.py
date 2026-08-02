@@ -198,10 +198,14 @@ async def list_data_networks():
 
 
 @router.get("/data/plans")
-async def list_data_plans(network: str = "mtn_gifting_data"):
+async def list_data_plans(network: str = "1"):
     """List data plans for a specific network."""
     logger.info("Fetching data plans for network=%s provider=%s", network, settings.bills_provider)
-    plans = await _get_vtu_public_client().get_data_plans(network)
+    try:
+        plans = await _get_vtu_public_client().get_data_plans(network)
+    except (PeyflexError, BigisubError) as exc:
+        logger.error("Failed to fetch data plans: %s", exc)
+        raise HTTPException(status_code=502, detail="Payment provider unavailable. Please try again later.")
     result = [
         {"plan_code": p.plan_code, "amount": p.amount, "label": getattr(p, "label", p.plan_code)}
         for p in plans
