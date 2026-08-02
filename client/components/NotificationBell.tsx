@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,7 +17,6 @@ export default function NotificationBell({ onPress }: Props) {
   const tokens = PagePay[scheme];
   const router = useRouter();
   const pathname = usePathname();
-  const [socketUnreadExtra, setSocketUnreadExtra] = useState(0);
 
   const isNotificationsScreen = pathname.includes("/(tabs)/notifications");
 
@@ -29,15 +28,16 @@ export default function NotificationBell({ onPress }: Props) {
       return res.json();
     },
     staleTime: 1000 * 30,
+    refetchInterval: isNotificationsScreen ? 5000 : false, // Auto-refetch when viewing notifications
   });
 
-  const unreadCount = (notifData?.unread_count ?? 0) + socketUnreadExtra;
+  const unreadCount = notifData?.unread_count ?? 0;
 
   useEffect(() => {
     const handler = () => {
-      console.log("📬 [BELL] Socket notification received, incrementing badge");
-      setSocketUnreadExtra((prev) => prev + 1);
-      // Also refetch to get accurate count from backend
+      console.log("📬 [BELL] Socket notification received, refetching count");
+      // Just refetch to get the latest count from backend
+      // Don't use socketUnreadExtra as it causes issues
       refetch();
     };
     onNotification(handler);

@@ -109,8 +109,8 @@ class AirtimePurchaseRequest(BaseModel):
 class DataPurchaseRequest(BaseModel):
     """POST /bills/data - Buy data bundle and earn points."""
     phone: str = Field(min_length=10, max_length=15)
-    network: str = Field(..., description="Data network identifier: mtn_data_share, mtn_gifting_data, glo_data, airtel_data, 9mobile_data, 9mobile_gifting")
-    plan_code: str = Field(..., description="Data plan code from Peyflex (e.g. M1GBS)")
+    network: str = Field(..., description="Data network identifier: mtn, glo, airtel, 9mobile")
+    plan_code: str = Field(..., description="Data plan code from provider")
 
 
 class AirtimePurchaseResponse(BaseModel):
@@ -128,7 +128,7 @@ class AirtimePurchaseResponse(BaseModel):
 class ElectricityPurchaseRequest(BaseModel):
     """POST /bills/electricity - Buy electricity tokens."""
     meter_number: str = Field(min_length=6, max_length=30)
-    plan_id: str = Field(..., description="Peyflex plan_id: ikeja-electric, abuja-electric, etc.")
+    plan_id: str = Field(..., description="Electricity provider code: ikeja-electric, eko-electric, etc.")
     meter_type: str = Field(default="prepaid", pattern="^(prepaid|postpaid)$")
     amount_naira: int = Field(ge=500, le=100000)
     phone: str = Field(min_length=10, max_length=15)
@@ -137,8 +137,8 @@ class ElectricityPurchaseRequest(BaseModel):
 class TelevisionPurchaseRequest(BaseModel):
     """POST /bills/tv - Subscribe cable TV."""
     smartcard_number: str = Field(min_length=8, max_length=30)
-    provider: str = Field(..., description="dstv, gotv, startimes")
-    plan_code: str = Field(..., description="Bouquet plan code from Peyflex")
+    provider: str = Field(..., description="dstv, gotv, startimes, showmax")
+    plan_code: str = Field(..., description="Bouquet plan code from provider")
     phone: str = Field(min_length=10, max_length=15)
 
 

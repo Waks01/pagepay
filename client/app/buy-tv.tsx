@@ -38,6 +38,7 @@ const PROVIDERS = [
   { key: 'dstv', label: 'DStv' },
   { key: 'gotv', label: 'GOtv' },
   { key: 'startimes', label: 'Startimes' },
+  { key: 'showmax', label: 'Showmax' },
 ];
 
 export default function BuyTvScreen() {

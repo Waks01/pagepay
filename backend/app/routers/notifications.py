@@ -322,6 +322,39 @@ async def list_notifications(
     )
 
 
+@router.get("/{notification_id}", response_model=NotificationItemResponse)
+async def get_notification(
+    notification_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a single notification by ID."""
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+    )
+    notification = result.scalar_one_or_none()
+    
+    if not notification:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found",
+        )
+    
+    return NotificationItemResponse(
+        id=notification.id,
+        user_id=notification.user_id,
+        title=notification.title,
+        body=notification.body,
+        category=notification.category,
+        data=_json.loads(notification.data) if notification.data else None,
+        read=notification.read,
+        created_at=notification.created_at,
+    )
+
+
 @router.post("/{notification_id}/read", status_code=status.HTTP_204_NO_CONTENT)
 async def mark_notification_read(
     notification_id: int,

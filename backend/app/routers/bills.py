@@ -1,20 +1,20 @@
 """Bills & Earn endpoints (Phase 8).
 
 Users buy airtime, data, electricity, or cable TV subscriptions and earn
-points back from the aggregator's commission — the platform never funds
+points back from the VTU provider's commission — the platform never funds
 rewards from its own pocket.
 
 Flow for every purchase:
   1. User requests a purchase (phone/meter, amount, network)
   2. Backend debits the user's wallet for the amount
-  3. Backend calls Peyflex to fulfill the purchase
-  4. Peyflex pays a commission (varies by service)
+  3. Backend calls VTU provider to fulfill the purchase
+  4. Provider pays a commission (varies by service)
   5. Backend splits the commission: user gets points, platform keeps the rest
   6. Backend records the BillTransaction row
   7. User receives the service + points
 
-Real Peyflex API: https://client.peyflex.com.ng/api/
-Reference: https://documenter.getpostman.com/view/17835214/2sB34imLMn
+Supported providers: Peyflex (client.peyflex.com.ng), Bigisub (api.bigisub.ng)
+Switch provider via BILLS_PROVIDER env var.
 """
 
 from __future__ import annotations
@@ -39,25 +39,45 @@ from app.schemas import (
     BillsPurchaseResponse,
 )
 from app.services.money import kobo_to_points
-from app.services.peyflex import get_client, get_public_client, PeyflexError
+from app.services.peyflex import get_client as get_peyflex_client, get_public_client as get_peyflex_public_client, PeyflexError
+from app.services.bigisub import get_client as get_bigisub_client, BigisubError
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/bills", tags=["bills"])
 
-_USER_SHARE = settings.bills_user_share  # User share of Peyflex commission; rest is platform profit.
+_USER_SHARE = settings.bills_user_share
 _POINTS_PER_NAIRA = settings.points_per_naira
+
+
+def _get_vtu_client():
+    if settings.bills_provider == "bigisub":
+        return get_bigisub_client()
+    return get_peyflex_client()
+
+
+def _get_vtu_public_client():
+    if settings.bills_provider == "bigisub":
+        return get_bigisub_client()
+    return get_peyflex_public_client()
+
+
+def _vtu_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, (PeyflexError, BigisubError)):
+        logger.error("VTU provider error: %s", exc)
+        return HTTPException(status_code=502, detail="Payment provider unavailable")
+    raise exc
 
 
 def _compute_points(commission_kobo: int) -> int:
     """Compute user's point share from a commission amount in kobo.
     
-    The commission comes from Peyflex's `discount` field in the API response,
-    which reflects the real-time discount rate for your account tier:
-    - Free API tier: 0.5-3% depending on service
-    - Top Reseller tier: 1-6% (higher earnings for your users)
+    The commission comes from the VTU provider's `discount` field in the API response,
+    which reflects the real-time discount/margin rate:
+    - Peyflex: discount percentage (Free API: 0.5-3%, Top Reseller: 1-6%)
+    - Bigisub: computed as (plan_amount - charged) / plan_amount * 100
     
-    Users receive 70% of the commission as points (10 pts = ₦1).
-    Platform keeps 30% to cover infrastructure costs.
+    Users receive 67% of the commission as points (10 pts = ₦1).
+    Platform keeps 33% to cover infrastructure costs.
     """
     user_share_kobo = int(commission_kobo * _USER_SHARE)
     return user_share_kobo * _POINTS_PER_NAIRA // 100
@@ -72,8 +92,8 @@ def _generate_reference() -> str:
 
 @router.get("/airtime/networks")
 async def list_airtime_networks():
-    """List airtime networks available on Peyflex."""
-    nets = await get_public_client().get_airtime_networks()
+    """List airtime networks available on VTU provider."""
+    nets = await _get_vtu_public_client().get_airtime_networks()
     return [{"id": n.id, "name": n.name} for n in nets]
 
 
@@ -104,29 +124,28 @@ async def buy_airtime(
         .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
     )
 
-    # 2. Call Peyflex
+    # 2. Call VTU provider
     try:
-        result = await get_client().buy_airtime(
+        result = await _get_vtu_client().buy_airtime(
             network=payload.network,
             mobile_number=payload.phone,
             amount=payload.amount_naira,
         )
-    except PeyflexError as exc:
+    except (PeyflexError, BigisubError) as exc:
         await db.rollback()
-        logger.error("Peyflex airtime failed: %s", exc)
-        raise HTTPException(status_code=502, detail="Payment provider unavailable")
+        raise _vtu_error(exc)
 
     if result.status != "success":
         await db.rollback()
         raise HTTPException(status_code=502, detail=f"Purchase failed: {result.message}")
 
-    # Extract real commission from Peyflex's discount field.
-    # This reflects your actual account tier discount (Free API: 1%, Top Reseller: 2%).
-    # If discount is missing or invalid, fall back to 0 commission.
+    # Extract real commission from provider's discount field.
+    # Peyflex: discount is a percentage (e.g. "2.5").
+    # Bigisub: discount is computed as (plan_amount - charged) / plan_amount * 100.
     try:
         commission_kobo = int(float(result.discount) * 100)
     except (ValueError, TypeError):
-        logger.warning("Peyflex airtime discount field missing or invalid: %s", result.discount)
+        logger.warning("VTU airtime discount field missing or invalid: %s", result.discount)
         commission_kobo = 0
 
     points = _compute_points(commission_kobo)
@@ -135,7 +154,7 @@ async def buy_airtime(
     tx = BillTransaction(
         user_id=current_user.id,
         service="airtime",
-        provider="peyflex",
+        provider=settings.bills_provider,
         phone=payload.phone,
         amount_naira=payload.amount_naira,
         commission_naira=commission_kobo,
@@ -170,17 +189,17 @@ async def buy_airtime(
 
 @router.get("/data/networks")
 async def list_data_networks():
-    """List data networks available on Peyflex."""
-    nets = await get_public_client().get_data_networks()
+    """List data networks available on VTU provider."""
+    nets = await _get_vtu_public_client().get_data_networks()
     return [{"identifier": n.identifier, "name": n.name} for n in nets]
 
 
 @router.get("/data/plans")
 async def list_data_plans(network: str = "mtn_gifting_data"):
     """List data plans for a specific network."""
-    plans = await get_public_client().get_data_plans(network)
+    plans = await _get_vtu_public_client().get_data_plans(network)
     return [
-        {"plan_code": p.plan_code, "amount": p.amount, "label": p.label}
+        {"plan_code": p.plan_code, "amount": p.amount, "label": getattr(p, "label", p.plan_code)}
         for p in plans
     ]
 
@@ -196,8 +215,8 @@ async def buy_data(
 
     # Fetch plan price to know how much to charge
     try:
-        plans = await get_client().get_data_plans(payload.network)
-    except PeyflexError as exc:
+        plans = await _get_vtu_public_client().get_data_plans(payload.network)
+    except (PeyflexError, BigisubError) as exc:
         logger.error("Failed to fetch plans for pricing: %s", exc)
         raise HTTPException(status_code=502, detail="Failed to get plan pricing")
 
@@ -226,26 +245,26 @@ async def buy_data(
     )
 
     try:
-        result = await get_client().buy_data(
+        result = await _get_vtu_client().buy_data(
             network=payload.network,
             mobile_number=payload.phone,
             plan_code=payload.plan_code,
         )
-    except PeyflexError as exc:
+    except (PeyflexError, BigisubError) as exc:
         await db.rollback()
-        logger.error("Peyflex data failed: %s", exc)
-        raise HTTPException(status_code=502, detail="Payment provider unavailable")
+        raise _vtu_error(exc)
 
     if result.status != "success":
         await db.rollback()
         raise HTTPException(status_code=502, detail=f"Purchase failed: {result.message}")
 
-    # Extract real commission from Peyflex's discount field.
-    # This reflects your actual account tier discount (Free API: 0.5-3%, Top Reseller: 1-6%).
+    # Extract real commission from provider's discount field.
+    # Peyflex: discount is a percentage (e.g. "2.5").
+    # Bigisub: discount is computed as (plan_amount - charged) / plan_amount * 100.
     try:
         commission_kobo = int(float(result.discount) * 100)
     except (ValueError, TypeError):
-        logger.warning("Peyflex data discount field missing or invalid: %s", result.discount)
+        logger.warning("VTU data discount field missing or invalid: %s", result.discount)
         commission_kobo = 0
 
     points = _compute_points(commission_kobo)
@@ -253,7 +272,7 @@ async def buy_data(
     tx = BillTransaction(
         user_id=current_user.id,
         service="data",
-        provider="peyflex",
+        provider=settings.bills_provider,
         phone=payload.phone,
         amount_naira=price_naira,
         commission_naira=commission_kobo,
@@ -287,8 +306,8 @@ async def buy_data(
 
 @router.get("/electricity/plans")
 async def list_electricity_plans():
-    """List electricity DISCOs available on Peyflex."""
-    return await get_public_client().get_electricity_plans()
+    """List electricity DISCOs available on VTU provider."""
+    return await _get_vtu_public_client().get_electricity_plans()
 
 
 @router.post("/electricity")
@@ -319,32 +338,30 @@ async def buy_electricity(
     )
 
     try:
-        result = await get_client().buy_electricity(
+        result = await _get_vtu_client().buy_electricity(
             plan=payload.plan_id,
             meter=payload.meter_number,
             amount=payload.amount_naira,
             meter_type=payload.meter_type,
             phone=payload.phone,
         )
-    except PeyflexError as exc:
+    except (PeyflexError, BigisubError) as exc:
         await db.rollback()
-        logger.error("Peyflex electricity failed: %s", exc)
-        raise HTTPException(status_code=502, detail="Payment provider unavailable")
+        raise _vtu_error(exc)
 
-    if result.get("status") != "SUCCESS":
+    # Peyflex uses "SUCCESS", Bigisub uses success=true
+    is_success = result.get("status") == "SUCCESS" or result.get("success") is True
+    if not is_success:
         await db.rollback()
         raise HTTPException(status_code=502, detail=f"Purchase failed: {result.get('message', 'Unknown')}")
 
-    # Extract real commission from Peyflex's response.
-    # Electricity has very low commission (Free API: 0.1%, Top Reseller: 0.5%).
-    # Peyflex may return this in 'discount', 'charged', or a computed field.
+    # Extract real commission from provider's response.
+    # Electricity typically has low or zero commission.
     commission_kobo = 0
     try:
-        # Try to extract discount if available
         if "discount" in result and result["discount"]:
             commission_kobo = int(float(result["discount"]) * 100)
         elif "charged" in result and result["charged"]:
-            # Some APIs return charged = amount - discount
             charged = float(result["charged"])
             commission_kobo = int((payload.amount_naira - charged) * 100)
     except (ValueError, TypeError, KeyError) as e:
@@ -356,14 +373,14 @@ async def buy_electricity(
     tx = BillTransaction(
         user_id=current_user.id,
         service="electricity",
-        provider="peyflex",
+        provider=settings.bills_provider,
         meter_number=payload.meter_number,
         amount_naira=payload.amount_naira,
         commission_naira=commission_kobo,
         points_earned=points,
         reference=reference,
         status="success",
-        external_ref=result.get("reference", ""),
+        external_ref=result.get("reference", result.get("transaction_id", "")),
     )
     db.add(tx)
 
@@ -383,6 +400,8 @@ async def buy_electricity(
         "status": "success",
         "meter_number": payload.meter_number,
         "token": result.get("token", ""),
+        "units": result.get("units", ""),
+        "customer_name": result.get("customer_name", ""),
     }
 
 
@@ -390,14 +409,14 @@ async def buy_electricity(
 
 @router.get("/tv/providers")
 async def list_tv_providers():
-    """List cable TV providers available on Peyflex."""
-    return await get_public_client().get_cable_providers()
+    """List cable TV providers available on VTU provider."""
+    return await _get_vtu_public_client().get_cable_providers()
 
 
 @router.get("/tv/plans")
 async def list_tv_plans(provider: str = "dstv"):
     """List cable TV plans for a provider."""
-    return await get_public_client().get_cable_plans(provider)
+    return await _get_vtu_public_client().get_cable_plans(provider)
 
 
 @router.post("/tv")
@@ -411,8 +430,8 @@ async def buy_tv(
 
     # Fetch plan price
     try:
-        plans = await get_client().get_cable_plans(payload.provider)
-    except PeyflexError as exc:
+        plans = await _get_vtu_public_client().get_cable_plans(payload.provider)
+    except (PeyflexError, BigisubError) as exc:
         logger.error("Failed to fetch TV plans for pricing: %s", exc)
         raise HTTPException(status_code=502, detail="Failed to get plan pricing")
 
@@ -441,32 +460,29 @@ async def buy_tv(
     )
 
     try:
-        result = await get_client().buy_cable(
+        result = await _get_vtu_client().buy_cable(
             identifier=payload.provider,
             plan=payload.plan_code,
             iuc=payload.smartcard_number,
             phone=payload.phone,
             amount=price_naira,
         )
-    except PeyflexError as exc:
+    except (PeyflexError, BigisubError) as exc:
         await db.rollback()
-        logger.error("Peyflex TV failed: %s", exc)
-        raise HTTPException(status_code=502, detail="Payment provider unavailable")
+        raise _vtu_error(exc)
 
-    if result.get("status") != "SUCCESS":
+    # Peyflex uses "SUCCESS", Bigisub uses success=true
+    is_success = result.get("status") == "SUCCESS" or result.get("success") is True
+    if not is_success:
         await db.rollback()
         raise HTTPException(status_code=502, detail=f"Purchase failed: {result.get('message', 'Unknown')}")
 
-    # Extract real commission from Peyflex's response.
-    # Cable TV commission varies: DStv/GOtv 0.1%, Startimes 0.5% (Free API tier).
-    # Top Reseller: 0.5% for all providers.
+    # Extract real commission from provider's response.
     commission_kobo = 0
     try:
-        # Try to extract discount if available
         if "discount" in result and result["discount"]:
             commission_kobo = int(float(result["discount"]) * 100)
         elif "charged" in result and result["charged"]:
-            # Some APIs return charged = amount - discount
             charged = float(result["charged"])
             commission_kobo = int((price_naira - charged) * 100)
     except (ValueError, TypeError, KeyError) as e:
@@ -478,14 +494,14 @@ async def buy_tv(
     tx = BillTransaction(
         user_id=current_user.id,
         service="tv",
-        provider="peyflex",
+        provider=settings.bills_provider,
         smartcard_number=payload.smartcard_number,
         amount_naira=price_naira,
         commission_naira=commission_kobo,
         points_earned=points,
         reference=reference,
         status="success",
-        external_ref=result.get("reference", ""),
+        external_ref=result.get("reference", result.get("transaction_id", "")),
     )
     db.add(tx)
 

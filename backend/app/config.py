@@ -157,6 +157,15 @@ class Settings(BaseSettings):
     peyflex_api_key: str | None = None
     peyflex_base_url: str = "https://client.peyflex.com.ng/api"
 
+    # Bigisub VTU provider (airtime, data, electricity, TV).
+    # API key + PIN from bigisub.ng dashboard — never commit the real values.
+    bigisub_api_key: str | None = None
+    bigisub_base_url: str = "https://api.bigisub.ng"
+    bigisub_pin: str | None = None
+
+    # Active VTU provider: "peyflex" or "bigisub".
+    bills_provider: str = "peyflex"
+
     # Commission split: portion of the aggregator's commission that goes
     # back to the user as points (the rest funds the platform).
     # 0.67 = user gets 67% of the commission, platform keeps 33%.

@@ -43,7 +43,7 @@ function categorizePlan(label: string): ValidityPeriod {
       const numDays = parseInt(daysMatch[1]);
       // 1-3 days are daily plans
       if (numDays <= 3) return 'daily';
-      // 4-13 days could be considered weekly-ish but Peyflex doesn't have this
+      // 4-13 days could be considered weekly-ish
       // 7 days+ are usually treated as weekly bundles
       if (numDays >= 4 && numDays <= 13) return 'weekly';
     }
@@ -80,7 +80,7 @@ export default function BuyDataScreen() {
   const qc = useQueryClient();
 
   const [phone, setPhone] = useState('');
-  const [network, setNetwork] = useState('mtn_data_share');
+  const [network, setNetwork] = useState('mtn');
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ValidityPeriod>('monthly');
   const [showNetworkDropdown, setShowNetworkDropdown] = useState(false);
@@ -304,7 +304,7 @@ export default function BuyDataScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.earnLabel, { color: tokens.mint }]}>You'll earn cashback points!</Text>
               <Text style={[styles.earnSub, { color: tokens.ink }]}>
-                Real commission from Peyflex will be credited after purchase (varies by network).
+                Real commission from your VTU provider will be credited after purchase (varies by network).
               </Text>
             </View>
           </View>

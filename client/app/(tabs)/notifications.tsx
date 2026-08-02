@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { PagePay } from "@/constants/theme";
@@ -142,7 +143,7 @@ export default function NotificationsScreen() {
     return (
       <TouchableOpacity
         onPress={() => {
-          if (!item.read) markReadMutation.mutate(item.id);
+          router.push(`/notification/${item.id}`);
         }}
         activeOpacity={0.7}
         style={[
