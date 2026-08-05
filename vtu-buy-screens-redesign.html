@@ -290,6 +290,11 @@
       grid-template-columns: repeat(2, 1fr);
       gap: var(--pp-space-3);
     }
+    .plan-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--pp-space-3);
+    }
     .plan-card {
       flex: 1;
       background: var(--pp-paper);
@@ -775,22 +780,36 @@
               </div>
               <div class="input-hint muted" id="airtime-phone-hint">Enter 11-digit phone number</div>
             </div>
-            <div class="section-card">
+            <div class="section-card" style="padding-bottom: 8px;">
               <span class="section-label">Network</span>
-              <div class="segmented-control">
-                <button class="segment-btn active" onclick="selectSegment(this, 'airtime-network')">MTN</button>
-                <button class="segment-btn" onclick="selectSegment(this, 'airtime-network')">Airtel</button>
-                <button class="segment-btn" onclick="selectSegment(this, 'airtime-network')">Glo</button>
-                <button class="segment-btn" onclick="selectSegment(this, 'airtime-network')">9mobile</button>
+              <div class="plan-scroll" style="margin-top: 8px;">
+                <div class="plan-card selected" onclick="selectPlan(this, 'airtime-network')">
+                  <img src="../client/assets/images/networks/mtn.jpg" style="width: 28px; height: 28px; border-radius: 6px; object-fit: contain;" />
+                  <span class="plan-name">MTN</span>
+                </div>
+                <div class="plan-card" onclick="selectPlan(this, 'airtime-network')">
+                  <img src="../client/assets/images/networks/airtel.png" style="width: 28px; height: 28px; border-radius: 6px; object-fit: contain;" />
+                  <span class="plan-name">Airtel</span>
+                </div>
+                <div class="plan-card" onclick="selectPlan(this, 'airtime-network')">
+                  <img src="../client/assets/images/networks/glo.png" style="width: 28px; height: 28px; border-radius: 6px; object-fit: contain;" />
+                  <span class="plan-name">Glo</span>
+                </div>
+                <div class="plan-card" onclick="selectPlan(this, 'airtime-network')">
+                  <img src="../client/assets/images/networks/9mobile.png" style="width: 28px; height: 28px; border-radius: 6px; object-fit: contain;" />
+                  <span class="plan-name">9mobile</span>
+                </div>
               </div>
             </div>
+
+            <!-- Amount (3-card grid) -->
             <div class="section-card">
               <span class="section-label">Amount</span>
-              <div class="plan-grid" style="margin-top:8px;">
+              <div class="plan-grid-3" style="margin-top: 12px;">
                 <div class="plan-card" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦100</span><span class="plan-points">+5 pts</span></div>
                 <div class="plan-card" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦200</span><span class="plan-points">+10 pts</span></div>
-                <div class="plan-card" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦500</span><span class="plan-points">+25 pts</span></div>
-                <div class="plan-card selected" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦1,000</span><span class="plan-points">+50 pts</span></div>
+                <div class="plan-card selected" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦500</span><span class="plan-points">+25 pts</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦1,000</span><span class="plan-points">+50 pts</span></div>
                 <div class="plan-card" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦2,000</span><span class="plan-points">+100 pts</span></div>
                 <div class="plan-card" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦5,000</span><span class="plan-points">+250 pts</span></div>
               </div>

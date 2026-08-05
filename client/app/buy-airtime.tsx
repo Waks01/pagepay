@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/src/shared/api/client';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
+import NetworkIcon from '@/src/components/NetworkIcon';
 
 type AirtimeResult = {
   reference: string;
@@ -196,8 +197,12 @@ export default function BuyAirtimeScreen() {
           {networksQ.isLoading ? (
             <ActivityIndicator color={tokens.mint} />
           ) : (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {networkList.map((n) => {
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.networkCarousel}
+            >
+              {networkList.map(n => {
                 const key = String(n.id);
                 const isActive = selectedNetworkId === key;
                 return (
@@ -205,40 +210,28 @@ export default function BuyAirtimeScreen() {
                     key={key}
                     onPress={() => setSelectedNetworkId(key)}
                     style={[
-                      styles.segmentBtn,
+                      styles.networkCard,
                       {
-                        backgroundColor: isActive ? tokens.mint : tokens.paper,
+                        backgroundColor: isActive ? tokens.mintSoft : tokens.paper,
                         borderColor: isActive ? tokens.mint : tokens.border,
                       },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.segmentText,
-                        { color: isActive ? tokens.mintText : tokens.ink },
-                      ]}
-                    >
+                    <NetworkIcon name={n.name} size={32} />
+                    <Text style={[styles.networkName, { color: isActive ? tokens.mint : tokens.ink }]}>
                       {n.name}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
           )}
         </View>
 
         {/* Amount */}
         <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.airtime.amount_label')}</Text>
-            <View style={[styles.earnBadge, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
-              <Ionicons name="gift-outline" size={14} color={tokens.mint} />
-              <Text style={[styles.earnBadgeText, { color: tokens.mint }]}>
-                +{Math.floor((activeAmount || 0) * 0.018 * 0.67 * 10)} pts
-              </Text>
-            </View>
-          </View>
-          <View style={[styles.planGrid, { marginTop: 12 }]}>
+          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.airtime.amount_label')}</Text>
+          <View style={[styles.amountGrid, { marginTop: 12 }]}>
             {AMOUNTS.map((a) => {
               const estPts = Math.floor(a * 0.018 * 0.67 * 10);
               const isActive = selectedAmount === a;
@@ -247,15 +240,15 @@ export default function BuyAirtimeScreen() {
                   key={a}
                   onPress={() => { setSelectedAmount(a); setCustomAmount(''); }}
                   style={[
-                    styles.planCard,
+                    styles.amountCard,
                     {
                       backgroundColor: isActive ? tokens.mintSoft : tokens.paper,
                       borderColor: isActive ? tokens.mint : tokens.border,
                     },
                   ]}
                 >
-                  <Text style={[styles.planName, { color: tokens.ink }]}>₦{a.toLocaleString()}</Text>
-                  <Text style={[styles.planPoints, { color: tokens.mint }]}>+{estPts}</Text>
+                  <Text style={[styles.amountValue, { color: tokens.ink }]}>₦{a.toLocaleString()}</Text>
+                  <Text style={[styles.amountPoints, { color: tokens.mint }]}>+{estPts} pts</Text>
                 </TouchableOpacity>
               );
             })}
@@ -323,23 +316,21 @@ const styles = StyleSheet.create({
   inputIconValid: {
     position: 'absolute', right: 12, top: 14,
   },
-  segmentBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, alignItems: 'center',
+  networkCarousel: {
+    flexDirection: 'row', gap: 10, paddingVertical: 4,
   },
-  segmentText: { fontSize: 13, fontWeight: '600' },
-  planGrid: {
+  networkCard: {
+    width: 100, padding: 10, borderRadius: 12, borderWidth: 1, alignItems: 'center', gap: 6,
+  },
+  networkName: { fontSize: 12, fontWeight: '600' },
+  amountGrid: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 10,
   },
-  planCard: {
-    width: '30%', minWidth: 100, padding: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center', gap: 4,
+  amountCard: {
+    width: '30%', minWidth: 100, padding: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center', gap: 6,
   },
-  planName: { fontSize: 14, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  planPoints: { fontSize: 11, fontWeight: '600' },
-  earnBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1,
-  },
-  earnBadgeText: { fontSize: 12, fontWeight: '600' },
+  amountValue: { fontSize: 14, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  amountPoints: { fontSize: 11, fontWeight: '600' },
   payBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, borderRadius: 14, padding: 16, marginTop: 8,
