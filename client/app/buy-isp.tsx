@@ -49,7 +49,7 @@ export default function BuyIspScreen() {
     queryKey: ['smile-plans'],
     queryFn: async () => {
       const res = await apiFetch('/api/v1/bills/isp/smile/plans');
-      if (!res.ok) throw new Error('Failed to load Smile plans');
+      if (!res.ok) throw new Error(t('bills.isp.load_smile_error'));
       return (await res.json()) as IspPlan[];
     },
   });
@@ -58,7 +58,7 @@ export default function BuyIspScreen() {
     queryKey: ['spectranet-plans'],
     queryFn: async () => {
       const res = await apiFetch('/api/v1/bills/isp/spectranet/plans');
-      if (!res.ok) throw new Error('Failed to load Spectranet plans');
+      if (!res.ok) throw new Error(t('bills.isp.load_spectranet_error'));
       return (await res.json()) as IspPlan[];
     },
   });
@@ -70,8 +70,8 @@ export default function BuyIspScreen() {
 
   const purchaseMutation = useMutation({
     mutationFn: async () => {
-      if (!accountNumber) throw new Error('Enter account number');
-      if (!selectedPlan) throw new Error('Select a plan');
+      if (!accountNumber) throw new Error(t('bills.isp.enter_account'));
+      if (!selectedPlan) throw new Error(t('bills.isp.select_plan'));
       const endpoint = ispType === 'smile' ? '/api/v1/bills/isp/smile/topup' : '/api/v1/bills/isp/spectranet/topup';
       const res = await apiFetch(endpoint, {
         method: 'POST',
@@ -82,7 +82,7 @@ export default function BuyIspScreen() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.detail || 'Top-up failed');
+        throw new Error(err.detail || t('bills.isp.topup_failed'));
       }
       return (await res.json()) as PurchaseResult;
     },

@@ -50,6 +50,8 @@ export default function BuyTvScreen() {
   const [phone, setPhone] = useState('');
   const [provider, setProvider] = useState<string | null>(null);
   const [selectedBouquet, setSelectedBouquet] = useState<string | null>(null);
+  const [validatedCustomer, setValidatedCustomer] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   const providersQ = useQuery({
     queryKey: ['tv-providers'],
@@ -88,6 +90,21 @@ export default function BuyTvScreen() {
   });
 
   const selectedPkg = bouquetsQ.data?.find((b) => (b.plan_code || b.id) === selectedBouquet);
+
+  const validateMutation = useMutation({
+    mutationFn: async () => {
+      if (!provider || !smartcard) throw new Error(t('bills.tv.errors.smartcard_required'));
+      const res = await apiFetch('/api/v1/bills/validate-smartcard', {
+        method: 'POST',
+        body: JSON.stringify({ smartcard_number: smartcard, provider }),
+      });
+      if (!res.ok) throw new Error(t('bills.tv.errors.validation_failed'));
+      return (await res.json()) as { customer_name?: string; validated?: boolean };
+    },
+    onSuccess: (data) => {
+      if (data.customer_name) setValidatedCustomer(data.customer_name);
+    },
+  });
 
   const purchaseMutation = useMutation({
     mutationFn: async () => {
@@ -147,7 +164,7 @@ export default function BuyTvScreen() {
             {(providersQ.data ?? []).map((p) => (
               <TouchableOpacity
                 key={p.cable_name}
-                onPress={() => { setProvider(p.cable_name); setSelectedBouquet(null); }}
+                onPress={() => { setProvider(p.cable_name); setSelectedBouquet(null); setValidatedCustomer(null); }}
                 style={[
                   styles.providerCard,
                   {
@@ -177,7 +194,7 @@ export default function BuyTvScreen() {
               return (
               <TouchableOpacity
                 key={id}
-                onPress={() => setSelectedBouquet(id)}
+                onPress={() => { setSelectedBouquet(id); setValidatedCustomer(null); }}
                 style={[
                   styles.bundleCard,
                   {
@@ -211,6 +228,7 @@ export default function BuyTvScreen() {
           onChangeText={(text) => {
             const cleaned = text.replace(/[^0-9]/g, '');
             setSmartcard(cleaned);
+            setValidatedCustomer(null);
           }}
           keyboardType="number-pad"
           maxLength={15}
@@ -219,6 +237,21 @@ export default function BuyTvScreen() {
           <Text style={{ color: tokens.error, fontSize: 12, marginTop: -10 }}>
             {t('bills.tv.smartcard_error')}
           </Text>
+        )}
+
+        {/* Validate Smartcard */}
+        <TouchableOpacity
+          onPress={() => validateMutation.mutate()}
+          disabled={smartcard.length < 10 || !provider || validateMutation.isPending}
+          style={[styles.validateBtn, { opacity: (smartcard.length < 10 || !provider || validateMutation.isPending) ? 0.5 : 1 }]}
+        >
+          <Ionicons name="checkmark-circle-outline" size={18} color={tokens.mintText} />
+          <Text style={[styles.validateText, { color: tokens.mintText }]}>
+            {validateMutation.isPending ? t('bills.tv.validating') : t('bills.tv.validate_button')}
+          </Text>
+        </TouchableOpacity>
+        {validatedCustomer && (
+          <Text style={{ color: tokens.mint, fontSize: 12 }}>✓ {validatedCustomer}</Text>
         )}
 
         {/* Phone Number */}
@@ -312,4 +345,9 @@ const styles = StyleSheet.create({
     gap: 8, borderRadius: 14, padding: 16, marginTop: 8,
   },
   payText: { fontSize: 16, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  validateBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    padding: 12, borderRadius: 10,
+  },
+  validateText: { fontSize: 14, fontWeight: '600' },
 });

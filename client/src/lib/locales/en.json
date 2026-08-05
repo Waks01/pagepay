@@ -422,6 +422,8 @@
       "success_title": "Airtime Purchased!",
       "success_message": "₦{{amount}} airtime sent to {{phone}}. You earned {{points}} points!",
       "ok": "OK",
+      "load_error": "Could not load networks. Please check your connection.",
+      "select_network": "Select a network",
       "errors": {
         "phone_required": "Enter phone number",
         "phone_invalid": "Phone number must be 11 digits",
@@ -446,6 +448,8 @@
       "success_title": "Data Purchased!",
       "success_message": "{{plan}} sent to {{phone}}. You earned {{points}} points!",
       "ok": "OK",
+      "load_error": "Could not load plans. Please check your connection and try again.",
+      "select_network": "Select a network",
       "errors": {
         "phone_required": "Enter phone number",
         "phone_invalid": "Phone number must be 11 digits",
@@ -458,13 +462,18 @@
       "title": "Buy Electricity",
       "meter_label": "Meter number",
       "meter_placeholder": "Enter meter number",
-      "disco_label": "Distribution company",
+      "disco": "Distribution Company",
       "select_disco": "Select DISCO",
-      "meter_type_label": "Meter type",
+      "meter_type": "Meter Type",
+      "meter_number": "Meter Number",
       "prepaid": "Prepaid",
       "postpaid": "Postpaid",
-      "amount_label": "Amount",
+      "amount": "Amount",
+      "phone": "Phone Number",
+      "phone_placeholder": "08012345678",
       "custom_amount": "Custom amount",
+      "min_amount": "Minimum amount is ₦1,000",
+      "min_amount_prompt": "Enter at least ₦1,000",
       "commission": "You earn {{points}} points",
       "buy_button": "Buy Token",
       "buying": "Processing...",
@@ -474,11 +483,14 @@
       "success_title": "Token Purchased!",
       "success_message": "₦{{amount}} token sent to meter {{meter}}. You earned {{points}} points!",
       "ok": "OK",
+      "load_error": "Could not load DISCOs. Please check your connection.",
+      "earn_points": "You'll earn {{points}} points",
+      "earn_description": "Commission from the purchase will be credited after purchase.",
       "errors": {
         "meter_required": "Enter meter number",
         "disco_required": "Select distribution company",
         "amount_required": "Select or enter amount",
-        "amount_min": "Minimum amount is ₦500",
+        "amount_min": "Minimum amount is ₦1,000",
         "amount_max": "Maximum amount is ₦50,000",
         "insufficient_balance": "Insufficient balance. Fund your wallet first.",
         "purchase_failed": "Purchase failed. Please try again.",
@@ -502,6 +514,12 @@
       "success_title": "Subscription Paid!",
       "success_message": "{{package}} activated for {{smartcard}}. You earned {{points}} points!",
       "ok": "OK",
+      "load_error": "Could not load providers. Please check your connection.",
+      "select_bouquet": "Select a bouquet",
+      "phone_required": "Enter phone number",
+      "select_bouquet_prompt": "Select a bouquet",
+      "earn_points": "You'll earn {{points}} points",
+      "earn_description": "Commission from the subscription will be credited after purchase.",
       "errors": {
         "smartcard_required": "Enter smartcard number",
         "provider_required": "Select TV provider",
@@ -524,7 +542,10 @@
       "success_message": "Your pins: {{pins}}",
       "done": "Done",
       "error_title": "Purchase Failed",
-      "purchase_failed": "Purchase failed. Please try again."
+      "purchase_failed": "Purchase failed. Please try again.",
+      "load_networks_error": "Could not load networks. Please check your connection.",
+      "load_plans_error": "Could not load plans. Please try again.",
+      "total": "Total"
     },
     "betting": {
       "title": "Fund Betting Wallet",
@@ -540,7 +561,14 @@
       "success_message": "{{platform}} wallet funded. Transaction ID: {{tx}}",
       "done": "Done",
       "error_title": "Funding Failed",
-      "purchase_failed": "Funding failed. Please try again."
+      "purchase_failed": "Funding failed. Please try again.",
+      "load_error": "Could not load platforms. Please check your connection.",
+      "load_products_error": "Could not load products. Please try again.",
+      "select_platform": "Select a betting platform",
+      "enter_account": "Enter account number",
+      "amount_required": "Select or enter an amount",
+      "select_biller_account": "Select a platform and enter account number",
+      "validation_failed": "Validation failed. Please try again."
     },
     "isp": {
       "title": "Buy ISP Data",
@@ -556,7 +584,11 @@
       "success_message": "{{isp}} account topped up. You earned {{points}} points!",
       "done": "Done",
       "error_title": "Top-Up Failed",
-      "purchase_failed": "Top-up failed. Please try again."
+      "purchase_failed": "Top-up failed. Please try again.",
+      "load_smile_error": "Could not load Smile plans. Please check your connection.",
+      "load_spectranet_error": "Could not load Spectranet plans. Please check your connection.",
+      "enter_account": "Enter account number",
+      "topup_failed": "Top-up failed. Please try again."
     },
     "education": {
       "title": "Exam Result Checker",
@@ -569,7 +601,9 @@
       "done": "Done",
       "error_title": "Purchase Failed",
       "select_exam_prompt": "Select an exam",
-      "purchase_failed": "Purchase failed. Please try again."
+      "purchase_failed": "Purchase failed. Please try again.",
+      "load_error": "Could not load exams. Please check your connection.",
+      "total": "Total"
     },
     "sms": {
       "title": "Bulk SMS",
@@ -586,8 +620,21 @@
       "success_message": "{{pages}} page(s) sent to {{recipients}} recipients. Job ID: {{job}}",
       "done": "Done",
       "error_title": "Send Failed",
-      "purchase_failed": "Send failed. Please try again."
-    }
+      "purchase_failed": "Send failed. Please try again.",
+      "load_error": "Could not load SMS pricing. Please check your connection.",
+      "enter_sender": "Enter sender name",
+      "enter_recipients": "Enter at least one recipient",
+      "enter_message": "Enter message",
+      "send_failed": "Send failed. Please try again."
+    },
+    "tab_daily": "Daily",
+    "tab_weekly": "Weekly",
+    "tab_monthly": "Monthly",
+    "earn_title": "You'll earn cashback points!",
+    "earn_sub": "Real commission from your VTU provider will be credited after purchase.",
+    "earn_cashback": "Earn cashback points",
+    "load_error": "Could not load plans. Please check your connection and try again.",
+    "no_plans": "No plans available for this period."
   },
   "fund_wallet": {
     "title": "Fund Wallet",

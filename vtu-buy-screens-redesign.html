@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PagePay VTU Buy Screens — Redesign Mockup</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ============================================================
+       PagePay Design Tokens (Light Mode)
+       ============================================================ */
+    :root {
+      --pp-ink: #0E1116;
+      --pp-ink-muted: #6B7280;
+      --pp-paper: #FBFAF6;
+      --pp-card: #FFFFFF;
+      --pp-border: #E5E2DA;
+      --pp-mint: #0E7C66;
+      --pp-mint-soft: #E6F1ED;
+      --pp-mint-text: #FFFFFF;
+      --pp-signal: #C2410C;
+      --pp-signal-soft: #FDEFE7;
+      --pp-error: #DC2626;
+      --pp-radius-sm: 8px;
+      --pp-radius-md: 12px;
+      --pp-radius-lg: 16px;
+      --pp-radius-xl: 20px;
+      --pp-space-1: 4px;
+      --pp-space-2: 8px;
+      --pp-space-3: 12px;
+      --pp-space-4: 16px;
+      --pp-space-5: 20px;
+      --pp-space-6: 24px;
+      --pp-space-8: 32px;
+    }
+
+    /* ============================================================
+       Global Reset & Page Layout
+       ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+      background: #F3F4F6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px;
+      color: var(--pp-ink);
+    }
+
+    /* ============================================================
+       Typography Scale
+       ============================================================ */
+    .type-display { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+    .type-h1      { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+    .type-h2      { font-size: 17px; font-weight: 600; }
+    .type-body    { font-size: 15px; font-weight: 400; line-height: 1.5; }
+    .type-caption { font-size: 12px; font-weight: 500; }
+    .type-micro   { font-size: 11px; font-weight: 600; }
+
+    /* ============================================================
+       Design Token Reference Panel
+       ============================================================ */
+    .tokens-panel {
+      width: 100%;
+      max-width: 390px;
+      background: #fff;
+      border-radius: var(--pp-radius-lg);
+      padding: var(--pp-space-5);
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .tokens-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--pp-space-2);
+      margin-top: var(--pp-space-3);
+    }
+    .token-swatch {
+      height: 36px;
+      border-radius: var(--pp-radius-sm);
+      border: 1px solid var(--pp-border);
+      position: relative;
+    }
+    .token-label {
+      font-size: 10px;
+      color: var(--pp-ink-muted);
+      text-align: center;
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    /* ============================================================
+       Phone Frame
+       ============================================================ */
+    .phone-frame {
+      width: 100%;
+      max-width: 390px;
+      background: #fff;
+      border-radius: 40px;
+      box-shadow:
+        0 0 0 2px #1a1a1a,
+        0 0 0 6px #2d2d2d,
+        0 20px 60px rgba(0,0,0,0.25);
+      overflow: hidden;
+      position: relative;
+    }
+    .phone-notch {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 28px;
+      background: #1a1a1a;
+      border-bottom-left-radius: 16px;
+      border-bottom-right-radius: 16px;
+      z-index: 10;
+    }
+    .phone-screen {
+      background: var(--pp-paper);
+      min-height: 720px;
+      max-height: 780px;
+      overflow-y: auto;
+      padding: 48px var(--pp-space-5) var(--pp-space-5);
+      display: flex;
+      flex-direction: column;
+      gap: var(--pp-space-4);
+      scrollbar-width: none;
+    }
+    .phone-screen::-webkit-scrollbar { display: none; }
+
+    /* ============================================================
+       Screen Header
+       ============================================================ */
+    .screen-header {
+      display: flex;
+      align-items: center;
+      gap: var(--pp-space-3);
+      margin-bottom: var(--pp-space-1);
+    }
+    .back-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--pp-radius-sm);
+      background: var(--pp-card);
+      border: 1px solid var(--pp-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--pp-ink);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .screen-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--pp-ink);
+    }
+
+    /* ============================================================
+       Section Card (the "3-4 sections" concept)
+       ============================================================ */
+    .section-card {
+      background: var(--pp-card);
+      border-radius: var(--pp-radius-lg);
+      border: 1px solid var(--pp-border);
+      padding: var(--pp-space-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--pp-space-3);
+    }
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--pp-ink-muted);
+    }
+
+    /* ============================================================
+       Input with Inline Validation
+       ============================================================ */
+    .input-wrapper {
+      position: relative;
+    }
+    .text-input {
+      width: 100%;
+      padding: 14px var(--pp-space-4);
+      border-radius: var(--pp-radius-md);
+      border: 1.5px solid var(--pp-border);
+      background: var(--pp-paper);
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--pp-ink);
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .textarea-input {
+      width: 100%;
+      padding: 14px var(--pp-space-4);
+      border-radius: var(--pp-radius-md);
+      border: 1.5px solid var(--pp-border);
+      background: var(--pp-paper);
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--pp-ink);
+      outline: none;
+      min-height: 80px;
+      text-align: left;
+      resize: none;
+    }
+    .text-input:focus {
+      border-color: var(--pp-mint);
+      box-shadow: 0 0 0 3px rgba(14, 124, 102, 0.1);
+    }
+    .text-input.is-valid {
+      border-color: var(--pp-mint);
+      padding-right: 40px;
+    }
+    .text-input.is-invalid {
+      border-color: var(--pp-error);
+    }
+    .input-icon {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .input-icon.valid { background: var(--pp-mint); color: #fff; }
+    .input-icon.invalid { background: var(--pp-signal-soft); color: var(--pp-signal); }
+    .input-hint {
+      font-size: 12px;
+      font-weight: 500;
+      margin-top: 4px;
+      min-height: 16px;
+    }
+    .input-hint.valid { color: var(--pp-mint); }
+    .input-hint.invalid { color: var(--pp-error); }
+    .input-hint.muted { color: var(--pp-ink-muted); }
+
+    /* ============================================================
+       Segmented Control (Network Selector)
+       Replaces horizontal scroll chips.
+       ============================================================ */
+    .segmented-control {
+      display: flex;
+      background: var(--pp-paper);
+      border-radius: var(--pp-radius-md);
+      padding: 3px;
+      gap: 2px;
+      border: 1px solid var(--pp-border);
+    }
+    .segment-btn {
+      flex: 1;
+      padding: 10px 8px;
+      border-radius: calc(var(--pp-radius-md) - 2px);
+      border: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--pp-ink-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+    .segment-btn.active {
+      background: var(--pp-card);
+      color: var(--pp-ink);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    /* ============================================================
+       Plan Cards — 2-Column Grid
+       Replaces horizontal scroll. Shows 2 cards per row.
+       ============================================================ */
+    .plan-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--pp-space-3);
+    }
+    .plan-card {
+      flex: 1;
+      background: var(--pp-paper);
+      border-radius: var(--pp-radius-md);
+      border: 1.5px solid var(--pp-border);
+      padding: var(--pp-space-3);
+      display: flex;
+      flex-direction: column;
+      gap: var(--pp-space-1);
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .plan-card:hover {
+      border-color: var(--pp-mint);
+    }
+    .plan-card.selected {
+      border-color: var(--pp-mint);
+      background: var(--pp-mint-soft);
+    }
+    .plan-card.selected::after {
+      content: '';
+      position: absolute;
+      top: -1.5px;
+      right: -1.5px;
+      width: 0;
+      height: 0;
+      border-top: 20px solid var(--pp-mint);
+      border-left: 20px solid transparent;
+      border-radius: 0 var(--pp-radius-md) 0 0;
+    }
+    .plan-check {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 12px;
+      height: 12px;
+      color: #fff;
+      font-size: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .plan-validity {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--pp-ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .plan-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--pp-ink);
+      line-height: 1.3;
+    }
+    .plan-price {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--pp-mint);
+      margin-top: 2px;
+    }
+    .plan-points {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--pp-mint);
+      background: var(--pp-mint-soft);
+      padding: 2px 6px;
+      border-radius: 4px;
+      align-self: flex-start;
+      margin-top: 2px;
+    }
+
+    /* ============================================================
+       Inline Earn Badge
+       Replaces the large earn notice card.
+       ============================================================ */
+    .earn-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--pp-mint-soft);
+      border: 1px solid var(--pp-mint);
+      border-radius: var(--pp-radius-xl);
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--pp-mint);
+    }
+
+    /* ============================================================
+       Validate Button (inline, for meter/smartcard/account)
+       ============================================================ */
+    .validate-btn {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: var(--pp-radius-md);
+      border: 1.5px solid var(--pp-mint);
+      background: var(--pp-mint-soft);
+      color: var(--pp-mint);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-top: 8px;
+    }
+    .validate-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ============================================================
+       CTA Button (Sticky / Prominent)
+       ============================================================ */
+    .cta-button {
+      width: 100%;
+      padding: 16px;
+      border-radius: var(--pp-radius-lg);
+      border: none;
+      background: var(--pp-mint);
+      color: var(--pp-mint-text);
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.15s;
+      margin-top: auto;
+      position: sticky;
+      bottom: 0;
+    }
+    .cta-button:active { transform: scale(0.98); }
+    .cta-button:disabled {
+      background: var(--pp-border);
+      color: var(--pp-ink-muted);
+      cursor: not-allowed;
+    }
+
+    /* ============================================================
+       Summary Row
+       ============================================================ */
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--pp-space-2) 0;
+    }
+    .summary-row + .summary-row {
+      border-top: 1px solid var(--pp-border);
+    }
+    .summary-key {
+      font-size: 13px;
+      color: var(--pp-ink-muted);
+      font-weight: 500;
+    }
+    .summary-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--pp-ink);
+    }
+    .summary-value.mint { color: var(--pp-mint); }
+
+    /* ============================================================
+       Design Annotations
+       ============================================================ */
+    .annotation {
+      background: #FFFBEB;
+      border: 1px solid #FCD34D;
+      border-radius: var(--pp-radius-md);
+      padding: var(--pp-space-3) var(--pp-space-4);
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: #92400E;
+      line-height: 1.5;
+    }
+    .annotation strong { color: #78350F; }
+
+    /* ============================================================
+       Screen Variants Grid
+       ============================================================ */
+    .variants-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      width: 100%;
+      max-width: 1200px;
+      margin-top: 40px;
+    }
+    .variant-card {
+      background: #fff;
+      border-radius: var(--pp-radius-lg);
+      padding: var(--pp-space-4);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .variant-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--pp-ink);
+      margin-bottom: var(--pp-space-2);
+    }
+    .variant-desc {
+      font-size: 12px;
+      color: var(--pp-ink-muted);
+      line-height: 1.5;
+    }
+    .variant-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--pp-radius-sm);
+      background: var(--pp-mint-soft);
+      color: var(--pp-mint);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: var(--pp-space-2);
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       PAGE TITLE
+       ============================================================ -->
+  <div style="max-width: 390px; width: 100%; margin-bottom: 16px;">
+    <h1 class="type-display" style="color: var(--pp-ink); margin-bottom: 4px;">
+      PagePay VTU Redesign
+    </h1>
+    <p class="type-body" style="color: var(--pp-ink-muted);">
+      Visual mockup for the new Buy Data screen (buy-airtime, buy-electricity, buy-tv, buy-recharge-pin, buy-betting, buy-isp, buy-education, buy-sms follow the same pattern).
+    </p>
+  </div>
+
+  <!-- ============================================================
+       DESIGN TOKENS REFERENCE
+       ============================================================ -->
+  <div class="tokens-panel">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <span class="type-h2">Design Tokens (Light)</span>
+      <span class="type-caption" style="color: var(--pp-ink-muted);">Light / Dark / Sepia</span>
+    </div>
+    <div class="tokens-grid">
+      <div>
+        <div class="token-swatch" style="background: var(--pp-ink);"></div>
+        <div class="token-label">ink</div>
+      </div>
+      <div>
+        <div class="token-swatch" style="background: var(--pp-ink-muted);"></div>
+        <div class="token-label">inkMuted</div>
+      </div>
+      <div>
+        <div class="token-swatch" style="background: var(--pp-paper);"></div>
+        <div class="token-label">paper</div>
+      </div>
+      <div>
+        <div class="token-swatch" style="background: var(--pp-card);"></div>
+        <div class="token-label">card</div>
+      </div>
+      <div>
+        <div class="token-swatch" style="background: var(--pp-border);"></div>
+        <div class="token-label">border</div>
+      </div>
+      <div>
+        <div class="token-swatch" style="background: var(--pp-mint);"></div>
+        <div class="token-label">mint</div>
+      </div>
+      <div>
+        <div class="token-swatch" style="background: var(--pp-mint-soft);"></div>
+        <div class="token-label">mintSoft</div>
+      </div>
+      <div>
+        <div class="token-swatch" style="background: var(--pp-error);"></div>
+        <div class="token-label">error</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       DESIGN RATIONALE (annotations before the phone)
+       ============================================================ -->
+  <div style="max-width: 390px; width: 100%; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+    <div class="annotation">
+      <strong>Design Decision 1 — Max 4 sections.</strong> The old screen had 7+ vertical sections (header, phone, network chips, amount chips, custom amount, earn card, pay button). The new design collapses this into 4 cards: <em>Phone</em> → <em>Network</em> → <em>Plan</em> → <em>Summary & Pay</em>. Each section is a self-contained card with clear internal spacing (8px grid).
+    </div>
+    <div class="annotation">
+      <strong>Design Decision 2 — Segmented control for network.</strong> The horizontal scroll of chips (Mtn, Airtel, Glo, 9mobile) is replaced with a tight segmented control. It reduces height by ~60% and communicates "pick one" more clearly. On smaller screens this prevents the chips from wrapping to a second row.
+    </div>
+    <div class="annotation">
+      <strong>Design Decision 3 — Plan cards in a 2-column grid.</strong> Plans are shown in a 2-column grid instead of horizontal scroll or single-column list. This shows 2 plans at a time, making comparison easy without excessive scrolling. Each card shows the plantype tag (SME, GIFTING, etc.), size, price, and estimated points.
+    </div>
+    <div class="annotation">
+      <strong>Design Decision 4 — Plantype filter tabs.</strong> Bigisub returns structured <code>plantype</code> values (<strong>SME, GIFTING, DataTransfer, CGIFTING</strong>) instead of generic daily/weekly/monthly buckets. The tabs reflect the actual categories from the API. Networks differ: MTN/GLO have all 4 types, Airtel has SME+GIFTING, 9mobile has DataTransfer only.
+    </div>
+    <div class="annotation">
+      <strong>Design Decision 5 — Inline earn badge.</strong> The old repetitive earn notice card is replaced with a small inline badge that appears only after a plan is selected. It shows "+120 pts" without consuming a full card slot.
+    </div>
+    <div class="annotation">
+      <strong>Design Decision 6 — Inline phone validation.</strong> The phone input shows a green checkmark inside the field once 11 digits are entered. Error text appears directly below the input with proper spacing. No more floating error text with negative margin.
+    </div>
+    <div class="annotation">
+      <strong>Design Decision 7 — Visual hierarchy via section cards.</strong> Each section is visually isolated with a white card on the paper background. This creates clear grouping: "enter your number", "choose your network", "pick a plan", "pay now".
+    </div>
+    <div class="annotation">
+      <strong>Design Decision 8 — Sticky CTA button.</strong> The pay button is placed at the bottom of the scroll view but feels anchored. It always shows context (selected plan + amount) so the user knows exactly what they're paying for before tapping.
+    </div>
+    <div class="annotation">
+      <strong>Design Decision 9 — Real Bigisub validation with full data display.</strong> Each validate button calls Bigisub's verify endpoint and shows the actual returned fields on success:
+      <ul style="margin-top:8px; margin-left:16px; line-height: 1.8;">
+        <li><strong>Electricity:</strong> customer_name + address from <code>POST /api/v2/bills/electricity/verify/</code></li>
+        <li><strong>TV:</strong> customer_name + account_status from <code>POST /api/v2/vtu/cable/verify/</code></li>
+        <li><strong>Betting:</strong> customer_name + validation_reference + requires_validation_ref from <code>POST /api/v2/betting/validate/</code> (uses <code>customer_id</code> field)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       PHONE FRAME — Primary Example: Buy Data
+       ============================================================ -->
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="phone-screen">
+
+      <!-- Header -->
+      <div class="screen-header">
+        <button class="back-btn" aria-label="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <span class="screen-title">Buy Data</span>
+      </div>
+
+      <!-- SECTION 1: Phone Number -->
+      <div class="section-card">
+        <span class="section-label">Phone Number</span>
+        <div class="input-wrapper">
+          <input
+            type="tel"
+            class="text-input is-valid"
+            value="08012345678"
+            maxlength="11"
+            inputmode="numeric"
+          />
+          <div class="input-icon valid">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+        </div>
+        <div class="input-hint valid">Validated — MTN detected</div>
+      </div>
+
+      <!-- SECTION 2: Network (Segmented Control) -->
+      <div class="section-card">
+        <span class="section-label">Network</span>
+        <div class="segmented-control">
+          <button class="segment-btn active">MTN</button>
+          <button class="segment-btn">Airtel</button>
+          <button class="segment-btn">Glo</button>
+          <button class="segment-btn">9mobile</button>
+        </div>
+      </div>
+
+      <!-- SECTION 3: Plan Selection (2-Column Grid) -->
+      <div class="section-card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span class="section-label">Select Plan</span>
+          <span class="earn-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 6v6l4 2"></path>
+            </svg>
+            +120 pts on this purchase
+          </span>
+        </div>
+        <!-- Plantype filter tabs (real Bigisub categories) -->
+        <div class="segmented-control" style="margin-top: 12px;">
+          <button class="segment-btn active">SME</button>
+          <button class="segment-btn">GIFTING</button>
+          <button class="segment-btn">DataTransfer</button>
+          <button class="segment-btn">CGIFTING</button>
+        </div>
+        <!-- 2-column plan grid -->
+        <div class="plan-grid" style="margin-top: 12px;">
+          <!-- Plan 1: selected -->
+          <div class="plan-card selected">
+            <div class="plan-check">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <span class="plan-validity">SME</span>
+            <span class="plan-name">1.5GB</span>
+            <span class="plan-price">₦465</span>
+            <span class="plan-points">+31 pts</span>
+          </div>
+          <!-- Plan 2 -->
+          <div class="plan-card">
+            <span class="plan-validity">SME</span>
+            <span class="plan-name">2GB</span>
+            <span class="plan-price">₦580</span>
+            <span class="plan-points">+39 pts</span>
+          </div>
+          <!-- Plan 3 -->
+          <div class="plan-card">
+            <span class="plan-validity">GIFTING</span>
+            <span class="plan-name">3GB</span>
+            <span class="plan-price">₦980</span>
+            <span class="plan-points">+66 pts</span>
+          </div>
+          <!-- Plan 4 -->
+          <div class="plan-card">
+            <span class="plan-validity">GIFTING</span>
+            <span class="plan-name">5GB</span>
+            <span class="plan-price">₦1,500</span>
+            <span class="plan-points">+100 pts</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 4: Summary + Pay CTA -->
+      <div class="section-card">
+        <div class="summary-row">
+          <span class="summary-key">Plan</span>
+          <span class="summary-value">1GB Daily — MTN</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-key">Amount</span>
+          <span class="summary-value mint">₦350</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-key">You'll earn</span>
+          <span class="summary-value mint">+25 points</span>
+        </div>
+      </div>
+
+      <!-- CTA Button -->
+      <button class="cta-button">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="21" r="1"></circle>
+          <circle cx="20" cy="21" r="1"></circle>
+          <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+        </svg>
+        Pay ₦350 — Buy 1GB
+      </button>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       ALL 9 VTU BUY SCREENS — Interactive Mockups
+       Each phone is fully functional with JavaScript
+       ============================================================ -->
+  <div style="max-width: 1200px; width: 100%; margin-top: 32px;">
+    <h2 class="type-h1" style="margin-bottom: 4px; color: var(--pp-ink);">All 9 VTU Buy Screens</h2>
+    <p class="type-body" style="color: var(--pp-ink-muted); margin-bottom: 20px;">Each screen is interactive — tap segmented controls, plan cards, and buttons to see state changes.</p>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 24px; align-items: start;">
+
+      <!-- ==================== BUY AIRTIME ==================== -->
+      <div>
+        <div style="font-size: 13px; font-weight: 700; color: var(--pp-ink-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">📱 Buy Airtime</div>
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen" data-screen="airtime">
+            <div class="screen-header">
+              <button class="back-btn" onclick="goBack(this)">‹</button>
+              <span class="screen-title">Buy Airtime</span>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Phone Number</span>
+              <div class="input-wrapper">
+                <input type="tel" class="text-input" placeholder="08012345678" maxlength="11" oninput="handlePhoneInput(this, 'airtime')" />
+                <div class="input-icon valid" style="display:none" id="airtime-phone-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+              </div>
+              <div class="input-hint muted" id="airtime-phone-hint">Enter 11-digit phone number</div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Network</span>
+              <div class="segmented-control">
+                <button class="segment-btn active" onclick="selectSegment(this, 'airtime-network')">MTN</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'airtime-network')">Airtel</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'airtime-network')">Glo</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'airtime-network')">9mobile</button>
+              </div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Amount</span>
+              <div class="plan-grid" style="margin-top:8px;">
+                <div class="plan-card" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦100</span><span class="plan-points">+5 pts</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦200</span><span class="plan-points">+10 pts</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦500</span><span class="plan-points">+25 pts</span></div>
+                <div class="plan-card selected" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦1,000</span><span class="plan-points">+50 pts</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦2,000</span><span class="plan-points">+100 pts</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'airtime')"><span class="plan-name">₦5,000</span><span class="plan-points">+250 pts</span></div>
+              </div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Custom Amount</span>
+              <input type="number" class="text-input" placeholder="Enter amount (₦50 min)" oninput="updateAirtimeCustom(this.value)" />
+            </div>
+            <button class="cta-button" id="airtime-cta" onclick="submitScreen('airtime', 'Buy Airtime', '₦1,000')">Buy Airtime — ₦1,000</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== BUY DATA ==================== -->
+      <div>
+        <div style="font-size: 13px; font-weight: 700; color: var(--pp-ink-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">📶 Buy Data</div>
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen" data-screen="data">
+            <div class="screen-header">
+              <button class="back-btn" onclick="goBack(this)">‹</button>
+              <span class="screen-title">Buy Data</span>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Phone Number</span>
+              <div class="input-wrapper">
+                <input type="tel" class="text-input is-valid" value="08012345678" maxlength="11" />
+                <div class="input-icon valid"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+              </div>
+              <div class="input-hint valid">Validated — MTN detected</div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Network</span>
+              <div class="segmented-control">
+                <button class="segment-btn active" onclick="selectSegment(this, 'data-network')">MTN</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'data-network')">Airtel</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'data-network')">Glo</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'data-network')">9mobile</button>
+              </div>
+            </div>
+            <div class="section-card">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="section-label">Select Plan</span>
+                <span class="earn-badge">⚡ +31 pts</span>
+              </div>
+              <div class="segmented-control" style="margin-top:12px;" id="data-plantype-tabs">
+                <button class="segment-btn active" onclick="selectPlantype(this, 'SME')">SME</button>
+                <button class="segment-btn" onclick="selectPlantype(this, 'GIFTING')">GIFTING</button>
+                <button class="segment-btn" onclick="selectPlantype(this, 'DataTransfer')">DataTransfer</button>
+                <button class="segment-btn" onclick="selectPlantype(this, 'CGIFTING')">CGIFTING</button>
+              </div>
+              <div class="plan-grid" style="margin-top:12px;" id="data-plan-grid">
+                <div class="plan-card selected" onclick="selectPlan(this, 'data')">
+                  <div class="plan-check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+                  <span class="plan-validity">SME</span><span class="plan-name">1.5GB</span><span class="plan-price">₦465</span><span class="plan-points">+31 pts</span>
+                </div>
+                <div class="plan-card" onclick="selectPlan(this, 'data')"><span class="plan-validity">SME</span><span class="plan-name">2GB</span><span class="plan-price">₦580</span><span class="plan-points">+39 pts</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'data')"><span class="plan-validity">GIFTING</span><span class="plan-name">3GB</span><span class="plan-price">₦980</span><span class="plan-points">+66 pts</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'data')"><span class="plan-validity">GIFTING</span><span class="plan-name">5GB</span><span class="plan-price">₦1,500</span><span class="plan-points">+100 pts</span></div>
+              </div>
+            </div>
+            <div class="section-card">
+              <div class="summary-row"><span class="summary-key">Plan</span><span class="summary-value">1.5GB SME — MTN</span></div>
+              <div class="summary-row"><span class="summary-key">Amount</span><span class="summary-value mint">₦465</span></div>
+              <div class="summary-row"><span class="summary-key">You'll earn</span><span class="summary-value mint">+31 pts</span></div>
+            </div>
+            <button class="cta-button" onclick="submitScreen('data', 'Buy Data', '₦465')">Buy Data — ₦465</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== BUY ELECTRICITY ==================== -->
+      <div>
+        <div style="font-size: 13px; font-weight: 700; color: var(--pp-ink-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">⚡ Buy Electricity</div>
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen" data-screen="electricity">
+            <div class="screen-header">
+              <button class="back-btn" onclick="goBack(this)">‹</button>
+              <span class="screen-title">Buy Electricity</span>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Meter Number</span>
+              <div class="input-wrapper">
+                <input type="tel" class="text-input" placeholder="Enter meter number" maxlength="20" oninput="handleMeterInput(this)" />
+              </div>
+              <div class="input-hint muted" id="electricity-meter-hint">Enter at least 10 digits</div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Meter Type</span>
+              <div class="segmented-control">
+                <button class="segment-btn active" onclick="selectSegment(this, 'electricity-metertype')">Prepaid</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'electricity-metertype')">Postpaid</button>
+              </div>
+            </div>
+            <button class="validate-btn" id="electricity-validate-btn" onclick="validateMeter()" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span id="electricity-validate-text">Validate Meter</span>
+            </button>
+            <div id="electricity-validated-name" style="display:none; color: var(--pp-mint); font-size: 12px; margin-top: 4px; font-weight: 600;">✓ John Doe</div>
+            <div id="electricity-validated-address" style="display:none; color: var(--pp-ink-muted); font-size: 11px; margin-top: 2px;">12 Akala Street, Ikeja</div>
+            <div id="electricity-validate-source" style="display:none; color: var(--pp-ink-muted); font-size: 11px; margin-top: 2px;">Verified via Bigisub API</div>
+            <div class="section-card" style="margin-top: 8px;">
+              <span class="section-label">DISCO</span>
+              <div class="segmented-control">
+                <button class="segment-btn active" onclick="selectSegment(this, 'electricity-disco')">Ikeja Electric</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'electricity-disco')">EKEDC</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'electricity-disco')">IBEDC</button>
+              </div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Amount</span>
+              <div class="plan-grid" style="margin-top:8px;">
+                <div class="plan-card" onclick="selectPlan(this, 'electricity')"><span class="plan-name">₦1,000</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'electricity')"><span class="plan-name">₦2,000</span></div>
+                <div class="plan-card selected" onclick="selectPlan(this, 'electricity')"><span class="plan-name">₦5,000</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'electricity')"><span class="plan-name">₦10,000</span></div>
+              </div>
+              <input type="number" class="text-input" placeholder="Or enter custom amount" style="margin-top:8px;" oninput="updateElectricityCustom(this.value)" />
+            </div>
+            <button class="cta-button" id="electricity-cta" onclick="submitScreen('electricity', 'Buy Token', '₦5,000')">Buy Token — ₦5,000</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== BUY TV ==================== -->
+      <div>
+        <div style="font-size: 13px; font-weight: 700; color: var(--pp-ink-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">📺 Buy TV</div>
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen" data-screen="tv">
+            <div class="screen-header">
+              <button class="back-btn" onclick="goBack(this)">‹</button>
+              <span class="screen-title">Pay TV Subscription</span>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Smartcard / IUC Number</span>
+              <div class="input-wrapper">
+                <input type="tel" class="text-input" placeholder="Enter smartcard number" maxlength="20" oninput="handleSmartcardInput(this)" />
+              </div>
+              <div class="input-hint muted" id="tv-smartcard-hint">Enter at least 10 digits</div>
+            </div>
+            <button class="validate-btn" id="tv-validate-btn" onclick="validateSmartcard()" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span id="tv-validate-text">Validate Card</span>
+            </button>
+            <div id="tv-validated-name" style="display:none; color: var(--pp-mint); font-size: 12px; margin-top: 4px; font-weight: 600;">✓ Jane Smith</div>
+            <div id="tv-validated-status" style="display:none; color: var(--pp-ink-muted); font-size: 11px; margin-top: 2px;">Account status: Active</div>
+            <div id="tv-validate-source" style="display:none; color: var(--pp-ink-muted); font-size: 11px; margin-top: 2px;">Verified via Bigisub API</div>
+            <div class="section-card" style="margin-top: 8px;">
+              <span class="section-label">Provider</span>
+              <div class="segmented-control">
+                <button class="segment-btn active" onclick="selectSegment(this, 'tv-provider')">DSTV</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'tv-provider')">GOtv</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'tv-provider')">Startimes</button>
+              </div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Bouquet</span>
+              <div class="plan-grid" style="margin-top:8px;">
+                <div class="plan-card" onclick="selectPlan(this, 'tv')"><span class="plan-name">Compact</span><span class="plan-price">₦2,500</span></div>
+                <div class="plan-card selected" onclick="selectPlan(this, 'tv')"><span class="plan-name">Premium</span><span class="plan-price">₦7,900</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'tv')"><span class="plan-name">Premium Plus</span><span class="plan-price">₦12,500</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'tv')"><span class="plan-name">Concert</span><span class="plan-price">₦24,500</span></div>
+              </div>
+            </div>
+            <button class="cta-button" onclick="submitScreen('tv', 'Pay Subscription', '₦7,900')">Pay Subscription — ₦7,900</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== BUY RECHARGE PIN ==================== -->
+      <div>
+        <div style="font-size: 13px; font-weight: 700; color: var(--pp-ink-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">🎫 Buy Recharge Pin</div>
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen" data-screen="recharge">
+            <div class="screen-header">
+              <button class="back-btn" onclick="goBack(this)">‹</button>
+              <span class="screen-title">Buy Recharge Pin</span>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Network</span>
+              <div class="segmented-control">
+                <button class="segment-btn active" onclick="selectSegment(this, 'recharge-network')">MTN</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'recharge-network')">Airtel</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'recharge-network')">Glo</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'recharge-network')">9mobile</button>
+              </div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Pin Denomination</span>
+              <div class="plan-grid" style="margin-top:8px;">
+                <div class="plan-card" onclick="selectPlan(this, 'recharge')"><span class="plan-name">₦100</span></div>
+                <div class="plan-card selected" onclick="selectPlan(this, 'recharge')"><span class="plan-name">₦200</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'recharge')"><span class="plan-name">₦500</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'recharge')"><span class="plan-name">₦1,000</span></div>
+              </div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Quantity</span>
+              <div class="segmented-control" style="max-width: 200px;">
+                <button class="segment-btn" onclick="selectSegment(this, 'recharge-qty')">1</button>
+                <button class="segment-btn active" onclick="selectSegment(this, 'recharge-qty')">2</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'recharge-qty')">5</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'recharge-qty')">10</button>
+              </div>
+            </div>
+            <div class="section-card">
+              <div class="summary-row"><span class="summary-key">Denomination</span><span class="summary-value">₦200 × 2</span></div>
+              <div class="summary-row"><span class="summary-key">Total</span><span class="summary-value mint">₦400</span></div>
+            </div>
+            <button class="cta-button" onclick="submitScreen('recharge', 'Buy Pin', '₦400')">Buy Pin — ₦400</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== BUY BETTING ==================== -->
+      <div>
+        <div style="font-size: 13px; font-weight: 700; color: var(--pp-ink-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">🎲 Fund Betting Wallet</div>
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen" data-screen="betting">
+            <div class="screen-header">
+              <button class="back-btn" onclick="goBack(this)">‹</button>
+              <span class="screen-title">Fund Betting Wallet</span>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Platform</span>
+              <div class="segmented-control">
+                <button class="segment-btn active" onclick="selectSegment(this, 'betting-platform')">Bet9ja</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'betting-platform')">Nairabet</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'betting-platform')">1xBet</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'betting-platform')">SportyBet</button>
+              </div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Account Number / Username</span>
+              <div class="input-wrapper">
+                <input type="text" class="text-input" placeholder="Enter customer ID / account number" oninput="handleBettingAccount(this)" />
+              </div>
+              <div class="input-hint muted" id="betting-account-hint">Enter at least 3 characters</div>
+            </div>
+            <button class="validate-btn" id="betting-validate-btn" onclick="validateBetting()" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span id="betting-validate-text">Validate Account</span>
+            </button>
+            <div id="betting-validated-name" style="display:none; color: var(--pp-mint); font-size: 12px; margin-top: 4px; font-weight: 600;">✓ John Doe</div>
+            <div id="betting-validated-ref" style="display:none; color: var(--pp-ink-muted); font-size: 11px; margin-top: 2px;">Ref: VAL-2026-0891</div>
+            <div id="betting-validate-source" style="display:none; color: var(--pp-ink-muted); font-size: 11px; margin-top: 2px;">Verified via Bigisub API</div>
+            <div class="section-card" style="margin-top: 8px;">
+              <span class="section-label">Amount</span>
+              <div class="plan-grid" style="margin-top:8px;">
+                <div class="plan-card" onclick="selectPlan(this, 'betting')"><span class="plan-name">₦500</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'betting')"><span class="plan-name">₦1,000</span></div>
+                <div class="plan-card selected" onclick="selectPlan(this, 'betting')"><span class="plan-name">₦5,000</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'betting')"><span class="plan-name">₦10,000</span></div>
+              </div>
+              <input type="number" class="text-input" placeholder="Or enter custom amount" style="margin-top:8px;" oninput="updateBettingCustom(this.value)" />
+            </div>
+            <button class="cta-button" id="betting-cta" onclick="submitScreen('betting', 'Fund Wallet', '₦5,000')">Fund Wallet — ₦5,000</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== BUY ISP ==================== -->
+      <div>
+        <div style="font-size: 13px; font-weight: 700; color: var(--pp-ink-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">🌐 Buy ISP Data</div>
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen" data-screen="isp">
+            <div class="screen-header">
+              <button class="back-btn" onclick="goBack(this)">‹</button>
+              <span class="screen-title">Buy ISP Data</span>
+            </div>
+            <div class="section-card">
+              <span class="section-label">ISP Provider</span>
+              <div class="segmented-control">
+                <button class="segment-btn active" onclick="selectSegment(this, 'isp-type')">Smile</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'isp-type')">Spectranet</button>
+              </div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Account Number</span>
+              <div class="input-wrapper">
+                <input type="tel" class="text-input" placeholder="Enter account number" maxlength="20" />
+              </div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Plans</span>
+              <div class="plan-grid" style="margin-top:8px;">
+                <div class="plan-card" onclick="selectPlan(this, 'isp')"><span class="plan-name">5GB</span><span class="plan-validity">30 days</span><span class="plan-price">₦2,000</span></div>
+                <div class="plan-card selected" onclick="selectPlan(this, 'isp')"><span class="plan-name">10GB</span><span class="plan-validity">30 days</span><span class="plan-price">₦3,500</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'isp')"><span class="plan-name">20GB</span><span class="plan-validity">30 days</span><span class="plan-price">₦5,500</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'isp')"><span class="plan-name">50GB</span><span class="plan-validity">60 days</span><span class="plan-price">₦10,000</span></div>
+              </div>
+            </div>
+            <button class="cta-button" onclick="submitScreen('isp', 'Top Up', '₦3,500')">Top Up — ₦3,500</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== BUY EDUCATION ==================== -->
+      <div>
+        <div style="font-size: 13px; font-weight: 700; color: var(--pp-ink-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">🎓 Exam Result Checker</div>
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen" data-screen="education">
+            <div class="screen-header">
+              <button class="back-btn" onclick="goBack(this)">‹</button>
+              <span class="screen-title">Exam Result Checker</span>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Select Exam</span>
+              <div class="plan-grid" style="margin-top:8px;">
+                <div class="plan-card" onclick="selectPlan(this, 'education')"><span class="plan-name">WAEC</span><span class="plan-validity">2025</span><span class="plan-price">₦1,500</span></div>
+                <div class="plan-card selected" onclick="selectPlan(this, 'education')"><span class="plan-name">NECO</span><span class="plan-validity">2025</span><span class="plan-price">₦1,200</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'education')"><span class="plan-name">NABTEB</span><span class="plan-validity">2025</span><span class="plan-price">₦1,000</span></div>
+                <div class="plan-card" onclick="selectPlan(this, 'education')"><span class="plan-name">JAMB</span><span class="plan-validity">2025</span><span class="plan-price">₦2,000</span></div>
+              </div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Quantity</span>
+              <div class="segmented-control" style="max-width: 240px;">
+                <button class="segment-btn active" onclick="selectSegment(this, 'education-qty')">1</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'education-qty')">2</button>
+                <button class="segment-btn" onclick="selectSegment(this, 'education-qty')">5</button>
+              </div>
+            </div>
+            <div class="section-card">
+              <div class="summary-row"><span class="summary-key">Exam</span><span class="summary-value">NECO 2025 × 1</span></div>
+              <div class="summary-row"><span class="summary-key">Total</span><span class="summary-value mint">₦1,200</span></div>
+            </div>
+            <button class="cta-button" onclick="submitScreen('education', 'Buy PIN', '₦1,200')">Buy PIN — ₦1,200</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== BUY SMS ==================== -->
+      <div>
+        <div style="font-size: 13px; font-weight: 700; color: var(--pp-ink-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">💬 Bulk SMS</div>
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen" data-screen="sms">
+            <div class="screen-header">
+              <button class="back-btn" onclick="goBack(this)">‹</button>
+              <span class="screen-title">Bulk SMS</span>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Sender Name</span>
+              <input type="text" class="text-input" placeholder="e.g. MyBusiness" maxlength="20" oninput="updateSmsEstimate()" />
+            </div>
+            <div class="section-card">
+              <span class="section-label">Recipients</span>
+              <textarea class="textarea-input" placeholder="08012345678, 08087654321" oninput="updateSmsEstimate()"></textarea>
+              <div class="input-hint muted" id="sms-recipient-count">0 recipients</div>
+            </div>
+            <div class="section-card">
+              <span class="section-label">Message</span>
+              <textarea class="textarea-input" placeholder="Enter your message here..." oninput="updateSmsEstimate()"></textarea>
+              <div class="input-hint muted" id="sms-char-count">0 / 1000 chars</div>
+            </div>
+            <div class="section-card" id="sms-estimate-card" style="display:none;">
+              <div class="summary-row"><span class="summary-key">Pages</span><span class="summary-value" id="sms-pages">1</span></div>
+              <div class="summary-row"><span class="summary-key">Recipients</span><span class="summary-value" id="sms-recipients">1</span></div>
+              <div class="summary-row" style="border-top: 1px solid var(--pp-border); padding-top: 8px; margin-top: 4px;"><span class="summary-key">Estimated Cost</span><span class="summary-value mint" id="sms-cost">₦5</span></div>
+            </div>
+            <button class="cta-button" id="sms-cta" onclick="submitScreen('sms', 'Send SMS', '₦5')" disabled>Send SMS — ₦0</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       JAVASCRIPT — Interactive Functionality
+       ============================================================ -->
+  <script>
+    // Track selections per screen
+    const state = {
+      airtime: { network: 'MTN', plan: '₦1,000', planPrice: 1000 },
+      data: { network: 'MTN', plantype: 'SME', plan: '1.5GB', planPrice: 465 },
+      electricity: { meterType: 'Prepaid', disco: 'Ikeja Electric', plan: '₦5,000', planPrice: 5000 },
+      tv: { provider: 'DSTV', plan: 'Premium', planPrice: 7900 },
+      recharge: { network: 'MTN', plan: '₦200', planPrice: 200, qty: 2 },
+      betting: { platform: 'Bet9ja', plan: '₦5,000', planPrice: 5000 },
+      isp: { type: 'Smile', plan: '10GB', planPrice: 3500 },
+      education: { exam: 'NECO', qty: 1, planPrice: 1200 },
+      sms: { pages: 1, recipients: 1, cost: 5 },
+    };
+
+    function selectSegment(btn, group) {
+      const container = btn.parentElement;
+      container.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function selectPlan(card, screen) {
+      const grid = card.parentElement;
+      grid.querySelectorAll('.plan-card').forEach(c => {
+        c.classList.remove('selected');
+        const check = c.querySelector('.plan-check');
+        if (check) check.remove();
+      });
+      card.classList.add('selected');
+      const checkEl = document.createElement('div');
+      checkEl.className = 'plan-check';
+      checkEl.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+      card.appendChild(checkEl);
+      const planName = card.querySelector('.plan-name').textContent;
+      const planPrice = card.querySelector('.plan-price').textContent;
+      state[screen].plan = planName;
+      state[screen].planPrice = parseInt(planPrice.replace(/[₦,]/g, '')) || 0;
+    }
+
+    function selectPlantype(btn, type) {
+      const container = btn.parentElement;
+      container.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.data.plantype = type;
+      const grid = document.getElementById('data-plan-grid');
+      if (grid) {
+        const cards = grid.querySelectorAll('.plan-card');
+        cards.forEach(c => {
+          const ptype = c.querySelector('.plan-validity').textContent;
+          c.style.display = ptype === type ? '' : 'none';
+        });
+      }
+    }
+
+    function handlePhoneInput(input, screen) {
+      const val = input.value.replace(/[^0-9]/g, '');
+      input.value = val;
+      const icon = document.getElementById(screen + '-phone-icon');
+      const hint = document.getElementById(screen + '-phone-hint');
+      if (val.length === 11) {
+        input.classList.add('is-valid');
+        if (icon) icon.style.display = 'flex';
+        if (hint) { hint.textContent = 'Validated — MTN detected'; hint.className = 'input-hint valid'; }
+      } else if (val.length > 0) {
+        input.classList.remove('is-valid');
+        if (icon) icon.style.display = 'none';
+        if (hint) { hint.textContent = val.length + '/11 digits'; hint.className = 'input-hint muted'; }
+      }
+    }
+
+    function handleMeterInput(input) {
+      const val = input.value.replace(/[^0-9]/g, '');
+      input.value = val;
+      const hint = document.getElementById('electricity-meter-hint');
+      const btn = document.getElementById('electricity-validate-btn');
+      if (val.length >= 10) {
+        if (hint) { hint.textContent = 'Valid meter number'; hint.className = 'input-hint valid'; }
+        if (btn) btn.disabled = false;
+      } else if (val.length > 0) {
+        if (hint) { hint.textContent = val.length + '/10+ digits'; hint.className = 'input-hint muted'; }
+        if (btn) btn.disabled = true;
+      }
+    }
+
+    function handleSmartcardInput(input) {
+      const val = input.value.replace(/[^0-9]/g, '');
+      input.value = val;
+      const hint = document.getElementById('tv-smartcard-hint');
+      const btn = document.getElementById('tv-validate-btn');
+      if (val.length >= 10) {
+        if (hint) { hint.textContent = 'Valid smartcard number'; hint.className = 'input-hint valid'; }
+        if (btn) btn.disabled = false;
+      } else if (val.length > 0) {
+        if (hint) { hint.textContent = val.length + '/10+ digits'; hint.className = 'input-hint muted'; }
+        if (btn) btn.disabled = true;
+      }
+    }
+
+    function handleBettingAccount(input) {
+      const val = input.value.trim();
+      const hint = document.getElementById('betting-account-hint');
+      const btn = document.getElementById('betting-validate-btn');
+      if (val.length >= 3) {
+        if (hint) { hint.textContent = 'Ready to validate'; hint.className = 'input-hint valid'; }
+        if (btn) btn.disabled = false;
+      } else if (val.length > 0) {
+        if (hint) { hint.textContent = val.length + '/3 min characters'; hint.className = 'input-hint muted'; }
+        if (btn) btn.disabled = true;
+      }
+    }
+
+    function validateMeter() {
+      const btn = document.getElementById('electricity-validate-btn');
+      const text = document.getElementById('electricity-validate-text');
+      if (btn) { btn.disabled = true; text.textContent = 'Validating via Bigisub...'; }
+      setTimeout(() => {
+        if (btn) { btn.disabled = false; text.textContent = 'Validate Meter'; }
+        const nameEl = document.getElementById('electricity-validated-name');
+        const addrEl = document.getElementById('electricity-validated-address');
+        const sourceEl = document.getElementById('electricity-validate-source');
+        if (nameEl) nameEl.style.display = 'block';
+        if (addrEl) addrEl.style.display = 'block';
+        if (sourceEl) sourceEl.style.display = 'block';
+      }, 1200);
+    }
+
+    function validateSmartcard() {
+      const btn = document.getElementById('tv-validate-btn');
+      const text = document.getElementById('tv-validate-text');
+      if (btn) { btn.disabled = true; text.textContent = 'Validating via Bigisub...'; }
+      setTimeout(() => {
+        if (btn) { btn.disabled = false; text.textContent = 'Validate Card'; }
+        const nameEl = document.getElementById('tv-validated-name');
+        const statusEl = document.getElementById('tv-validated-status');
+        const sourceEl = document.getElementById('tv-validate-source');
+        if (nameEl) nameEl.style.display = 'block';
+        if (statusEl) statusEl.style.display = 'block';
+        if (sourceEl) sourceEl.style.display = 'block';
+      }, 1200);
+    }
+
+    function validateBetting() {
+      const btn = document.getElementById('betting-validate-btn');
+      const text = document.getElementById('betting-validate-text');
+      if (btn) { btn.disabled = true; text.textContent = 'Validating via Bigisub...'; }
+      setTimeout(() => {
+        if (btn) { btn.disabled = false; text.textContent = 'Validate Account'; }
+        const nameEl = document.getElementById('betting-validated-name');
+        const refEl = document.getElementById('betting-validated-ref');
+        const sourceEl = document.getElementById('betting-validate-source');
+        if (nameEl) nameEl.style.display = 'block';
+        if (refEl) refEl.style.display = 'block';
+        if (sourceEl) sourceEl.style.display = 'block';
+      }, 1200);
+    }
+
+    function updateAirtimeCustom(val) {
+      if (val && parseInt(val) >= 50) {
+        state.airtime.plan = '₦' + parseInt(val).toLocaleString();
+        state.airtime.planPrice = parseInt(val);
+      }
+    }
+
+    function updateElectricityCustom(val) {
+      if (val && parseInt(val) >= 1000) {
+        state.electricity.plan = '₦' + parseInt(val).toLocaleString();
+        state.electricity.planPrice = parseInt(val);
+      }
+    }
+
+    function updateBettingCustom(val) {
+      if (val && parseInt(val) > 0) {
+        state.betting.plan = '₦' + parseInt(val).toLocaleString();
+        state.betting.planPrice = parseInt(val);
+      }
+    }
+
+    function updateSmsEstimate() {
+      const screen = document.querySelector('[data-screen="sms"]');
+      if (!screen) return;
+      const msgEl = screen.querySelector('textarea:nth-of-type(2)');
+      const recipEl = screen.querySelector('textarea:nth-of-type(1)');
+      if (!msgEl || !recipEl) return;
+      const msg = msgEl.value;
+      const recipText = recipEl.value;
+      const recipients = recipText.split(',').filter(r => r.trim().length > 0).length;
+      const pages = msg.length > 0 ? Math.max(1, Math.ceil(msg.length / 160)) : 0;
+      const cost = pages * recipients * 5;
+      document.getElementById('sms-recipient-count').textContent = recipients + ' recipient' + (recipients !== 1 ? 's' : '');
+      document.getElementById('sms-char-count').textContent = msg.length + ' / 1000 chars';
+      if (recipients > 0 && msg.length > 0) {
+        document.getElementById('sms-estimate-card').style.display = 'block';
+        document.getElementById('sms-pages').textContent = pages;
+        document.getElementById('sms-recipients').textContent = recipients;
+        document.getElementById('sms-cost').textContent = '₦' + cost.toLocaleString();
+        const cta = document.getElementById('sms-cta');
+        cta.disabled = false;
+        cta.textContent = 'Send SMS — ₦' + cost.toLocaleString();
+        state.sms = { pages, recipients, cost };
+      } else {
+        document.getElementById('sms-estimate-card').style.display = 'none';
+        const cta = document.getElementById('sms-cta');
+        cta.disabled = true;
+        cta.textContent = 'Send SMS — ₦0';
+      }
+    }
+
+    function submitScreen(screen, action, amount) {
+      alert(action + ' confirmed!\n\nAmount: ' + amount + '\n\n(This is a mockup — no real purchase.)');
+    }
+
+    function goBack(btn) {
+      const screen = btn.closest('.phone-screen');
+      if (screen) {
+        const title = screen.querySelector('.screen-title').textContent;
+        alert('Navigate back from: ' + title + '\n\n(This is a mockup.)');
+      }
+    }
+  </script>
+
+  <!-- ============================================================
+       FOOTER NOTE
+       ============================================================ -->
+  <div style="max-width: 390px; width: 100%; margin-top: 40px; padding: 20px 0 40px; text-align: center;">
+    <p class="type-caption" style="color: var(--pp-ink-muted);">
+      This is a static visual mockup. No React Native code has been written yet.
+      <br/>Colors and spacing mirror the PagePay <code style="background: var(--pp-mint-soft); padding: 2px 6px; border-radius: 4px; font-size: 11px;">PagePay</code> design tokens.
+    </p>
+  </div>
+
+</body>
+</html>

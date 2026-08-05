@@ -48,6 +48,7 @@ export default function BuyElectricityScreen() {
   const [meterType, setMeterType] = useState<'prepaid' | 'postpaid'>('prepaid');
   const [amount, setAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
+  const [validatedCustomer, setValidatedCustomer] = useState<string | null>(null);
 
   const discosQ = useQuery({
     queryKey: ['electricity-plans'],
@@ -100,6 +101,21 @@ export default function BuyElectricityScreen() {
     },
   });
 
+  const validateMutation = useMutation({
+    mutationFn: async () => {
+      if (!planId || !meterNumber) throw new Error(t('bills.electricity.meter_required'));
+      const res = await apiFetch('/api/v1/bills/validate-meter', {
+        method: 'POST',
+        body: JSON.stringify({ meter_number: meterNumber, plan_id: planId, meter_type: meterType }),
+      });
+      if (!res.ok) throw new Error(t('bills.electricity.errors.validation_failed'));
+      return (await res.json()) as { customer_name?: string; validated?: boolean };
+    },
+    onSuccess: (data) => {
+      if (data.customer_name) setValidatedCustomer(data.customer_name);
+    },
+  });
+
   const finalAmount = amount ?? (parseInt(customAmount) || 0);
   const canSubmit = meterNumber.length >= 10 && phone.length === 11 && finalAmount >= 1000;
   const estPoints = finalAmount ? Math.floor(finalAmount * 0.012 * 0.67 * 10) : 0;
@@ -130,7 +146,7 @@ export default function BuyElectricityScreen() {
               return (
               <TouchableOpacity
                 key={id}
-                onPress={() => setPlanId(id)}
+                onPress={() => { setPlanId(id); setValidatedCustomer(null); }}
                 style={[
                   styles.discoChip,
                   {
@@ -187,9 +203,9 @@ export default function BuyElectricityScreen() {
           placeholderTextColor={tokens.inkMuted}
           value={meterNumber}
           onChangeText={(text) => {
-            // Only allow numbers
             const cleaned = text.replace(/[^0-9]/g, '');
             setMeterNumber(cleaned);
+            setValidatedCustomer(null);
           }}
           keyboardType="number-pad"
           maxLength={20}
@@ -198,6 +214,21 @@ export default function BuyElectricityScreen() {
           <Text style={{ color: tokens.error, fontSize: 12, marginTop: -10 }}>
             {t('bills.electricity.meter_error')}
           </Text>
+        )}
+
+        {/* Validate Meter */}
+        <TouchableOpacity
+          onPress={() => validateMutation.mutate()}
+          disabled={meterNumber.length < 10 || !planId || validateMutation.isPending}
+          style={[styles.validateBtn, { opacity: (meterNumber.length < 10 || !planId || validateMutation.isPending) ? 0.5 : 1 }]}
+        >
+          <Ionicons name="checkmark-circle-outline" size={18} color={tokens.mintText} />
+          <Text style={[styles.validateText, { color: tokens.mintText }]}>
+            {validateMutation.isPending ? t('bills.electricity.validating') : t('bills.electricity.validate_button')}
+          </Text>
+        </TouchableOpacity>
+        {validatedCustomer && (
+          <Text style={{ color: tokens.mint, fontSize: 12 }}>✓ {validatedCustomer}</Text>
         )}
 
         {/* Phone Number */}
@@ -334,6 +365,11 @@ const styles = StyleSheet.create({
   },
   earnLabel: { fontSize: 14, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
   earnSub: { fontSize: 12, marginTop: 2 },
+  validateBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    padding: 12, borderRadius: 10,
+  },
+  validateText: { fontSize: 14, fontWeight: '600' },
   payBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, borderRadius: 14, padding: 16, marginTop: 8,

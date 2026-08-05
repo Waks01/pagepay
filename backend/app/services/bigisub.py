@@ -183,12 +183,16 @@ class BigisubClient:
             "pin": self._pin,
         })
         data = body.get("data", {})
+        actual_charged = float(data.get("amount", amount))
+        discount_pct = 0.0
+        if amount > 0:
+            discount_pct = ((amount - actual_charged) / amount) * 100
         return AirtimeResult(
             status="success" if body.get("success") else "failed",
             reference=data.get("reference", data.get("transaction_id", "")),
-            amount=data.get("amount", str(amount)),
-            charged=data.get("amount", str(amount)),
-            discount="0",
+            amount=str(amount),
+            charged=str(int(actual_charged)),
+            discount=str(round(discount_pct, 2)),
             balance="",
             network=data.get("network", str(network_id)),
             mobile_number=data.get("phone_number", mobile_number),
@@ -273,8 +277,8 @@ class BigisubClient:
         self, disco_code: str, meter_number: str, meter_type: str = "prepaid",
     ) -> dict:
         body = await self._post("bills/electricity/verify/", {
-            "disco_code": disco_code,
-            "meter_number": meter_number,
+            "company": disco_code,
+            "meter_no": meter_number,
             "meter_type": meter_type,
         })
         return body.get("data", {})
@@ -286,8 +290,8 @@ class BigisubClient:
         customer_name = verify_result.get("customer_name", "")
 
         body = await self._post("bills/electricity/pay/", {
-            "disco_code": disco_code,
-            "meter_number": meter_number,
+            "company": disco_code,
+            "meter_no": meter_number,
             "amount": str(amount),
             "meter_type": meter_type,
             "phone_number": phone,
@@ -321,7 +325,7 @@ class BigisubClient:
 
     async def verify_cable(self, iuc: str, cable_name: str) -> dict:
         body = await self._post("vtu/cable/verify/", {
-            "smartcard_number": iuc,
+            "card_no": iuc,
             "cable_name": cable_name.lower(),
         })
         return body.get("data", {})
@@ -338,7 +342,7 @@ class BigisubClient:
         plan_amount = int(plan["amount"]) if plan else amount
 
         body = await self._post("vtu/cable/purchase/", {
-            "smartcard_number": iuc,
+            "card_no": iuc,
             "cable_name": cable_name.lower(),
             "plan_id": plan_id,
             "phone_number": phone,
@@ -410,7 +414,7 @@ class BigisubClient:
     async def validate_betting_account(self, biller_code: str, account_number: str) -> dict:
         body = await self._post("betting/validate/", {
             "biller_code": biller_code,
-            "account_number": account_number,
+            "customer_id": account_number,
         })
         return body.get("data", {})
 

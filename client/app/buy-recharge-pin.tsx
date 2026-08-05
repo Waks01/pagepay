@@ -52,7 +52,7 @@ export default function BuyRechargePinScreen() {
     queryKey: ['airtime-networks'],
     queryFn: async () => {
       const res = await apiFetch('/api/v1/bills/airtime/networks');
-      if (!res.ok) throw new Error('Failed to load networks');
+      if (!res.ok) throw new Error(t('bills.recharge_pin.load_networks_error'));
       return (await res.json()) as NetworkOption[];
     },
   });
@@ -68,7 +68,7 @@ export default function BuyRechargePinScreen() {
     queryFn: async () => {
       if (!network) return [];
       const res = await apiFetch(`/api/v1/bills/recharge-pin/plans?network=${network}`);
-      if (!res.ok) throw new Error('Failed to load plans');
+      if (!res.ok) throw new Error(t('bills.recharge_pin.load_plans_error'));
       return (await res.json()) as PinPlan[];
     },
     enabled: !!network,
@@ -202,7 +202,7 @@ export default function BuyRechargePinScreen() {
         {/* Total */}
         {totalPrice > 0 && (
           <View style={[styles.totalCard, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
-            <Text style={[styles.totalLabel, { color: tokens.inkMuted }]}>Total</Text>
+            <Text style={[styles.totalLabel, { color: tokens.inkMuted }]}>{t('bills.recharge_pin.total')}</Text>
             <Text style={[styles.totalValue, { color: tokens.mint }]}>
               ₦{totalPrice.toLocaleString()}
             </Text>

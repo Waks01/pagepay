@@ -207,7 +207,12 @@ async def list_data_plans(network: str = "1"):
         logger.error("Failed to fetch data plans: %s", exc)
         raise HTTPException(status_code=502, detail="Payment provider unavailable. Please try again later.")
     result = [
-        {"plan_code": p.plan_code, "amount": p.amount, "label": getattr(p, "label", p.plan_code)}
+        {
+            "plan_code": p.plan_code,
+            "amount": p.amount,
+            "label": getattr(p, "label", p.plan_code),
+            "plantype": getattr(p, "plantype", ""),
+        }
         for p in plans
     ]
     logger.info("Data plans response: count=%d network=%s", len(result), network)
@@ -544,6 +549,13 @@ NETWORK_PREFIXES = {
     "9mobile": ["0809", "0817", "0818", "0908", "0909"],
 }
 
+NETWORK_NAME_TO_ID = {
+    "mtn": 1,
+    "glo": 2,
+    "airtel": 3,
+    "9mobile": 4,
+}
+
 
 @router.post("/detect-network")
 async def detect_network(payload: dict):
@@ -566,9 +578,10 @@ async def detect_network(payload: dict):
     
     for network, prefixes in NETWORK_PREFIXES.items():
         if prefix_4 in prefixes or prefix_5 in prefixes:
+            network_id = NETWORK_NAME_TO_ID.get(network)
             return {
                 "phone": phone_clean,
-                "network": network,
+                "network": network_id,
                 "network_name": network.upper(),
                 "validated": True,
             }
@@ -585,10 +598,14 @@ async def detect_network(payload: dict):
 
 @router.post("/validate-meter")
 async def validate_meter(payload: dict, current_user: User = Depends(get_current_user)):
-    """Validate electricity meter number and return customer details using Paystack.
+    """Validate electricity meter number via Bigisub.
     
-    Paystack provides merchant verification API that works across all DISCOs.
-    Returns customer name and address for confirmation before purchase.
+    Calls Bigisub's bills/electricity/verify/ endpoint with correct field names:
+    - company: DISCO code (e.g. ikeja-electric)
+    - meter_no: meter number
+    - meter_type: prepaid or postpaid
+    
+    Returns customer_name and address on success.
     """
     meter_number = payload.get("meter_number", "").strip()
     disco_code = payload.get("plan_id", "ikeja-electric")
@@ -597,62 +614,30 @@ async def validate_meter(payload: dict, current_user: User = Depends(get_current
     if len(meter_number) < 10:
         raise HTTPException(status_code=400, detail="Meter number must be at least 10 digits")
     
-    if not settings.paystack_secret_key:
-        # Fall back to no validation if Paystack not configured
-        return {
-            "meter_number": meter_number,
-            "customer_name": None,
-            "address": None,
-            "validated": False,
-            "message": "Validation service not configured - proceed with purchase",
-        }
-    
     try:
-        # Use Paystack's merchant verification for electricity
-        # Endpoint: GET /bvn/match (but for bills, different endpoint)
-        # Actually, Paystack uses: GET /verifications/resolve_meter
-        # Reference: https://paystack.com/docs/payments/multi-payments/#resolve-card-bin
-        
-        import httpx
-        
-        headers = {
-            "Authorization": f"Bearer {settings.paystack_secret_key}",
-            "Content-Type": "application/json",
-        }
-        
-        # Paystack meter resolution endpoint
-        # Note: This requires Paystack's bill payment feature to be enabled
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"https://api.paystack.co/verifications/resolve_meter/{disco_code}/{meter_number}/{meter_type}",
-                headers=headers,
-            )
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get("status") and data.get("data"):
-                details = data["data"]
-                return {
-                    "meter_number": meter_number,
-                    "customer_name": details.get("customer_name"),
-                    "address": details.get("address"),
-                    "validated": True,
-                    "message": "Meter verified successfully",
-                }
-        
-        # If Paystack doesn't support this or meter invalid
-        logger.warning(f"Paystack meter validation failed: {resp.status_code} - {resp.text}")
+        result = await _get_vtu_client().verify_meter(
+            disco_code=disco_code,
+            meter_number=meter_number,
+            meter_type=meter_type,
+        )
+        customer_name = result.get("customer_name")
+        if customer_name:
+            return {
+                "meter_number": meter_number,
+                "customer_name": customer_name,
+                "address": result.get("address"),
+                "validated": True,
+                "message": "Meter verified successfully",
+            }
         return {
             "meter_number": meter_number,
             "customer_name": None,
             "address": None,
             "validated": False,
-            "message": "Could not verify meter - check number and try again",
+            "message": result.get("message", "Could not verify meter - check number and try again"),
         }
-        
-    except Exception as e:
-        logger.error(f"Meter validation error: {e}")
-        # Don't block user - let them proceed
+    except (PeyflexError, BigisubError) as exc:
+        logger.error("Meter validation failed: %s", exc)
         return {
             "meter_number": meter_number,
             "customer_name": None,
@@ -664,10 +649,13 @@ async def validate_meter(payload: dict, current_user: User = Depends(get_current
 
 @router.post("/validate-smartcard")
 async def validate_smartcard(payload: dict, current_user: User = Depends(get_current_user)):
-    """Validate TV smartcard/IUC number and return customer details using Paystack.
+    """Validate TV smartcard/IUC number via Bigisub.
     
-    Paystack provides merchant verification API for cable TV subscriptions.
-    Returns customer name and account status for confirmation.
+    Calls Bigisub's vtu/cable/verify/ endpoint with correct field names:
+    - card_no: smartcard/IUC number
+    - cable_name: provider (e.g. dstv, gotv)
+    
+    Returns customer_name on success.
     """
     smartcard = payload.get("smartcard_number", "").strip()
     provider = payload.get("provider", "dstv")
@@ -675,54 +663,29 @@ async def validate_smartcard(payload: dict, current_user: User = Depends(get_cur
     if len(smartcard) < 10:
         raise HTTPException(status_code=400, detail="Smartcard number must be at least 10 digits")
     
-    if not settings.paystack_secret_key:
-        return {
-            "smartcard_number": smartcard,
-            "customer_name": None,
-            "account_status": None,
-            "validated": False,
-            "message": "Validation service not configured - proceed with purchase",
-        }
-    
     try:
-        import httpx
-        
-        headers = {
-            "Authorization": f"Bearer {settings.paystack_secret_key}",
-            "Content-Type": "application/json",
-        }
-        
-        # Paystack smartcard resolution endpoint
-        # Endpoint: GET /verifications/resolve_smartcard/{provider_code}/{smartcard_number}
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"https://api.paystack.co/verifications/resolve_smartcard/{provider}/{smartcard}",
-                headers=headers,
-            )
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get("status") and data.get("data"):
-                details = data["data"]
-                return {
-                    "smartcard_number": smartcard,
-                    "customer_name": details.get("customer_name"),
-                    "account_status": details.get("account_status", "Active"),
-                    "validated": True,
-                    "message": "Smartcard verified successfully",
-                }
-        
-        logger.warning(f"Paystack smartcard validation failed: {resp.status_code} - {resp.text}")
+        result = await _get_vtu_client().verify_cable(
+            iuc=smartcard,
+            cable_name=provider,
+        )
+        customer_name = result.get("customer_name")
+        if customer_name:
+            return {
+                "smartcard_number": smartcard,
+                "customer_name": customer_name,
+                "account_status": result.get("account_status", "Active"),
+                "validated": True,
+                "message": "Smartcard verified successfully",
+            }
         return {
             "smartcard_number": smartcard,
             "customer_name": None,
             "account_status": None,
             "validated": False,
-            "message": "Could not verify smartcard - check number and try again",
+            "message": result.get("message", "Could not verify smartcard - check number and try again"),
         }
-        
-    except Exception as e:
-        logger.error(f"Smartcard validation error: {e}")
+    except (PeyflexError, BigisubError) as exc:
+        logger.error("Smartcard validation failed: %s", exc)
         return {
             "smartcard_number": smartcard,
             "customer_name": None,

@@ -384,6 +384,8 @@
       "success_title": "Airtime Ti Ra!",
       "success_message": "₦{{amount}} airtime ti fi ranṣẹ si {{phone}}. O gba {{points}} aaye!",
       "ok": "O dara",
+      "load_error": "Ko le gba awọn nẹtiwọọki. Jọwọ ṣayẹwo asopọ rẹ.",
+      "select_network": "Yan nẹtiwọọki",
       "errors": {
         "phone_required": "Tẹ nọmba foonu sii",
         "phone_invalid": "Nọmba foonu gbọdọ jẹ awọn nọmba 11",
@@ -472,7 +474,39 @@
         "purchase_failed": "Rira ko ṣiṣẹ. Jọwọ gbiyanju lẹẹkansi.",
         "validation_failed": "Ayẹwo kaadi ko ṣiṣẹ. Ṣayẹwo nọmba naa ki o tun gbiyanju."
       }
-    }
+    },
+    "sms": {
+      "title": "Bulk SMS",
+      "sender": "Oruko Olufarahan",
+      "sender_placeholder": "apẹẹrẹ. Iṣẹ Mi",
+      "recipients": "Awọn Olgba",
+      "recipients_placeholder": "08012345678, 08087654321",
+      "message": "Ifiranṣẹ",
+      "message_placeholder": "Tẹ ifiranṣẹ rẹ sii...",
+      "fill_details": "Kún gbogbo awọn alaye",
+      "send_button": "Firanṣẹ SMS (₦{{cost}})",
+      "sending": "N fi ranṣẹ...",
+      "success_title": "SMS Ti Fi Ranṣẹ!",
+      "success_message": "{{pages}} oju-iwe(s) ti fi ranṣẹ si {{recipients}} awọn olgba. ID Iṣẹ: {{job}}",
+      "done": "Parí",
+      "error_title": "Isanwo Ko Ṣiṣẹ",
+      "purchase_failed": "Isanwo ko ṣiṣẹ. Jọwọ gbiyanju lẹẹkansi.",
+      "load_error": "Ko le gba awọn eto. Jọwọ ṣayẹwo asopọ rẹ.",
+      "load_products_error": "Ko le gba awọn ọja. Jọwọ gbiyanju lẹẹkansi.",
+      "select_platform": "Yan pẹpẹ eto",
+      "enter_account": "Tẹ nọmba akọọlẹ sii",
+      "amount_required": "Yan tabi tẹ iye owo sii",
+      "select_biller_account": "Yan pẹpẹ ki o si tẹ nọmba akọọlẹ",
+      "validation_failed": "Ayẹwo ko ṣiṣẹ. Jọwọ gbiyanju lẹẹkansi."
+    },
+    "tab_daily": "Ojoojumọ",
+    "tab_weekly": "Ọsẹ",
+    "tab_monthly": "Oṣooṣu",
+    "earn_title": "O yoo gba awọn aaye cashback!",
+    "earn_sub": "Awọn ẹbun gidi lati ọdọ VTU provider rẹ yoo fi kun lẹhin rara.",
+    "earn_cashback": "Gba awọn aaye cashback",
+    "load_error": "Ko le gba awọn eto. Jọwọ ṣayẹwo asopọ rẹ ki o tun gbiyanju.",
+    "no_plans": "Ko si awọn eto fun akoko yii."
   },
   "fund_wallet": {
     "title": "Fi Owo Kun",

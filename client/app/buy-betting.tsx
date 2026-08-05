@@ -53,7 +53,7 @@ export default function BuyBettingScreen() {
     queryKey: ['betting-billers'],
     queryFn: async () => {
       const res = await apiFetch('/api/v1/bills/betting/billers');
-      if (!res.ok) throw new Error('Failed to load billers');
+      if (!res.ok) throw new Error(t('bills.betting.load_error'));
       return (await res.json()) as Biller[];
     },
   });
@@ -63,7 +63,7 @@ export default function BuyBettingScreen() {
     queryFn: async () => {
       if (!biller) return [];
       const res = await apiFetch(`/api/v1/bills/betting/products?biller_code=${biller}`);
-      if (!res.ok) throw new Error('Failed to load products');
+      if (!res.ok) throw new Error(t('bills.betting.load_products_error'));
       return (await res.json()) as Product[];
     },
     enabled: !!biller,
@@ -71,12 +71,12 @@ export default function BuyBettingScreen() {
 
   const validateMutation = useMutation({
     mutationFn: async () => {
-      if (!biller || !accountNumber) throw new Error('Select biller and enter account number');
+      if (!biller || !accountNumber) throw new Error(t('bills.betting.select_biller_account'));
       const res = await apiFetch('/api/v1/bills/betting/validate', {
         method: 'POST',
         body: JSON.stringify({ biller_code: biller, account_number: accountNumber }),
       });
-      if (!res.ok) throw new Error('Validation failed');
+      if (!res.ok) throw new Error(t('bills.betting.validation_failed'));
       return (await res.json()) as { customer_name?: string };
     },
     onSuccess: (data) => {
@@ -86,9 +86,9 @@ export default function BuyBettingScreen() {
 
   const purchaseMutation = useMutation({
     mutationFn: async () => {
-      if (!biller) throw new Error('Select a betting platform');
-      if (!accountNumber) throw new Error('Enter account number');
-      if (!selectedProduct) throw new Error('Select an amount');
+      if (!biller) throw new Error(t('bills.betting.select_platform'));
+      if (!accountNumber) throw new Error(t('bills.betting.enter_account'));
+      if (!selectedProduct) throw new Error(t('bills.betting.select_amount'));
       const res = await apiFetch('/api/v1/bills/betting', {
         method: 'POST',
         body: JSON.stringify({
@@ -100,7 +100,7 @@ export default function BuyBettingScreen() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.detail || 'Purchase failed');
+        throw new Error(err.detail || t('bills.betting.purchase_failed'));
       }
       return (await res.json()) as PurchaseResult;
     },
@@ -135,6 +135,18 @@ export default function BuyBettingScreen() {
         <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.betting.platform')}</Text>
         {billersQ.isLoading ? (
           <ActivityIndicator color={tokens.mint} />
+        ) : billersQ.isError ? (
+          <View style={[styles.errorBox, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
+            <Ionicons name="alert-circle-outline" size={20} color={tokens.signal} />
+            <Text style={[styles.errorText, { color: tokens.signal }]}>
+              {t('bills.betting.load_error')}
+            </Text>
+            <TouchableOpacity onPress={() => billersQ.refetch()} style={styles.retryBtn}>
+              <Text style={[styles.retryText, { color: tokens.mint }]}>
+                {t('common.retry')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {(billersQ.data ?? []).map((b) => (
@@ -278,4 +290,11 @@ const styles = StyleSheet.create({
     gap: 8, borderRadius: 14, padding: 16, marginTop: 8,
   },
   payText: { fontSize: 16, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  errorBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 12, padding: 14, borderWidth: 1,
+  },
+  errorText: { flex: 1, fontSize: 13, fontWeight: '500' },
+  retryBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  retryText: { fontSize: 13, fontWeight: '700' },
 });

@@ -45,7 +45,7 @@ export default function BuySmsScreen() {
     queryKey: ['sms-pricing'],
     queryFn: async () => {
       const res = await apiFetch('/api/v1/bills/sms/pricing');
-      if (!res.ok) throw new Error('Failed to load SMS pricing');
+      if (!res.ok) throw new Error(t('bills.sms.load_error'));
       return (await res.json()) as SmsPricing;
     },
   });
@@ -67,9 +67,9 @@ export default function BuySmsScreen() {
 
   const purchaseMutation = useMutation({
     mutationFn: async () => {
-      if (!senderName.trim()) throw new Error('Enter sender name');
-      if (recipientList.length === 0) throw new Error('Enter at least one recipient');
-      if (!message.trim()) throw new Error('Enter message');
+      if (!senderName.trim()) throw new Error(t('bills.sms.enter_sender'));
+      if (recipientList.length === 0) throw new Error(t('bills.sms.enter_recipients'));
+      if (!message.trim()) throw new Error(t('bills.sms.enter_message'));
       const res = await apiFetch('/api/v1/bills/sms/send', {
         method: 'POST',
         body: JSON.stringify({
@@ -80,7 +80,7 @@ export default function BuySmsScreen() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.detail || 'Send failed');
+        throw new Error(err.detail || t('bills.sms.send_failed'));
       }
       return (await res.json()) as PurchaseResult;
     },

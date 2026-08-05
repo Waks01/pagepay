@@ -45,7 +45,7 @@ export default function BuyEducationScreen() {
     queryKey: ['education-prices'],
     queryFn: async () => {
       const res = await apiFetch('/api/v1/bills/education/prices');
-      if (!res.ok) throw new Error('Failed to load exams');
+      if (!res.ok) throw new Error(t('bills.education.load_error'));
       return (await res.json()) as ExamProduct[];
     },
   });
@@ -149,7 +149,7 @@ export default function BuyEducationScreen() {
         {/* Total */}
         {totalPrice > 0 && (
           <View style={[styles.totalCard, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
-            <Text style={[styles.totalLabel, { color: tokens.inkMuted }]}>Total</Text>
+            <Text style={[styles.totalLabel, { color: tokens.inkMuted }]}>{t('bills.education.total')}</Text>
             <Text style={[styles.totalValue, { color: tokens.mint }]}>
               ₦{totalPrice.toLocaleString()}
             </Text>
