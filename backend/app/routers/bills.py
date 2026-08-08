@@ -80,14 +80,53 @@ def _compute_points(commission_kobo: int) -> int:
     
     The commission comes from the VTU provider's `discount` field in the API response,
     which reflects the real-time discount/margin rate:
-    - Peyflex: discount percentage (Free API: 0.5-3%, Top Reseller: 1-6%)
-    - Bigisub: computed as (plan_amount - charged) / plan_amount * 100
+    - Peyflex: discount percentage (e.g. "2.5").
+    - Bigisub: computed as (plan_amount - charged) / plan_amount * 100.
     
     Users receive 67% of the commission as points (10 pts = ₦1).
     Platform keeps 33% to cover infrastructure costs.
     """
     user_share_kobo = int(commission_kobo * _USER_SHARE)
     return user_share_kobo * _POINTS_PER_NAIRA // 100
+
+
+def _effective_commission_kobo(
+    amount_kobo: int,
+    service: str,
+    discount: str | None = None,
+    charged: float | None = None,
+    price_naira: float | None = None,
+) -> int:
+    """Convert provider discount/charged data to commission kobo, with fallback.
+
+    Tries, in order:
+    1. Provider `discount` percentage (Peyflex, some Bigisub responses).
+    2. `charged` minus `price_naira` for services where the API returns both.
+    3. Fallback minimum commission (1.8% of transaction value) so users earn
+       points even when the provider returns 0/unknown discount.
+
+    The fallback matches the frontend estimate users see before purchase.
+    """
+    commission_kobo = 0
+
+    if discount is not None:
+        try:
+            commission_kobo = int(float(discount) * 100)
+        except (ValueError, TypeError):
+            pass
+
+    if commission_kobo <= 0 and charged is not None and price_naira is not None:
+        try:
+            commission_kobo = int((price_naira - charged) * 100)
+        except (ValueError, TypeError):
+            pass
+
+    if commission_kobo <= 0:
+        fallback_kobo = max(1, int(amount_kobo * 0.018))
+        logger.info("VTU %s returned 0 commission; using fallback of %d kobo", service, fallback_kobo)
+        commission_kobo = fallback_kobo
+
+    return commission_kobo
 
 
 def _generate_reference() -> str:
@@ -146,14 +185,11 @@ async def buy_airtime(
         await db.rollback()
         raise HTTPException(status_code=502, detail=f"Purchase failed: {result.message}")
 
-    # Extract real commission from provider's discount field.
-    # Peyflex: discount is a percentage (e.g. "2.5").
-    # Bigisub: discount is computed as (plan_amount - charged) / plan_amount * 100.
-    try:
-        commission_kobo = int(float(result.discount) * 100)
-    except (ValueError, TypeError):
-        logger.warning("VTU airtime discount field missing or invalid: %s", result.discount)
-        commission_kobo = 0
+    commission_kobo = _effective_commission_kobo(
+        amount_kobo=amount_kobo,
+        service="airtime",
+        discount=result.discount,
+    )
 
     points = _compute_points(commission_kobo)
 
@@ -298,14 +334,11 @@ async def buy_data(
         await db.rollback()
         raise HTTPException(status_code=502, detail=f"Purchase failed: {result.message}")
 
-    # Extract real commission from provider's discount field.
-    # Peyflex: discount is a percentage (e.g. "2.5").
-    # Bigisub: discount is computed as (plan_amount - charged) / plan_amount * 100.
-    try:
-        commission_kobo = int(float(result.discount) * 100)
-    except (ValueError, TypeError):
-        logger.warning("VTU data discount field missing or invalid: %s", result.discount)
-        commission_kobo = 0
+    commission_kobo = _effective_commission_kobo(
+        amount_kobo=amount_kobo,
+        service="data",
+        discount=result.discount,
+    )
 
     points = _compute_points(commission_kobo)
 
@@ -414,17 +447,15 @@ async def buy_electricity(
         raise HTTPException(status_code=502, detail=f"Purchase failed: {result.get('message', 'Unknown')}")
 
     # Extract real commission from provider's response.
-    # Electricity typically has low or zero commission.
-    commission_kobo = 0
-    try:
-        if "discount" in result and result["discount"]:
-            commission_kobo = int(float(result["discount"]) * 100)
-        elif "charged" in result and result["charged"]:
-            charged = float(result["charged"])
-            commission_kobo = int((payload.amount_naira - charged) * 100)
-    except (ValueError, TypeError, KeyError) as e:
-        logger.warning("Could not extract electricity commission from response: %s. Error: %s", result, e)
-        commission_kobo = 0
+    discount = result.get("discount") if isinstance(result, dict) else getattr(result, "discount", None)
+    charged = result.get("charged") if isinstance(result, dict) else getattr(result, "charged", None)
+    commission_kobo = _effective_commission_kobo(
+        amount_kobo=amount_kobo,
+        service="electricity",
+        discount=discount,
+        charged=float(charged) if charged else None,
+        price_naira=payload.amount_naira,
+    )
 
     points = _compute_points(commission_kobo)
 
@@ -554,16 +585,15 @@ async def buy_tv(
         raise HTTPException(status_code=502, detail=f"Purchase failed: {result.get('message', 'Unknown')}")
 
     # Extract real commission from provider's response.
-    commission_kobo = 0
-    try:
-        if "discount" in result and result["discount"]:
-            commission_kobo = int(float(result["discount"]) * 100)
-        elif "charged" in result and result["charged"]:
-            charged = float(result["charged"])
-            commission_kobo = int((price_naira - charged) * 100)
-    except (ValueError, TypeError, KeyError) as e:
-        logger.warning("Could not extract TV commission from response: %s. Error: %s", result, e)
-        commission_kobo = 0
+    discount = result.get("discount") if isinstance(result, dict) else getattr(result, "discount", None)
+    charged = result.get("charged") if isinstance(result, dict) else getattr(result, "charged", None)
+    commission_kobo = _effective_commission_kobo(
+        amount_kobo=amount_kobo,
+        service="tv",
+        discount=discount,
+        charged=float(charged) if charged else None,
+        price_naira=price_naira,
+    )
 
     points = _compute_points(commission_kobo)
 
@@ -835,12 +865,12 @@ async def buy_recharge_pin(
         await db.rollback()
         raise _vtu_error(exc)
 
-    commission_kobo = 0
-    try:
-        if "discount" in result and result["discount"]:
-            commission_kobo = int(float(result["discount"]) * 100)
-    except (ValueError, TypeError):
-        commission_kobo = 0
+    discount = result.get("discount") if isinstance(result, dict) else getattr(result, "discount", None)
+    commission_kobo = _effective_commission_kobo(
+        amount_kobo=amount_kobo,
+        service="recharge_pin",
+        discount=discount,
+    )
 
     points = _compute_points(commission_kobo)
 
@@ -964,7 +994,10 @@ async def fund_betting(
         await db.rollback()
         raise _vtu_error(exc)
 
-    commission_kobo = 0
+    commission_kobo = _effective_commission_kobo(
+        amount_kobo=amount_kobo,
+        service="betting",
+    )
     points = _compute_points(commission_kobo)
 
     tx = BillTransaction(
@@ -1089,7 +1122,10 @@ async def topup_smile(
         await db.rollback()
         raise _vtu_error(exc)
 
-    commission_kobo = 0
+    commission_kobo = _effective_commission_kobo(
+        amount_kobo=amount_kobo,
+        service="isp_smile",
+    )
     points = _compute_points(commission_kobo)
 
     tx = BillTransaction(
@@ -1189,7 +1225,10 @@ async def topup_spectranet(
         await db.rollback()
         raise _vtu_error(exc)
 
-    commission_kobo = 0
+    commission_kobo = _effective_commission_kobo(
+        amount_kobo=amount_kobo,
+        service="isp_spectranet",
+    )
     points = _compute_points(commission_kobo)
 
     tx = BillTransaction(
@@ -1297,7 +1336,10 @@ async def buy_result_checker(
         await db.rollback()
         raise _vtu_error(exc)
 
-    commission_kobo = 0
+    commission_kobo = _effective_commission_kobo(
+        amount_kobo=amount_kobo,
+        service="education",
+    )
     points = _compute_points(commission_kobo)
 
     tx = BillTransaction(
@@ -1406,7 +1448,10 @@ async def send_sms(
         await db.rollback()
         raise _vtu_error(exc)
 
-    commission_kobo = 0
+    commission_kobo = _effective_commission_kobo(
+        amount_kobo=amount_kobo,
+        service="sms",
+    )
     points = _compute_points(commission_kobo)
 
     tx = BillTransaction(
