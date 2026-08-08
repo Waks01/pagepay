@@ -824,19 +824,17 @@ async def admob_ssv_callback(
     # asyncio.create_task keeps this fire-and-forget; FCM failures
     # never block the SSV response.
     if points > 0:
-        from app.services.fcm import send_ad_reward
-        from app.services.notifications import create_notification
+        from app.services.fcm import send_ad_reward_background
+        from app.services.notifications import create_notification_background
         asyncio.create_task(
-            send_ad_reward(
-                db,
+            send_ad_reward_background(
                 user_id,
                 points_earned=points,
                 ad_unit=req.ad_unit,
             )
         )
         asyncio.create_task(
-            create_notification(
-                db,
+            create_notification_background(
                 user_id,
                 title="Ad Reward",
                 body=f"You earned {points} points for watching an ad!",

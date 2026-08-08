@@ -179,7 +179,7 @@ async def buy_airtime(
     await db.commit()
 
     from app.services.notifications import create_notification_background
-    from app.services.fcm import send_push_notification
+    from app.services.fcm import send_push_notification_background
 
     asyncio.create_task(create_notification_background(
         user_id=current_user.id,
@@ -188,8 +188,7 @@ async def buy_airtime(
         category="wallet_updates",
         data={"type": "wallet_update", "service": "airtime", "points": str(points)},
     ))
-    asyncio.create_task(send_push_notification(
-        db=db,
+    asyncio.create_task(send_push_notification_background(
         user_id=current_user.id,
         title="Airtime Purchase Successful",
         body=f"You bought ₦{payload.amount_naira} airtime for {payload.phone} and earned {points} points.",
@@ -331,7 +330,7 @@ async def buy_data(
     await db.commit()
 
     from app.services.notifications import create_notification_background
-    from app.services.fcm import send_push_notification
+    from app.services.fcm import send_push_notification_background
 
     asyncio.create_task(create_notification_background(
         user_id=current_user.id,
@@ -340,8 +339,7 @@ async def buy_data(
         category="wallet_updates",
         data={"type": "wallet_update", "service": "data", "points": str(points)},
     ))
-    asyncio.create_task(send_push_notification(
-        db=db,
+    asyncio.create_task(send_push_notification_background(
         user_id=current_user.id,
         title="Data Purchase Successful",
         body=f"You bought data for {payload.phone} and earned {points} points.",
@@ -451,7 +449,7 @@ async def buy_electricity(
     await db.commit()
 
     from app.services.notifications import create_notification_background
-    from app.services.fcm import send_push_notification
+    from app.services.fcm import send_push_notification_background
 
     asyncio.create_task(create_notification_background(
         user_id=current_user.id,
@@ -460,8 +458,7 @@ async def buy_electricity(
         category="wallet_updates",
         data={"type": "wallet_update", "service": "electricity", "points": str(points)},
     ))
-    asyncio.create_task(send_push_notification(
-        db=db,
+    asyncio.create_task(send_push_notification_background(
         user_id=current_user.id,
         title="Electricity Purchase Successful",
         body=f"You bought electricity for meter {payload.meter_number} and earned {points} points.",
@@ -591,7 +588,7 @@ async def buy_tv(
     await db.commit()
 
     from app.services.notifications import create_notification_background
-    from app.services.fcm import send_push_notification
+    from app.services.fcm import send_push_notification_background
 
     asyncio.create_task(create_notification_background(
         user_id=current_user.id,
@@ -600,8 +597,7 @@ async def buy_tv(
         category="wallet_updates",
         data={"type": "wallet_update", "service": "tv", "points": str(points)},
     ))
-    asyncio.create_task(send_push_notification(
-        db=db,
+    asyncio.create_task(send_push_notification_background(
         user_id=current_user.id,
         title="Cable TV Subscription Successful",
         body=f"You subscribed to {payload.provider} for smartcard {payload.smartcard_number} and earned {points} points.",
@@ -868,7 +864,7 @@ async def buy_recharge_pin(
     await db.commit()
 
     from app.services.notifications import create_notification_background
-    from app.services.fcm import send_push_notification
+    from app.services.fcm import send_push_notification_background
 
     asyncio.create_task(create_notification_background(
         user_id=current_user.id,
@@ -877,8 +873,7 @@ async def buy_recharge_pin(
         category="wallet_updates",
         data={"type": "wallet_update", "service": "recharge_pin", "points": str(points)},
     ))
-    asyncio.create_task(send_push_notification(
-        db=db,
+    asyncio.create_task(send_push_notification_background(
         user_id=current_user.id,
         title="Recharge Pin Purchase Successful",
         body=f"You bought {quantity}x {size} recharge pin(s) and earned {points} points.",
@@ -992,7 +987,7 @@ async def fund_betting(
     await db.commit()
 
     from app.services.notifications import create_notification_background
-    from app.services.fcm import send_push_notification
+    from app.services.fcm import send_push_notification_background
 
     asyncio.create_task(create_notification_background(
         user_id=current_user.id,
@@ -1001,8 +996,7 @@ async def fund_betting(
         category="wallet_updates",
         data={"type": "wallet_update", "service": "betting", "points": str(points)},
     ))
-    asyncio.create_task(send_push_notification(
-        db=db,
+    asyncio.create_task(send_push_notification_background(
         user_id=current_user.id,
         title="Betting Wallet Funded",
         body=f"You funded your {biller_code} wallet with ₦{amount_naira} and earned {points} points.",
@@ -1118,7 +1112,7 @@ async def topup_smile(
     await db.commit()
 
     from app.services.notifications import create_notification_background
-    from app.services.fcm import send_push_notification
+    from app.services.fcm import send_push_notification_background
 
     asyncio.create_task(create_notification_background(
         user_id=current_user.id,
@@ -1127,8 +1121,7 @@ async def topup_smile(
         category="wallet_updates",
         data={"type": "wallet_update", "service": "isp_smile", "points": str(points)},
     ))
-    asyncio.create_task(send_push_notification(
-        db=db,
+    asyncio.create_task(send_push_notification_background(
         user_id=current_user.id,
         title="Smile ISP Top-up Successful",
         body=f"You topped up Smile account {account_number} and earned {points} points.",
@@ -1219,7 +1212,7 @@ async def topup_spectranet(
     await db.commit()
 
     from app.services.notifications import create_notification_background
-    from app.services.fcm import send_push_notification
+    from app.services.fcm import send_push_notification_background
 
     asyncio.create_task(create_notification_background(
         user_id=current_user.id,
@@ -1228,8 +1221,7 @@ async def topup_spectranet(
         category="wallet_updates",
         data={"type": "wallet_update", "service": "isp_spectranet", "points": str(points)},
     ))
-    asyncio.create_task(send_push_notification(
-        db=db,
+    asyncio.create_task(send_push_notification_background(
         user_id=current_user.id,
         title="Spectranet ISP Top-up Successful",
         body=f"You topped up Spectranet account {account_number} and earned {points} points.",
@@ -1328,7 +1320,7 @@ async def buy_result_checker(
     await db.commit()
 
     from app.services.notifications import create_notification_background
-    from app.services.fcm import send_push_notification
+    from app.services.fcm import send_push_notification_background
 
     asyncio.create_task(create_notification_background(
         user_id=current_user.id,
@@ -1337,8 +1329,7 @@ async def buy_result_checker(
         category="wallet_updates",
         data={"type": "wallet_update", "service": "education", "points": str(points)},
     ))
-    asyncio.create_task(send_push_notification(
-        db=db,
+    asyncio.create_task(send_push_notification_background(
         user_id=current_user.id,
         title="Result Checker Purchase Successful",
         body=f"You bought {quantity}x {exam_code} result checker PIN(s) and earned {points} points.",
@@ -1438,7 +1429,7 @@ async def send_sms(
     await db.commit()
 
     from app.services.notifications import create_notification_background
-    from app.services.fcm import send_push_notification
+    from app.services.fcm import send_push_notification_background
 
     asyncio.create_task(create_notification_background(
         user_id=current_user.id,
@@ -1447,8 +1438,7 @@ async def send_sms(
         category="wallet_updates",
         data={"type": "wallet_update", "service": "sms", "points": str(points)},
     ))
-    asyncio.create_task(send_push_notification(
-        db=db,
+    asyncio.create_task(send_push_notification_background(
         user_id=current_user.id,
         title="Bulk SMS Sent Successfully",
         body=f"You sent bulk SMS to {len(recipients)} recipients and earned {points} points.",

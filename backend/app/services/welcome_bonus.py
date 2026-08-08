@@ -154,11 +154,10 @@ async def grant_welcome_bonus(db: AsyncSession, user: User) -> bool:
     # path for the *first* signup but the *second* (e.g. a re-issued
     # token) will start delivering.
     try:
-        from app.services.fcm import send_push_notification
+        from app.services.fcm import send_push_notification_background
 
         asyncio.create_task(
-            send_push_notification(
-                db,
+            send_push_notification_background(
                 user_id=user.id,
                 title="Welcome bonus! 🎉",
                 body=(

@@ -150,11 +150,10 @@ async def end_session(
 
     if bonus_credited > 0 and session.verified and session.points_earned == bonus_credited:
         bonus_naira = bonus_credited / max(1, settings.points_per_naira)
-        from app.services.fcm import send_wallet_update
-        from app.services.notifications import create_notification
+        from app.services.fcm import send_wallet_update_background
+        from app.services.notifications import create_notification_background
         asyncio.create_task(
-            send_wallet_update(
-                db,
+            send_wallet_update_background(
                 current_user.id,
                 amount_naira=bonus_naira,
                 transaction_type="credit",
@@ -162,8 +161,7 @@ async def end_session(
             )
         )
         asyncio.create_task(
-            create_notification(
-                db,
+            create_notification_background(
                 current_user.id,
                 title="Reading Reward",
                 body=f"You earned {bonus_credited} points for finishing this slice!",

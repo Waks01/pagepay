@@ -264,6 +264,26 @@ async def send_push_notification_background(
             # Don't re-raise - this is a background task
 
 
+async def send_ad_reward_background(
+    user_id: int,
+    points_earned: int,
+    ad_unit: str | None = None,
+) -> None:
+    """Send ad reward notification in a background task with its own DB session."""
+    from app.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        try:
+            await send_ad_reward(
+                db=db,
+                user_id=user_id,
+                points_earned=points_earned,
+                ad_unit=ad_unit,
+            )
+        except Exception as e:
+            logger.error(f"Background ad reward notification failed: {e}")
+
+
 async def send_bulk_push_notification(
     db: AsyncSession,
     user_ids: List[int],
