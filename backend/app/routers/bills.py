@@ -65,7 +65,11 @@ def _get_vtu_public_client():
 def _vtu_error(exc: Exception) -> HTTPException:
     if isinstance(exc, (PeyflexError, BigisubError)):
         logger.error("VTU provider error: %s", exc)
-        return HTTPException(status_code=502, detail="Payment provider unavailable")
+        msg = str(exc)
+        safe_msg = msg if msg else "Payment provider error"
+        for sensitive in ["token", "key", "secret", "password", "authorization"]:
+            safe_msg = safe_msg.replace(sensitive, "***")
+        return HTTPException(status_code=502, detail=f"Payment provider error: {safe_msg}")
     raise exc
 
 

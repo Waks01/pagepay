@@ -200,6 +200,11 @@ async def lifespan(app: FastAPI):
             "disabled until this is resolved.",
             exc,
         )
+
+    logger.info(
+        "VTU provider configured: %s",
+        getattr(settings, "bills_provider", "peyflex"),
+    )
     
     # Start Phase 7 background task processor
     # Only start if explicitly enabled via settings.run_task_processor
