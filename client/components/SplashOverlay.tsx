@@ -217,7 +217,7 @@ export function SplashOverlay({ onDone }: SplashOverlayProps) {
       );
 
       fadeOut.value = withDelay(
-        2500,
+        4700,
         withTiming(
           0,
           { duration: 300, easing: Easing.in(Easing.cubic) },
