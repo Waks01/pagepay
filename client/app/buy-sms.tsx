@@ -160,7 +160,9 @@ export default function BuySmsScreen() {
           label={t('bills.sms.recipients')}
           accessory={recipientList.length > 0 ? (
             <Text style={{ color: tokens.inkMuted, fontSize: 11 }}>
-              {recipientList.length} {recipientList.length === 1 ? 'recipient' : 'recipients'}
+              {recipientList.length === 1
+                ? t('bills.sms.recipient_count_one', { count: recipientList.length })
+                : t('bills.sms.recipient_count_other', { count: recipientList.length })}
             </Text>
           ) : undefined}
         >
@@ -263,15 +265,15 @@ export default function BuySmsScreen() {
 
         <ConfirmModal
           visible={showConfirmModal}
-          title="Confirm Send"
+          title={t('bills.sms.confirm_title')}
           confirming={purchaseMutation.isPending}
           rows={[
-            { key: 'sender', label: 'Sender', value: senderName.trim() },
-            { key: 'recip', label: 'Recipients', value: recipientList.length },
-            { key: 'pages', label: 'Pages', value: `× ${estimate.pages}` },
-            { key: 'msg', label: 'Message', value: message.trim(), valueStyle: { maxWidth: 180 }, valueColor: 'muted' },
-            { key: 'amt', label: 'Cost', value: `₦${estimate.cost.toLocaleString()}`, valueColor: 'mint' as const },
-            { key: 'earn', label: "You'll earn", value: `+${estPoints} pts`, valueColor: 'mint' as const },
+            { key: 'sender', label: t('bills.sms.confirm_sender'), value: senderName.trim() },
+            { key: 'recip', label: t('bills.sms.confirm_recipients'), value: recipientList.length },
+            { key: 'pages', label: t('bills.sms.confirm_pages'), value: `× ${estimate.pages}` },
+            { key: 'msg', label: t('bills.sms.confirm_message'), value: message.trim(), valueStyle: { maxWidth: 180 }, valueColor: 'muted' },
+            { key: 'amt', label: t('bills.sms.confirm_cost'), value: `₦${estimate.cost.toLocaleString()}`, valueColor: 'mint' as const },
+            { key: 'earn', label: t('bills.sms.confirm_earn_label'), value: `+${estPoints} pts`, valueColor: 'mint' as const },
           ]}
           onCancel={() => setShowConfirmModal(false)}
           onConfirm={() => purchaseMutation.mutate()}

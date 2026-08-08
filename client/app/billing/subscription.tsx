@@ -20,7 +20,7 @@ export default function SubscriptionManagementScreen() {
     queryKey: ['me'],
     queryFn: async () => {
       const res = await apiFetch('/api/v1/auth/me');
-      if (!res.ok) throw new Error('Failed to load profile');
+      if (!res.ok) throw new Error(t('subscription.load_profile_failed'));
       return (await res.json()) as UserMe;
     },
   });

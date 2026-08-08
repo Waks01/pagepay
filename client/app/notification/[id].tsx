@@ -41,7 +41,7 @@ export default function NotificationDetailScreen() {
     queryKey: ["notification", notificationId],
     queryFn: async (): Promise<NotificationDetail> => {
       const res = await apiFetch(`/api/v1/notifications/${notificationId}`);
-      if (!res.ok) throw new Error("Failed to load notification");
+      if (!res.ok) throw new Error(t("notifications_list.load_failed"));
       return res.json();
     },
     enabled: !!notificationId && !isNaN(notificationId),
@@ -55,7 +55,7 @@ export default function NotificationDetailScreen() {
           method: "POST",
         },
       );
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) throw new Error(t("notifications_list.generic_failed"));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notifications"] });

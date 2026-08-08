@@ -89,10 +89,12 @@ export default function PremiumScreen() {
     console.log("🏁 [PREMIUM] Polling complete. Success:", success);
 
     Alert.alert(
-      success ? "🎉 Premium Activated!" : "⏳ Processing Payment",
       success
-        ? "Welcome to Premium! Enjoy ad-free reading and 2x earning points."
-        : "Your subscription is being activated. This may take a few moments.",
+        ? t("premium.premium_activated_title")
+        : t("premium.processing_payment_title"),
+      success
+        ? t("premium.premium_activated_body")
+        : t("premium.processing_payment_body"),
     );
 
     console.log("🔄 [PREMIUM] Final query invalidation...");
@@ -105,7 +107,7 @@ export default function PremiumScreen() {
     queryKey: ["payments", "tiers"],
     queryFn: async () => {
       const res = await apiFetch("/api/v1/payments/tiers");
-      if (!res.ok) throw new Error("Failed to load tiers");
+      if (!res.ok) throw new Error(t("premium.load_tiers_failed"));
       return res.json() as Promise<Tier[]>;
     },
   });
@@ -114,7 +116,7 @@ export default function PremiumScreen() {
     queryKey: ["payments", "subscription"],
     queryFn: async () => {
       const res = await apiFetch("/api/v1/payments/subscription");
-      if (!res.ok) throw new Error("Failed to load subscription");
+      if (!res.ok) throw new Error(t("premium.load_subscription_failed"));
       return res.json() as Promise<any>;
     },
   });
@@ -138,7 +140,7 @@ export default function PremiumScreen() {
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
         console.error("❌ [PREMIUM] Backend error:", err);
-        throw new Error(err.detail || "Initiation failed");
+        throw new Error(err.detail || t("premium.initiation_failed"));
       }
 
       const data = await res.json();
@@ -151,9 +153,9 @@ export default function PremiumScreen() {
 
         // Show "Payment Initiated" alert
         Alert.alert(
-          "💳 Subscription Payment Initiated",
-          "Opening payment page... Complete the payment and return to activate your subscription.",
-          [{ text: "OK" }],
+          t("premium.payment_initiated_title"),
+          t("premium.payment_initiated_body"),
+          [{ text: t("premium.ok") }],
         );
 
         const result = await WebBrowser.openBrowserAsync(data.payment_url, {

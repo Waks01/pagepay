@@ -108,12 +108,9 @@ export default function VerifyPinScreen() {
         <ScrollView contentContainerStyle={styles.scroll}>
           <Text style={[styles.title, { color: tokens.ink }]}>{title}</Text>
           <Text style={[styles.subtitle, { color: tokens.inkMuted }]}>
-            {t('pin.subtitle', {
-              defaultValue:
-                mode === 'setup'
-                  ? 'Create a 4-digit PIN for withdrawals and fallback authentication.'
-                  : 'Enter your PIN to continue.',
-            })}
+            {mode === 'setup'
+              ? t('pin.subtitle_setup', { defaultValue: 'Create a 4-digit PIN for withdrawals and fallback authentication.' })
+              : t('pin.subtitle_verify', { defaultValue: 'Enter your PIN to continue.' })}
           </Text>
 
           <OtpInput

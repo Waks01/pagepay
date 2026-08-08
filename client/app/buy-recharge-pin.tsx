@@ -285,15 +285,15 @@ export default function BuyRechargePinScreen() {
 
         <ConfirmModal
           visible={showConfirmModal}
-          title="Confirm Purchase"
+          title={t('bills.recharge_pin.confirm_title')}
           confirming={purchaseMutation.isPending}
           rows={[
-            { key: 'net', label: 'Network', value: selectedPlan?.network_name ?? '' },
-            { key: 'den', label: 'Denomination', value: `₦${selectedPlan?.size ?? ''}` },
-            { key: 'qty', label: 'Quantity', value: `× ${quantity}` },
-            { key: 'unit', label: 'Unit Price', value: `₦${(selectedPlan?.regular_price || 0).toLocaleString()}` },
-            { key: 'amt', label: 'Total', value: `₦${totalPrice.toLocaleString()}`, valueColor: 'mint' as const },
-            { key: 'earn', label: "You'll earn", value: `+${estPoints} pts`, valueColor: 'mint' as const },
+            { key: 'net', label: t('bills.recharge_pin.confirm_network'), value: selectedPlan?.network_name ?? '' },
+            { key: 'den', label: t('bills.recharge_pin.confirm_denomination'), value: `₦${selectedPlan?.size ?? ''}` },
+            { key: 'qty', label: t('bills.recharge_pin.confirm_quantity'), value: `× ${quantity}` },
+            { key: 'unit', label: t('bills.recharge_pin.confirm_unit_price'), value: `₦${(selectedPlan?.regular_price || 0).toLocaleString()}` },
+            { key: 'amt', label: t('bills.recharge_pin.confirm_total'), value: `₦${totalPrice.toLocaleString()}`, valueColor: 'mint' as const },
+            { key: 'earn', label: t('bills.recharge_pin.confirm_earn_label'), value: `+${estPoints} pts`, valueColor: 'mint' as const },
           ]}
           onCancel={() => setShowConfirmModal(false)}
           onConfirm={() => purchaseMutation.mutate()}

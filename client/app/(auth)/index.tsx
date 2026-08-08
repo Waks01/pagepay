@@ -9,6 +9,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
 import LoginScreen from './LoginForm';
 import RegisterScreen from './RegisterForm';
@@ -25,6 +26,7 @@ import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
  * "setState on unmounted component".
  */
 export default function AuthScreen() {
+  const { t } = useTranslation();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
 
@@ -71,7 +73,10 @@ export default function AuthScreen() {
   };
 
   const handleGoogleSignIn = async () => {
-    Alert.alert('Coming soon', 'Google Sign-In will be available once OAuth2 credentials are configured.');
+    Alert.alert(
+      t('auth.google_sign_in.coming_soon_title'),
+      t('auth.google_sign_in.coming_soon_body'),
+    );
   };
 
   const contentStyle = useAnimatedStyle(() => ({
@@ -98,7 +103,7 @@ export default function AuthScreen() {
           <View style={styles.socialWrap}>
             <View style={styles.divider}>
               <View style={[styles.dividerLine, { backgroundColor: tokens.border }]} />
-              <Text style={[styles.dividerText, { color: tokens.inkMuted }]}>or</Text>
+              <Text style={[styles.dividerText, { color: tokens.inkMuted }]}>{t('auth.divider_or')}</Text>
               <View style={[styles.dividerLine, { backgroundColor: tokens.border }]} />
             </View>
 
@@ -108,7 +113,7 @@ export default function AuthScreen() {
                activeOpacity={0.7}
              >
                <Ionicons name="logo-google" size={20} color={tokens.ink} />
-               <Text style={[styles.googleButtonText, { color: tokens.ink }]}>Continue with Google</Text>
+               <Text style={[styles.googleButtonText, { color: tokens.ink }]}>{t('auth.google_sign_in.button')}</Text>
              </TouchableOpacity>
           </View>
         </View>

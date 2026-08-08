@@ -27,7 +27,7 @@ export default function SponsorTaskDetailScreen() {
       Alert.alert(t('sponsor_task_detail.approved_title'), t('sponsor_task_detail.approved_message'));
     },
     onError: (error: any) => {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('common.error'), error.message);
     },
   });
 
@@ -41,7 +41,7 @@ export default function SponsorTaskDetailScreen() {
       Alert.alert(t('sponsor_task_detail.rejected_title'), t('sponsor_task_detail.rejected_message'));
     },
     onError: (error: any) => {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('common.error'), error.message);
     },
   });
 

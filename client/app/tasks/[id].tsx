@@ -32,7 +32,7 @@ export default function TaskDetailScreen() {
       router.push(`/tasks/${id}/complete?submission_id=${data.submission_id}`);
     },
     onError: (error: any) => {
-      Alert.alert('Error', error.message || t('task_detail.errors.start_failed'));
+      Alert.alert(t('common.error'), error.message || t('task_detail.errors.start_failed'));
     },
   });
 
@@ -145,7 +145,7 @@ export default function TaskDetailScreen() {
         <View style={styles.statItem}>
           <Ionicons name="time-outline" size={20} color="#666" />
           <Text style={styles.statLabel}>{t('task_detail.stats.time_limit')}</Text>
-          <Text style={styles.statValue}>{task.time_limit_minutes || t('task_detail.time_unlimited')} {task.time_limit_minutes ? 'min' : ''}</Text>
+          <Text style={styles.statValue}>{task.time_limit_minutes || t('task_detail.time_unlimited')} {task.time_limit_minutes ? t('task_detail.min_suffix') : ''}</Text>
         </View>
 
         <View style={styles.statItem}>

@@ -118,7 +118,7 @@ export default function CreateTaskScreen() {
     }
 
     if (isNaN(max) || max < 500) {
-      Alert.alert(t('sponsor_create_task.errors.invalid_completions'), 'Minimum 500 tasks per order');
+      Alert.alert(t('sponsor_create_task.errors.invalid_completions'), t('sponsor_create_task.errors.min_order_quantity'));
       return;
     }
 
@@ -311,7 +311,7 @@ export default function CreateTaskScreen() {
           <Text style={[styles.label, { color: tokens.ink }]}>{t('sponsor_create_task.reward_label')}</Text>
           {activeRate && (
             <View style={[styles.rateCard, { backgroundColor: tokens.mintSoft }]}>
-              <Text style={[styles.rateLabel, { color: tokens.mint }]}>Base rate</Text>
+              <Text style={[styles.rateLabel, { color: tokens.mint }]}>{t('sponsor_create_task.base_rate_label', { defaultValue: 'Base rate' })}</Text>
               <Text style={[styles.rateValue, { color: tokens.mint }]}>₦{(activeRate.baseRateKobo / 100).toFixed(2)}</Text>
               <Text style={[styles.rateNote, { color: tokens.mint }]}>
                 {t('sponsor_create_task.platform_controlled_minimum')}
@@ -345,7 +345,7 @@ export default function CreateTaskScreen() {
         <Text style={[styles.label, { color: tokens.ink }]}>{t('sponsor_create_task.time_limit_label')}</Text>
         <TextInput
           style={[styles.input, { backgroundColor: tokens.card, color: tokens.ink, borderColor: tokens.border }]}
-          placeholder="e.g. 10"
+          placeholder={t('sponsor_create_task.time_limit_placeholder', { defaultValue: 'e.g. 10' })}
           placeholderTextColor={tokens.inkMuted}
           value={timeLimitMinutes}
           onChangeText={setTimeLimitMinutes}
@@ -374,8 +374,10 @@ export default function CreateTaskScreen() {
         </View>
         <Text style={[styles.multiplierNote, { color: tokens.inkMuted }]}>
           {rewardMultiplier > 1.0
-            ? `Workers earn ₦${((parseInt(rewardKobo || '0') * rewardMultiplier) / 100).toFixed(2)} per task`
-            : 'No boost — workers earn the base rate'}
+            ? t('sponsor_create_task.workers_earn_with_boost', {
+                amount: ((parseInt(rewardKobo || '0') * rewardMultiplier) / 100).toFixed(2),
+              })
+            : t('sponsor_create_task.no_boost_note')}
         </Text>
       </View>
 

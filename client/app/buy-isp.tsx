@@ -120,8 +120,8 @@ export default function BuyIspScreen() {
   };
 
   const ispOptions: { value: IspType; label: string; icon: 'wifi-outline' }[] = [
-    { value: 'smile', label: 'smile', icon: 'wifi-outline' },
-    { value: 'spectranet', label: 'spectranet', icon: 'wifi-outline' },
+    { value: 'smile', label: t('bills.isp.smile_label'), icon: 'wifi-outline' },
+    { value: 'spectranet', label: t('bills.isp.spectranet_label'), icon: 'wifi-outline' },
   ];
 
   return (
@@ -218,15 +218,15 @@ export default function BuyIspScreen() {
 
         <ConfirmModal
           visible={showConfirmModal}
-          title="Confirm Top-Up"
+          title={t('bills.isp.confirm_title')}
           confirming={purchaseMutation.isPending}
           rows={[
-            { key: 'prov', label: 'Provider', value: ispType, valueStyle: { textTransform: 'capitalize' } },
-            { key: 'plan', label: 'Plan', value: selectedPkg?.name || `${selectedPkg?.size}GB` || '' },
-            ...(selectedPkg?.validity ? [{ key: 'val', label: 'Validity', value: selectedPkg.validity }] : []),
-            { key: 'acct', label: 'Account', value: accountNumber, valueStyle: { fontFamily: 'monospace' } },
-            { key: 'amt', label: 'Amount', value: `₦${price.toLocaleString()}`, valueColor: 'mint' as const },
-            { key: 'earn', label: "You'll earn", value: `+${Math.floor(price * 0.018 * 0.67 * 10)} pts`, valueColor: 'mint' as const },
+            { key: 'prov', label: t('bills.isp.confirm_provider'), value: ispType, valueStyle: { textTransform: 'capitalize' } },
+            { key: 'plan', label: t('bills.isp.confirm_plan'), value: selectedPkg?.name || `${selectedPkg?.size}GB` || '' },
+            ...(selectedPkg?.validity ? [{ key: 'val', label: t('bills.isp.confirm_validity'), value: selectedPkg.validity }] : []),
+            { key: 'acct', label: t('bills.isp.confirm_account'), value: accountNumber, valueStyle: { fontFamily: 'monospace' } },
+            { key: 'amt', label: t('bills.isp.confirm_amount'), value: `₦${price.toLocaleString()}`, valueColor: 'mint' as const },
+            { key: 'earn', label: t('bills.isp.confirm_earn_label'), value: `+${Math.floor(price * 0.018 * 0.67 * 10)} pts`, valueColor: 'mint' as const },
           ]}
           onCancel={() => setShowConfirmModal(false)}
           onConfirm={() => purchaseMutation.mutate()}

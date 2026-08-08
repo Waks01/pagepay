@@ -378,14 +378,14 @@ export default function BuyBettingScreen() {
 
         <ConfirmModal
           visible={showConfirmModal}
-          title="Confirm Funding"
+          title={t('bills.betting.confirm_title')}
           confirming={purchaseMutation.isPending}
           rows={[
-            { key: 'plat', label: 'Platform', value: selectedBiller?.name ?? '' },
-            { key: 'acct', label: 'Account', value: accountNumber, valueStyle: { fontFamily: 'monospace' } },
-            ...(validatedName ? [{ key: 'cust', label: 'Customer', value: validatedName }] : []),
-            { key: 'amt', label: 'Amount', value: `₦${amountNum.toLocaleString()}`, valueColor: 'mint' as const },
-            { key: 'earn', label: "You'll earn", value: `+${Math.floor(amountNum * 0.018 * 0.67 * 10)} pts`, valueColor: 'mint' as const },
+            { key: 'plat', label: t('bills.betting.confirm_platform'), value: selectedBiller?.name ?? '' },
+            { key: 'acct', label: t('bills.betting.confirm_account'), value: accountNumber, valueStyle: { fontFamily: 'monospace' } },
+            ...(validatedName ? [{ key: 'cust', label: t('bills.betting.confirm_customer'), value: validatedName }] : []),
+            { key: 'amt', label: t('bills.betting.confirm_amount'), value: `₦${amountNum.toLocaleString()}`, valueColor: 'mint' as const },
+            { key: 'earn', label: t('bills.betting.confirm_earn_label'), value: `+${Math.floor(amountNum * 0.018 * 0.67 * 10)} pts`, valueColor: 'mint' as const },
           ]}
           onCancel={() => setShowConfirmModal(false)}
           onConfirm={() => purchaseMutation.mutate()}

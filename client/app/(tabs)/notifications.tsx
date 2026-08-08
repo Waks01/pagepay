@@ -14,6 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useTranslation } from "react-i18next";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { PagePay } from "@/constants/theme";
@@ -38,6 +39,7 @@ type NotificationsResponse = {
 };
 
 export default function NotificationsScreen() {
+  const { t } = useTranslation();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const qc = useQueryClient();
@@ -47,7 +49,7 @@ export default function NotificationsScreen() {
     queryKey: ["notifications"],
     queryFn: async (): Promise<NotificationsResponse> => {
       const res = await apiFetch("/api/v1/notifications?limit=50");
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) throw new Error(t("notifications_list.load_failed"));
       return res.json();
     },
   });
@@ -72,7 +74,7 @@ export default function NotificationsScreen() {
         `/api/v1/notifications/${notificationId}/read`,
         { method: "POST" },
       );
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) throw new Error(t("notifications_list.load_failed"));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notifications"] });
@@ -85,7 +87,7 @@ export default function NotificationsScreen() {
       const res = await apiFetch("/api/v1/notifications/read-all", {
         method: "POST",
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) throw new Error(t("notifications_list.load_failed"));
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
@@ -194,10 +196,10 @@ export default function NotificationsScreen() {
         color={tokens.inkMuted}
       />
       <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>
-        No notifications yet
+        {t("notifications_list.empty_title", { defaultValue: "No notifications yet" })}
       </Text>
       <Text style={[styles.emptySub, { color: tokens.inkMuted }]}>
-        We'll notify you when something important happens
+        {t("notifications_list.empty_subtitle", { defaultValue: "We'll notify you when something important happens" })}
       </Text>
     </View>
   );
@@ -225,10 +227,12 @@ export default function NotificationsScreen() {
                 { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
               ]}
             >
-              Notifications
+              {t("notifications_list.title", { defaultValue: "Notifications" })}
             </Text>
             <Text style={[styles.headerSubtitle, { color: tokens.inkMuted }]}>
-              {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
+              {unreadCount > 0
+                ? t("notifications_list.unread_count", { count: unreadCount })
+                : t("notifications_list.all_caught_up", { defaultValue: "All caught up" })}
             </Text>
           </View>
           <NotificationBell />
@@ -246,7 +250,7 @@ export default function NotificationsScreen() {
             ]}
           >
             <Text style={[styles.markAllText, { color: tokens.mint }]}>
-              Mark all read
+              {t("notifications_list.mark_all_read", { defaultValue: "Mark all read" })}
             </Text>
           </TouchableOpacity>
         </View>

@@ -377,16 +377,16 @@ export default function BuyTvScreen() {
 
         <ConfirmModal
           visible={showConfirmModal}
-          title="Confirm Subscription"
+          title={t('bills.tv.confirm_title')}
           confirming={purchaseMutation.isPending}
           rows={[
-            { key: 'prov', label: 'Provider', value: (provider ?? '').toUpperCase() },
-            { key: 'pkg', label: 'Package', value: selectedPkg?.name ?? '' },
-            { key: 'sc', label: 'Smartcard', value: smartcard, valueStyle: { fontFamily: 'monospace' } },
-            ...(validatedName ? [{ key: 'cust', label: 'Customer', value: validatedName }] : []),
-            { key: 'phone', label: 'Phone', value: phone },
-            { key: 'amt', label: 'Amount', value: `₦${(selectedPkg?.price_naira || selectedPkg?.amount || 0).toLocaleString()}`, valueColor: 'mint' as const },
-            { key: 'earn', label: "You'll earn", value: `+${estPoints} pts`, valueColor: 'mint' as const },
+            { key: 'prov', label: t('bills.tv.confirm_provider'), value: (provider ?? '').toUpperCase() },
+            { key: 'pkg', label: t('bills.tv.confirm_package'), value: selectedPkg?.name ?? '' },
+            { key: 'sc', label: t('bills.tv.confirm_smartcard'), value: smartcard, valueStyle: { fontFamily: 'monospace' } },
+            ...(validatedName ? [{ key: 'cust', label: t('bills.tv.confirm_customer'), value: validatedName }] : []),
+            { key: 'phone', label: t('bills.tv.phone'), value: phone },
+            { key: 'amt', label: t('bills.tv.confirm_amount'), value: `₦${(selectedPkg?.price_naira || selectedPkg?.amount || 0).toLocaleString()}`, valueColor: 'mint' as const },
+            { key: 'earn', label: t('bills.tv.confirm_earn_label'), value: `+${estPoints} pts`, valueColor: 'mint' as const },
           ]}
           onCancel={() => setShowConfirmModal(false)}
           onConfirm={() => purchaseMutation.mutate()}

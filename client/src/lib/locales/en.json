@@ -84,18 +84,25 @@
       "change_title": "Change Transaction PIN",
       "verify_title": "Enter Transaction PIN",
       "subtitle": "Enter your PIN to continue.",
+      "subtitle_setup": "Create a 4-digit PIN for withdrawals and fallback authentication.",
+      "subtitle_verify": "Enter your PIN to continue.",
       "password_placeholder": "Account password",
       "password_required": "Please enter your account password.",
       "new_pin_label": "New PIN",
       "confirm_label": "Confirm PIN",
+      "confirm_new_label": "Confirm New PIN",
       "current_pin_label": "Current PIN",
       "mismatch": "PINs do not match.",
+      "change_mismatch": "New PINs do not match.",
       "verifying": "Verifying...",
       "submit": "Confirm",
       "setting_up": "Setting up...",
       "setup_button": "Set PIN",
+      "setup_error": "Could not set your PIN. Try again.",
       "changing": "Changing...",
       "change_button": "Change PIN",
+      "change_error": "Could not change your PIN. Try again.",
+      "error": "Error",
       "error_generic": "Something went wrong.",
       "error_connection": "Network error. Try again.",
       "not_set": "Not set",
@@ -134,7 +141,15 @@
     "save": "Save",
     "saving": "Saving...",
     "done": "Done",
-    "retry": "Retry"
+    "retry": "Retry",
+    "try_again": "Try Again",
+    "back": "Back",
+    "or": "or",
+    "yes": "Yes",
+    "no": "No",
+    "youll_earn": "You'll earn",
+    "confirm": "Confirm",
+    "connection_error_with_status": "Connection error (HTTP {{status}})"
   },
   "home": {
     "greeting_still_up": "Still up?",
@@ -309,9 +324,17 @@
     "dismiss": "Dismiss"
   },
   "auth": {
+    "divider_or": "or",
+    "google_sign_in": {
+      "button": "Continue with Google",
+      "coming_soon_title": "Coming soon",
+      "coming_soon_body": "Google Sign-In will be available once OAuth2 credentials are configured."
+    },
     "login": {
       "title": "Welcome back.",
       "subtitle": "Sign in to keep earning.",
+      "identifier_label": "Username, email or phone",
+      "identifier_placeholder": "Enter username, email or phone",
       "email_label": "Email or phone",
       "email_placeholder": "you@example.com",
       "password_label": "Password",
@@ -335,6 +358,8 @@
     "register": {
       "title": "Create your PagePay account.",
       "subtitle": "Earn for reading. Prep for exams. Free to start.",
+      "username_label": "Username",
+      "username_placeholder": "johndoe",
       "email_label": "Email or phone",
       "email_placeholder": "you@example.com",
       "password_label": "Password",
@@ -359,6 +384,8 @@
         "strong": "Strong"
       },
       "errors": {
+        "enter_username": "Enter a username.",
+        "username_too_long": "Username must be 12 characters or less.",
         "enter_email": "Enter your email or phone.",
         "enter_password": "Enter a password.",
         "password_too_short": "Use at least 8 characters.",
@@ -371,9 +398,7 @@
         "invalid_referral": "Invalid or expired referral code. Check the code and try again.",
         "create_failed": "Couldn't create your account. Try again.",
         "connection_error": "Can't reach the server. Check your connection and try again."
-      },
-      "username_label": "Username",
-      "username_placeholder": "johndoe"
+      }
     }
   },
   "onboarding": {
@@ -421,11 +446,26 @@
       "buy_button": "Buy Airtime — ₦{{amount}}",
       "buying": "Processing...",
       "success_title": "Airtime Purchased!",
+      "success_title_big": "Purchase Successful!",
       "success_message": "₦{{amount}} airtime sent to {{phone}}. You earned {{points}} points!",
+      "error_title_big": "Purchase Failed",
+      "error_note": "No points were deducted from your wallet. Please try again.",
+      "processing_title": "Processing Purchase...",
+      "processing_sub": "Please wait while we process your airtime purchase",
       "ok": "OK",
       "load_error": "Could not load networks. Please check your connection.",
       "select_network": "Select a network",
       "no_networks": "No networks available right now.",
+      "detecting": "Detecting network...",
+      "confirm_title": "Confirm Purchase",
+      "confirm_network": "Network",
+      "confirm_amount": "Amount",
+      "confirm_phone": "Phone",
+      "confirm_points": "Points",
+      "confirm_unit_price": "Unit Price",
+      "confirm_reference": "Reference",
+      "points_earned_label": "Points Earned",
+      "reference_label": "Reference",
       "errors": {
         "phone_required": "Enter phone number",
         "phone_invalid": "Phone number must be 11 digits",
@@ -433,7 +473,8 @@
         "amount_min": "Minimum amount is ₦100",
         "amount_max": "Maximum amount is ₦50,000",
         "insufficient_balance": "Insufficient balance. Fund your wallet first.",
-        "purchase_failed": "Purchase failed. Please try again."
+        "purchase_failed": "Purchase failed. Please try again.",
+        "network_required": "Select a network"
       }
     },
     "data": {
@@ -444,18 +485,34 @@
       "detected": "Detected: {{network}}",
       "plan_label": "Data plan",
       "select_plan": "Select a data plan",
+      "no_plans": "No plans available for this period.",
       "commission": "You earn {{points}} points",
       "buy_button": "Buy Data",
       "buying": "Processing...",
       "success_title": "Data Purchased!",
+      "success_title_big": "Purchase Successful!",
       "success_message": "{{plan}} sent to {{phone}}. You earned {{points}} points!",
+      "error_title_big": "Purchase Failed",
+      "error_note": "No points were deducted from your wallet. Please try again.",
+      "processing_title": "Processing Purchase...",
+      "processing_sub": "Please wait while we process your data purchase",
       "ok": "OK",
       "load_error": "Could not load plans. Please check your connection and try again.",
       "select_network": "Select a network",
+      "confirm_title": "Confirm Purchase",
+      "confirm_network": "Network",
+      "confirm_plan": "Plan",
+      "confirm_amount": "Amount",
+      "confirm_phone": "Phone",
+      "confirm_points": "Points",
+      "confirm_reference": "Reference",
+      "points_earned_label": "Points Earned",
+      "reference_label": "Reference",
       "errors": {
         "phone_required": "Enter phone number",
         "phone_invalid": "Phone number must be 11 digits",
         "plan_required": "Select a data plan",
+        "network_required": "Select a network",
         "insufficient_balance": "Insufficient balance. Fund your wallet first.",
         "purchase_failed": "Purchase failed. Please try again."
       }
@@ -490,12 +547,19 @@
       "customer_name": "Customer: {{name}}",
       "address": "Address: {{address}}",
       "success_title": "Token Purchased!",
+      "success_message_with_token": "Token: {{token}}{{units}}\n\nYou earned {{points}} points.",
       "success_message": "₦{{amount}} token sent to meter {{meter}}. You earned {{points}} points!",
       "done": "Done",
       "ok": "OK",
       "load_error": "Could not load DISCOs. Please check your connection.",
       "earn_points": "You'll earn {{points}} points",
       "earn_description": "Commission from the purchase will be credited after purchase.",
+      "confirm_title": "Confirm Purchase",
+      "confirm_meter": "Meter",
+      "confirm_customer": "Customer",
+      "confirm_type": "Type",
+      "confirm_amount": "Amount",
+      "confirm_earn_label": "You'll earn",
       "errors": {
         "meter_required": "Enter meter number",
         "disco_required": "Select distribution company",
@@ -540,6 +604,14 @@
       "select_bouquet_prompt": "Select a bouquet",
       "earn_points": "You'll earn {{points}} points",
       "earn_description": "Commission from the subscription will be credited after purchase.",
+      "confirm_title": "Confirm Subscription",
+      "confirm_provider": "Provider",
+      "confirm_package": "Package",
+      "confirm_smartcard": "Smartcard",
+      "confirm_customer": "Customer",
+      "confirm_phone": "Phone",
+      "confirm_amount": "Amount",
+      "confirm_earn_label": "You'll earn",
       "errors": {
         "smartcard_required": "Enter smartcard number",
         "provider_required": "Select TV provider",
@@ -569,7 +641,14 @@
       "purchase_failed": "Purchase failed. Please try again.",
       "load_networks_error": "Could not load networks. Please check your connection.",
       "load_plans_error": "Could not load plans. Please try again.",
-      "total": "Total"
+      "total": "Total",
+      "confirm_title": "Confirm Purchase",
+      "confirm_network": "Network",
+      "confirm_denomination": "Denomination",
+      "confirm_quantity": "Quantity",
+      "confirm_unit_price": "Unit Price",
+      "confirm_total": "Total",
+      "confirm_earn_label": "You'll earn"
     },
     "betting": {
       "title": "Fund Betting Wallet",
@@ -598,7 +677,13 @@
       "enter_account": "Enter account number",
       "amount_required": "Select or enter an amount",
       "select_biller_account": "Select a platform and enter account number",
-      "validation_failed": "Validation failed. Please try again."
+      "validation_failed": "Validation failed. Please try again.",
+      "confirm_title": "Confirm Funding",
+      "confirm_platform": "Platform",
+      "confirm_account": "Account",
+      "confirm_customer": "Customer",
+      "confirm_amount": "Amount",
+      "confirm_earn_label": "You'll earn"
     },
     "isp": {
       "title": "Buy ISP Data",
@@ -620,7 +705,16 @@
       "load_smile_error": "Could not load Smile plans. Please check your connection.",
       "load_spectranet_error": "Could not load Spectranet plans. Please check your connection.",
       "enter_account": "Enter account number",
-      "topup_failed": "Top-up failed. Please try again."
+      "topup_failed": "Top-up failed. Please try again.",
+      "smile_label": "smile",
+      "spectranet_label": "spectranet",
+      "confirm_title": "Confirm Top-Up",
+      "confirm_provider": "Provider",
+      "confirm_plan": "Plan",
+      "confirm_validity": "Validity",
+      "confirm_account": "Account",
+      "confirm_amount": "Amount",
+      "confirm_earn_label": "You'll earn"
     },
     "education": {
       "title": "Exam Result Checker",
@@ -639,7 +733,14 @@
       "load_error": "Could not load exams. Please check your connection.",
       "total": "Total",
       "exam_label": "Exam",
-      "earn_label": "You'll earn"
+      "earn_label": "You'll earn",
+      "confirm_title": "Confirm Purchase",
+      "confirm_exam": "Exam",
+      "confirm_type": "Type",
+      "confirm_quantity": "Quantity",
+      "confirm_unit_price": "Unit Price",
+      "confirm_total": "Total",
+      "confirm_earn_label": "You'll earn"
     },
     "sms": {
       "title": "Bulk SMS",
@@ -665,7 +766,16 @@
       "enter_sender": "Enter sender name",
       "enter_recipients": "Enter at least one recipient",
       "enter_message": "Enter message",
-      "send_failed": "Send failed. Please try again."
+      "send_failed": "Send failed. Please try again.",
+      "recipient_count_one": "{{count}} recipient",
+      "recipient_count_other": "{{count}} recipients",
+      "confirm_title": "Confirm Send",
+      "confirm_sender": "Sender",
+      "confirm_recipients": "Recipients",
+      "confirm_pages": "Pages",
+      "confirm_message": "Message",
+      "confirm_cost": "Cost",
+      "confirm_earn_label": "You'll earn"
     },
     "tab_daily": "Daily",
     "tab_weekly": "Weekly",
@@ -686,6 +796,16 @@
     "fund_button": "Proceed to Payment",
     "funding": "Opening payment...",
     "payment_note": "You'll be redirected to Paystack to complete payment",
+    "youll_receive": "You'll receive",
+    "pay_securely_note": "Pay securely via Paystack. Wallet credited instantly after payment.",
+    "verifying_payment": "Verifying payment...",
+    "payment_success_title": "Payment Successful",
+    "payment_success_body": "Your wallet has been funded!",
+    "payment_processing_title": "Processing Payment",
+    "payment_processing_body": "Payment is processing. Balance will update shortly.",
+    "payment_initiated_title": "Payment Initiated",
+    "payment_initiated_body": "Opening payment page... Complete the payment and return to see your updated balance.",
+    "could_not_open_payment": "Could not open payment page",
     "errors": {
       "amount_required": "Select or enter amount",
       "amount_min": "Minimum deposit is ₦100",
@@ -795,6 +915,7 @@
     "verifying_payment": "Verifying Payment",
     "verifying_subtitle": "Please wait while we confirm your subscription...",
     "view_payment_history": "View Payment History",
+    "load_failed": "Failed to load payment history",
     "load_error": "Failed to load plans",
     "connection_error": "Please check your connection and try again.",
     "retry": "Retry",
@@ -802,7 +923,38 @@
     "faq_title": "Can I change my plan?",
     "faq_text": "Yes. Upgrade or downgrade anytime. Your subscription will automatically renew.",
     "payment_error": "Payment Error",
-    "days_suffix": "days"
+    "days_suffix": "days",
+    "load_tiers_failed": "Failed to load tiers",
+    "load_subscription_failed": "Failed to load subscription",
+    "initiation_failed": "Initiation failed",
+    "payment_initiated_title": "Subscription Payment Initiated",
+    "payment_initiated_body": "Opening payment page... Complete the payment and return to activate your subscription.",
+    "ok": "OK",
+    "premium_activated_title": "Premium Activated!",
+    "premium_activated_body": "Welcome to Premium! Enjoy ad-free reading and 2x earning points.",
+    "processing_payment_title": "Processing Payment",
+    "processing_payment_body": "Your subscription is being activated. This may take a few moments."
+  },
+  "tabs": {
+    "home": "Home",
+    "catalog": "Catalog",
+    "study": "Study",
+    "wallet": "Wallet",
+    "more": "More"
+  },
+  "drawer": {
+    "title": "More",
+    "notifications_label": "Notifications",
+    "notifications_desc": "Your alerts and updates",
+    "tasks_label": "Tasks",
+    "tasks_desc": "Daily challenges and goals",
+    "community_label": "Community",
+    "community_desc": "Connect with other readers",
+    "profile_label": "Profile",
+    "profile_desc": "Account, settings, preferences",
+    "premium_label": "Premium",
+    "premium_desc": "Unlock exclusive content",
+    "badge_overflow": "9+"
   },
   "verify_email": {
     "title": "Verify your email",
@@ -855,7 +1007,8 @@
     "alert_title": "Manage Subscription",
     "alert_message": "To manage your subscription, go to your device settings:\n\nAndroid: Google Play Store → Subscriptions\niOS: Settings → Apple ID → Subscriptions",
     "alert_cancel": "Cancel",
-    "alert_open": "Open Settings"
+    "alert_open": "Open Settings",
+    "load_profile_failed": "Failed to load profile"
   },
   "book_detail": {
     "book_title": "Book",
@@ -941,6 +1094,8 @@
     "login_link": "Already have an account? Log in",
     "success_title": "Registration Successful!",
     "success_message": "Complete KYC verification to start creating tasks.",
+    "continue": "Continue",
+    "username_optional_label": "Username (optional)",
     "errors": {
       "missing_fields": "Please fill in all required fields.",
       "weak_password": "Password must be at least 8 characters.",
@@ -1003,6 +1158,10 @@
     "max_workers_placeholder": "100",
     "estimated_cost_label": "Estimated Cost",
     "platform_fee_note": "+ {{percent}}% platform fee",
+    "base_rate_label": "Base rate",
+    "workers_earn_with_boost": "Workers earn ₦{{amount}} per task",
+    "no_boost_note": "No boost — workers earn the base rate",
+    "time_limit_placeholder": "e.g. 10",
     "submit_button": "Create Task",
     "success_title": "Task Created!",
     "publish_prompt": "Publish now to make it live?",
@@ -1014,6 +1173,7 @@
       "missing_fields": "Please fill in all required fields.",
       "invalid_reward": "Minimum reward is ₦10 (1000 kobo).",
       "invalid_completions": "Minimum 1 completion required.",
+      "min_order_quantity": "Minimum 500 tasks per order",
       "creation_failed": "Creation Failed",
       "publish_failed": "Publish Failed"
     }
@@ -1064,6 +1224,7 @@
     },
     "time_unlimited": "∞",
     "time_minutes": "{{minutes}} min",
+    "min_suffix": "min",
     "requirements_title": "Requirements",
     "level_requirement": "Level {{level}}+",
     "approval_rate_requirement": "{{rate}}% approval rate",
@@ -1170,5 +1331,23 @@
       "subscriptions": "Subscription",
       "default": "Notification"
     }
+  },
+  "notifications_list": {
+    "load_failed": "Failed to load notifications",
+    "generic_failed": "Failed",
+    "mark_all_failed": "Failed to mark all notifications as read",
+    "delete_failed": "Failed to delete notification",
+    "empty_title": "No notifications yet",
+    "empty_subtitle": "We'll notify you when something important happens",
+    "title": "Notifications",
+    "unread_count_one": "{{count}} unread",
+    "unread_count_other": "{{count}} unread",
+    "all_caught_up": "All caught up",
+    "mark_all_read": "Mark all read"
+  },
+  "error_boundary": {
+    "title": "Something went wrong",
+    "message": "We encountered an unexpected error. Please try again.",
+    "retry": "Try again"
   }
 }

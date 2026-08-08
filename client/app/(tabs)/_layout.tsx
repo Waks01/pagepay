@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
@@ -21,9 +22,9 @@ import { EmailVerificationGate } from '@/src/components/EmailVerificationGate';
 type Tokens = (typeof PagePay)['light'];
 type DrawerItem = {
   name: string;
-  label: string;
+  labelKey: string;
   icon: keyof typeof Ionicons.glyphMap;
-  desc: string;
+  descKey: string;
   badge?: number;
 };
 
@@ -31,11 +32,11 @@ const VISIBLE_TABS = ['index', 'catalog', 'study', 'wallet'];
 type VisibleTab = (typeof VISIBLE_TABS)[number];
 
 const DRAWER_ITEMS: DrawerItem[] = [
-  { name: 'notifications', label: 'Notifications', icon: 'notifications-outline', desc: 'Your alerts and updates' },
-  { name: 'tasks', label: 'Tasks', icon: 'briefcase', desc: 'Daily challenges and goals' },
-  { name: 'community', label: 'Community', icon: 'people', desc: 'Connect with other readers' },
-  { name: 'profile', label: 'Profile', icon: 'person-circle', desc: 'Account, settings, preferences' },
-  { name: 'premium', label: 'Premium', icon: 'diamond', desc: 'Unlock exclusive content' },
+  { name: 'notifications', labelKey: 'drawer.notifications_label', icon: 'notifications-outline', descKey: 'drawer.notifications_desc' },
+  { name: 'tasks', labelKey: 'drawer.tasks_label', icon: 'briefcase', descKey: 'drawer.tasks_desc' },
+  { name: 'community', labelKey: 'drawer.community_label', icon: 'people', descKey: 'drawer.community_desc' },
+  { name: 'profile', labelKey: 'drawer.profile_label', icon: 'person-circle', descKey: 'drawer.profile_desc' },
+  { name: 'premium', labelKey: 'drawer.premium_label', icon: 'diamond', descKey: 'drawer.premium_desc' },
 ];
 
 export default function TabLayout() {
@@ -43,6 +44,7 @@ export default function TabLayout() {
   const [showEmailGate, setShowEmailGate] = useState(false);
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
+  const { t } = useTranslation();
 
   const { data: me } = useQuery({
     queryKey: ['auth', 'me'],
@@ -98,7 +100,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Home',
+            title: t('tabs.home'),
             tabBarIcon: ({ color, size, focused }) => (
               <TabIcon name="home" color={color} size={size} focused={focused} tokens={tokens} />
             ),
@@ -107,7 +109,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="catalog"
           options={{
-            title: 'Catalog',
+            title: t('tabs.catalog'),
             tabBarIcon: ({ color, size, focused }) => (
               <TabIcon name="book" color={color} size={size} focused={focused} tokens={tokens} />
             ),
@@ -116,7 +118,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="study"
           options={{
-            title: 'Study',
+            title: t('tabs.study'),
             tabBarIcon: ({ color, size, focused }) => (
               <TabIcon name="school" color={color} size={size} focused={focused} tokens={tokens} />
             ),
@@ -125,7 +127,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="wallet"
           options={{
-            title: 'Wallet',
+            title: t('tabs.wallet'),
             tabBarIcon: ({ color, size, focused }) => (
               <TabIcon name="wallet" color={color} size={size} focused={focused} tokens={tokens} />
             ),
@@ -143,6 +145,7 @@ export default function TabLayout() {
         visible={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         tokens={tokens}
+        t={t}
       />
 
       {/* Email verification gate - shown when email is not verified */}
@@ -169,6 +172,7 @@ function CustomTabBar({
   isMoreActive: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   return (
     <View
@@ -232,7 +236,7 @@ function CustomTabBar({
             { color: isMoreActive ? tokens.mint : tokens.inkMuted },
           ]}
         >
-          More
+          {t('tabs.more')}
         </Text>
         {isMoreActive ? <View style={[styles.tabDot, { backgroundColor: tokens.mint }]} /> : null}
       </TouchableOpacity>
@@ -280,10 +284,12 @@ function MoreDrawer({
   visible,
   onClose,
   tokens,
+  t,
 }: {
   visible: boolean;
   onClose: () => void;
   tokens: Tokens;
+  t: (key: string) => string;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -363,7 +369,7 @@ function MoreDrawer({
                 { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' },
               ]}
             >
-              More
+              {t('drawer.title')}
             </Text>
 
             {itemsWithBadge.map((item) => (
@@ -381,16 +387,16 @@ function MoreDrawer({
                       { color: tokens.ink, fontFamily: 'SpaceGrotesk_500Medium' },
                     ]}
                   >
-                    {item.label}
+                    {t(item.labelKey)}
                   </Text>
                   <Text style={[styles.drawerItemDesc, { color: tokens.inkMuted }]}>
-                    {item.desc}
+                    {t(item.descKey)}
                   </Text>
                 </View>
                 {item.badge ? (
                   <View style={[styles.badge, { backgroundColor: tokens.mint }]}>
                     <Text style={[styles.badgeText, { color: tokens.mintText }]}>
-                      {item.badge > 9 ? '9+' : item.badge}
+                      {item.badge > 9 ? t('drawer.badge_overflow') : item.badge}
                     </Text>
                   </View>
                 ) : (

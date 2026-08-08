@@ -27,7 +27,7 @@ export default function SponsorRegisterScreen() {
       Alert.alert(
         t('sponsor_register.success_title'),
         t('sponsor_register.success_message'),
-        [{ text: 'Continue', onPress: () => router.replace('/sponsor/kyc') }]
+        [{ text: t('sponsor_register.continue'), onPress: () => router.replace('/sponsor/kyc') }]
       );
     },
     onError: (error: any) => {
@@ -88,7 +88,7 @@ export default function SponsorRegisterScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={[styles.label, { color: tokens.ink }]}>Username (optional)</Text>
+          <Text style={[styles.label, { color: tokens.ink }]}>{t('sponsor_register.username_optional_label')}</Text>
           <TextInput
             style={[styles.input, { backgroundColor: tokens.paper, color: tokens.ink, borderColor: tokens.border }]}
             placeholder="johndoe"

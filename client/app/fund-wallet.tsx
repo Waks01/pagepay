@@ -117,10 +117,12 @@ export default function FundWalletScreen() {
     console.log("🏁 [PAYMENT] Polling complete. Success:", success);
 
     Alert.alert(
-      success ? "✅ Payment Successful" : "⏳ Processing Payment",
       success
-        ? "Your wallet has been funded!"
-        : "Payment is processing. Balance will update shortly.",
+        ? t("fund_wallet.payment_success_title")
+        : t("fund_wallet.payment_processing_title"),
+      success
+        ? t("fund_wallet.payment_success_body")
+        : t("fund_wallet.payment_processing_body"),
     );
 
     console.log("🔄 [PAYMENT] Final query invalidation...");
@@ -169,9 +171,9 @@ export default function FundWalletScreen() {
 
       // Show "Payment initiated" alert
       Alert.alert(
-        "💳 Payment Initiated",
-        "Opening payment page... Complete the payment and return to see your updated balance.",
-        [{ text: "OK" }],
+        t("fund_wallet.payment_initiated_title"),
+        t("fund_wallet.payment_initiated_body"),
+        [{ text: t("premium.ok") }],
       );
 
       return data as DepositResponse;
@@ -197,7 +199,7 @@ export default function FundWalletScreen() {
         console.error("❌ [DEPOSIT] Failed to open payment browser:", e);
         Alert.alert(
           t("fund_wallet.errors.deposit_failed"),
-          "Could not open payment page",
+          t("fund_wallet.could_not_open_payment"),
         );
         return;
       }
@@ -360,7 +362,7 @@ export default function FundWalletScreen() {
             </View>
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryLabel, { color: tokens.mint }]}>
-                You'll receive
+                {t("fund_wallet.youl_receive")}
               </Text>
               <Text
                 style={[
@@ -375,8 +377,7 @@ export default function FundWalletScreen() {
               style={[styles.divider, { backgroundColor: tokens.border }]}
             />
             <Text style={[styles.noteText, { color: tokens.inkMuted }]}>
-              💳 Pay securely via Paystack. Wallet credited instantly after
-              payment.
+              {t("fund_wallet.pay_securely_note")}
             </Text>
           </View>
         )}
@@ -405,7 +406,7 @@ export default function FundWalletScreen() {
                     { color: tokens.mintText, fontSize: 14 },
                   ]}
                 >
-                  Verifying payment...
+                  {t("fund_wallet.verifying_payment")}
                 </Text>
               )}
             </View>

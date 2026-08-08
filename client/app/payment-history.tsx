@@ -38,7 +38,7 @@ export default function PaymentHistoryScreen() {
     queryKey: ["payments", "history"],
     queryFn: async () => {
       const res = await apiFetch("/api/v1/payments/history");
-      if (!res.ok) throw new Error("Failed to load payment history");
+      if (!res.ok) throw new Error(t("payment_history.load_failed"));
       return res.json() as Promise<PaymentHistoryItem[]>;
     },
   });

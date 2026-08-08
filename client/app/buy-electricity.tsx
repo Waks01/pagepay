@@ -136,7 +136,11 @@ export default function BuyElectricityScreen() {
       Alert.alert(
         t('bills.electricity.success_title'),
         data.token
-          ? `Token: ${data.token}${data.units ? `\n${data.units}` : ''}\n\nYou earned ${data.points_earned} points.`
+          ? t('bills.electricity.success_message_with_token', {
+              token: data.token,
+              units: data.units ? `\n${data.units}` : '',
+              points: data.points_earned,
+            })
           : t('bills.electricity.success_message', { amount: finalAmount, meter: meterNumber, points: data.points_earned }),
         [{ text: t('bills.electricity.done'), onPress: () => router.back() }],
       );
@@ -416,15 +420,15 @@ export default function BuyElectricityScreen() {
 
         <ConfirmModal
           visible={showConfirmModal}
-          title="Confirm Purchase"
+          title={t('bills.electricity.confirm_title')}
           confirming={purchaseMutation.isPending}
           rows={[
-            { key: 'meter', label: 'Meter', value: meterNumber, valueStyle: { fontFamily: 'monospace' } },
-            ...(validatedName ? [{ key: 'cust', label: 'Customer', value: validatedName }] : []),
-            { key: 'type', label: 'Type', value: t(`bills.electricity.${meterType}`) },
-            { key: 'phone', label: 'Phone', value: phone },
-            { key: 'amt', label: 'Amount', value: `₦${finalAmount.toLocaleString()}`, valueColor: 'mint' as const },
-            { key: 'earn', label: "You'll earn", value: `+${estPoints} pts`, valueColor: 'mint' as const },
+            { key: 'meter', label: t('bills.electricity.confirm_meter'), value: meterNumber, valueStyle: { fontFamily: 'monospace' } },
+            ...(validatedName ? [{ key: 'cust', label: t('bills.electricity.confirm_customer'), value: validatedName }] : []),
+            { key: 'type', label: t('bills.electricity.confirm_type'), value: t(`bills.electricity.${meterType}`) },
+            { key: 'phone', label: t('bills.electricity.phone'), value: phone },
+            { key: 'amt', label: t('bills.electricity.confirm_amount'), value: `₦${finalAmount.toLocaleString()}`, valueColor: 'mint' as const },
+            { key: 'earn', label: t('bills.electricity.confirm_earn_label'), value: `+${estPoints} pts`, valueColor: 'mint' as const },
           ]}
           onCancel={() => setShowConfirmModal(false)}
           onConfirm={() => purchaseMutation.mutate()}

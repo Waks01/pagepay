@@ -112,7 +112,7 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
         if (status === 401 && !detail) {
           setFormError(t('auth.login.errors.credentials_mismatch'));
         } else {
-          setFormError(detail || `Connection error (HTTP ${status})`);
+          setFormError(detail || t('common.connection_error_with_status', { status }));
         }
         setErrorTrigger(true);
         setTimeout(() => setErrorTrigger(false), 600);

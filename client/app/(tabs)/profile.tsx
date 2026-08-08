@@ -198,7 +198,7 @@ export default function ProfileScreen() {
     async (next: LanguagePref) => {
       const opt = languageOptions.find((o) => o.value === next);
       if (!opt?.available) {
-        Alert.alert(t('profile.coming_soon'), t('profile.coming_soon_message', { language: opt?.label ?? 'That language' }));
+        Alert.alert(t('profile.coming_soon'), t('profile.coming_soon_message', { language: opt?.label ?? '' }));
         return;
       }
       

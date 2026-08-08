@@ -441,7 +441,7 @@ export default function HomeScreen() {
               }}
               hitSlop={6}
               accessibilityRole="link"
-              accessibilityLabel="See all content in catalog"
+              accessibilityLabel={t('home.see_all_catalog', { defaultValue: 'See all content in catalog' })}
             >
               <Text style={[styles.seeAll, { color: tokens.mint }]}>{t('home.see_all')}</Text>
             </TouchableOpacity>

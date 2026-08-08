@@ -35,7 +35,7 @@ export default function TaskCompleteScreen() {
       );
     },
     onError: (error: any) => {
-      Alert.alert('Error', error.message || t('task_complete.errors.submit_failed'));
+      Alert.alert(t('common.error'), error.message || t('task_complete.errors.submit_failed'));
     },
   });
 

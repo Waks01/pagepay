@@ -226,15 +226,15 @@ export default function BuyEducationScreen() {
 
         <ConfirmModal
           visible={showConfirmModal}
-          title="Confirm Purchase"
+          title={t('bills.education.confirm_title')}
           confirming={purchaseMutation.isPending}
           rows={[
-            { key: 'exam', label: 'Exam', value: selectedExamData?.name ?? '' },
-            { key: 'type', label: 'Type', value: selectedExamData?.exam_type ?? '' },
-            { key: 'qty', label: 'Quantity', value: `× ${quantity}` },
-            { key: 'unit', label: 'Unit Price', value: `₦${(selectedExamData?.amount || 0).toLocaleString()}` },
-            { key: 'amt', label: 'Total', value: `₦${totalPrice.toLocaleString()}`, valueColor: 'mint' as const },
-            { key: 'earn', label: "You'll earn", value: `+${estPoints} pts`, valueColor: 'mint' as const },
+            { key: 'exam', label: t('bills.education.confirm_exam'), value: selectedExamData?.name ?? '' },
+            { key: 'type', label: t('bills.education.confirm_type'), value: selectedExamData?.exam_type ?? '' },
+            { key: 'qty', label: t('bills.education.confirm_quantity'), value: `× ${quantity}` },
+            { key: 'unit', label: t('bills.education.confirm_unit_price'), value: `₦${(selectedExamData?.amount || 0).toLocaleString()}` },
+            { key: 'amt', label: t('bills.education.confirm_total'), value: `₦${totalPrice.toLocaleString()}`, valueColor: 'mint' as const },
+            { key: 'earn', label: t('bills.education.confirm_earn_label'), value: `+${estPoints} pts`, valueColor: 'mint' as const },
           ]}
           onCancel={() => setShowConfirmModal(false)}
           onConfirm={() => purchaseMutation.mutate()}
