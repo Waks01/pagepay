@@ -14,7 +14,7 @@ import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
 import {
   SectionCard,
-  SegmentedControl,
+  NetworkPicker,
   ConfirmModal,
   EarnBadge,
 } from '@/src/components/bills';
@@ -31,7 +31,7 @@ type AirtimeResult = {
 };
 
 type NetworkOption = {
-  id: number;
+  id: string;
   name: string;
 };
 
@@ -70,7 +70,7 @@ export default function BuyAirtimeScreen() {
 
   useEffect(() => {
     if (!selectedNetworkId && networkList.length > 0) {
-      setSelectedNetworkId(String(networkList[0].id));
+      setSelectedNetworkId(networkList[0].id);
     }
   }, [networkList, selectedNetworkId]);
 
@@ -88,9 +88,9 @@ export default function BuyAirtimeScreen() {
       if (res.ok) {
         const data = await res.json();
         if (data.validated && data.network) {
-          const matched = networkList.find(n => String(n.id) === String(data.network));
+          const matched = networkList.find(n => n.id === String(data.network));
           if (matched) {
-            setSelectedNetworkId(String(matched.id));
+            setSelectedNetworkId(matched.id);
             setDetectedNetwork(data.network_name || matched.name);
           }
         }
@@ -102,7 +102,7 @@ export default function BuyAirtimeScreen() {
     }
   };
 
-  const selectedNetwork = networkList.find(n => String(n.id) === selectedNetworkId);
+  const selectedNetwork = networkList.find(n => n.id === selectedNetworkId);
   const finalAmount = selectedAmount ?? (parseInt(customAmount, 10) || 0);
   const canSubmit = phone.length === 11 && selectedNetworkId !== null && finalAmount >= 50;
   const estPoints = finalAmount ? Math.floor(finalAmount * 0.018 * 0.67 * 10) : 0;
@@ -155,7 +155,7 @@ export default function BuyAirtimeScreen() {
     setPurchaseState('idle');
     setSuccessData(null);
     setPhone('');
-    setSelectedNetworkId(networkList.length > 0 ? String(networkList[0].id) : null);
+    setSelectedNetworkId(networkList.length > 0 ? networkList[0].id : null);
     setDetectedNetwork(null);
     setSelectedAmount(null);
     setCustomAmount('');
@@ -167,37 +167,37 @@ export default function BuyAirtimeScreen() {
         <View style={[styles.successIcon, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
           <Ionicons name="checkmark" size={48} color={tokens.mint} />
         </View>
-        <Text style={[styles.bigTitle, { color: tokens.ink }]}>Purchase Successful!</Text>
+        <Text style={[styles.bigTitle, { color: tokens.ink }]}>{t('bills.airtime.success_title_big')}</Text>
         <SectionCard>
           <View style={styles.summaryRow}>
-            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Network</Text>
+            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.airtime.confirm_network')}</Text>
             <Text style={[styles.summaryValue, { color: tokens.ink }]}>{selectedNetwork?.name || successData.network}</Text>
           </View>
           <View style={[styles.divider, { backgroundColor: tokens.border }]} />
           <View style={styles.summaryRow}>
-            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Amount</Text>
+            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.airtime.confirm_amount')}</Text>
             <Text style={[styles.summaryValue, { color: tokens.mint }]}>₦{successData.amount_naira.toLocaleString()}</Text>
           </View>
           <View style={[styles.divider, { backgroundColor: tokens.border }]} />
           <View style={styles.summaryRow}>
-            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Phone</Text>
+            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.airtime.confirm_phone')}</Text>
             <Text style={[styles.summaryValue, { color: tokens.ink }]}>{successData.phone}</Text>
           </View>
           <View style={[styles.divider, { backgroundColor: tokens.border }]} />
           <View style={styles.summaryRow}>
-            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Points Earned</Text>
+            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.airtime.points_earned_label')}</Text>
             <Text style={[styles.summaryValue, { color: tokens.mint }]}>+{successData.points_earned} pts</Text>
           </View>
           <View style={[styles.divider, { backgroundColor: tokens.border }]} />
           <View style={styles.summaryRow}>
-            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Reference</Text>
+            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.airtime.reference_label')}</Text>
             <Text style={[styles.summaryValue, { color: tokens.ink, fontFamily: 'monospace' }]}>
               {successData.reference.slice(0, 12)}...
             </Text>
           </View>
         </SectionCard>
         <TouchableOpacity onPress={handleSuccessDone} style={[styles.payBtn, { backgroundColor: tokens.mint }]}>
-          <Text style={[styles.payText, { color: tokens.mintText }]}>Done</Text>
+          <Text style={[styles.payText, { color: tokens.mintText }]}>{t('common.done')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -209,15 +209,15 @@ export default function BuyAirtimeScreen() {
         <View style={[styles.errorIcon, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
           <Ionicons name="close" size={48} color={tokens.signal} />
         </View>
-        <Text style={[styles.bigTitle, { color: tokens.ink }]}>Purchase Failed</Text>
+        <Text style={[styles.bigTitle, { color: tokens.ink }]}>{t('bills.airtime.error_title_big')}</Text>
         <Text style={[styles.errorMessage, { color: tokens.inkMuted }]}>{errorMessage}</Text>
         <SectionCard>
           <Text style={[styles.errorNote, { color: tokens.inkMuted }]}>
-            No points were deducted from your wallet. Please try again.
+            {t('bills.airtime.error_note')}
           </Text>
         </SectionCard>
         <TouchableOpacity onPress={handleRetry} style={[styles.payBtn, { backgroundColor: tokens.mint }]}>
-          <Text style={[styles.payText, { color: tokens.mintText }]}>Try Again</Text>
+          <Text style={[styles.payText, { color: tokens.mintText }]}>{t('common.try_again')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -227,9 +227,9 @@ export default function BuyAirtimeScreen() {
     return (
       <View style={[styles.fullscreen, { paddingTop: insets.top, backgroundColor: tokens.paper }]}>
         <ActivityIndicator size="large" color={tokens.mint} />
-        <Text style={[styles.processingTitle, { color: tokens.ink }]}>Processing Purchase...</Text>
+        <Text style={[styles.processingTitle, { color: tokens.ink }]}>{t('bills.airtime.processing_title')}</Text>
         <Text style={[styles.processingSub, { color: tokens.inkMuted }]}>
-          Please wait while we process your airtime purchase
+          {t('bills.airtime.processing_sub')}
         </Text>
       </View>
     );
@@ -237,8 +237,8 @@ export default function BuyAirtimeScreen() {
 
   // idle state — the form
   const networkOptions = networkList.map(n => ({
-    value: String(n.id),
-    label: n.name,
+    id: n.id,
+    name: n.name,
   }));
 
   return (
@@ -297,12 +297,12 @@ export default function BuyAirtimeScreen() {
           )}
           {isDetecting && (
             <Text style={{ color: tokens.inkMuted, fontSize: 12, marginTop: 4 }}>
-              Detecting network...
+              {t('bills.airtime.detecting')}
             </Text>
           )}
         </SectionCard>
 
-        {/* SECTION 2: Network (segmented control) */}
+        {/* SECTION 2: Network (logo chips) */}
         <SectionCard label={t('bills.airtime.network_label')}>
           {networksQ.isLoading ? (
             <ActivityIndicator color={tokens.mint} />
@@ -311,9 +311,9 @@ export default function BuyAirtimeScreen() {
               {t('bills.airtime.no_networks')}
             </Text>
           ) : (
-            <SegmentedControl
+            <NetworkPicker
               options={networkOptions}
-              value={selectedNetworkId ?? networkOptions[0]?.value ?? ''}
+              value={selectedNetworkId}
               onChange={setSelectedNetworkId}
             />
           )}
@@ -395,12 +395,12 @@ export default function BuyAirtimeScreen() {
         {/* Confirm Modal */}
         <ConfirmModal
           visible={showConfirmModal}
-          title="Confirm Purchase"
+          title={t('bills.airtime.confirm_title')}
           rows={[
-            { key: 'net', label: 'Network', value: selectedNetwork?.name ?? '' },
-            { key: 'amt', label: 'Amount', value: `₦${finalAmount.toLocaleString()}`, valueColor: 'mint' },
-            { key: 'phone', label: 'Phone', value: phone },
-            { key: 'pts', label: 'Points', value: `+${estPoints} pts`, valueColor: 'mint' },
+            { key: 'net', label: t('bills.airtime.confirm_network'), value: selectedNetwork?.name ?? '' },
+            { key: 'amt', label: t('bills.airtime.confirm_amount'), value: `₦${finalAmount.toLocaleString()}`, valueColor: 'mint' as const },
+            { key: 'phone', label: t('bills.airtime.confirm_phone'), value: phone },
+            { key: 'pts', label: t('bills.airtime.confirm_points'), value: `+${estPoints} pts`, valueColor: 'mint' as const },
           ]}
           onCancel={() => setShowConfirmModal(false)}
           onConfirm={handleConfirmPurchase}

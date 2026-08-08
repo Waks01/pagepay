@@ -6,3 +6,5 @@ export { ConfirmModal } from './ConfirmModal';
 export type { ConfirmRow } from './ConfirmModal';
 export { EarnBadge } from './EarnBadge';
 export { ErrorBanner } from './ErrorBanner';
+export { NetworkPicker } from './NetworkPicker';
+export type { NetworkOption } from './NetworkPicker';

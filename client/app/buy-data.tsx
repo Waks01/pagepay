@@ -14,7 +14,8 @@ import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
 import {
   SectionCard,
-  SegmentedControl,
+  NetworkPicker,
+  PlanGrid,
   EarnBadge,
   ConfirmModal,
 } from '@/src/components/bills';
@@ -171,44 +172,44 @@ export default function BuyDataScreen() {
             <View style={[styles.successIcon, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
               <Ionicons name="checkmark" size={48} color={tokens.mint} />
             </View>
-            <Text style={[styles.bigTitle, { color: tokens.ink }]}>Purchase Successful!</Text>
+            <Text style={[styles.bigTitle, { color: tokens.ink }]}>{t('bills.data.success_title_big')}</Text>
             <SectionCard>
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Network</Text>
+                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.data.confirm_network')}</Text>
                 <Text style={[styles.summaryValue, { color: tokens.ink }]}>
                   {networkList.find(n => n.identifier === selectedNetworkId)?.name || selectedNetworkId}
                 </Text>
               </View>
               <View style={[styles.divider, { backgroundColor: tokens.border }]} />
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Plan</Text>
+                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.data.confirm_plan')}</Text>
                 <Text style={[styles.summaryValue, { color: tokens.ink }]}>{selectedPkg?.label || selectedPlan}</Text>
               </View>
               <View style={[styles.divider, { backgroundColor: tokens.border }]} />
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Amount</Text>
+                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.data.confirm_amount')}</Text>
                 <Text style={[styles.summaryValue, { color: tokens.mint }]}>₦{selectedPkg?.amount.toLocaleString()}</Text>
               </View>
               <View style={[styles.divider, { backgroundColor: tokens.border }]} />
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Phone</Text>
+                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.data.confirm_phone')}</Text>
                 <Text style={[styles.summaryValue, { color: tokens.ink }]}>{successData.phone}</Text>
               </View>
               <View style={[styles.divider, { backgroundColor: tokens.border }]} />
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Points Earned</Text>
+                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.data.points_earned_label')}</Text>
                 <Text style={[styles.summaryValue, { color: tokens.mint }]}>+{successData.points_earned} pts</Text>
               </View>
               <View style={[styles.divider, { backgroundColor: tokens.border }]} />
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Reference</Text>
+                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.data.reference_label')}</Text>
                 <Text style={[styles.summaryValue, { color: tokens.ink, fontFamily: 'monospace' }]}>
                   {successData.reference.slice(0, 12)}...
                 </Text>
               </View>
             </SectionCard>
             <TouchableOpacity onPress={handleSuccessDone} style={[styles.payBtn, { backgroundColor: tokens.mint }]}>
-              <Text style={[styles.payText, { color: tokens.mintText }]}>Done</Text>
+              <Text style={[styles.payText, { color: tokens.mintText }]}>{t('common.done')}</Text>
             </TouchableOpacity>
           </View>
         );
@@ -219,15 +220,15 @@ export default function BuyDataScreen() {
             <View style={[styles.errorIcon, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
               <Ionicons name="close" size={48} color={tokens.signal} />
             </View>
-            <Text style={[styles.bigTitle, { color: tokens.ink }]}>Purchase Failed</Text>
+            <Text style={[styles.bigTitle, { color: tokens.ink }]}>{t('bills.data.error_title_big')}</Text>
             <Text style={[styles.errorMessage, { color: tokens.inkMuted }]}>{errorMessage}</Text>
             <SectionCard>
               <Text style={[styles.errorNote, { color: tokens.inkMuted }]}>
-                No points were deducted from your wallet. Please try again.
+                {t('bills.data.error_note')}
               </Text>
             </SectionCard>
             <TouchableOpacity onPress={handleRetry} style={[styles.payBtn, { backgroundColor: tokens.mint }]}>
-              <Text style={[styles.payText, { color: tokens.mintText }]}>Try Again</Text>
+              <Text style={[styles.payText, { color: tokens.mintText }]}>{t('common.try_again')}</Text>
             </TouchableOpacity>
           </View>
         );
@@ -236,16 +237,16 @@ export default function BuyDataScreen() {
         return (
           <View style={[styles.fullscreen, { paddingTop: insets.top, backgroundColor: tokens.paper }]}>
             <ActivityIndicator size="large" color={tokens.mint} />
-            <Text style={[styles.processingTitle, { color: tokens.ink }]}>Processing Purchase...</Text>
+            <Text style={[styles.processingTitle, { color: tokens.ink }]}>{t('bills.data.processing_title')}</Text>
             <Text style={[styles.processingSub, { color: tokens.inkMuted }]}>
-              Please wait while we process your data purchase
+              {t('bills.data.processing_sub')}
             </Text>
           </View>
         );
     }
 
     // idle — the form
-    const networkOptions = networkList.map(n => ({ value: n.identifier, label: n.name }));
+    const networkOptions = networkList.map(n => ({ id: n.identifier, name: n.name }));
 
     return (
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
@@ -297,9 +298,9 @@ export default function BuyDataScreen() {
           {networksQ.isLoading ? (
             <ActivityIndicator color={tokens.mint} />
           ) : (
-            <SegmentedControl
+            <NetworkPicker
               options={networkOptions}
-              value={selectedNetworkId ?? networkOptions[0]?.value ?? ''}
+              value={selectedNetworkId}
               onChange={(v) => {
                 setSelectedNetworkId(v);
                 setSelectedPlan(null);
@@ -365,40 +366,15 @@ export default function BuyDataScreen() {
               </Text>
             </View>
           ) : (
-            <View style={styles.planGrid}>
-              {filteredPlans.map(p => {
-                const isActive = selectedPlan === p.plan_code;
-                return (
-                  <TouchableOpacity
-                    key={p.plan_code}
-                    onPress={() => setSelectedPlan(p.plan_code)}
-                    style={[
-                      styles.planCard,
-                      {
-                        backgroundColor: isActive ? tokens.mintSoft : tokens.paper,
-                        borderColor: isActive ? tokens.mint : tokens.border,
-                      },
-                    ]}
-                  >
-                    {isActive && (
-                      <View style={styles.planCheck}>
-                        <Ionicons name="checkmark" size={10} color="#fff" />
-                      </View>
-                    )}
-                    <Text style={[styles.planValidity, { color: tokens.inkMuted }]}>{p.plantype}</Text>
-                    <Text style={[styles.planName, { color: tokens.ink }]} numberOfLines={2}>
-                      {p.label}
-                    </Text>
-                    <Text style={[styles.planPrice, { color: tokens.mint }]}>
-                      ₦{p.amount.toLocaleString()}
-                    </Text>
-                    <Text style={[styles.planPoints, { color: tokens.mint }]}>
-                      +{Math.floor(p.amount * 0.018 * 0.67 * 10)} pts
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <PlanGrid
+              items={filteredPlans}
+              isActive={(p) => selectedPlan === p.plan_code}
+              onSelect={(p) => setSelectedPlan(p.plan_code)}
+              primary={(p) => `₦${p.amount.toLocaleString()}`}
+              secondary={(p) => p.label}
+              tertiary={(p) => `+${Math.floor(p.amount * 0.018 * 0.67 * 10)} pts`}
+              emptyLabel={t('bills.data.no_plans')}
+            />
           )}
         </SectionCard>
 
@@ -428,12 +404,12 @@ export default function BuyDataScreen() {
 
         <ConfirmModal
           visible={showConfirmModal}
-          title="Confirm Purchase"
+          title={t('bills.data.confirm_title')}
           rows={[
-            { key: 'plan', label: 'Plan', value: selectedPkg?.label ?? '' },
-            { key: 'phone', label: 'Phone', value: phone },
-            { key: 'amt', label: 'Amount', value: `₦${(selectedPkg?.amount || 0).toLocaleString()}`, valueColor: 'mint' as const },
-            { key: 'pts', label: 'Points', value: `+${estPoints} pts`, valueColor: 'mint' as const },
+            { key: 'plan', label: t('bills.data.confirm_plan'), value: selectedPkg?.label ?? '' },
+            { key: 'phone', label: t('bills.data.confirm_phone'), value: phone },
+            { key: 'amt', label: t('bills.data.confirm_amount'), value: `₦${(selectedPkg?.amount || 0).toLocaleString()}`, valueColor: 'mint' as const },
+            { key: 'pts', label: t('bills.data.confirm_points'), value: `+${estPoints} pts`, valueColor: 'mint' as const },
           ]}
           onCancel={() => setShowConfirmModal(false)}
           onConfirm={handleConfirmPurchase}
@@ -462,20 +438,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1,
   },
   plantypeTabText: { fontSize: 11, fontWeight: '600' },
-  planGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12,
-  },
-  planCard: {
-    width: '48%', padding: 12, borderRadius: 12, borderWidth: 1, gap: 4,
-  },
-  planCheck: {
-    position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8,
-    backgroundColor: '#0E7C66', alignItems: 'center', justifyContent: 'center',
-  },
-  planValidity: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
-  planName: { fontSize: 13, fontWeight: '600' },
-  planPrice: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  planPoints: { fontSize: 11, fontWeight: '600' },
   errorBox: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderRadius: 12, padding: 14, borderWidth: 1,
