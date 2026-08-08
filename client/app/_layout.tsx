@@ -194,9 +194,8 @@ export default function RootLayout() {
         const appMod = require('@react-native-firebase/app');
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const crashlyticsMod = require('@react-native-firebase/crashlytics');
-        const app = appMod.getApp?.();
-        if (!app) return;
-        const crashlytics = crashlyticsMod.getCrashlytics?.();
+        if (!crashlyticsMod?.getCrashlytics) return;
+        const crashlytics = crashlyticsMod.getCrashlytics();
         if (!crashlytics) return;
         await crashlytics.setCrashlyticsCollectionEnabled(true);
         console.log('Crashlytics initialized');
