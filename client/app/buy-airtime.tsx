@@ -312,7 +312,7 @@ export default function BuyAirtimeScreen() {
         {/* SECTION 2: Network (logo chips) */}
         <SectionCard label={t('bills.airtime.network_label')}>
           {networksQ.isLoading ? (
-            <ActivityIndicator color={tokens.mint} />
+            <PagePaySpinner size={32} />
           ) : networkList.length === 0 ? (
             <Text style={{ color: tokens.inkMuted, fontSize: 13 }}>
               {t('bills.airtime.no_networks')}

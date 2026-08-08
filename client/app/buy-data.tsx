@@ -302,7 +302,7 @@ export default function BuyDataScreen() {
         {/* SECTION 2: Network */}
         <SectionCard label={t('bills.data.network_label')}>
           {networksQ.isLoading ? (
-            <ActivityIndicator color={tokens.mint} />
+            <PagePaySpinner size={32} />
           ) : (
             <NetworkPicker
               options={networkOptions}
@@ -351,7 +351,7 @@ export default function BuyDataScreen() {
 
           {plansQ.isLoading ? (
             <View style={{ paddingVertical: 32 }}>
-              <ActivityIndicator color={tokens.mint} />
+              <PagePaySpinner size={32} />
             </View>
           ) : plansQ.isError ? (
             <View style={[styles.errorBox, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
@@ -397,7 +397,7 @@ export default function BuyDataScreen() {
           ]}
         >
           {purchaseMutation.isPending ? (
-            <ActivityIndicator color={tokens.mintText} />
+            <PagePaySpinner size={20} />
           ) : (
             <>
               <Ionicons name="cart-outline" size={20} color={tokens.mintText} />
