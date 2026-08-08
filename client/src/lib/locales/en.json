@@ -475,7 +475,8 @@
         "insufficient_balance": "Insufficient balance. Fund your wallet first.",
         "purchase_failed": "Purchase failed. Please try again.",
         "network_required": "Select a network"
-      }
+      },
+      "amount_required": "Select or enter amount"
     },
     "data": {
       "title": "Buy Data",

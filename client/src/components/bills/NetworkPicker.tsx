@@ -40,6 +40,17 @@ const NETWORK_LOGO_MAP: Record<string, any> = {
 };
 
 /**
+ * Some VTU providers return numeric network IDs instead of brand slugs.
+ * This map bridges those IDs to the brand keys used by NETWORK_LOGO_MAP.
+ */
+const NUMERIC_ID_TO_BRAND: Record<string, string> = {
+  '1': 'mtn',
+  '2': 'glo',
+  '3': 'airtel',
+  '4': '9mobile',
+};
+
+/**
  * Fallback brand colors when no image is available. Keeps the chip
  * visually meaningful even if a new network appears that we don't
  * have art for yet.
@@ -72,6 +83,8 @@ export function resolveBrand(id: string | number | undefined | null): string {
   }
   const lower = String(id).toLowerCase();
   if (NETWORK_LOGO_MAP[lower]) return lower;
+  const numericBrand = NUMERIC_ID_TO_BRAND[lower];
+  if (numericBrand) return numericBrand;
   const head = lower.split('_')[0];
   return NETWORK_LOGO_MAP[head] ? head : lower;
 }
