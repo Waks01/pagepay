@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  ActivityIndicator, StyleSheet,
+  StyleSheet,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,8 @@ import {
   ConfirmModal,
   EarnBadge,
 } from '@/src/components/bills';
+import { PagePaySpinner } from '@/components/PagePaySpinner';
+import { Skeleton } from '@/components/Skeleton';
 
 type AirtimeResult = {
   reference: string;
@@ -226,11 +228,16 @@ export default function BuyAirtimeScreen() {
   if (purchaseState === 'processing') {
     return (
       <View style={[styles.fullscreen, { paddingTop: insets.top, backgroundColor: tokens.paper }]}>
-        <ActivityIndicator size="large" color={tokens.mint} />
+        <PagePaySpinner size={56} />
         <Text style={[styles.processingTitle, { color: tokens.ink }]}>{t('bills.airtime.processing_title')}</Text>
         <Text style={[styles.processingSub, { color: tokens.inkMuted }]}>
           {t('bills.airtime.processing_sub')}
         </Text>
+        <View style={styles.skeletonGroup}>
+          <Skeleton width="80%" height={14} borderRadius={7} marginBottom={12} />
+          <Skeleton width="60%" height={12} borderRadius={6} marginBottom={8} />
+          <Skeleton width="70%" height={12} borderRadius={6} />
+        </View>
       </View>
     );
   }
@@ -458,4 +465,5 @@ const styles = StyleSheet.create({
   errorNote: { fontSize: 13, textAlign: 'center', lineHeight: 20 },
   processingTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
   processingSub: { fontSize: 14, textAlign: 'center', lineHeight: 22 },
+  skeletonGroup: { marginTop: 24, alignItems: 'center' },
 });
