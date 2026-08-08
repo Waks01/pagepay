@@ -17,8 +17,6 @@ import { connectSocket, disconnectSocket, onNotification } from '@/src/lib/socke
 import { SplashOverlay } from '@/components/SplashOverlay';
 import { AdSlotProvider } from '@/src/shared/contexts/AdSlot';
 import BannerNotification, { type BannerNotificationItem } from '@/src/components/BannerNotification';
-import { getApp as getFirebaseApp } from '@react-native-firebase/app';
-import { getCrashlytics } from '@react-native-firebase/crashlytics';
 import '@/src/lib/i18n';
 
 const queryClient = new QueryClient();
@@ -190,9 +188,16 @@ export default function RootLayout() {
 
     const initCrashlytics = async () => {
       try {
-        const app = getFirebaseApp();
+        // Lazy-require Firebase so dev-client / Expo Go builds without
+        // the native modules don't blow up at module-evaluation time.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const appMod = require('@react-native-firebase/app');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const crashlyticsMod = require('@react-native-firebase/crashlytics');
+        const app = appMod.getApp?.();
         if (!app) return;
-        const crashlytics = getCrashlytics();
+        const crashlytics = crashlyticsMod.getCrashlytics?.();
+        if (!crashlytics) return;
         await crashlytics.setCrashlyticsCollectionEnabled(true);
         console.log('Crashlytics initialized');
       } catch (error) {

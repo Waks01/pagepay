@@ -2,33 +2,40 @@
  * Firebase Cloud Messaging notification service.
  * Handles permission requests, token registration, and notification listening.
  * Phase 3 feature.
+ *
+ * Firebase is loaded lazily via require() so the absence of the native
+ * modules (e.g. Expo Go or a dev-client build without Firebase) doesn't
+ * crash JS bundle evaluation. Top-level static imports of
+ * `@react-native-firebase/*` would otherwise trigger the native-module
+ * registry at module load and throw a synchronous error.
  */
 import { Platform, Linking } from "react-native";
 import * as Notifications from "expo-notifications";
-import { getApp } from "@react-native-firebase/app";
-import {
-  getMessaging,
-  onMessage,
-  onTokenRefresh,
-  setBackgroundMessageHandler,
-  requestPermission,
-  AuthorizationStatus,
-} from "@react-native-firebase/messaging";
 import { apiFetch } from "@/src/shared/api/client";
 import { router } from "expo-router";
 
-let messaging: ReturnType<typeof getMessaging> | null = null;
+type MessagingInstance = unknown;
+
+let messaging: MessagingInstance | null = null;
 let initError: Error | null = null;
+let messagingMod: any = null;
 
 async function getFirebaseMessaging() {
-  if (!messaging && !initError) {
-    try {
-      const app = getApp();
-      messaging = getMessaging(app);
-    } catch (error) {
-      console.error("[notifications] Firebase init failed:", error);
-      initError = error instanceof Error ? error : new Error(String(error));
+  if (messaging || initError) return messaging;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const appMod = require("@react-native-firebase/app");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    messagingMod = require("@react-native-firebase/messaging");
+    const app = appMod.getApp?.();
+    if (!app) {
+      initError = new Error("Firebase app not available");
+      return null;
     }
+    messaging = messagingMod.getMessaging(app);
+  } catch (error) {
+    console.error("[notifications] Firebase init failed:", error);
+    initError = error instanceof Error ? error : new Error(String(error));
   }
   return messaging;
 }
@@ -69,16 +76,16 @@ export async function requestNotificationPermissions(): Promise<boolean> {
     // For iOS, also request Firebase messaging authorization
     if (Platform.OS === "ios") {
       const messagingInstance = await getFirebaseMessaging();
-      if (!messagingInstance) {
+      if (!messagingInstance || !messagingMod) {
         console.log(
           "Firebase messaging unavailable, skipping iOS auth request",
         );
         return false;
       }
-      const authStatus = await requestPermission(messagingInstance);
+      const authStatus = await messagingMod.requestPermission(messagingInstance);
       const enabled =
-        authStatus === AuthorizationStatus.AUTHORIZED ||
-        authStatus === AuthorizationStatus.PROVISIONAL;
+        authStatus === messagingMod.AuthorizationStatus.AUTHORIZED ||
+        authStatus === messagingMod.AuthorizationStatus.PROVISIONAL;
 
       if (!enabled) {
         console.log("iOS Firebase messaging authorization denied");
@@ -104,10 +111,8 @@ export async function getFCMToken(): Promise<string | null> {
       return null;
     }
     const messagingInstance = await getFirebaseMessaging();
-    if (!messagingInstance) return null;
-    const { getToken: getFCMTokenFromModule } =
-      await import("@react-native-firebase/messaging");
-    const token = await getFCMTokenFromModule(messagingInstance);
+    if (!messagingInstance || !messagingMod) return null;
+    const token = await messagingMod.getToken(messagingInstance);
 
     if (!token) {
       console.warn("No FCM token available");
@@ -178,11 +183,10 @@ export async function registerFCMToken(): Promise<boolean> {
 export async function deregisterFCMToken(): Promise<boolean> {
   try {
     const messagingInstance = await getFirebaseMessaging();
-    if (!messagingInstance) {
+    if (!messagingInstance || !messagingMod) {
       return true;
     }
-    const { getToken } = await import("@react-native-firebase/messaging");
-    const token = await getToken(messagingInstance);
+    const token = await messagingMod.getToken(messagingInstance);
 
     if (!token) {
       return true; // No token to deregister
@@ -233,11 +237,11 @@ export function setupNotificationListeners() {
 
   getFirebaseMessaging()
     .then((messagingInstance) => {
-      if (!messagingInstance) return;
+      if (!messagingInstance || !messagingMod) return;
 
-      unsubscribeTokenRefresh = onTokenRefresh(
+      unsubscribeTokenRefresh = messagingMod.onTokenRefresh(
         messagingInstance,
-        async (newToken) => {
+        async (newToken: unknown) => {
           console.log("FCM token refreshed, re-registering:", newToken);
           try {
             await registerFCMToken();
@@ -247,9 +251,9 @@ export function setupNotificationListeners() {
         },
       );
 
-      unsubscribeForeground = onMessage(
+      unsubscribeForeground = messagingMod.onMessage(
         messagingInstance,
-        async (remoteMessage) => {
+        async (remoteMessage: any) => {
           console.log("Foreground notification received:", remoteMessage);
 
           await Notifications.scheduleNotificationAsync({
@@ -264,9 +268,12 @@ export function setupNotificationListeners() {
         },
       );
 
-      setBackgroundMessageHandler(messagingInstance, async (remoteMessage) => {
-        console.log("Background notification received:", remoteMessage);
-      });
+      messagingMod.setBackgroundMessageHandler(
+        messagingInstance,
+        async (remoteMessage: unknown) => {
+          console.log("Background notification received:", remoteMessage);
+        },
+      );
     })
     .catch((error) => {
       console.error(

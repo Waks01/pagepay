@@ -2,7 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PagePay } from '@/constants/theme';
-import { getCrashlytics } from '@react-native-firebase/crashlytics';
+import i18n from '@/src/lib/i18n';
 
 interface Props {
   children: ReactNode;
@@ -13,6 +13,35 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+}
+
+// Crashlytics is loaded lazily so the absence of the native module
+// (e.g. Expo Go or a dev-client build without Firebase) doesn't crash
+// the JS bundle at module-evaluation time. Each call is also wrapped
+// in try/catch because the named import's module factory itself can
+// throw if the native registry rejects the lookup.
+type CrashlyticsLike = {
+  recordError: (error: Error) => void;
+  setCustomKey: (key: string, value: string | boolean) => void;
+};
+
+let cachedCrashlytics: CrashlyticsLike | null = null;
+let crashlyticsAttempted = false;
+
+function getCrashlyticsSafe(): CrashlyticsLike | null {
+  if (crashlyticsAttempted) return cachedCrashlytics;
+  crashlyticsAttempted = true;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('@react-native-firebase/crashlytics');
+    const instance = mod.getCrashlytics?.();
+    if (instance && typeof instance.recordError === 'function') {
+      cachedCrashlytics = instance as CrashlyticsLike;
+    }
+  } catch {
+    cachedCrashlytics = null;
+  }
+  return cachedCrashlytics;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -36,11 +65,15 @@ export class ErrorBoundary extends Component<Props, State> {
     this.props.onError?.(error, errorInfo);
 
     try {
-      const crashlytics = getCrashlytics();
+      const crashlytics = getCrashlyticsSafe();
+      if (!crashlytics) return;
       crashlytics.recordError(error);
       crashlytics.setCustomKey('error_boundary', true);
       if (errorInfo.componentStack) {
-        crashlytics.setCustomKey('component_stack', errorInfo.componentStack.slice(0, 1000));
+        crashlytics.setCustomKey(
+          'component_stack',
+          errorInfo.componentStack.slice(0, 1000),
+        );
       }
     } catch (e) {
       console.error('Failed to log error to Crashlytics:', e);
@@ -60,6 +93,10 @@ export class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      // i18n.t is a stable global accessor, so a class component can
+      // pull translations without subscribing to language changes.
+      const t = i18n.t.bind(i18n);
+
       return (
         <View style={styles.container}>
           <View style={styles.content}>
@@ -67,10 +104,13 @@ export class ErrorBoundary extends Component<Props, State> {
               <Ionicons name="warning-outline" size={48} color={PagePay.light.signal} />
             </View>
             <Text style={[styles.title, { color: PagePay.light.ink }]}>
-              Something went wrong
+              {t('error_boundary.title', { defaultValue: 'Something went wrong' })}
             </Text>
             <Text style={[styles.message, { color: PagePay.light.inkMuted }]}>
-              We encountered an unexpected error. Please try again.
+              {t('error_boundary.message', {
+                defaultValue:
+                  'We encountered an unexpected error. Please try again.',
+              })}
             </Text>
             {__DEV__ && this.state.error && (
               <View style={[styles.errorDetails, { backgroundColor: PagePay.light.paper, borderColor: PagePay.light.border }]}>
@@ -88,7 +128,7 @@ export class ErrorBoundary extends Component<Props, State> {
             >
               <Ionicons name="refresh-outline" size={18} color={PagePay.light.mintText} />
               <Text style={[styles.retryText, { color: PagePay.light.mintText }]}>
-                Try again
+                {t('error_boundary.retry', { defaultValue: 'Try again' })}
               </Text>
             </Pressable>
           </View>
