@@ -5,7 +5,7 @@ import { PagePay } from '@/constants/theme';
 export type NetworkOption = {
   /** Identifier from the API (e.g. "mtn", "airtel", "9mobile", or for
    *  data: "mtn_gifting_data", "mtn_data_share"). */
-  id: string;
+  id: string | number;
   /** Human-readable network name. */
   name: string;
   /**
@@ -18,8 +18,8 @@ export type NetworkOption = {
 
 type NetworkPickerProps = {
   options: ReadonlyArray<NetworkOption>;
-  value: string | null;
-  onChange: (id: string) => void;
+  value: string | number | null;
+  onChange: (id: string | number) => void;
   /** Override default column count. */
   columns?: number;
   /** Disable interaction. */
@@ -52,11 +52,11 @@ const NETWORK_FALLBACK_COLORS: Record<string, string> = {
   etisalat: '#0066B3',
 };
 
-function resolveLogo(id: string) {
+function resolveLogo(id: string | number | undefined | null) {
   return NETWORK_LOGO_MAP[resolveBrand(id)] ?? null;
 }
 
-function resolveFallbackColor(id: string) {
+function resolveFallbackColor(id: string | number | undefined | null) {
   return NETWORK_FALLBACK_COLORS[resolveBrand(id)] ?? '#6B7280';
 }
 
@@ -66,8 +66,11 @@ function resolveFallbackColor(id: string) {
  * Identifiers with no underscore (e.g. `mtn`, `airtel`) are returned
  * unchanged.
  */
-export function resolveBrand(id: string): string {
-  const lower = id.toLowerCase();
+export function resolveBrand(id: string | number | undefined | null): string {
+  if (id === undefined || id === null) {
+    return '';
+  }
+  const lower = String(id).toLowerCase();
   if (NETWORK_LOGO_MAP[lower]) return lower;
   const head = lower.split('_')[0];
   return NETWORK_LOGO_MAP[head] ? head : lower;
@@ -101,7 +104,7 @@ export function NetworkPicker({
       ]}
     >
       {options.map((opt) => {
-        const isActive = opt.id === value;
+        const isActive = String(opt.id) === String(value);
         const logo = resolveLogo(opt.id);
         const fallbackColor = resolveFallbackColor(opt.id);
         const initial = opt.name.trim().charAt(0).toUpperCase() || '?';

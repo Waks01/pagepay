@@ -95,7 +95,7 @@ def _generate_reference() -> str:
 async def list_airtime_networks():
     """List airtime networks available on VTU provider."""
     nets = await _get_vtu_public_client().get_airtime_networks()
-    return [{"id": n.id, "name": n.name} for n in nets]
+    return [{"id": str(n.id), "name": n.name} for n in nets]
 
 
 @router.post("/airtime", response_model=AirtimePurchaseResponse)
