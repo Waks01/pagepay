@@ -290,6 +290,7 @@ export default function RootLayout() {
         <Stack.Screen name="buy-isp" options={{ headerShown: false, title: 'ISP Data' }} />
         <Stack.Screen name="buy-education" options={{ headerShown: false, title: 'Result Checker' }} />
         <Stack.Screen name="buy-sms" options={{ headerShown: false, title: 'Bulk SMS' }} />
+        <Stack.Screen name="bills-history" options={{ headerShown: false, title: 'Bills History' }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         <Stack.Screen name="pin/verify" options={{ headerShown: false, title: 'Enter PIN' }} />
         <Stack.Screen name="pin/setup" options={{ headerShown: false, title: 'Set PIN' }} />

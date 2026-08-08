@@ -23,7 +23,7 @@ import logging
 import uuid
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
@@ -38,6 +38,8 @@ from app.schemas import (
     ElectricityPurchaseRequest,
     TelevisionPurchaseRequest,
     BillsPurchaseResponse,
+    BillTransactionOut,
+    BillsHistoryResponse,
 )
 from app.services.money import kobo_to_points
 from app.services.peyflex import get_client as get_peyflex_client, get_public_client as get_peyflex_public_client, PeyflexError
@@ -170,7 +172,7 @@ async def buy_airtime(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -321,7 +323,7 @@ async def buy_data(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -440,7 +442,7 @@ async def buy_electricity(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -579,7 +581,7 @@ async def buy_tv(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -855,7 +857,7 @@ async def buy_recharge_pin(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -978,7 +980,7 @@ async def fund_betting(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -1103,7 +1105,7 @@ async def topup_smile(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -1203,7 +1205,7 @@ async def topup_spectranet(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -1311,7 +1313,7 @@ async def buy_result_checker(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -1420,7 +1422,7 @@ async def send_sms(
     )
     db.add(tx)
 
-    new_balance = current_user.points_balance - kobo_to_points(amount_kobo) + points
+    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
     await db.execute(
         update(User)
         .where(User.id == current_user.id)
@@ -1456,4 +1458,48 @@ async def send_sms(
         "total_pages": result.get("total_pages", 0),
         "total_cost": total_cost,
     }
+
+
+@router.get("/history", response_model=BillsHistoryResponse)
+async def get_bills_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    service: str | None = Query(default=None, description="Filter by service type: airtime, data, electricity, tv, recharge_pin, betting, isp, education, sms"),
+    status: str | None = Query(default=None, description="Filter by status: success, failed, pending"),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> BillsHistoryResponse:
+    """List user's bill transaction history with pagination."""
+    query = (
+        select(BillTransaction)
+        .where(BillTransaction.user_id == current_user.id)
+        .order_by(BillTransaction.created_at.desc())
+    )
+
+    if service:
+        query = query.where(BillTransaction.service == service)
+    if status:
+        query = query.where(BillTransaction.status == status)
+
+    count_query = select(BillTransaction.id).where(BillTransaction.user_id == current_user.id)
+    if service:
+        count_query = count_query.where(BillTransaction.service == service)
+    if status:
+        count_query = count_query.where(BillTransaction.status == status)
+
+    total_result = await db.execute(count_query)
+    total = len(total_result.scalars().all())
+
+    offset = (page - 1) * limit
+    paginated_query = query.offset(offset).limit(limit)
+    result = await db.execute(paginated_query)
+    items = result.scalars().all()
+
+    return BillsHistoryResponse(
+        items=[BillTransactionOut.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        limit=limit,
+        service=service,
+    )
 

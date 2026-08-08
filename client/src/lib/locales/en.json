@@ -785,7 +785,14 @@
     "earn_sub": "Real commission from your VTU provider will be credited after purchase.",
     "earn_cashback": "Earn cashback points",
     "load_error": "Could not load plans. Please check your connection and try again.",
-    "no_plans": "No plans available for this period."
+    "no_plans": "No plans available for this period.",
+    "history": {
+      "title": "Bills History",
+      "load_failed": "Could not load transaction history.",
+      "load_error": "Something went wrong loading your history.",
+      "empty_title": "No transactions yet",
+      "empty_text": "Your bill purchases and earned points will appear here."
+    }
   },
   "fund_wallet": {
     "title": "Fund Wallet",

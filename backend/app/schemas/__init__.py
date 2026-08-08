@@ -163,6 +163,35 @@ class BillsPurchaseResponse(BaseModel):
     total_cost: int | None = None
 
 
+class BillTransactionOut(BaseModel):
+    """One row in the bills transaction history."""
+    id: int
+    service: str
+    provider: str
+    phone: str | None
+    meter_number: str | None
+    smartcard_number: str | None
+    amount_naira: int
+    commission_naira: int
+    points_earned: int
+    reference: str
+    status: str
+    external_ref: str | None
+    error_message: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BillsHistoryResponse(BaseModel):
+    """Paginated bills transaction history."""
+    items: list[BillTransactionOut]
+    total: int
+    page: int
+    limit: int
+    service: str | None = None
+
+
 class ContentItem(BaseModel):
     id: int
     title: str
