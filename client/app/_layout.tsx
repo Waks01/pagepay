@@ -2,7 +2,7 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useFonts, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import 'react-native-reanimated';
 
@@ -16,6 +16,9 @@ import { setupNotificationListeners, registerFCMToken } from '@/src/lib/notifica
 import { connectSocket, disconnectSocket, onNotification } from '@/src/lib/socket';
 import { SplashOverlay } from '@/components/SplashOverlay';
 import { AdSlotProvider } from '@/src/shared/contexts/AdSlot';
+import BannerNotification, { type BannerNotification } from '@/src/components/BannerNotification';
+import { getApp as getFirebaseApp } from '@react-native-firebase/app';
+import { getCrashlytics } from '@react-native-firebase/crashlytics';
 import '@/src/lib/i18n';
 
 const queryClient = new QueryClient();
@@ -163,6 +166,18 @@ export default function RootLayout() {
           connectSocket(me.id);
           onNotification((notification) => {
             console.log('In-app notification:', notification);
+            setBannerNotifications((prev) => {
+              const exists = prev.some((n) => n.id === notification.id);
+              if (exists) return prev;
+              const next = [notification, ...prev];
+              if (next.length > 5) next.pop();
+              return next;
+            });
+            setTimeout(() => {
+              setBannerNotifications((prev) =>
+                prev.filter((n) => n.id !== notification.id),
+              );
+            }, 8000);
           });
         }
       } catch (error) {
@@ -173,6 +188,20 @@ export default function RootLayout() {
     initNotifications();
     initSocket();
 
+    const initCrashlytics = async () => {
+      try {
+        const app = getFirebaseApp();
+        if (!app) return;
+        const crashlytics = getCrashlytics(app);
+        await crashlytics.setCrashlyticsCollectionEnabled(true);
+        console.log('Crashlytics initialized');
+      } catch (error) {
+        console.error('Failed to init Crashlytics:', error);
+      }
+    };
+
+    initCrashlytics();
+
     return () => {
       if (cleanup) cleanup();
       disconnectSocket();
@@ -180,11 +209,23 @@ export default function RootLayout() {
   }, [isReady]);
 
   // Splash overlay state. Native splash (expo-splash-screen) shows first
-  // as a static image while JS loads. Once fonts are loaded and auth is
+  // as a static image while JS loads. Once fonts are loaded and auth are
   // ready, we show the animated SplashOverlay which hides the native splash
   // and runs the full animation sequence. When complete, it calls onDone
   // to dismiss and reveal the app.
   const [splashDismissed, setSplashDismissed] = useState(false);
+
+  // In-app banner notifications
+  const [bannerNotifications, setBannerNotifications] = useState<BannerNotification[]>([]);
+
+  const handleBannerDismiss = useCallback((id: number) => {
+    setBannerNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
+  const handleBannerPress = useCallback((notification: BannerNotification) => {
+    setBannerNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+    handleNotificationTap(notification);
+  }, []);
 
   if (!isReady || !fontsLoaded) {
     // Show animated splash overlay during initialization.
@@ -201,6 +242,11 @@ export default function RootLayout() {
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AdsBootstrapComponent />
         <AdSlotProvider>
+          <BannerNotification
+            notifications={bannerNotifications}
+            onDismiss={handleBannerDismiss}
+            onPress={handleBannerPress}
+          />
           <Stack>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />

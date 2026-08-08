@@ -1,62 +1,39 @@
 services:
-  db:
-    image: postgres:18-alpine
-    environment:
-      POSTGRES_USER: pagepay
-      POSTGRES_PASSWORD: pagepass
-      POSTGRES_DB: pagepay
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pagepay -d pagepay"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 30s
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://pagepay:pagepass@db:5432/pagepay
+      DATABASE_URL: ${DATABASE_URL}
       SECRET_KEY: ${SECRET_KEY}
-      CORS_ORIGINS: http://localhost:8081,https://pagepay-fff6.onrender.com
+      CORS_ORIGINS: ${CORS_ORIGINS}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       ENVIRONMENT: production
-    depends_on:
-      db:
-        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')\""]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
   cron:
     build:
       context: .
       dockerfile: Dockerfile.cron
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://pagepay:pagepass@db:5432/pagepay
+      DATABASE_URL: ${DATABASE_URL}
       SECRET_KEY: ${SECRET_KEY}
       GNEWS_API_KEY: ${GNEWS_API_KEY:-}
       ENVIRONMENT: production
-    depends_on:
-      db:
-        condition: service_healthy
     command: ["sh", "-c", "while true; do python -m app.services.cron || true; sleep 21600; done"]
-  
-  ngrok:
-    image: ngrok/ngrok:latest
-    command: http api:8000
-    environment:
-      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
-    ports:
-      - "4040:4040"
-    depends_on:
-      - api
-    networks:
-      - default
+    restart: unless-stopped
 
 volumes:
   pg_data:
-
-networks:
-  default:
-    driver: bridge

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet,
+  Alert, ActivityIndicator, StyleSheet, Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +34,13 @@ type PurchaseResult = {
   customer_name: string | null;
 };
 
+type ValidateResult = {
+  customer_name: string | null;
+  account_status: string | null;
+  validated: boolean;
+  message?: string;
+};
+
 type TvProvider = {
   cable_name: string;
   product_name?: string;
@@ -50,8 +57,10 @@ export default function BuyTvScreen() {
   const [phone, setPhone] = useState('');
   const [provider, setProvider] = useState<string | null>(null);
   const [selectedBouquet, setSelectedBouquet] = useState<string | null>(null);
-  const [validatedCustomer, setValidatedCustomer] = useState<string | null>(null);
-  const [isValidating, setIsValidating] = useState(false);
+  const [validatedName, setValidatedName] = useState<string | null>(null);
+  const [validatedStatus, setValidatedStatus] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   const providersQ = useQuery({
     queryKey: ['tv-providers'],
@@ -99,10 +108,20 @@ export default function BuyTvScreen() {
         body: JSON.stringify({ smartcard_number: smartcard, provider }),
       });
       if (!res.ok) throw new Error(t('bills.tv.errors.validation_failed'));
-      return (await res.json()) as { customer_name?: string; validated?: boolean };
+      return (await res.json()) as ValidateResult;
     },
     onSuccess: (data) => {
-      if (data.customer_name) setValidatedCustomer(data.customer_name);
+      if (data.validated && data.customer_name) {
+        setValidatedName(data.customer_name);
+        setValidatedStatus(data.account_status);
+      } else {
+        setValidatedName(null);
+        setValidatedStatus(null);
+      }
+    },
+    onError: () => {
+      setValidatedName(null);
+      setValidatedStatus(null);
     },
   });
 
@@ -110,7 +129,7 @@ export default function BuyTvScreen() {
     mutationFn: async () => {
       if (!selectedPkg) throw new Error(t('bills.tv.select_bouquet'));
       if (!phone) throw new Error(t('bills.tv.phone_required'));
-      if (!provider) throw new Error('Select a TV provider');
+      if (!provider) throw new Error(t('bills.tv.errors.provider_required'));
       const res = await apiFetch('/api/v1/bills/tv', {
         method: 'POST',
         body: JSON.stringify({
@@ -128,6 +147,7 @@ export default function BuyTvScreen() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['me'] });
+      setShowConfirmModal(false);
       Alert.alert(
         t('bills.tv.success_title'),
         t('bills.tv.success_message', { name: selectedPkg?.name, smartcard, points: data.points_earned }),
@@ -135,7 +155,8 @@ export default function BuyTvScreen() {
       );
     },
     onError: (error: Error) => {
-      Alert.alert(t('bills.tv.error_title'), error.message);
+      setShowConfirmModal(false);
+      setPurchaseError(error.message);
     },
   });
 
@@ -143,6 +164,12 @@ export default function BuyTvScreen() {
   const estPoints = selectedPkg
     ? Math.floor((selectedPkg.price_naira || selectedPkg.amount || 0) * 0.018 * 0.67 * 10)
     : 0;
+
+  const handleBuyPress = () => {
+    if (!canSubmit) return;
+    setPurchaseError(null);
+    setShowConfirmModal(true);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
@@ -155,141 +182,232 @@ export default function BuyTvScreen() {
           <Text style={[styles.title, { color: tokens.ink }]}>{t('bills.tv.title')}</Text>
         </View>
 
-        {/* Provider */}
-        <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.tv.provider')}</Text>
-        {providersQ.isLoading ? (
-          <ActivityIndicator color={tokens.mint} />
-        ) : (
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            {(providersQ.data ?? []).map((p) => (
-              <TouchableOpacity
-                key={p.cable_name}
-                onPress={() => { setProvider(p.cable_name); setSelectedBouquet(null); setValidatedCustomer(null); }}
-                style={[
-                  styles.providerCard,
-                  {
-                    backgroundColor: provider === p.cable_name ? tokens.mintSoft : tokens.card,
-                    borderColor: provider === p.cable_name ? tokens.mint : tokens.border,
-                  },
-                ]}
-              >
-                <Ionicons name="tv-outline" size={24} color={tokens.mint} />
-                <Text style={[
-                  styles.chipText,
-                  { color: provider === p.cable_name ? tokens.mint : tokens.ink },
-                ]}>{p.cable_name.toUpperCase()}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+        {/* SECTION 1: Provider (segmented control) */}
+        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.tv.provider_label')}</Text>
+          {providersQ.isLoading ? (
+            <ActivityIndicator color={tokens.mint} />
+          ) : (providersQ.data ?? []).length === 0 ? (
+            <Text style={{ color: tokens.inkMuted, fontSize: 13 }}>
+              {t('bills.tv.no_providers')}
+            </Text>
+          ) : (
+            <View style={styles.segmentedControl}>
+              {(providersQ.data ?? []).map((p) => {
+                const isActive = provider === p.cable_name;
+                return (
+                  <TouchableOpacity
+                    key={p.cable_name}
+                    onPress={() => {
+                      setProvider(p.cable_name);
+                      setSelectedBouquet(null);
+                      setValidatedName(null);
+                      setValidatedStatus(null);
+                    }}
+                    style={[
+                      styles.segmentBtn,
+                      {
+                        backgroundColor: isActive ? tokens.card : 'transparent',
+                        borderColor: isActive ? tokens.mint : 'transparent',
+                        shadowColor: isActive ? '#000' : 'transparent',
+                        shadowOpacity: isActive ? 0.08 : 0,
+                        shadowRadius: isActive ? 4 : 0,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.segmentText, { color: isActive ? tokens.ink : tokens.inkMuted }]}>
+                      {p.cable_name.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
-        {/* Bouquets */}
-        <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.tv.select_bouquet')}</Text>
-        {bouquetsQ.isLoading ? (
-          <ActivityIndicator color={tokens.mint} />
-        ) : (
-          <View style={{ gap: 8 }}>
-            {(bouquetsQ.data ?? []).map((b) => {
-              const id = b.plan_code ?? b.id ?? '';
-              return (
-              <TouchableOpacity
-                key={id}
-                onPress={() => { setSelectedBouquet(id); setValidatedCustomer(null); }}
-                style={[
-                  styles.bundleCard,
-                  {
-                    backgroundColor: selectedBouquet === id ? tokens.mintSoft : tokens.card,
-                    borderColor: selectedBouquet === id ? tokens.mint : tokens.border,
-                  },
-                ]}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.bundleName, { color: tokens.ink }]}>{b.name}</Text>
-                  {b.channels && (
-                    <Text style={[styles.bundleMeta, { color: tokens.inkMuted }]}>{b.channels}</Text>
-                  )}
-                </View>
-                <Text style={[styles.bundlePrice, { color: tokens.mint }]}>
-                  ₦{((b.price_naira || b.amount || 0).toLocaleString())}
+        {/* SECTION 2: Bouquets (2-col grid) */}
+        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.tv.package_label')}</Text>
+            {selectedPkg && (
+              <View style={[styles.earnBadge, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
+                <Ionicons name="gift-outline" size={14} color={tokens.mint} />
+                <Text style={[styles.earnBadgeText, { color: tokens.mint }]}>
+                  +{estPoints} pts
                 </Text>
-              </TouchableOpacity>
-              );
-            })}
+              </View>
+            )}
           </View>
-        )}
+          {bouquetsQ.isLoading ? (
+            <ActivityIndicator color={tokens.mint} />
+          ) : (bouquetsQ.data ?? []).length === 0 ? (
+            <Text style={{ color: tokens.inkMuted, fontSize: 13 }}>
+              {t('bills.tv.no_bouquets')}
+            </Text>
+          ) : (
+            <View style={styles.bouquetGrid}>
+              {(bouquetsQ.data ?? []).map((b) => {
+                const id = b.plan_code ?? b.id ?? '';
+                const isActive = selectedBouquet === id;
+                const price = b.price_naira || b.amount || 0;
+                return (
+                  <TouchableOpacity
+                    key={id}
+                    onPress={() => {
+                      setSelectedBouquet(id);
+                      setValidatedName(null);
+                      setValidatedStatus(null);
+                    }}
+                    style={[
+                      styles.bouquetCard,
+                      {
+                        backgroundColor: isActive ? tokens.mintSoft : tokens.paper,
+                        borderColor: isActive ? tokens.mint : tokens.border,
+                      },
+                    ]}
+                  >
+                    {isActive && (
+                      <View style={styles.planCheck}>
+                        <Ionicons name="checkmark" size={10} color="#fff" />
+                      </View>
+                    )}
+                    <Text style={[styles.bouquetName, { color: tokens.ink }]} numberOfLines={2}>
+                      {b.name}
+                    </Text>
+                    {b.channels && (
+                      <Text style={[styles.bouquetMeta, { color: tokens.inkMuted }]} numberOfLines={1}>
+                        {b.channels}
+                      </Text>
+                    )}
+                    <Text style={[styles.bouquetPrice, { color: tokens.mint }]}>
+                      ₦{price.toLocaleString()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
-        {/* Smartcard */}
-        <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.tv.smartcard')}</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: tokens.card, color: tokens.ink, borderColor: tokens.border }]}
-          placeholder={t('bills.tv.smartcard_placeholder')}
-          placeholderTextColor={tokens.inkMuted}
-          value={smartcard}
-          onChangeText={(text) => {
-            const cleaned = text.replace(/[^0-9]/g, '');
-            setSmartcard(cleaned);
-            setValidatedCustomer(null);
-          }}
-          keyboardType="number-pad"
-          maxLength={15}
-        />
-        {smartcard.length > 0 && smartcard.length < 10 && (
-          <Text style={{ color: tokens.error, fontSize: 12, marginTop: -10 }}>
-            {t('bills.tv.smartcard_error')}
-          </Text>
-        )}
+        {/* SECTION 3: Smartcard + Validate */}
+        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.tv.smartcard_label')}</Text>
+          <View style={{ position: 'relative' }}>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: tokens.paper,
+                  color: tokens.ink,
+                  borderColor: smartcard.length >= 10 ? tokens.mint : tokens.border,
+                },
+              ]}
+              placeholder={t('bills.tv.smartcard_placeholder')}
+              placeholderTextColor={tokens.inkMuted}
+              value={smartcard}
+              onChangeText={(text) => {
+                const cleaned = text.replace(/[^0-9]/g, '');
+                setSmartcard(cleaned);
+                setValidatedName(null);
+                setValidatedStatus(null);
+              }}
+              keyboardType="number-pad"
+              maxLength={15}
+            />
+            {validatedName && (
+              <View style={styles.inputIconValid}>
+                <Ionicons name="checkmark-circle" size={20} color={tokens.mint} />
+              </View>
+            )}
+          </View>
+          {smartcard.length > 0 && smartcard.length < 10 && (
+            <Text style={{ color: tokens.error, fontSize: 12, marginTop: 4 }}>
+              {t('bills.tv.smartcard_error')}
+            </Text>
+          )}
 
-        {/* Validate Smartcard */}
-        <TouchableOpacity
-          onPress={() => validateMutation.mutate()}
-          disabled={smartcard.length < 10 || !provider || validateMutation.isPending}
-          style={[styles.validateBtn, { opacity: (smartcard.length < 10 || !provider || validateMutation.isPending) ? 0.5 : 1 }]}
-        >
-          <Ionicons name="checkmark-circle-outline" size={18} color={tokens.mintText} />
-          <Text style={[styles.validateText, { color: tokens.mintText }]}>
-            {validateMutation.isPending ? t('bills.tv.validating') : t('bills.tv.validate_button')}
-          </Text>
-        </TouchableOpacity>
-        {validatedCustomer && (
-          <Text style={{ color: tokens.mint, fontSize: 12 }}>✓ {validatedCustomer}</Text>
-        )}
+          {/* Inline validate */}
+          <TouchableOpacity
+            onPress={() => validateMutation.mutate()}
+            disabled={smartcard.length < 10 || !provider || validateMutation.isPending}
+            style={[
+              styles.validateBtn,
+              {
+                backgroundColor: tokens.mintSoft,
+                borderColor: tokens.mint,
+                opacity: (smartcard.length < 10 || !provider || validateMutation.isPending) ? 0.5 : 1,
+              },
+            ]}
+          >
+            {validateMutation.isPending ? (
+              <ActivityIndicator size="small" color={tokens.mint} />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={16} color={tokens.mint} />
+                <Text style={[styles.validateText, { color: tokens.mint }]}>
+                  {t('bills.tv.validate_button')}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
 
-        {/* Phone Number */}
-        <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.tv.phone')}</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: tokens.card, color: tokens.ink, borderColor: tokens.border }]}
-          placeholder={t('bills.tv.phone_placeholder')}
-          placeholderTextColor={tokens.inkMuted}
-          value={phone}
-          onChangeText={(text) => {
-            const cleaned = text.replace(/[^0-9]/g, '');
-            setPhone(cleaned);
-          }}
-          keyboardType="phone-pad"
-          maxLength={11}
-        />
-        {phone.length > 0 && phone.length < 11 && (
-          <Text style={{ color: tokens.error, fontSize: 12, marginTop: -10 }}>
-            {t('bills.tv.phone_error')}
-          </Text>
-        )}
-
-        {/* Earn notice */}
-        {selectedPkg && (
-          <View style={[styles.earnCard, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
-            <Ionicons name="gift-outline" size={20} color={tokens.mint} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.earnLabel, { color: tokens.mint }]}>{t('bills.tv.earn_points', { points: estPoints })}</Text>
-              <Text style={[styles.earnSub, { color: tokens.ink }]}>
-                {t('bills.tv.earn_description')}
+          {/* Validated customer + status (per spec) */}
+          {validatedName && (
+            <View style={{ marginTop: 8, gap: 2 }}>
+              <Text style={{ color: tokens.mint, fontSize: 13, fontWeight: '600' }}>
+                ✓ {validatedName}
+              </Text>
+              {validatedStatus && (
+                <Text style={{ color: tokens.inkMuted, fontSize: 11 }}>
+                  {t('bills.tv.account_status', { status: validatedStatus })}
+                </Text>
+              )}
+              <Text style={{ color: tokens.inkMuted, fontSize: 10, fontStyle: 'italic' }}>
+                {t('bills.tv.verified_via')}
               </Text>
             </View>
+          )}
+        </View>
+
+        {/* SECTION 4: Phone */}
+        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.tv.phone')}</Text>
+          <View style={{ position: 'relative' }}>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: tokens.paper,
+                  color: tokens.ink,
+                  borderColor: phone.length === 11 ? tokens.mint : tokens.border,
+                },
+              ]}
+              placeholder={t('bills.tv.phone_placeholder')}
+              placeholderTextColor={tokens.inkMuted}
+              value={phone}
+              onChangeText={(text) => {
+                const cleaned = text.replace(/[^0-9]/g, '');
+                setPhone(cleaned);
+              }}
+              keyboardType="phone-pad"
+              maxLength={11}
+            />
+            {phone.length === 11 && (
+              <View style={styles.inputIconValid}>
+                <Ionicons name="checkmark-circle" size={20} color={tokens.mint} />
+              </View>
+            )}
           </View>
-        )}
+          {phone.length > 0 && phone.length < 11 && (
+            <Text style={{ color: tokens.error, fontSize: 12, marginTop: 4 }}>
+              {t('bills.tv.phone_error')}
+            </Text>
+          )}
+        </View>
 
         {/* Pay button */}
         <TouchableOpacity
-          onPress={() => purchaseMutation.mutate()}
+          onPress={handleBuyPress}
           disabled={!canSubmit || purchaseMutation.isPending}
           style={[
             styles.payBtn,
@@ -299,17 +417,99 @@ export default function BuyTvScreen() {
             },
           ]}
         >
-          {purchaseMutation.isPending ? (
-            <ActivityIndicator color={tokens.mintText} />
-          ) : (
-            <>
-              <Ionicons name="cart-outline" size={20} color={tokens.mintText} />
-              <Text style={[styles.payText, { color: tokens.mintText }]}>
-                {selectedPkg ? t('bills.tv.pay_button', { amount: (selectedPkg.price_naira || selectedPkg.amount || 0) }) : t('bills.tv.select_bouquet_prompt')}
-              </Text>
-            </>
-          )}
+          <Ionicons name="cart-outline" size={20} color={tokens.mintText} />
+          <Text style={[styles.payText, { color: tokens.mintText }]}>
+            {selectedPkg
+              ? t('bills.tv.pay_button_with_amount', { amount: (selectedPkg.price_naira || selectedPkg.amount || 0) })
+              : t('bills.tv.select_bouquet_prompt')}
+          </Text>
         </TouchableOpacity>
+
+        {/* Inline error banner */}
+        {purchaseError && (
+          <View style={[styles.errorBanner, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
+            <Ionicons name="alert-circle-outline" size={18} color={tokens.signal} />
+            <Text style={{ flex: 1, color: tokens.signal, fontSize: 13 }}>
+              {purchaseError}
+            </Text>
+            <TouchableOpacity onPress={() => setPurchaseError(null)}>
+              <Ionicons name="close" size={18} color={tokens.signal} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Confirm Modal */}
+        <Modal
+          visible={showConfirmModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowConfirmModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+              <Text style={[styles.modalTitle, { color: tokens.ink }]}>Confirm Subscription</Text>
+              <View style={[styles.modalDivider, { backgroundColor: tokens.border }]} />
+              <View style={{ gap: 12, marginVertical: 16 }}>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Provider</Text>
+                  <Text style={[styles.modalValue, { color: tokens.ink }]}>
+                    {provider?.toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Package</Text>
+                  <Text style={[styles.modalValue, { color: tokens.ink }]}>{selectedPkg?.name}</Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Smartcard</Text>
+                  <Text style={[styles.modalValue, { color: tokens.ink, fontFamily: 'monospace' }]}>
+                    {smartcard}
+                  </Text>
+                </View>
+                {validatedName && (
+                  <View style={styles.modalRow}>
+                    <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Customer</Text>
+                    <Text style={[styles.modalValue, { color: tokens.ink }]}>{validatedName}</Text>
+                  </View>
+                )}
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Phone</Text>
+                  <Text style={[styles.modalValue, { color: tokens.ink }]}>{phone}</Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Amount</Text>
+                  <Text style={[styles.modalValue, { color: tokens.mint, fontWeight: '700' }]}>
+                    ₦{(selectedPkg?.price_naira || selectedPkg?.amount || 0).toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>You'll earn</Text>
+                  <Text style={[styles.modalValue, { color: tokens.mint }]}>+{estPoints} pts</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+                <TouchableOpacity
+                  onPress={() => setShowConfirmModal(false)}
+                  disabled={purchaseMutation.isPending}
+                  style={[styles.modalBtn, styles.modalBtnCancel, { borderColor: tokens.border }]}
+                >
+                  <Text style={[styles.modalBtnText, { color: tokens.inkMuted }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => purchaseMutation.mutate()}
+                  disabled={purchaseMutation.isPending}
+                  style={[styles.modalBtn, styles.modalBtnConfirm, { backgroundColor: tokens.mint }]}
+                >
+                  {purchaseMutation.isPending ? (
+                    <ActivityIndicator color={tokens.mintText} />
+                  ) : (
+                    <Text style={[styles.modalBtnText, { color: tokens.mintText }]}>Confirm</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </View>
   );
@@ -317,37 +517,76 @@ export default function BuyTvScreen() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  card: {
+    borderRadius: 16, padding: 16, borderWidth: 1, gap: 12,
+  },
   label: { fontSize: 13, fontWeight: '500' },
   input: {
     borderRadius: 12, padding: 14, fontSize: 18, fontWeight: '600',
     borderWidth: 1,
   },
-  chipText: { fontSize: 14, fontWeight: '600' },
-  providerCard: {
-    flex: 1, padding: 14, borderRadius: 12, borderWidth: 1,
-    alignItems: 'center', gap: 6,
+  inputIconValid: {
+    position: 'absolute', right: 12, top: 14,
   },
-  bundleCard: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 12, padding: 14, borderWidth: 1,
+  segmentedControl: {
+    flexDirection: 'row', borderRadius: 10,
+    padding: 3, gap: 2,
   },
-  bundleName: { fontSize: 14, fontWeight: '600' },
-  bundleMeta: { fontSize: 11, marginTop: 1 },
-  bundlePrice: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  earnCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderRadius: 12, padding: 14, borderWidth: 1, marginTop: 4,
+  segmentBtn: {
+    flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, alignItems: 'center',
   },
-  earnLabel: { fontSize: 14, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  earnSub: { fontSize: 12, marginTop: 2 },
+  segmentText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  bouquetGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12,
+  },
+  bouquetCard: {
+    width: '47%', padding: 12, borderRadius: 12, borderWidth: 1,
+    gap: 4, position: 'relative',
+  },
+  bouquetName: { fontSize: 13, fontWeight: '600', lineHeight: 1.3 },
+  bouquetMeta: { fontSize: 10, fontWeight: '500' },
+  bouquetPrice: { fontSize: 14, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold', marginTop: 2 },
+  planCheck: {
+    position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#0E7C66', alignItems: 'center', justifyContent: 'center',
+  },
+  earnBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1,
+  },
+  earnBadgeText: { fontSize: 12, fontWeight: '600' },
+  validateBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, marginTop: 4,
+  },
+  validateText: { fontSize: 14, fontWeight: '600' },
   payBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, borderRadius: 14, padding: 16, marginTop: 8,
   },
   payText: { fontSize: 16, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  validateBtn: {
+  errorBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 12, borderRadius: 10,
+    padding: 12, borderRadius: 12, borderWidth: 1,
   },
-  validateText: { fontSize: 14, fontWeight: '600' },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24,
+  },
+  modalContent: {
+    borderRadius: 20, padding: 24, width: '100%', maxWidth: 380, borderWidth: 1,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  modalDivider: { height: 1, marginTop: 12 },
+  modalRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
+  modalKey: { fontSize: 14, fontWeight: '500' },
+  modalValue: { fontSize: 14, fontWeight: '600' },
+  modalBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center',
+    minHeight: 48, justifyContent: 'center',
+  },
+  modalBtnCancel: { backgroundColor: 'transparent', borderWidth: 1 },
+  modalBtnConfirm: { },
+  modalBtnText: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
 });

@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PagePay } from '@/constants/theme';
+import { getCrashlytics } from '@react-native-firebase/crashlytics';
 
 interface Props {
   children: ReactNode;
@@ -33,6 +34,17 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.props.onError?.(error, errorInfo);
+
+    try {
+      const crashlytics = getCrashlytics();
+      crashlytics.recordError(error);
+      crashlytics.setCustomKey('error_boundary', true);
+      if (errorInfo.componentStack) {
+        crashlytics.setCustomKey('component_stack', errorInfo.componentStack.slice(0, 1000));
+      }
+    } catch (e) {
+      console.error('Failed to log error to Crashlytics:', e);
+    }
   }
 
   handleReset = () => {

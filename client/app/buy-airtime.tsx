@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet, Modal,
+  ActivityIndicator, StyleSheet,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,12 @@ import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/src/shared/api/client';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
-import NetworkIcon from '@/src/components/NetworkIcon';
+import {
+  SectionCard,
+  SegmentedControl,
+  ConfirmModal,
+  EarnBadge,
+} from '@/src/components/bills';
 
 type AirtimeResult = {
   reference: string;
@@ -90,8 +95,8 @@ export default function BuyAirtimeScreen() {
           }
         }
       }
-    } catch (error) {
-      // Silently ignore detection failures
+    } catch {
+      // Silently ignore detection failures — user can still pick manually
     } finally {
       setIsDetecting(false);
     }
@@ -128,9 +133,6 @@ export default function BuyAirtimeScreen() {
       setErrorMessage(error.message);
       setPurchaseState('failed');
     },
-    onSettled: () => {
-      // Reset processing state
-    },
   });
 
   const handleBuyPress = () => {
@@ -150,89 +152,97 @@ export default function BuyAirtimeScreen() {
   };
 
   const handleSuccessDone = () => {
-    router.back();
+    setPurchaseState('idle');
+    setSuccessData(null);
+    setPhone('');
+    setSelectedNetworkId(networkList.length > 0 ? String(networkList[0].id) : null);
+    setDetectedNetwork(null);
+    setSelectedAmount(null);
+    setCustomAmount('');
   };
 
-  const renderContent = () => {
-    switch (purchaseState) {
-      case 'success':
-        if (!successData) return null;
-        return (
-          <View style={{ flex: 1, paddingTop: insets.top, padding: 20, alignItems: 'center', justifyContent: 'center', gap: 24 }}>
-            <View style={[styles.successIcon, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
-              <Ionicons name="checkmark" size={48} color={tokens.mint} />
-            </View>
-            <Text style={[styles.successTitle, { color: tokens.ink }]}>Purchase Successful!</Text>
-            <View style={[styles.successCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-              <View style={styles.successRow}>
-                <Text style={[styles.successLabel, { color: tokens.inkMuted }]}>Network</Text>
-                <Text style={[styles.successValue, { color: tokens.ink }]}>{selectedNetwork?.name || successData.network}</Text>
-              </View>
-              <View style={[styles.successDivider, { backgroundColor: tokens.border }]} />
-              <View style={styles.successRow}>
-                <Text style={[styles.successLabel, { color: tokens.inkMuted }]}>Amount</Text>
-                <Text style={[styles.successValue, { color: tokens.mint }]}>₦{successData.amount_naira.toLocaleString()}</Text>
-              </View>
-              <View style={[styles.successDivider, { backgroundColor: tokens.border }]} />
-              <View style={styles.successRow}>
-                <Text style={[styles.successLabel, { color: tokens.inkMuted }]}>Phone</Text>
-                <Text style={[styles.successValue, { color: tokens.ink }]}>{successData.phone}</Text>
-              </View>
-              <View style={[styles.successDivider, { backgroundColor: tokens.border }]} />
-              <View style={styles.successRow}>
-                <Text style={[styles.successLabel, { color: tokens.inkMuted }]}>Points Earned</Text>
-                <Text style={[styles.successValue, { color: tokens.mint }]}>+{successData.points_earned} pts</Text>
-              </View>
-              <View style={[styles.successDivider, { backgroundColor: tokens.border }]} />
-              <View style={styles.successRow}>
-                <Text style={[styles.successLabel, { color: tokens.inkMuted }]}>Reference</Text>
-                <Text style={[styles.successValue, { color: tokens.ink, fontFamily: 'monospace' }]}>
-                  {successData.reference.slice(0, 12)}...
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={handleSuccessDone}
-              style={[styles.doneBtn, { backgroundColor: tokens.mint }]}
-            >
-              <Text style={[styles.doneBtnText, { color: tokens.mintText }]}>Done</Text>
-            </TouchableOpacity>
+  if (purchaseState === 'success' && successData) {
+    return (
+      <View style={[styles.fullscreen, { paddingTop: insets.top, backgroundColor: tokens.paper }]}>
+        <View style={[styles.successIcon, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
+          <Ionicons name="checkmark" size={48} color={tokens.mint} />
+        </View>
+        <Text style={[styles.bigTitle, { color: tokens.ink }]}>Purchase Successful!</Text>
+        <SectionCard>
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Network</Text>
+            <Text style={[styles.summaryValue, { color: tokens.ink }]}>{selectedNetwork?.name || successData.network}</Text>
           </View>
-        );
-
-      case 'failed':
-        return (
-          <View style={{ flex: 1, paddingTop: insets.top, padding: 20, alignItems: 'center', justifyContent: 'center', gap: 24 }}>
-            <View style={[styles.errorIcon, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
-              <Ionicons name="close" size={48} color={tokens.signal} />
-            </View>
-            <Text style={[styles.errorTitle, { color: tokens.ink }]}>Purchase Failed</Text>
-            <Text style={[styles.errorMessage, { color: tokens.inkMuted }]}>{errorMessage}</Text>
-            <View style={[styles.errorCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-              <Text style={[styles.errorNote, { color: tokens.inkMuted }]}>
-                No points were deducted from your wallet. Please try again.
-              </Text>
-            </View>
-            <TouchableOpacity onPress={handleRetry} style={[styles.retryBtn, { backgroundColor: tokens.mint }]}>
-              <Text style={[styles.retryBtnText, { color: tokens.mintText }]}>Try Again</Text>
-            </TouchableOpacity>
+          <View style={[styles.divider, { backgroundColor: tokens.border }]} />
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Amount</Text>
+            <Text style={[styles.summaryValue, { color: tokens.mint }]}>₦{successData.amount_naira.toLocaleString()}</Text>
           </View>
-        );
-
-      case 'processing':
-        return (
-          <View style={{ flex: 1, paddingTop: insets.top, padding: 20, alignItems: 'center', justifyContent: 'center', gap: 24 }}>
-            <ActivityIndicator size="large" color={tokens.mint} />
-            <Text style={[styles.processingTitle, { color: tokens.ink }]}>Processing Purchase...</Text>
-            <Text style={[styles.processingSub, { color: tokens.inkMuted }]}>
-              Please wait while we process your airtime purchase
+          <View style={[styles.divider, { backgroundColor: tokens.border }]} />
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Phone</Text>
+            <Text style={[styles.summaryValue, { color: tokens.ink }]}>{successData.phone}</Text>
+          </View>
+          <View style={[styles.divider, { backgroundColor: tokens.border }]} />
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Points Earned</Text>
+            <Text style={[styles.summaryValue, { color: tokens.mint }]}>+{successData.points_earned} pts</Text>
+          </View>
+          <View style={[styles.divider, { backgroundColor: tokens.border }]} />
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Reference</Text>
+            <Text style={[styles.summaryValue, { color: tokens.ink, fontFamily: 'monospace' }]}>
+              {successData.reference.slice(0, 12)}...
             </Text>
           </View>
-        );
-    }
+        </SectionCard>
+        <TouchableOpacity onPress={handleSuccessDone} style={[styles.payBtn, { backgroundColor: tokens.mint }]}>
+          <Text style={[styles.payText, { color: tokens.mintText }]}>Done</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
-    // 'idle' state - show the form
+  if (purchaseState === 'failed') {
     return (
+      <View style={[styles.fullscreen, { paddingTop: insets.top, backgroundColor: tokens.paper }]}>
+        <View style={[styles.errorIcon, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
+          <Ionicons name="close" size={48} color={tokens.signal} />
+        </View>
+        <Text style={[styles.bigTitle, { color: tokens.ink }]}>Purchase Failed</Text>
+        <Text style={[styles.errorMessage, { color: tokens.inkMuted }]}>{errorMessage}</Text>
+        <SectionCard>
+          <Text style={[styles.errorNote, { color: tokens.inkMuted }]}>
+            No points were deducted from your wallet. Please try again.
+          </Text>
+        </SectionCard>
+        <TouchableOpacity onPress={handleRetry} style={[styles.payBtn, { backgroundColor: tokens.mint }]}>
+          <Text style={[styles.payText, { color: tokens.mintText }]}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (purchaseState === 'processing') {
+    return (
+      <View style={[styles.fullscreen, { paddingTop: insets.top, backgroundColor: tokens.paper }]}>
+        <ActivityIndicator size="large" color={tokens.mint} />
+        <Text style={[styles.processingTitle, { color: tokens.ink }]}>Processing Purchase...</Text>
+        <Text style={[styles.processingSub, { color: tokens.inkMuted }]}>
+          Please wait while we process your airtime purchase
+        </Text>
+      </View>
+    );
+  }
+
+  // idle state — the form
+  const networkOptions = networkList.map(n => ({
+    value: String(n.id),
+    label: n.name,
+  }));
+
+  return (
+    <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -242,9 +252,8 @@ export default function BuyAirtimeScreen() {
           <Text style={[styles.title, { color: tokens.ink }]}>{t('bills.airtime.title')}</Text>
         </View>
 
-        {/* Phone */}
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.airtime.phone_label')}</Text>
+        {/* SECTION 1: Phone */}
+        <SectionCard label={t('bills.airtime.phone_label')}>
           <View style={{ position: 'relative' }}>
             <TextInput
               style={[
@@ -291,51 +300,32 @@ export default function BuyAirtimeScreen() {
               Detecting network...
             </Text>
           )}
-        </View>
+        </SectionCard>
 
-        {/* Network */}
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.airtime.network_label')}</Text>
+        {/* SECTION 2: Network (segmented control) */}
+        <SectionCard label={t('bills.airtime.network_label')}>
           {networksQ.isLoading ? (
             <ActivityIndicator color={tokens.mint} />
+          ) : networkList.length === 0 ? (
+            <Text style={{ color: tokens.inkMuted, fontSize: 13 }}>
+              {t('bills.airtime.no_networks')}
+            </Text>
           ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.networkCarousel}
-            >
-              {networkList.map(n => {
-                const key = String(n.id);
-                const isActive = selectedNetworkId === key;
-                return (
-                  <TouchableOpacity
-                    key={key}
-                    onPress={() => setSelectedNetworkId(key)}
-                    style={[
-                      styles.networkCard,
-                      {
-                        backgroundColor: isActive ? tokens.mintSoft : tokens.paper,
-                        borderColor: isActive ? tokens.mint : tokens.border,
-                      },
-                    ]}
-                  >
-                    <NetworkIcon name={n.name} size={32} />
-                    <Text style={[styles.networkName, { color: isActive ? tokens.mint : tokens.ink }]}>
-                      {n.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            <SegmentedControl
+              options={networkOptions}
+              value={selectedNetworkId ?? networkOptions[0]?.value ?? ''}
+              onChange={setSelectedNetworkId}
+            />
           )}
-        </View>
+        </SectionCard>
 
-        {/* Amount */}
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.airtime.amount_label')}</Text>
-          <View style={[styles.amountGrid, { marginTop: 12 }]}>
+        {/* SECTION 3: Amount (3-col grid) + custom amount */}
+        <SectionCard
+          label={t('bills.airtime.amount_label')}
+          accessory={finalAmount >= 50 ? <EarnBadge points={estPoints} /> : undefined}
+        >
+          <View style={styles.amountGrid}>
             {AMOUNTS.map((a) => {
-              const estPts = Math.floor(a * 0.018 * 0.67 * 10);
               const isActive = selectedAmount === a;
               return (
                 <TouchableOpacity
@@ -349,19 +339,29 @@ export default function BuyAirtimeScreen() {
                     },
                   ]}
                 >
+                  {isActive && (
+                    <View style={styles.planCheck}>
+                      <Ionicons name="checkmark" size={10} color="#fff" />
+                    </View>
+                  )}
                   <Text style={[styles.amountValue, { color: tokens.ink }]}>₦{a.toLocaleString()}</Text>
-                  <Text style={[styles.amountPoints, { color: tokens.mint }]}>+{estPts} pts</Text>
+                  <Text style={[styles.amountPoints, { color: tokens.mint }]}>
+                    +{Math.floor(a * 0.018 * 0.67 * 10)} pts
+                  </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-        </View>
-
-        {/* Custom Amount */}
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.airtime.custom_amount')}</Text>
           <TextInput
-            style={[styles.input, { backgroundColor: tokens.paper, color: tokens.ink, borderColor: tokens.border }]}
+            style={[
+              styles.input,
+              {
+                backgroundColor: tokens.paper,
+                color: tokens.ink,
+                borderColor: customAmount ? tokens.mint : tokens.border,
+                marginTop: 12,
+              },
+            ]}
             placeholder={t('bills.airtime.custom_amount')}
             placeholderTextColor={tokens.inkMuted}
             value={customAmount}
@@ -373,36 +373,7 @@ export default function BuyAirtimeScreen() {
             keyboardType="number-pad"
             maxLength={6}
           />
-        </View>
-
-        {/* Summary Card */}
-        {canSubmit && (
-          <View style={[styles.summaryCard, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
-            <View style={styles.summaryHeader}>
-              <Ionicons name="receipt-outline" size={20} color={tokens.mint} />
-              <Text style={[styles.summaryTitle, { color: tokens.mint }]}>Purchase Summary</Text>
-            </View>
-            <View style={[styles.summaryDivider, { backgroundColor: tokens.mint }]} />
-            <View style={styles.summaryBody}>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Network</Text>
-                <Text style={[styles.summaryValue, { color: tokens.ink }]}>{selectedNetwork?.name}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Amount</Text>
-                <Text style={[styles.summaryValue, { color: tokens.mint }]}>₦{finalAmount.toLocaleString()}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>Phone</Text>
-                <Text style={[styles.summaryValue, { color: tokens.ink }]}>{phone}</Text>
-              </View>
-              <View style={[styles.summaryRow, { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: tokens.border }]}>
-                <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>You'll earn</Text>
-                <Text style={[styles.summaryValue, { color: tokens.mint, fontWeight: '700' }]}>+{estPoints} pts</Text>
-              </View>
-            </View>
-          </View>
-        )}
+        </SectionCard>
 
         {/* Pay button */}
         <TouchableOpacity
@@ -410,90 +381,37 @@ export default function BuyAirtimeScreen() {
           disabled={!canSubmit}
           style={[
             styles.payBtn,
-            {
-              backgroundColor: canSubmit ? tokens.mint : tokens.border,
-            },
+            { backgroundColor: canSubmit ? tokens.mint : tokens.border },
           ]}
         >
-          <>
-            <Ionicons name="cart-outline" size={20} color={tokens.mintText} />
-            <Text style={[styles.payText, { color: tokens.mintText }]}>
-              {selectedAmount || finalAmount >= 50
-                ? t('bills.airtime.buy_button')
-                : t('bills.airtime.amount_required')}
-            </Text>
-          </>
+          <Ionicons name="cart-outline" size={20} color={tokens.mintText} />
+          <Text style={[styles.payText, { color: tokens.mintText }]}>
+            {finalAmount >= 50
+              ? t('bills.airtime.buy_button', { amount: finalAmount })
+              : t('bills.airtime.amount_required')}
+          </Text>
         </TouchableOpacity>
+
+        {/* Confirm Modal */}
+        <ConfirmModal
+          visible={showConfirmModal}
+          title="Confirm Purchase"
+          rows={[
+            { key: 'net', label: 'Network', value: selectedNetwork?.name ?? '' },
+            { key: 'amt', label: 'Amount', value: `₦${finalAmount.toLocaleString()}`, valueColor: 'mint' },
+            { key: 'phone', label: 'Phone', value: phone },
+            { key: 'pts', label: 'Points', value: `+${estPoints} pts`, valueColor: 'mint' },
+          ]}
+          onCancel={() => setShowConfirmModal(false)}
+          onConfirm={handleConfirmPurchase}
+        />
       </ScrollView>
-    );
-  };
-
-  return (
-    <View style={{ flex: 1, backgroundColor: tokens.paper }}>
-      {renderContent()}
-
-      {/* Confirmation Modal */}
-      <Modal
-        visible={showConfirmModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowConfirmModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-            <Text style={[styles.modalTitle, { color: tokens.ink }]}>Confirm Purchase</Text>
-            <View style={[styles.modalDivider, { backgroundColor: tokens.border }]} />
-            <View style={{ gap: 12, marginVertical: 16 }}>
-              <View style={styles.modalRow}>
-                <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Network</Text>
-                <Text style={[styles.modalValue, { color: tokens.ink }]}>{selectedNetwork?.name}</Text>
-              </View>
-              <View style={styles.modalRow}>
-                <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Amount</Text>
-                <Text style={[styles.modalValue, { color: tokens.mint, fontWeight: '700' }]}>₦{finalAmount.toLocaleString()}</Text>
-              </View>
-              <View style={styles.modalRow}>
-                <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Phone</Text>
-                <Text style={[styles.modalValue, { color: tokens.ink }]}>{phone}</Text>
-              </View>
-              <View style={styles.modalRow}>
-                <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Points</Text>
-                <Text style={[styles.modalValue, { color: tokens.mint }]}>+{estPoints} pts</Text>
-              </View>
-            </View>
-            <View style={[styles.modalNote, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
-              <Ionicons name="information-circle-outline" size={18} color={tokens.mint} />
-              <Text style={[styles.modalNoteText, { color: tokens.ink }]}>
-                Points will be deducted from your wallet now and credited back if the purchase fails.
-              </Text>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
-              <TouchableOpacity
-                onPress={() => setShowConfirmModal(false)}
-                style={[styles.modalBtn, styles.modalBtnCancel, { borderColor: tokens.border }]}
-              >
-                <Text style={[styles.modalBtnText, { color: tokens.inkMuted }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleConfirmPurchase}
-                style={[styles.modalBtn, styles.modalBtnConfirm, { backgroundColor: tokens.mint }]}
-              >
-                <Text style={[styles.modalBtnText, { color: tokens.mintText }]}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  card: {
-    borderRadius: 16, padding: 16, borderWidth: 1, gap: 12,
-  },
-  label: { fontSize: 13, fontWeight: '500' },
   input: {
     borderRadius: 12, padding: 14, fontSize: 18, fontWeight: '600',
     borderWidth: 1,
@@ -501,96 +419,43 @@ const styles = StyleSheet.create({
   inputIconValid: {
     position: 'absolute', right: 12, top: 14,
   },
-  networkCarousel: {
-    flexDirection: 'row', gap: 10, paddingVertical: 4,
-  },
-  networkCard: {
-    width: 100, padding: 10, borderRadius: 12, borderWidth: 1, alignItems: 'center', gap: 6,
-  },
-  networkName: { fontSize: 12, fontWeight: '600' },
   amountGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 10,
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12,
   },
   amountCard: {
-    width: '30%', minWidth: 100, padding: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center', gap: 6,
+    width: '30%', minWidth: 100, padding: 12, borderRadius: 12, borderWidth: 1,
+    alignItems: 'center', gap: 6, position: 'relative',
   },
   amountValue: { fontSize: 14, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
   amountPoints: { fontSize: 11, fontWeight: '600' },
-  summaryCard: {
-    borderRadius: 16, padding: 16, borderWidth: 1, gap: 12,
+  planCheck: {
+    position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#0E7C66', alignItems: 'center', justifyContent: 'center',
   },
-  summaryHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-  },
-  summaryTitle: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  summaryDivider: { height: 1 },
-  summaryBody: { gap: 10 },
-  summaryRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-  },
-  summaryKey: { fontSize: 13, fontWeight: '500' },
-  summaryValue: { fontSize: 14, fontWeight: '600' },
   payBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, borderRadius: 14, padding: 16, marginTop: 8,
   },
   payText: { fontSize: 16, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  fullscreen: {
+    flex: 1, padding: 20, alignItems: 'center', justifyContent: 'center', gap: 24,
+  },
   successIcon: {
-    width: 96, height: 96, borderRadius: 48, borderWidth: 3,
-    alignItems: 'center', justifyContent: 'center',
+    width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 2,
   },
-  successTitle: { fontSize: 22, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  successCard: {
-    borderRadius: 16, padding: 20, borderWidth: 1, width: '100%', gap: 16,
-  },
-  successRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-  },
-  successLabel: { fontSize: 13, fontWeight: '500' },
-  successValue: { fontSize: 14, fontWeight: '600' },
-  successDivider: { height: 1 },
-  doneBtn: {
-    paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12, marginTop: 8,
-  },
-  doneBtnText: { fontSize: 16, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
   errorIcon: {
-    width: 96, height: 96, borderRadius: 48, borderWidth: 3,
-    alignItems: 'center', justifyContent: 'center',
+    width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 2,
   },
-  errorTitle: { fontSize: 22, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  errorMessage: { fontSize: 14, textAlign: 'center', paddingHorizontal: 20 },
-  errorCard: {
-    borderRadius: 12, padding: 16, borderWidth: 1, width: '100%',
-  },
-  errorNote: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
-  retryBtn: {
-    paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12, marginTop: 8,
-  },
-  retryBtnText: { fontSize: 16, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  processingTitle: { fontSize: 20, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  processingSub: { fontSize: 14, textAlign: 'center' },
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24,
-  },
-  modalContent: {
-    borderRadius: 20, padding: 24, width: '100%', maxWidth: 380, borderWidth: 1,
-  },
-  modalTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  modalDivider: { height: 1, marginTop: 12 },
-  modalRow: {
+  bigTitle: { fontSize: 22, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  summaryRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 4,
   },
-  modalKey: { fontSize: 14, fontWeight: '500' },
-  modalValue: { fontSize: 14, fontWeight: '600' },
-  modalNote: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    borderRadius: 12, padding: 12, borderWidth: 1,
-  },
-  modalNoteText: { flex: 1, fontSize: 12, lineHeight: 16 },
-  modalBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center',
-  },
-  modalBtnCancel: { backgroundColor: 'transparent', borderWidth: 1 },
-  modalBtnConfirm: { },
-  modalBtnText: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  summaryKey: { fontSize: 13, fontWeight: '500' },
+  summaryValue: { fontSize: 14, fontWeight: '600' },
+  divider: { height: 1 },
+  errorMessage: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  errorNote: { fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  processingTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  processingSub: { fontSize: 14, textAlign: 'center', lineHeight: 22 },
 });

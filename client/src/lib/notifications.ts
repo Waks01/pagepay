@@ -348,3 +348,47 @@ export async function openNotificationSettings(): Promise<void> {
     console.error("Error opening notification settings:", error);
   }
 }
+
+export type NotificationTapData = {
+  type?: string;
+  service?: string;
+  points?: string;
+  category?: string;
+};
+
+export function handleNotificationTap(
+  notification: {
+    data?: NotificationTapData | Record<string, unknown>;
+    category?: string | null;
+  },
+  navigation?: { push: (path: string) => void; back: () => void },
+) {
+  const data = (notification.data || {}) as NotificationTapData;
+  const category = notification.category;
+  const nav = navigation || router;
+
+  if (data.type === "study_reminder") {
+    nav.push("/(tabs)/study" as any);
+  } else if (data.type === "task_alert") {
+    nav.push("/(tabs)/tasks" as any);
+  } else if (data.type === "referral_bonus") {
+    nav.push("/(tabs)/profile" as any);
+  } else if (
+    data.type === "wallet_update" ||
+    data.type === "payment_initiated" ||
+    data.type === "payment_success"
+  ) {
+    nav.push("/(tabs)/wallet" as any);
+  } else if (
+    data.type === "subscription_initiated" ||
+    data.type === "subscription_success"
+  ) {
+    nav.push("/(tabs)/premium" as any);
+  } else if (data.type === "ad_reward") {
+    nav.push("/(tabs)/home" as any);
+  } else if (category === "wallet_updates") {
+    nav.push("/(tabs)/wallet" as any);
+  } else {
+    nav.push("/(tabs)/notifications" as any);
+  }
+}

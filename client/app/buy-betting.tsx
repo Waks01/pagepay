@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet,
+  Alert, ActivityIndicator, StyleSheet, Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +36,16 @@ type PurchaseResult = {
   status_detail: string;
 };
 
+// Bigisub /bills/betting/validate/ returns a flexible shape —
+// may include customer_name, validation_reference, requires_validation_ref.
+// We type loosely and only render fields that are present.
+type ValidateResult = {
+  customer_name?: string | null;
+  validation_reference?: string | null;
+  requires_validation_ref?: boolean | null;
+  [key: string]: unknown;
+};
+
 export default function BuyBettingScreen() {
   const { t } = useTranslation();
   const scheme = useEffectiveScheme();
@@ -48,6 +58,10 @@ export default function BuyBettingScreen() {
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [validatedName, setValidatedName] = useState<string | null>(null);
+  const [validationRef, setValidationRef] = useState<string | null>(null);
+  const [requiresValidationRef, setRequiresValidationRef] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   const billersQ = useQuery({
     queryKey: ['betting-billers'],
@@ -77,10 +91,18 @@ export default function BuyBettingScreen() {
         body: JSON.stringify({ biller_code: biller, account_number: accountNumber }),
       });
       if (!res.ok) throw new Error(t('bills.betting.validation_failed'));
-      return (await res.json()) as { customer_name?: string };
+      return (await res.json()) as ValidateResult;
     },
     onSuccess: (data) => {
-      if (data.customer_name) setValidatedName(data.customer_name);
+      setValidatedName(data.customer_name ?? null);
+      setValidationRef(data.validation_reference ?? null);
+      setRequiresValidationRef(Boolean(data.requires_validation_ref));
+      if (data.customer_name && !customerName) setCustomerName(String(data.customer_name));
+    },
+    onError: () => {
+      setValidatedName(null);
+      setValidationRef(null);
+      setRequiresValidationRef(false);
     },
   });
 
@@ -88,7 +110,7 @@ export default function BuyBettingScreen() {
     mutationFn: async () => {
       if (!biller) throw new Error(t('bills.betting.select_platform'));
       if (!accountNumber) throw new Error(t('bills.betting.enter_account'));
-      if (!selectedProduct) throw new Error(t('bills.betting.select_amount'));
+      if (!selectedProduct) throw new Error(t('bills.betting.amount_required'));
       const res = await apiFetch('/api/v1/bills/betting', {
         method: 'POST',
         body: JSON.stringify({
@@ -106,6 +128,7 @@ export default function BuyBettingScreen() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['me'] });
+      setShowConfirmModal(false);
       Alert.alert(
         t('bills.betting.success_title'),
         t('bills.betting.success_message', { platform: billersQ.data?.find(b => b.code === biller)?.name, tx: data.transaction_id }),
@@ -113,12 +136,25 @@ export default function BuyBettingScreen() {
       );
     },
     onError: (error: Error) => {
-      Alert.alert(t('bills.betting.error_title'), error.message);
+      setShowConfirmModal(false);
+      setPurchaseError(error.message);
     },
   });
 
   const selectedBiller = billersQ.data?.find(b => b.code === biller);
+  const amountNum = selectedProduct ? parseInt(selectedProduct, 10) : 0;
   const canSubmit = !!biller && accountNumber.length >= 3 && !!selectedProduct;
+
+  // Fixed amount buttons filtered to biller's range
+  const quickAmounts = [100, 500, 1000, 5000, 10000, 50000].filter(
+    (a) => !selectedBiller || (a >= selectedBiller.min_amount && a <= selectedBiller.max_amount)
+  );
+
+  const handleBuyPress = () => {
+    if (!canSubmit) return;
+    setPurchaseError(null);
+    setShowConfirmModal(true);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
@@ -131,113 +167,205 @@ export default function BuyBettingScreen() {
           <Text style={[styles.title, { color: tokens.ink }]}>{t('bills.betting.title')}</Text>
         </View>
 
-        {/* Platform */}
-        <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.betting.platform')}</Text>
-        {billersQ.isLoading ? (
-          <ActivityIndicator color={tokens.mint} />
-        ) : billersQ.isError ? (
-          <View style={[styles.errorBox, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
-            <Ionicons name="alert-circle-outline" size={20} color={tokens.signal} />
-            <Text style={[styles.errorText, { color: tokens.signal }]}>
-              {t('bills.betting.load_error')}
-            </Text>
-            <TouchableOpacity onPress={() => billersQ.refetch()} style={styles.retryBtn}>
-              <Text style={[styles.retryText, { color: tokens.mint }]}>
-                {t('common.retry')}
+        {/* SECTION 1: Platform (segmented control, scrollable) */}
+        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.betting.platform')}</Text>
+          {billersQ.isLoading ? (
+            <ActivityIndicator color={tokens.mint} />
+          ) : billersQ.isError ? (
+            <View style={[styles.errorBox, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
+              <Ionicons name="alert-circle-outline" size={20} color={tokens.signal} />
+              <Text style={[styles.errorText, { color: tokens.signal }]}>
+                {t('bills.betting.load_error')}
               </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-            {(billersQ.data ?? []).map((b) => (
-              <TouchableOpacity
-                key={b.code}
-                onPress={() => { setBiller(b.code); setSelectedProduct(null); setValidatedName(null); }}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: biller === b.code ? tokens.mint : tokens.card,
-                    borderColor: biller === b.code ? tokens.mint : tokens.border,
-                  },
-                ]}
-              >
-                <Text style={[
-                  styles.chipText,
-                  { color: biller === b.code ? tokens.mintText : tokens.ink },
-                ]}>{b.name}</Text>
+              <TouchableOpacity onPress={() => billersQ.refetch()} style={styles.retryBtn}>
+                <Text style={[styles.retryText, { color: tokens.mint }]}>{t('common.retry')}</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
+            </View>
+          ) : (billersQ.data ?? []).length === 0 ? (
+            <Text style={{ color: tokens.inkMuted, fontSize: 13 }}>
+              {t('bills.betting.no_platforms')}
+            </Text>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8 }}
+            >
+              {(billersQ.data ?? []).map((b) => {
+                const isActive = biller === b.code;
+                return (
+                  <TouchableOpacity
+                    key={b.code}
+                    onPress={() => {
+                      setBiller(b.code);
+                      setSelectedProduct(null);
+                      setValidatedName(null);
+                      setValidationRef(null);
+                      setRequiresValidationRef(false);
+                    }}
+                    style={[
+                      styles.segmentChip,
+                      {
+                        backgroundColor: isActive ? tokens.mint : tokens.paper,
+                        borderColor: isActive ? tokens.mint : tokens.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[
+                      styles.segmentChipText,
+                      { color: isActive ? tokens.mintText : tokens.ink },
+                    ]}>{b.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
 
-        {/* Account Number */}
-        <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.betting.account')}</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: tokens.card, color: tokens.ink, borderColor: tokens.border }]}
-          placeholder={t('bills.betting.account_placeholder')}
-          placeholderTextColor={tokens.inkMuted}
-          value={accountNumber}
-          onChangeText={setAccountNumber}
-          keyboardType="number-pad"
-          maxLength={20}
-        />
-        <TouchableOpacity
-          onPress={() => validateMutation.mutate()}
-          disabled={!biller || accountNumber.length < 3 || validateMutation.isPending}
-          style={[styles.validateBtn, { opacity: (!biller || accountNumber.length < 3 || validateMutation.isPending) ? 0.5 : 1 }]}
-        >
-          <Ionicons name="checkmark-circle-outline" size={18} color={tokens.mintText} />
-          <Text style={[styles.validateText, { color: tokens.mintText }]}>
-            {validateMutation.isPending ? 'Validating...' : 'Validate Account'}
-          </Text>
-        </TouchableOpacity>
-        {validatedName && (
-          <Text style={{ color: tokens.mint, fontSize: 12 }}>✓ {validatedName}</Text>
-        )}
-
-        {/* Amount */}
-        <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.betting.amount')}</Text>
-        {selectedBiller && (
-          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            {[100, 500, 1000, 5000, 10000, 50000].filter(a => a >= selectedBiller.min_amount && a <= selectedBiller.max_amount).map((a) => (
-              <TouchableOpacity
-                key={a}
-                onPress={() => setSelectedProduct(String(a))}
-                style={[
-                  styles.amtBtn,
-                  {
-                    backgroundColor: selectedProduct === String(a) ? tokens.mint : tokens.card,
-                    borderColor: selectedProduct === String(a) ? tokens.mint : tokens.border,
-                  },
-                ]}
-              >
-                <Text style={[
-                  styles.amtText,
-                  { color: selectedProduct === String(a) ? tokens.mintText : tokens.ink },
-                ]}>₦{a.toLocaleString()}</Text>
-              </TouchableOpacity>
-            ))}
+        {/* SECTION 2: Account + Validate */}
+        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.betting.account')}</Text>
+          <View style={{ position: 'relative' }}>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: tokens.paper,
+                  color: tokens.ink,
+                  borderColor: accountNumber.length >= 3 ? tokens.mint : tokens.border,
+                },
+              ]}
+              placeholder={t('bills.betting.account_placeholder')}
+              placeholderTextColor={tokens.inkMuted}
+              value={accountNumber}
+              onChangeText={(text) => {
+                setAccountNumber(text);
+                setValidatedName(null);
+                setValidationRef(null);
+                setRequiresValidationRef(false);
+              }}
+              maxLength={20}
+            />
+            {validatedName && (
+              <View style={styles.inputIconValid}>
+                <Ionicons name="checkmark-circle" size={20} color={tokens.mint} />
+              </View>
+            )}
           </View>
-        )}
 
-        {/* Custom Amount */}
-        <Text style={[styles.label, { color: tokens.inkMuted, marginTop: 4 }]}>{t('bills.betting.custom_amount')}</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: tokens.card, color: tokens.ink, borderColor: tokens.border }]}
-          placeholder={t('bills.betting.custom_amount')}
-          placeholderTextColor={tokens.inkMuted}
-          value={selectedProduct || ''}
-          onChangeText={(text) => {
-            const cleaned = text.replace(/[^0-9]/g, '');
-            setSelectedProduct(cleaned);
-          }}
-          keyboardType="number-pad"
-          maxLength={10}
-        />
+          <TouchableOpacity
+            onPress={() => validateMutation.mutate()}
+            disabled={!biller || accountNumber.length < 3 || validateMutation.isPending}
+            style={[
+              styles.validateBtn,
+              {
+                backgroundColor: tokens.mintSoft,
+                borderColor: tokens.mint,
+                opacity: (!biller || accountNumber.length < 3 || validateMutation.isPending) ? 0.5 : 1,
+              },
+            ]}
+          >
+            {validateMutation.isPending ? (
+              <ActivityIndicator size="small" color={tokens.mint} />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle-outline" size={16} color={tokens.mint} />
+                <Text style={[styles.validateText, { color: tokens.mint }]}>
+                  {t('bills.betting.validate_account_button')}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Validated fields (per spec: customer_name + validation_reference + requires_validation_ref) */}
+          {validatedName && (
+            <View style={{ marginTop: 8, gap: 2 }}>
+              <Text style={{ color: tokens.mint, fontSize: 13, fontWeight: '600' }}>
+                ✓ {validatedName}
+              </Text>
+              {validationRef && (
+                <Text style={{ color: tokens.inkMuted, fontSize: 11 }}>
+                  {t('bills.betting.validation_ref_label', { ref: validationRef })}
+                </Text>
+              )}
+              {requiresValidationRef && (
+                <Text style={{ color: tokens.signal, fontSize: 11, fontWeight: '600' }}>
+                  {t('bills.betting.requires_validation_ref')}
+                </Text>
+              )}
+              <Text style={{ color: tokens.inkMuted, fontSize: 10, fontStyle: 'italic' }}>
+                {t('bills.betting.verified_via')}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* SECTION 3: Amount (3-col grid) + custom */}
+        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.betting.amount')}</Text>
+            {amountNum > 0 && (
+              <View style={[styles.earnBadge, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
+                <Ionicons name="gift-outline" size={14} color={tokens.mint} />
+                <Text style={[styles.earnBadgeText, { color: tokens.mint }]}>
+                  +{Math.floor(amountNum * 0.018 * 0.67 * 10)} pts
+                </Text>
+              </View>
+            )}
+          </View>
+          {selectedBiller && quickAmounts.length > 0 && (
+            <View style={styles.amountGrid}>
+              {quickAmounts.map((a) => {
+                const isActive = selectedProduct === String(a);
+                return (
+                  <TouchableOpacity
+                    key={a}
+                    onPress={() => setSelectedProduct(String(a))}
+                    style={[
+                      styles.amountCard,
+                      {
+                        backgroundColor: isActive ? tokens.mintSoft : tokens.paper,
+                        borderColor: isActive ? tokens.mint : tokens.border,
+                      },
+                    ]}
+                  >
+                    {isActive && (
+                      <View style={styles.planCheck}>
+                        <Ionicons name="checkmark" size={10} color="#fff" />
+                      </View>
+                    )}
+                    <Text style={[styles.amountValue, { color: tokens.ink }]}>₦{a.toLocaleString()}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: tokens.paper,
+                color: tokens.ink,
+                borderColor: selectedProduct && parseInt(selectedProduct) >= (selectedBiller?.min_amount ?? 0) ? tokens.mint : tokens.border,
+                marginTop: 12,
+              },
+            ]}
+            placeholder={t('bills.betting.custom_amount')}
+            placeholderTextColor={tokens.inkMuted}
+            value={selectedProduct && !quickAmounts.includes(parseInt(selectedProduct)) ? selectedProduct : ''}
+            onChangeText={(text) => {
+              const cleaned = text.replace(/[^0-9]/g, '');
+              setSelectedProduct(cleaned || null);
+            }}
+            keyboardType="number-pad"
+            maxLength={10}
+          />
+        </View>
 
         {/* Pay button */}
         <TouchableOpacity
-          onPress={() => purchaseMutation.mutate()}
+          onPress={handleBuyPress}
           disabled={!canSubmit || purchaseMutation.isPending}
           style={[
             styles.payBtn,
@@ -247,17 +375,93 @@ export default function BuyBettingScreen() {
             },
           ]}
         >
-          {purchaseMutation.isPending ? (
-            <ActivityIndicator color={tokens.mintText} />
-          ) : (
-            <>
-              <Ionicons name="logo-bitcoin" size={20} color={tokens.mintText} />
-              <Text style={[styles.payText, { color: tokens.mintText }]}>
-                {selectedProduct ? t('bills.betting.fund_button', { amount: selectedProduct }) : t('bills.betting.select_amount')}
-              </Text>
-            </>
-          )}
+          <Ionicons name="wallet-outline" size={20} color={tokens.mintText} />
+          <Text style={[styles.payText, { color: tokens.mintText }]}>
+            {amountNum > 0
+              ? t('bills.betting.fund_button_with_amount', { amount: amountNum })
+              : t('bills.betting.amount_required')}
+          </Text>
         </TouchableOpacity>
+
+        {/* Inline error banner */}
+        {purchaseError && (
+          <View style={[styles.errorBanner, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
+            <Ionicons name="alert-circle-outline" size={18} color={tokens.signal} />
+            <Text style={{ flex: 1, color: tokens.signal, fontSize: 13 }}>
+              {purchaseError}
+            </Text>
+            <TouchableOpacity onPress={() => setPurchaseError(null)}>
+              <Ionicons name="close" size={18} color={tokens.signal} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Confirm Modal */}
+        <Modal
+          visible={showConfirmModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowConfirmModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+              <Text style={[styles.modalTitle, { color: tokens.ink }]}>Confirm Funding</Text>
+              <View style={[styles.modalDivider, { backgroundColor: tokens.border }]} />
+              <View style={{ gap: 12, marginVertical: 16 }}>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Platform</Text>
+                  <Text style={[styles.modalValue, { color: tokens.ink }]}>
+                    {selectedBiller?.name}
+                  </Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Account</Text>
+                  <Text style={[styles.modalValue, { color: tokens.ink, fontFamily: 'monospace' }]}>
+                    {accountNumber}
+                  </Text>
+                </View>
+                {validatedName && (
+                  <View style={styles.modalRow}>
+                    <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Customer</Text>
+                    <Text style={[styles.modalValue, { color: tokens.ink }]}>{validatedName}</Text>
+                  </View>
+                )}
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Amount</Text>
+                  <Text style={[styles.modalValue, { color: tokens.mint, fontWeight: '700' }]}>
+                    ₦{amountNum.toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>You'll earn</Text>
+                  <Text style={[styles.modalValue, { color: tokens.mint }]}>
+                    +{Math.floor(amountNum * 0.018 * 0.67 * 10)} pts
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+                <TouchableOpacity
+                  onPress={() => setShowConfirmModal(false)}
+                  disabled={purchaseMutation.isPending}
+                  style={[styles.modalBtn, styles.modalBtnCancel, { borderColor: tokens.border }]}
+                >
+                  <Text style={[styles.modalBtnText, { color: tokens.inkMuted }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => purchaseMutation.mutate()}
+                  disabled={purchaseMutation.isPending}
+                  style={[styles.modalBtn, styles.modalBtnConfirm, { backgroundColor: tokens.mint }]}
+                >
+                  {purchaseMutation.isPending ? (
+                    <ActivityIndicator color={tokens.mintText} />
+                  ) : (
+                    <Text style={[styles.modalBtnText, { color: tokens.mintText }]}>Confirm</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </View>
   );
@@ -265,26 +469,43 @@ export default function BuyBettingScreen() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  card: {
+    borderRadius: 16, padding: 16, borderWidth: 1, gap: 12,
+  },
   label: { fontSize: 13, fontWeight: '500' },
   input: {
     borderRadius: 12, padding: 14, fontSize: 18, fontWeight: '600',
     borderWidth: 1,
   },
-  chip: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20,
-    borderWidth: 1,
+  inputIconValid: {
+    position: 'absolute', right: 12, top: 14,
   },
-  chipText: { fontSize: 14, fontWeight: '600' },
+  segmentChip: {
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1,
+  },
+  segmentChipText: { fontSize: 13, fontWeight: '600' },
   validateBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 12, borderRadius: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, padding: 12, borderRadius: 10, borderWidth: 1, marginTop: 4,
   },
   validateText: { fontSize: 14, fontWeight: '600' },
-  amtBtn: {
-    paddingHorizontal: 20, paddingVertical: 14, borderRadius: 12,
-    borderWidth: 1, alignItems: 'center',
+  amountGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12,
   },
-  amtText: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  amountCard: {
+    width: '30%', minWidth: 100, padding: 12, borderRadius: 12, borderWidth: 1,
+    alignItems: 'center', position: 'relative',
+  },
+  amountValue: { fontSize: 14, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  planCheck: {
+    position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#0E7C66', alignItems: 'center', justifyContent: 'center',
+  },
+  earnBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1,
+  },
+  earnBadgeText: { fontSize: 12, fontWeight: '600' },
   payBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, borderRadius: 14, padding: 16, marginTop: 8,
@@ -297,4 +518,28 @@ const styles = StyleSheet.create({
   errorText: { flex: 1, fontSize: 13, fontWeight: '500' },
   retryBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   retryText: { fontSize: 13, fontWeight: '700' },
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    padding: 12, borderRadius: 12, borderWidth: 1,
+  },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24,
+  },
+  modalContent: {
+    borderRadius: 20, padding: 24, width: '100%', maxWidth: 380, borderWidth: 1,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  modalDivider: { height: 1, marginTop: 12 },
+  modalRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
+  modalKey: { fontSize: 14, fontWeight: '500' },
+  modalValue: { fontSize: 14, fontWeight: '600' },
+  modalBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center',
+    minHeight: 48, justifyContent: 'center',
+  },
+  modalBtnCancel: { backgroundColor: 'transparent', borderWidth: 1 },
+  modalBtnConfirm: { },
+  modalBtnText: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
 });

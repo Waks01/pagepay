@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet,
+  Alert, ActivityIndicator, StyleSheet, Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,6 +37,8 @@ type PurchaseResult = {
   pins: string[];
 };
 
+const QUANTITY_OPTIONS = [1, 2, 3, 5, 10];
+
 export default function BuyRechargePinScreen() {
   const { t } = useTranslation();
   const scheme = useEffectiveScheme();
@@ -46,7 +48,9 @@ export default function BuyRechargePinScreen() {
 
   const [network, setNetwork] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
-  const [quantity, setQuantity] = useState('1');
+  const [quantity, setQuantity] = useState(1);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   const networksQ = useQuery({
     queryKey: ['airtime-networks'],
@@ -77,13 +81,12 @@ export default function BuyRechargePinScreen() {
   const purchaseMutation = useMutation({
     mutationFn: async () => {
       if (!selectedSize) throw new Error(t('bills.recharge_pin.select_size'));
-      const qty = parseInt(quantity) || 1;
       const res = await apiFetch('/api/v1/bills/recharge-pin', {
         method: 'POST',
         body: JSON.stringify({
           network,
           size: selectedSize,
-          quantity: qty,
+          quantity: quantity,
         }),
       });
       if (!res.ok) {
@@ -94,6 +97,7 @@ export default function BuyRechargePinScreen() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['me'] });
+      setShowConfirmModal(false);
       Alert.alert(
         t('bills.recharge_pin.success_title'),
         t('bills.recharge_pin.success_message', { pins: data.pins?.join(', ') }),
@@ -101,13 +105,20 @@ export default function BuyRechargePinScreen() {
       );
     },
     onError: (error: Error) => {
-      Alert.alert(t('bills.recharge_pin.error_title'), error.message);
+      setShowConfirmModal(false);
+      setPurchaseError(error.message);
     },
   });
 
   const selectedPlan = plansQ.data?.find(p => p.size === selectedSize);
-  const totalPrice = selectedPlan ? selectedPlan.regular_price * (parseInt(quantity) || 1) : 0;
-  const canSubmit = !!network && !!selectedSize && parseInt(quantity) > 0;
+  const totalPrice = selectedPlan ? selectedPlan.regular_price * quantity : 0;
+  const canSubmit = !!network && !!selectedSize && quantity > 0;
+
+  const handleBuyPress = () => {
+    if (!canSubmit) return;
+    setPurchaseError(null);
+    setShowConfirmModal(true);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
@@ -120,98 +131,156 @@ export default function BuyRechargePinScreen() {
           <Text style={[styles.title, { color: tokens.ink }]}>{t('bills.recharge_pin.title')}</Text>
         </View>
 
-        {/* Network */}
-        <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.recharge_pin.network')}</Text>
-        {networksQ.isLoading ? (
-          <ActivityIndicator color={tokens.mint} />
-        ) : (
-          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            {(networksQ.data ?? []).map((n) => {
-              const key = String(n.id);
+        {/* SECTION 1: Network (segmented control, scrollable) */}
+        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.recharge_pin.network')}</Text>
+          {networksQ.isLoading ? (
+            <ActivityIndicator color={tokens.mint} />
+          ) : (networksQ.data ?? []).length === 0 ? (
+            <Text style={{ color: tokens.inkMuted, fontSize: 13 }}>
+              {t('bills.recharge_pin.no_networks')}
+            </Text>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8 }}
+            >
+              {(networksQ.data ?? []).map((n) => {
+                const key = String(n.id);
+                const isActive = network === key;
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => {
+                      setNetwork(key);
+                      setSelectedSize(null);
+                    }}
+                    style={[
+                      styles.segmentChip,
+                      {
+                        backgroundColor: isActive ? tokens.mint : tokens.paper,
+                        borderColor: isActive ? tokens.mint : tokens.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[
+                      styles.segmentChipText,
+                      { color: isActive ? tokens.mintText : tokens.ink },
+                    ]}>{n.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* SECTION 2: Denomination (2-col grid) */}
+        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.recharge_pin.size')}</Text>
+            {selectedPlan && (
+              <View style={[styles.earnBadge, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
+                <Ionicons name="gift-outline" size={14} color={tokens.mint} />
+                <Text style={[styles.earnBadgeText, { color: tokens.mint }]}>
+                  +{Math.floor(totalPrice * 0.018 * 0.67 * 10)} pts
+                </Text>
+              </View>
+            )}
+          </View>
+          {plansQ.isLoading ? (
+            <ActivityIndicator color={tokens.mint} />
+          ) : (plansQ.data ?? []).length === 0 ? (
+            <Text style={{ color: tokens.inkMuted, fontSize: 13 }}>
+              {t('bills.recharge_pin.no_plans')}
+            </Text>
+          ) : (
+            <View style={styles.denGrid}>
+              {(plansQ.data ?? []).map((p) => {
+                const isActive = selectedSize === p.size;
+                return (
+                  <TouchableOpacity
+                    key={p.size}
+                    onPress={() => setSelectedSize(p.size)}
+                    style={[
+                      styles.denCard,
+                      {
+                        backgroundColor: isActive ? tokens.mintSoft : tokens.paper,
+                        borderColor: isActive ? tokens.mint : tokens.border,
+                      },
+                    ]}
+                  >
+                    {isActive && (
+                      <View style={styles.planCheck}>
+                        <Ionicons name="checkmark" size={10} color="#fff" />
+                      </View>
+                    )}
+                    <Text style={[styles.denSize, { color: tokens.ink }]}>₦{p.size}</Text>
+                    <Text style={[styles.denMeta, { color: tokens.inkMuted }]} numberOfLines={1}>
+                      {p.network_name}
+                    </Text>
+                    <Text style={[styles.denPrice, { color: tokens.mint }]}>
+                      ₦{p.regular_price.toLocaleString()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* SECTION 3: Quantity (segmented control) */}
+        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.recharge_pin.quantity')}</Text>
+          <View style={styles.segmentedControl}>
+            {QUANTITY_OPTIONS.map((q) => {
+              const isActive = quantity === q;
               return (
                 <TouchableOpacity
-                  key={key}
-                  onPress={() => { setNetwork(key); setSelectedSize(null); }}
+                  key={q}
+                  onPress={() => setQuantity(q)}
                   style={[
-                    styles.chip,
+                    styles.segmentBtn,
                     {
-                      backgroundColor: network === key ? tokens.mint : tokens.card,
-                      borderColor: network === key ? tokens.mint : tokens.border,
+                      backgroundColor: isActive ? tokens.card : 'transparent',
+                      borderColor: isActive ? tokens.mint : 'transparent',
+                      shadowColor: isActive ? '#000' : 'transparent',
+                      shadowOpacity: isActive ? 0.08 : 0,
+                      shadowRadius: isActive ? 4 : 0,
                     },
                   ]}
                 >
-                  <Text style={[
-                    styles.chipText,
-                    { color: network === key ? tokens.mintText : tokens.ink },
-                  ]}>{n.name}</Text>
+                  <Text style={[styles.segmentText, { color: isActive ? tokens.ink : tokens.inkMuted }]}>
+                    {q}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-        )}
+        </View>
 
-        {/* Pin Size */}
-        <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.recharge_pin.size')}</Text>
-        {plansQ.isLoading ? (
-          <ActivityIndicator color={tokens.mint} />
-        ) : (
-          <View style={{ gap: 8 }}>
-            {(plansQ.data ?? []).map((p) => (
-              <TouchableOpacity
-                key={p.size}
-                onPress={() => setSelectedSize(p.size)}
-                style={[
-                  styles.optionCard,
-                  {
-                    backgroundColor: selectedSize === p.size ? tokens.mintSoft : tokens.card,
-                    borderColor: selectedSize === p.size ? tokens.mint : tokens.border,
-                  },
-                ]}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.optionTitle, { color: tokens.ink }]}>
-                    {p.network_name} ₦{p.size} PIN
-                  </Text>
-                  {!!p.info && (
-                    <Text style={[styles.optionMeta, { color: tokens.inkMuted }]} numberOfLines={2}>
-                      {p.info}
-                    </Text>
-                  )}
-                </View>
-                <Text style={[styles.optionPrice, { color: tokens.mint }]}>
-                  ₦{p.regular_price.toLocaleString()}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Quantity */}
-        <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.recharge_pin.quantity')}</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: tokens.card, color: tokens.ink, borderColor: tokens.border }]}
-          value={quantity}
-          onChangeText={(text) => {
-            const cleaned = text.replace(/[^0-9]/g, '');
-            setQuantity(cleaned);
-          }}
-          keyboardType="number-pad"
-          maxLength={3}
-        />
-
-        {/* Total */}
-        {totalPrice > 0 && (
-          <View style={[styles.totalCard, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
-            <Text style={[styles.totalLabel, { color: tokens.inkMuted }]}>{t('bills.recharge_pin.total')}</Text>
-            <Text style={[styles.totalValue, { color: tokens.mint }]}>
-              ₦{totalPrice.toLocaleString()}
-            </Text>
+        {/* SECTION 4: Summary */}
+        {selectedPlan && (
+          <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.recharge_pin.denomination_label')}</Text>
+              <Text style={[styles.summaryValue, { color: tokens.ink }]}>
+                ₦{selectedPlan.size} × {quantity}
+              </Text>
+            </View>
+            <View style={[styles.summaryDivider, { backgroundColor: tokens.border }]} />
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.recharge_pin.total')}</Text>
+              <Text style={[styles.summaryValue, { color: tokens.mint, fontWeight: '700' }]}>
+                ₦{totalPrice.toLocaleString()}
+              </Text>
+            </View>
           </View>
         )}
 
         {/* Pay button */}
         <TouchableOpacity
-          onPress={() => purchaseMutation.mutate()}
+          onPress={handleBuyPress}
           disabled={!canSubmit || purchaseMutation.isPending}
           style={[
             styles.payBtn,
@@ -221,17 +290,95 @@ export default function BuyRechargePinScreen() {
             },
           ]}
         >
-          {purchaseMutation.isPending ? (
-            <ActivityIndicator color={tokens.mintText} />
-          ) : (
-            <>
-              <Ionicons name="card-outline" size={20} color={tokens.mintText} />
-              <Text style={[styles.payText, { color: tokens.mintText }]}>
-                {totalPrice > 0 ? t('bills.recharge_pin.buy_button', { amount: totalPrice }) : t('bills.recharge_pin.select_prompt')}
-              </Text>
-            </>
-          )}
+          <Ionicons name="card-outline" size={20} color={tokens.mintText} />
+          <Text style={[styles.payText, { color: tokens.mintText }]}>
+            {totalPrice > 0
+              ? t('bills.recharge_pin.buy_button_with_amount', { amount: totalPrice })
+              : t('bills.recharge_pin.select_prompt')}
+          </Text>
         </TouchableOpacity>
+
+        {/* Inline error banner */}
+        {purchaseError && (
+          <View style={[styles.errorBanner, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
+            <Ionicons name="alert-circle-outline" size={18} color={tokens.signal} />
+            <Text style={{ flex: 1, color: tokens.signal, fontSize: 13 }}>
+              {purchaseError}
+            </Text>
+            <TouchableOpacity onPress={() => setPurchaseError(null)}>
+              <Ionicons name="close" size={18} color={tokens.signal} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Confirm Modal */}
+        <Modal
+          visible={showConfirmModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowConfirmModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+              <Text style={[styles.modalTitle, { color: tokens.ink }]}>Confirm Purchase</Text>
+              <View style={[styles.modalDivider, { backgroundColor: tokens.border }]} />
+              <View style={{ gap: 12, marginVertical: 16 }}>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Network</Text>
+                  <Text style={[styles.modalValue, { color: tokens.ink }]}>
+                    {selectedPlan?.network_name}
+                  </Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Denomination</Text>
+                  <Text style={[styles.modalValue, { color: tokens.ink }]}>₦{selectedPlan?.size}</Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Quantity</Text>
+                  <Text style={[styles.modalValue, { color: tokens.ink }]}>× {quantity}</Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Unit Price</Text>
+                  <Text style={[styles.modalValue, { color: tokens.ink }]}>
+                    ₦{(selectedPlan?.regular_price || 0).toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Total</Text>
+                  <Text style={[styles.modalValue, { color: tokens.mint, fontWeight: '700' }]}>
+                    ₦{totalPrice.toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>You'll earn</Text>
+                  <Text style={[styles.modalValue, { color: tokens.mint }]}>
+                    +{Math.floor(totalPrice * 0.018 * 0.67 * 10)} pts
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+                <TouchableOpacity
+                  onPress={() => setShowConfirmModal(false)}
+                  disabled={purchaseMutation.isPending}
+                  style={[styles.modalBtn, styles.modalBtnCancel, { borderColor: tokens.border }]}
+                >
+                  <Text style={[styles.modalBtnText, { color: tokens.inkMuted }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => purchaseMutation.mutate()}
+                  disabled={purchaseMutation.isPending}
+                  style={[styles.modalBtn, styles.modalBtnConfirm, { backgroundColor: tokens.mint }]}
+                >
+                  {purchaseMutation.isPending ? (
+                    <ActivityIndicator color={tokens.mintText} />
+                  ) : (
+                    <Text style={[styles.modalBtnText, { color: tokens.mintText }]}>Confirm</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </View>
   );
@@ -239,32 +386,75 @@ export default function BuyRechargePinScreen() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  card: {
+    borderRadius: 16, padding: 16, borderWidth: 1, gap: 12,
+  },
   label: { fontSize: 13, fontWeight: '500' },
-  input: {
-    borderRadius: 12, padding: 14, fontSize: 18, fontWeight: '600',
-    borderWidth: 1,
+  segmentedControl: {
+    flexDirection: 'row', borderRadius: 10,
+    padding: 3, gap: 2, maxWidth: 360,
   },
-  chip: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20,
-    borderWidth: 1,
+  segmentBtn: {
+    flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, alignItems: 'center',
   },
-  chipText: { fontSize: 14, fontWeight: '600' },
-  optionCard: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 12, padding: 14, borderWidth: 1, gap: 12,
+  segmentText: { fontSize: 13, fontWeight: '600' },
+  segmentChip: {
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1,
   },
-  optionTitle: { fontSize: 14, fontWeight: '600' },
-  optionMeta: { fontSize: 11, marginTop: 2 },
-  optionPrice: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  totalCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderRadius: 12, padding: 14, borderWidth: 1,
+  segmentChipText: { fontSize: 13, fontWeight: '600' },
+  denGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4,
   },
-  totalLabel: { fontSize: 14, fontWeight: '500' },
-  totalValue: { fontSize: 18, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  denCard: {
+    width: '47%', padding: 12, borderRadius: 12, borderWidth: 1,
+    gap: 4, position: 'relative',
+  },
+  denSize: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  denMeta: { fontSize: 10, fontWeight: '500' },
+  denPrice: { fontSize: 13, fontWeight: '600' },
+  planCheck: {
+    position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#0E7C66', alignItems: 'center', justifyContent: 'center',
+  },
+  earnBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1,
+  },
+  earnBadgeText: { fontSize: 12, fontWeight: '600' },
+  summaryRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 4,
+  },
+  summaryKey: { fontSize: 14, fontWeight: '500' },
+  summaryValue: { fontSize: 14, fontWeight: '600' },
+  summaryDivider: { height: 1 },
   payBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, borderRadius: 14, padding: 16, marginTop: 8,
   },
   payText: { fontSize: 16, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    padding: 12, borderRadius: 12, borderWidth: 1,
+  },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24,
+  },
+  modalContent: {
+    borderRadius: 20, padding: 24, width: '100%', maxWidth: 380, borderWidth: 1,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
+  modalDivider: { height: 1, marginTop: 12 },
+  modalRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
+  modalKey: { fontSize: 14, fontWeight: '500' },
+  modalValue: { fontSize: 14, fontWeight: '600' },
+  modalBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center',
+    minHeight: 48, justifyContent: 'center',
+  },
+  modalBtnCancel: { backgroundColor: 'transparent', borderWidth: 1 },
+  modalBtnConfirm: { },
+  modalBtnText: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
 });
