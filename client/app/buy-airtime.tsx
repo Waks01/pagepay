@@ -37,7 +37,7 @@ type NetworkOption = {
   name: string;
 };
 
-const AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
+const AMOUNTS = [25, 50, 100, 200, 500, 1000, 2000, 5000];
 
 type PurchaseState = 'idle' | 'processing' | 'success' | 'failed';
 
@@ -106,7 +106,7 @@ export default function BuyAirtimeScreen() {
 
   const selectedNetwork = networkList.find(n => n.id === selectedNetworkId);
   const finalAmount = selectedAmount ?? (parseInt(customAmount, 10) || 0);
-  const canSubmit = phone.length === 11 && selectedNetworkId !== null && finalAmount >= 50;
+  const canSubmit = phone.length === 11 && selectedNetworkId !== null && finalAmount >= 25;
   const estPoints = finalAmount ? Math.floor(finalAmount * 0.018 * 0.67 * 10) : 0;
 
   const purchaseMutation = useMutation({
@@ -329,7 +329,7 @@ export default function BuyAirtimeScreen() {
         {/* SECTION 3: Amount (3-col grid) + custom amount */}
         <SectionCard
           label={t('bills.airtime.amount_label')}
-          accessory={finalAmount >= 50 ? <EarnBadge points={estPoints} /> : undefined}
+          accessory={finalAmount >= 25 ? <EarnBadge points={estPoints} /> : undefined}
         >
           <View style={styles.amountGrid}>
             {AMOUNTS.map((a) => {
@@ -393,7 +393,7 @@ export default function BuyAirtimeScreen() {
         >
           <Ionicons name="cart-outline" size={20} color={tokens.mintText} />
           <Text style={[styles.payText, { color: tokens.mintText }]}>
-            {finalAmount >= 50
+            {finalAmount >= 25
               ? t('bills.airtime.buy_button', { amount: finalAmount })
               : t('bills.airtime.amount_required')}
           </Text>

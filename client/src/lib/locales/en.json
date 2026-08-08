@@ -470,7 +470,7 @@
         "phone_required": "Enter phone number",
         "phone_invalid": "Phone number must be 11 digits",
         "amount_required": "Select or enter amount",
-        "amount_min": "Minimum amount is ₦100",
+        "amount_min": "Minimum amount is ₦25",
         "amount_max": "Maximum amount is ₦50,000",
         "insufficient_balance": "Insufficient balance. Fund your wallet first.",
         "purchase_failed": "Purchase failed. Please try again.",

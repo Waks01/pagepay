@@ -103,7 +103,7 @@ class AirtimePurchaseRequest(BaseModel):
     """POST /bills/airtime - Buy airtime and earn points."""
     phone: str = Field(min_length=10, max_length=15)
     network: str = Field(..., description="mtn, airtel, glo")
-    amount_naira: int = Field(ge=50, le=50000)
+    amount_naira: int = Field(ge=25, le=50000)
 
 
 class DataPurchaseRequest(BaseModel):
