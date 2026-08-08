@@ -12,11 +12,11 @@ import { bootstrapPreferences, usePreferences } from '@/src/shared/lib/preferenc
 import { getToken } from '@/src/shared/lib/storage';
 import { initializeAdMob } from '@/src/shared/lib/ads-native';
 import { setOnUnauthenticated, apiFetch } from '@/src/shared/api/client';
-import { setupNotificationListeners, registerFCMToken } from '@/src/lib/notifications';
+import { setupNotificationListeners, registerFCMToken, handleNotificationTap } from '@/src/lib/notifications';
 import { connectSocket, disconnectSocket, onNotification } from '@/src/lib/socket';
 import { SplashOverlay } from '@/components/SplashOverlay';
 import { AdSlotProvider } from '@/src/shared/contexts/AdSlot';
-import BannerNotification, { type BannerNotification } from '@/src/components/BannerNotification';
+import BannerNotification, { type BannerNotificationItem } from '@/src/components/BannerNotification';
 import { getApp as getFirebaseApp } from '@react-native-firebase/app';
 import { getCrashlytics } from '@react-native-firebase/crashlytics';
 import '@/src/lib/i18n';
@@ -192,7 +192,7 @@ export default function RootLayout() {
       try {
         const app = getFirebaseApp();
         if (!app) return;
-        const crashlytics = getCrashlytics(app);
+        const crashlytics = getCrashlytics();
         await crashlytics.setCrashlyticsCollectionEnabled(true);
         console.log('Crashlytics initialized');
       } catch (error) {
@@ -216,15 +216,18 @@ export default function RootLayout() {
   const [splashDismissed, setSplashDismissed] = useState(false);
 
   // In-app banner notifications
-  const [bannerNotifications, setBannerNotifications] = useState<BannerNotification[]>([]);
+  const [bannerNotifications, setBannerNotifications] = useState<BannerNotificationItem[]>([]);
 
   const handleBannerDismiss = useCallback((id: number) => {
     setBannerNotifications((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
-  const handleBannerPress = useCallback((notification: BannerNotification) => {
+  const handleBannerPress = useCallback((notification: BannerNotificationItem) => {
     setBannerNotifications((prev) => prev.filter((n) => n.id !== notification.id));
-    handleNotificationTap(notification);
+    handleNotificationTap({
+      data: notification.data ?? undefined,
+      category: notification.category,
+    });
   }, []);
 
   if (!isReady || !fontsLoaded) {

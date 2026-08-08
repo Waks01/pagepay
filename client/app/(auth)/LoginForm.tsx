@@ -176,10 +176,10 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
 
                   <View style={{ gap: 14 }}>
                     <AnimatedInput
-                      label={t('auth.login.identifier_label', { defaultValue: 'Username, email or phone' })}
+                      label={t('auth.login.email_label')}
                       value={email}
                       onChangeText={onChangeEmail}
-                      placeholder={t('auth.login.identifier_placeholder', { defaultValue: 'Enter username, email or phone' })}
+                      placeholder={t('auth.login.email_placeholder')}
                       autoCapitalize="none"
                       autoCorrect={false}
                       textContentType="username"

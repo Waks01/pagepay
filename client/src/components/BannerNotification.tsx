@@ -10,7 +10,7 @@ import { router } from "expo-router";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
-type BannerNotification = {
+export type BannerNotificationItem = {
   id: number;
   title: string;
   body: string;
@@ -20,9 +20,9 @@ type BannerNotification = {
 };
 
 type Props = {
-  notifications: BannerNotification[];
+  notifications: BannerNotificationItem[];
   onDismiss: (id: number) => void;
-  onPress: (notification: BannerNotification) => void;
+  onPress: (notification: BannerNotificationItem) => void;
 };
 
 export default function BannerNotification({
@@ -54,11 +54,11 @@ export default function BannerNotification({
 }
 
 type BannerItemProps = {
-  notification: BannerNotification;
+  notification: BannerNotificationItem;
   tokens: any;
   index: number;
   onDismiss: (id: number) => void;
-  onPress: (notification: BannerNotification) => void;
+  onPress: (notification: BannerNotificationItem) => void;
 };
 
 function BannerItem({ notification, tokens, index, onDismiss, onPress }: BannerItemProps) {
@@ -176,7 +176,7 @@ function getCategoryColor(category: string | null): string {
   }
 }
 
-function getActionLabel(notification: BannerNotification): string {
+function getActionLabel(notification: BannerNotificationItem): string {
   const service = (notification.data?.service as string | undefined) || "";
   if (service) {
     return `View ${service.replace("_", " ")}`;

@@ -168,8 +168,8 @@ class Settings(BaseSettings):
 
     # Commission split: portion of the aggregator's commission that goes
     # back to the user as points (the rest funds the platform).
-    # 0.67 = user gets 67% of the commission, platform keeps 33%.
-    bills_user_share: float = 0.67
+    # 0.70 = user gets 70% of the commission, platform keeps 30%.
+    bills_user_share: float = 0.70
     # Every Nth item in the catalog feed is a sponsored slot. The
     # spec's default is 4 (in-feed native every 4th item). Set to
     # 0 to disable sponsored rotation entirely (rare — only for

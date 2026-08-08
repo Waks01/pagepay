@@ -120,7 +120,14 @@ export default function NotificationDetailScreen() {
 
   const handleAction = () => {
     if (notificationQ.data) {
-      handleNotificationTap(notificationQ.data, router);
+      const n = notificationQ.data;
+      handleNotificationTap(
+        {
+          data: n.data ?? undefined,
+          category: n.category,
+        },
+        { push: (path) => router.push(path as any), back: () => router.back() },
+      );
     }
   };
 
@@ -460,6 +467,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
     gap: 16,
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   errorTitle: {
     fontSize: 18,

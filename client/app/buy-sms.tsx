@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet, Modal,
+  Alert, ActivityIndicator, StyleSheet,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,11 @@ import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/src/shared/api/client';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
+import {
+  SectionCard,
+  ConfirmModal,
+  ErrorBanner,
+} from '@/src/components/bills';
 
 type SmsPricing = {
   cost_per_page: number;
@@ -105,6 +110,7 @@ export default function BuySmsScreen() {
 
   const canSubmit =
     senderName.trim().length > 0 && recipientList.length > 0 && message.trim().length > 0;
+  const estPoints = estimate.cost ? Math.floor(estimate.cost * 0.018 * 0.67 * 10) : 0;
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
@@ -124,8 +130,7 @@ export default function BuySmsScreen() {
         </View>
 
         {/* SECTION 1: Sender Name */}
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.sms.sender')}</Text>
+        <SectionCard label={t('bills.sms.sender')}>
           <View style={{ position: 'relative' }}>
             <TextInput
               style={[
@@ -148,18 +153,17 @@ export default function BuySmsScreen() {
               </View>
             )}
           </View>
-        </View>
+        </SectionCard>
 
         {/* SECTION 2: Recipients */}
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.sms.recipients')}</Text>
-            {recipientList.length > 0 && (
-              <Text style={{ color: tokens.inkMuted, fontSize: 11 }}>
-                {recipientList.length} {recipientList.length === 1 ? 'recipient' : 'recipients'}
-              </Text>
-            )}
-          </View>
+        <SectionCard
+          label={t('bills.sms.recipients')}
+          accessory={recipientList.length > 0 ? (
+            <Text style={{ color: tokens.inkMuted, fontSize: 11 }}>
+              {recipientList.length} {recipientList.length === 1 ? 'recipient' : 'recipients'}
+            </Text>
+          ) : undefined}
+        >
           <TextInput
             style={[
               styles.input,
@@ -176,16 +180,17 @@ export default function BuySmsScreen() {
             keyboardType="numbers-and-punctuation"
             multiline
           />
-        </View>
+        </SectionCard>
 
         {/* SECTION 3: Message */}
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.sms.message')}</Text>
+        <SectionCard
+          label={t('bills.sms.message')}
+          accessory={
             <Text style={{ color: tokens.inkMuted, fontSize: 11 }}>
               {message.length} / {MAX_CHARS}
             </Text>
-          </View>
+          }
+        >
           <TextInput
             style={[
               styles.textarea,
@@ -203,11 +208,11 @@ export default function BuySmsScreen() {
             numberOfLines={6}
             maxLength={MAX_CHARS}
           />
-        </View>
+        </SectionCard>
 
         {/* SECTION 4: Estimate Summary */}
         {estimate.cost > 0 && (
-          <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <SectionCard>
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.sms.pages_label')}</Text>
               <Text style={[styles.summaryValue, { color: tokens.ink }]}>{estimate.pages}</Text>
@@ -228,10 +233,10 @@ export default function BuySmsScreen() {
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.sms.earn_label')}</Text>
               <Text style={[styles.summaryValue, { color: tokens.mint, fontWeight: '700' }]}>
-                +{Math.floor(estimate.cost * 0.018 * 0.67 * 10)} pts
+                +{estPoints} pts
               </Text>
             </View>
-          </View>
+          </SectionCard>
         )}
 
         {/* Send button */}
@@ -254,85 +259,23 @@ export default function BuySmsScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Inline error banner */}
-        {purchaseError && (
-          <View style={[styles.errorBanner, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
-            <Ionicons name="alert-circle-outline" size={18} color={tokens.signal} />
-            <Text style={{ flex: 1, color: tokens.signal, fontSize: 13 }}>
-              {purchaseError}
-            </Text>
-            <TouchableOpacity onPress={() => setPurchaseError(null)}>
-              <Ionicons name="close" size={18} color={tokens.signal} />
-            </TouchableOpacity>
-          </View>
-        )}
+        <ErrorBanner message={purchaseError ?? ''} onDismiss={() => setPurchaseError(null)} />
 
-        {/* Confirm Modal */}
-        <Modal
+        <ConfirmModal
           visible={showConfirmModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowConfirmModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-              <Text style={[styles.modalTitle, { color: tokens.ink }]}>Confirm Send</Text>
-              <View style={[styles.modalDivider, { backgroundColor: tokens.border }]} />
-              <View style={{ gap: 12, marginVertical: 16 }}>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Sender</Text>
-                  <Text style={[styles.modalValue, { color: tokens.ink }]}>{senderName.trim()}</Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Recipients</Text>
-                  <Text style={[styles.modalValue, { color: tokens.ink }]}>{recipientList.length}</Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Pages</Text>
-                  <Text style={[styles.modalValue, { color: tokens.ink }]}>× {estimate.pages}</Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Message</Text>
-                  <Text style={[styles.modalValue, { color: tokens.inkMuted, maxWidth: 180 }]} numberOfLines={2}>
-                    {message.trim()}
-                  </Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Cost</Text>
-                  <Text style={[styles.modalValue, { color: tokens.mint, fontWeight: '700' }]}>
-                    ₦{estimate.cost.toLocaleString()}
-                  </Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>You'll earn</Text>
-                  <Text style={[styles.modalValue, { color: tokens.mint }]}>
-                    +{Math.floor(estimate.cost * 0.018 * 0.67 * 10)} pts
-                  </Text>
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
-                <TouchableOpacity
-                  onPress={() => setShowConfirmModal(false)}
-                  disabled={purchaseMutation.isPending}
-                  style={[styles.modalBtn, styles.modalBtnCancel, { borderColor: tokens.border }]}
-                >
-                  <Text style={[styles.modalBtnText, { color: tokens.inkMuted }]}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => purchaseMutation.mutate()}
-                  disabled={purchaseMutation.isPending}
-                  style={[styles.modalBtn, styles.modalBtnConfirm, { backgroundColor: tokens.mint }]}
-                >
-                  {purchaseMutation.isPending ? (
-                    <ActivityIndicator color={tokens.mintText} />
-                  ) : (
-                    <Text style={[styles.modalBtnText, { color: tokens.mintText }]}>Confirm</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+          title="Confirm Send"
+          confirming={purchaseMutation.isPending}
+          rows={[
+            { key: 'sender', label: 'Sender', value: senderName.trim() },
+            { key: 'recip', label: 'Recipients', value: recipientList.length },
+            { key: 'pages', label: 'Pages', value: `× ${estimate.pages}` },
+            { key: 'msg', label: 'Message', value: message.trim(), valueStyle: { maxWidth: 180 }, valueColor: 'muted' },
+            { key: 'amt', label: 'Cost', value: `₦${estimate.cost.toLocaleString()}`, valueColor: 'mint' as const },
+            { key: 'earn', label: "You'll earn", value: `+${estPoints} pts`, valueColor: 'mint' as const },
+          ]}
+          onCancel={() => setShowConfirmModal(false)}
+          onConfirm={() => purchaseMutation.mutate()}
+        />
       </ScrollView>
     </View>
   );
@@ -340,10 +283,6 @@ export default function BuySmsScreen() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  card: {
-    borderRadius: 16, padding: 16, borderWidth: 1, gap: 12,
-  },
-  label: { fontSize: 13, fontWeight: '500' },
   input: {
     borderRadius: 12, padding: 14, fontSize: 16, fontWeight: '600',
     borderWidth: 1,
@@ -367,28 +306,4 @@ const styles = StyleSheet.create({
     gap: 8, borderRadius: 14, padding: 16, marginTop: 8,
   },
   payText: { fontSize: 16, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  errorBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 12, borderRadius: 12, borderWidth: 1,
-  },
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24,
-  },
-  modalContent: {
-    borderRadius: 20, padding: 24, width: '100%', maxWidth: 380, borderWidth: 1,
-  },
-  modalTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  modalDivider: { height: 1, marginTop: 12 },
-  modalRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-  },
-  modalKey: { fontSize: 14, fontWeight: '500' },
-  modalValue: { fontSize: 14, fontWeight: '600' },
-  modalBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center',
-    minHeight: 48, justifyContent: 'center',
-  },
-  modalBtnCancel: { backgroundColor: 'transparent', borderWidth: 1 },
-  modalBtnConfirm: { },
-  modalBtnText: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
 });

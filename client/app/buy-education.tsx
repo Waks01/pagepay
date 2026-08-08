@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet, Modal,
+  View, Text, TouchableOpacity, ScrollView,
+  Alert, ActivityIndicator, StyleSheet,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,12 @@ import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/src/shared/api/client';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
+import {
+  SectionCard,
+  SegmentedControl,
+  ConfirmModal,
+  ErrorBanner,
+} from '@/src/components/bills';
 
 type ExamProduct = {
   exam_type: string;
@@ -89,12 +95,18 @@ export default function BuyEducationScreen() {
   const selectedExamData = examsQ.data?.find(e => e.code === selectedExam);
   const totalPrice = selectedExamData ? selectedExamData.amount * quantity : 0;
   const canSubmit = !!selectedExam && quantity > 0;
+  const estPoints = totalPrice ? Math.floor(totalPrice * 0.018 * 0.67 * 10) : 0;
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
     setPurchaseError(null);
     setShowConfirmModal(true);
   };
+
+  const quantityOptions = QUANTITY_OPTIONS.map(q => ({
+    value: q,
+    label: String(q),
+  }));
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
@@ -108,8 +120,7 @@ export default function BuyEducationScreen() {
         </View>
 
         {/* SECTION 1: Select Exam (2-col grid) */}
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.education.select_exam')}</Text>
+        <SectionCard label={t('bills.education.select_exam')}>
           {examsQ.isLoading ? (
             <ActivityIndicator color={tokens.mint} />
           ) : (examsQ.data ?? []).length === 0 ? (
@@ -154,41 +165,20 @@ export default function BuyEducationScreen() {
               })}
             </View>
           )}
-        </View>
+        </SectionCard>
 
         {/* SECTION 2: Quantity (segmented control) */}
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-          <Text style={[styles.label, { color: tokens.inkMuted }]}>{t('bills.education.quantity')}</Text>
-          <View style={styles.segmentedControl}>
-            {QUANTITY_OPTIONS.map((q) => {
-              const isActive = quantity === q;
-              return (
-                <TouchableOpacity
-                  key={q}
-                  onPress={() => setQuantity(q)}
-                  style={[
-                    styles.segmentBtn,
-                    {
-                      backgroundColor: isActive ? tokens.card : 'transparent',
-                      borderColor: isActive ? tokens.mint : 'transparent',
-                      shadowColor: isActive ? '#000' : 'transparent',
-                      shadowOpacity: isActive ? 0.08 : 0,
-                      shadowRadius: isActive ? 4 : 0,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.segmentText, { color: isActive ? tokens.ink : tokens.inkMuted }]}>
-                    {q}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
+        <SectionCard label={t('bills.education.quantity')}>
+          <SegmentedControl
+            options={quantityOptions}
+            value={quantity}
+            onChange={setQuantity}
+          />
+        </SectionCard>
 
         {/* SECTION 3: Summary */}
         {selectedExamData && (
-          <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <SectionCard>
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.education.exam_label')}</Text>
               <Text style={[styles.summaryValue, { color: tokens.ink }]}>
@@ -206,10 +196,10 @@ export default function BuyEducationScreen() {
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>{t('bills.education.earn_label')}</Text>
               <Text style={[styles.summaryValue, { color: tokens.mint, fontWeight: '700' }]}>
-                +{Math.floor(totalPrice * 0.018 * 0.67 * 10)} pts
+                +{estPoints} pts
               </Text>
             </View>
-          </View>
+          </SectionCard>
         )}
 
         {/* Pay button */}
@@ -232,89 +222,23 @@ export default function BuyEducationScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Inline error banner */}
-        {purchaseError && (
-          <View style={[styles.errorBanner, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
-            <Ionicons name="alert-circle-outline" size={18} color={tokens.signal} />
-            <Text style={{ flex: 1, color: tokens.signal, fontSize: 13 }}>
-              {purchaseError}
-            </Text>
-            <TouchableOpacity onPress={() => setPurchaseError(null)}>
-              <Ionicons name="close" size={18} color={tokens.signal} />
-            </TouchableOpacity>
-          </View>
-        )}
+        <ErrorBanner message={purchaseError ?? ''} onDismiss={() => setPurchaseError(null)} />
 
-        {/* Confirm Modal */}
-        <Modal
+        <ConfirmModal
           visible={showConfirmModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowConfirmModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-              <Text style={[styles.modalTitle, { color: tokens.ink }]}>Confirm Purchase</Text>
-              <View style={[styles.modalDivider, { backgroundColor: tokens.border }]} />
-              <View style={{ gap: 12, marginVertical: 16 }}>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Exam</Text>
-                  <Text style={[styles.modalValue, { color: tokens.ink }]}>
-                    {selectedExamData?.name}
-                  </Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Type</Text>
-                  <Text style={[styles.modalValue, { color: tokens.ink }]}>
-                    {selectedExamData?.exam_type}
-                  </Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Quantity</Text>
-                  <Text style={[styles.modalValue, { color: tokens.ink }]}>× {quantity}</Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Unit Price</Text>
-                  <Text style={[styles.modalValue, { color: tokens.ink }]}>
-                    ₦{(selectedExamData?.amount || 0).toLocaleString()}
-                  </Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>Total</Text>
-                  <Text style={[styles.modalValue, { color: tokens.mint, fontWeight: '700' }]}>
-                    ₦{totalPrice.toLocaleString()}
-                  </Text>
-                </View>
-                <View style={styles.modalRow}>
-                  <Text style={[styles.modalKey, { color: tokens.inkMuted }]}>You'll earn</Text>
-                  <Text style={[styles.modalValue, { color: tokens.mint }]}>
-                    +{Math.floor(totalPrice * 0.018 * 0.67 * 10)} pts
-                  </Text>
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
-                <TouchableOpacity
-                  onPress={() => setShowConfirmModal(false)}
-                  disabled={purchaseMutation.isPending}
-                  style={[styles.modalBtn, styles.modalBtnCancel, { borderColor: tokens.border }]}
-                >
-                  <Text style={[styles.modalBtnText, { color: tokens.inkMuted }]}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => purchaseMutation.mutate()}
-                  disabled={purchaseMutation.isPending}
-                  style={[styles.modalBtn, styles.modalBtnConfirm, { backgroundColor: tokens.mint }]}
-                >
-                  {purchaseMutation.isPending ? (
-                    <ActivityIndicator color={tokens.mintText} />
-                  ) : (
-                    <Text style={[styles.modalBtnText, { color: tokens.mintText }]}>Confirm</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+          title="Confirm Purchase"
+          confirming={purchaseMutation.isPending}
+          rows={[
+            { key: 'exam', label: 'Exam', value: selectedExamData?.name ?? '' },
+            { key: 'type', label: 'Type', value: selectedExamData?.exam_type ?? '' },
+            { key: 'qty', label: 'Quantity', value: `× ${quantity}` },
+            { key: 'unit', label: 'Unit Price', value: `₦${(selectedExamData?.amount || 0).toLocaleString()}` },
+            { key: 'amt', label: 'Total', value: `₦${totalPrice.toLocaleString()}`, valueColor: 'mint' as const },
+            { key: 'earn', label: "You'll earn", value: `+${estPoints} pts`, valueColor: 'mint' as const },
+          ]}
+          onCancel={() => setShowConfirmModal(false)}
+          onConfirm={() => purchaseMutation.mutate()}
+        />
       </ScrollView>
     </View>
   );
@@ -322,18 +246,6 @@ export default function BuyEducationScreen() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  card: {
-    borderRadius: 16, padding: 16, borderWidth: 1, gap: 12,
-  },
-  label: { fontSize: 13, fontWeight: '500' },
-  segmentedControl: {
-    flexDirection: 'row', borderRadius: 10,
-    padding: 3, gap: 2, maxWidth: 360,
-  },
-  segmentBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, alignItems: 'center',
-  },
-  segmentText: { fontSize: 13, fontWeight: '600' },
   examGrid: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4,
   },
@@ -363,28 +275,4 @@ const styles = StyleSheet.create({
     gap: 8, borderRadius: 14, padding: 16, marginTop: 8,
   },
   payText: { fontSize: 16, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  errorBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 12, borderRadius: 12, borderWidth: 1,
-  },
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24,
-  },
-  modalContent: {
-    borderRadius: 20, padding: 24, width: '100%', maxWidth: 380, borderWidth: 1,
-  },
-  modalTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
-  modalDivider: { height: 1, marginTop: 12 },
-  modalRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-  },
-  modalKey: { fontSize: 14, fontWeight: '500' },
-  modalValue: { fontSize: 14, fontWeight: '600' },
-  modalBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center',
-    minHeight: 48, justifyContent: 'center',
-  },
-  modalBtnCancel: { backgroundColor: 'transparent', borderWidth: 1 },
-  modalBtnConfirm: { },
-  modalBtnText: { fontSize: 15, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
 });

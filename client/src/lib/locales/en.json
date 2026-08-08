@@ -235,7 +235,7 @@
       "app_install": "app install",
       "website_visit": "website visit",
       "survey": "survey",
-      "review": "review",
+      "review": "Review",
       "follow": "Follow",
       "like": "Like",
       "subscribe": "Subscribe",
@@ -245,7 +245,6 @@
       "visit": "Visit",
       "signup": "Sign Up",
       "download": "Download",
-      "review": "Review",
       "watch": "Watch",
       "repost": "Repost",
       "join": "Join",
@@ -372,7 +371,9 @@
         "invalid_referral": "Invalid or expired referral code. Check the code and try again.",
         "create_failed": "Couldn't create your account. Try again.",
         "connection_error": "Can't reach the server. Check your connection and try again."
-      }
+      },
+      "username_label": "Username",
+      "username_placeholder": "johndoe"
     }
   },
   "onboarding": {
@@ -993,7 +994,6 @@
     "description_placeholder": "What should workers do?",
     "instructions_label": "Instructions *",
     "instructions_placeholder": "Step-by-step guide",
-    "platform_label": "Platform",
     "task_type_label": "Task Type",
     "target_url_label": "Target URL (Optional)",
     "target_url_placeholder": "https://twitter.com/yourhandle",

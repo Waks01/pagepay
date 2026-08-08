@@ -316,10 +316,10 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
                   />
 
                   <Field
-                    label={t('auth.register.username_label', { defaultValue: 'Username' })}
+                    label={t('auth.register.username_label')}
                     value={username}
                     onChangeText={onChangeUsername}
-                    placeholder={t('auth.register.username_placeholder', { defaultValue: 'johndoe' })}
+                    placeholder={t('auth.register.username_placeholder')}
                     autoCapitalize="none"
                     autoCorrect={false}
                     textContentType="username"
