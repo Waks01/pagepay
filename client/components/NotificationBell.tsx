@@ -6,7 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { apiFetch } from "@/src/shared/api/client";
-import { onNotification, offNotification } from "@/src/lib/socket";
 
 type Props = {
   onPress?: () => void;
@@ -32,17 +31,6 @@ export default function NotificationBell({ onPress }: Props) {
   });
 
   const unreadCount = notifData?.unread_count ?? 0;
-
-  useEffect(() => {
-    const handler = () => {
-      console.log("📬 [BELL] Socket notification received, refetching count");
-      // Just refetch to get the latest count from backend
-      // Don't use socketUnreadExtra as it causes issues
-      refetch();
-    };
-    onNotification(handler);
-    return () => offNotification(handler);
-  }, [refetch]);
 
   const handlePress = useCallback(() => {
     if (onPress) {

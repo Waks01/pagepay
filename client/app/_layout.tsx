@@ -1,7 +1,7 @@
 ﻿import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, useCallback } from 'react';
 import { useFonts, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import 'react-native-reanimated';
@@ -117,6 +117,7 @@ function AdsBootstrapComponent() {
 export default function RootLayout() {
   const colorScheme = useEffectiveScheme();
   const isReady = useAuthGate();
+  const qc = useQueryClient();
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_500Medium,
     SpaceGrotesk_700Bold,
@@ -164,6 +165,7 @@ export default function RootLayout() {
           connectSocket(me.id);
           onNotification((notification) => {
             console.log('In-app notification:', notification);
+            qc.invalidateQueries({ queryKey: ['notifications-unread-count'] });
             setBannerNotifications((prev) => {
               const exists = prev.some((n) => n.id === notification.id);
               if (exists) return prev;

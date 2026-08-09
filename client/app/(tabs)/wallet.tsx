@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiFetch } from '@/src/shared/api/client';
 import { PLATFORM_ENV } from '@/src/shared/lib/ads';
 import { consumePendingWithdrawAfterPin } from '@/src/shared/lib/pin-verify-flag';
-import { formatKobo, formatPoints, pointsToNairaString } from '@/src/shared/lib/money';
+import { formatKobo, formatPoints, pointsToNairaString, koboToPoints } from '@/src/shared/lib/money';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay, Fonts } from '@/constants/theme';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -64,7 +64,7 @@ type WithdrawalResponse = {
   amount_kobo: number;
 };
 
-const MIN_WITHDRAWAL_KOBO = 100_000; // ₦1,000 — matches the server's Pydantic floor.
+const MIN_WITHDRAWAL_POINTS = koboToPoints(100_000); // ₦1,000 minimum → 10,000 points at 10 pts/₦
 
 const formatDate = (iso: string | null) => {
   if (!iso) return '—';
@@ -208,7 +208,7 @@ export default function WalletScreen() {
   };
   const transactions = txQ.data ?? [];
   const withdrawals = withdrawalsQ.data ?? [];
-  const belowMin = balance < MIN_WITHDRAWAL_KOBO;
+  const belowMin = balance < MIN_WITHDRAWAL_POINTS;
 
   const onRefresh = () => {
     qc.invalidateQueries({ queryKey: ['me'] });

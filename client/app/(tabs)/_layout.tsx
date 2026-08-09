@@ -9,9 +9,9 @@ import {
   Animated,
   Pressable,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import { PagePay } from '@/constants/theme';
@@ -45,6 +45,7 @@ export default function TabLayout() {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const { t } = useTranslation();
+  const qc = useQueryClient();
 
   const { data: me } = useQuery({
     queryKey: ['auth', 'me'],
@@ -296,7 +297,7 @@ function MoreDrawer({
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const { data: notifData } = useQuery({
-    queryKey: ['notifications-unread'],
+    queryKey: ['notifications-unread-count'],
     queryFn: async () => {
       const res = await apiFetch('/api/v1/notifications?limit=1');
       if (!res.ok) return { unread_count: 0 };
