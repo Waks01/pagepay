@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 from pydantic import BaseModel, Field
 
 from app.database import get_db
-from app.models import ReadingSession, ContentCatalog, AdEvent, User, Payment
+from app.models import ReadingSession, ContentCatalog, AdEvent, User, Payment, BillTransaction
 from app.routers.auth import get_current_user
 from app.routers.payouts import paystack_webhook as _payouts_paystack_webhook
 from app.services.paystack import get_client
@@ -99,6 +99,17 @@ async def list_transactions(
     )
     ad_events = (await db.execute(ad_stmt)).scalars().all()
 
+    # Bill transactions: every successful VTU purchase that earned points.
+    bill_stmt = (
+        select(BillTransaction)
+        .where(BillTransaction.user_id == current_user.id)
+        .where(BillTransaction.status == "success")
+        .where(BillTransaction.points_earned > 0)
+        .order_by(BillTransaction.created_at.desc())
+        .limit(limit)
+    )
+    bill_txs = (await db.execute(bill_stmt)).scalars().all()
+
     out: list[Transaction] = []
     for session, title, read_order, total_slices in sessions:
         sid = session.id
@@ -120,6 +131,25 @@ async def list_transactions(
                 id=event.id, type="earn", points=event.user_points_credited,
                 description="Rewarded ad",
                 date=event.created_at,
+            )
+        )
+
+    for bill in bill_txs:
+        service_label = bill.service.replace("_", " ").title()
+        description = f"Bought {service_label}"
+        if bill.phone:
+            description += f" for {bill.phone}"
+        elif bill.meter_number:
+            description += f" (meter {bill.meter_number})"
+        elif bill.smartcard_number:
+            description += f" (smartcard {bill.smartcard_number})"
+        if bill.points_earned > 0:
+            description += f" — earned {bill.points_earned} pts"
+        out.append(
+            Transaction(
+                id=bill.id, type="earn", points=bill.points_earned,
+                description=description,
+                date=bill.created_at,
             )
         )
 

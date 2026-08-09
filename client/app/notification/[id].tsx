@@ -16,6 +16,7 @@ import { apiFetch } from "@/src/shared/api/client";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { handleNotificationTap } from "@/src/lib/notifications";
+import { SkeletonDetailPage } from "@/components/skeletons";
 
 type NotificationDetail = {
   id: number;
@@ -148,11 +149,7 @@ export default function NotificationDetailScreen() {
         edges={["top"]}
         style={{ flex: 1, backgroundColor: tokens.paper }}
       >
-        <View style={styles.centerContainer}>
-          <Text style={{ color: tokens.inkMuted }}>
-            {t("notification_detail.loading")}
-          </Text>
-        </View>
+        <SkeletonDetailPage />
       </SafeAreaView>
     );
   }

@@ -20,6 +20,7 @@ import { apiFetch } from "@/src/shared/api/client";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import NotificationBell from "@/components/NotificationBell";
+import { SkeletonPage } from "@/components/skeletons";
 import { onNotification, offNotification } from "@/src/lib/socket";
 
 type NotificationItem = {
@@ -270,7 +271,13 @@ export default function NotificationsScreen() {
             tintColor={tokens.mint}
           />
         }
-        ListEmptyComponent={ListEmpty}
+        ListEmptyComponent={
+          notificationsQ.isLoading ? (
+            <SkeletonPage count={4} header={false} />
+          ) : (
+            ListEmpty
+          )
+        }
       />
     </SafeAreaView>
   );
