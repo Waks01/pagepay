@@ -24,7 +24,9 @@ import BannerNotification, { type BannerNotificationItem } from '@/src/component
 import { PaystackProvider } from 'expo-paystack';
 import '@/src/lib/i18n';
 
-const PAYSTACK_PUBLIC_KEY = Constants.expoConfig?.extra?.paystackPublicKey || process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY || '';
+const PAYSTACK_PUBLIC_KEY = __DEV__
+  ? process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY_TEST || process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY
+  : Constants.expoConfig?.extra?.paystackPublicKey || process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY;
 
 export const unstable_settings = {
   // Intentionally no anchor — the auth gate in useAuthGate controls
@@ -218,9 +220,10 @@ export default function RootLayout() {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const crashlyticsMod = require('@react-native-firebase/crashlytics');
         if (!crashlyticsMod?.getCrashlytics) return;
-        const crashlytics = crashlyticsMod.getCrashlytics();
+        const { getCrashlytics, setCrashlyticsCollectionEnabled } = crashlyticsMod;
+        const crashlytics = getCrashlytics();
         if (!crashlytics) return;
-        await crashlytics.setCrashlyticsCollectionEnabled(true);
+        await setCrashlyticsCollectionEnabled(crashlytics, true);
         console.log('Crashlytics initialized');
       } catch (error) {
         console.error('Failed to init Crashlytics:', error);
