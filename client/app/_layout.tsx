@@ -29,9 +29,7 @@ const PAYSTACK_PUBLIC_KEY = __DEV__
   : Constants.expoConfig?.extra?.paystackPublicKey || process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY;
 
 export const unstable_settings = {
-  // Intentionally no anchor — the auth gate in useAuthGate controls
-  // the initial route. Setting anchor here would let Expo Router
-  // render the tabs layout before the auth check completes.
+  anchor: '/(auth)/',
 };
 
 const VALID_TABS = ['index', 'catalog', 'study', 'wallet', 'notifications', 'tasks', 'community', 'profile', 'premium'] as const;
