@@ -218,22 +218,18 @@ class TaskProcessor:
             )
             logger.info(f"User {submission.worker_id} leveled up to {reputation.worker_level}")
         
-        # Update streak
-        today = datetime.utcnow().date()
-        last_task_date = reputation.last_task_date.date() if reputation.last_task_date else None
-        
-        if last_task_date == today:
-            pass  # Same day, no streak change
-        elif last_task_date and (today - last_task_date).days == 1:
-            # Consecutive day
+        # Update streak — use a strict 24-hour UTC gap so the reset
+        # behaves the same regardless of the user's timezone.
+        now = datetime.utcnow()
+        last_task_date = reputation.last_task_date
+        if last_task_date is None or (now - last_task_date) > timedelta(hours=24):
+            reputation.current_streak_days = 1
+        elif (now - last_task_date) <= timedelta(hours=24):
             reputation.current_streak_days += 1
             if reputation.current_streak_days > reputation.longest_streak_days:
                 reputation.longest_streak_days = reputation.current_streak_days
-        elif not last_task_date or (today - last_task_date).days > 1:
-            # Streak broken, restart
-            reputation.current_streak_days = 1
         
-        reputation.last_task_date = datetime.utcnow()
+        reputation.last_task_date = now
         
         await db.commit()
 

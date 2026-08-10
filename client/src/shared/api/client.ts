@@ -59,8 +59,10 @@ async function refreshAccessToken(): Promise<boolean> {
 
 export async function publicApiFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const isFormData = options.body instanceof FormData;
+  const timezoneOffset = -new Date().getTimezoneOffset();
   const headers: HeadersInit = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    'X-Timezone-Offset': String(timezoneOffset),
     ...options.headers,
   };
 
@@ -82,9 +84,11 @@ export async function publicApiFetch(path: string, options: RequestInit = {}): P
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const token = await getToken();
   const isFormData = options.body instanceof FormData;
+  const timezoneOffset = -new Date().getTimezoneOffset(); // minutes ahead of UTC; negative if behind
   const headers: HeadersInit = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'X-Timezone-Offset': String(timezoneOffset),
     ...options.headers,
   };
 

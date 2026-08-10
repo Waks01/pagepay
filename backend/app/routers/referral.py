@@ -6,8 +6,8 @@ POST /referral/validate  — referee completed first session → award points
 """
 
 import logging
-from datetime import date, datetime
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date, datetime, timedelta, timezone
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,20 @@ REFERRER_REWARD = settings.referral_referrer_reward
 REFEREE_REWARD = settings.referral_referee_reward
 DAILY_CAP = settings.referral_daily_cap
 APP_BASE_URL = settings.referral_app_base_url
+
+
+def _get_timezone_offset_minutes(request: Request) -> int:
+    """Read client timezone offset from request header."""
+    raw = request.headers.get("X-Timezone-Offset", "0")
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _user_local_date_from_utc(utc_now: datetime, offset_minutes: int) -> date:
+    """Compute the user's local calendar date from a UTC datetime and offset."""
+    return (utc_now + timedelta(minutes=offset_minutes)).date()
 
 
 @router.post("/generate", response_model=ReferralGenerateResponse)
@@ -90,6 +104,7 @@ async def get_referral_stats(
 
 @router.post("/validate", response_model=ReferralValidateResponse)
 async def validate_referral(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -121,8 +136,16 @@ async def validate_referral(
     if referral and referral.reward_granted:
         return ReferralValidateResponse(rewarded=False, referrer_points=0, referee_points=0, message="Already rewarded")
 
-    today = date.today()
-    if referrer.referrals_today_reset_at is None or referrer.referrals_today_reset_at.date() < today:
+    utc_now = datetime.now(timezone.utc)
+    offset = _get_timezone_offset_minutes(request)
+    user_local_today = _user_local_date_from_utc(utc_now, offset)
+    user_local_reset_date = (
+        _user_local_date_from_utc(referrer.referrals_today_reset_at, offset)
+        if referrer.referrals_today_reset_at
+        else None
+    )
+
+    if user_local_reset_date is None or user_local_reset_date < user_local_today:
         referrer.referrals_today_count = 0
         referrer.referrals_today_reset_at = datetime.utcnow()
 
