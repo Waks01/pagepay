@@ -613,6 +613,7 @@ async def withdraw(
         new_balance_points=user_row.points_balance,
         fee_kobo=fee_kobo,
         amount_kobo=payload.amount_kobo,
+        amount_points=kobo_to_points(payload.amount_kobo),
     )
 
 

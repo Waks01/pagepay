@@ -261,12 +261,18 @@ export default function TransactionDetailScreen() {
             <View style={styles.pointsRow}>
               <Text style={[styles.pointsLabel, { color: tokens.inkMuted }]}>Amount</Text>
               <Text style={[styles.pointsValue, { color: d.status === 'failed' ? tokens.signal : tokens.mint }]}>
+                −{formatKobo(d.amount_kobo)}
+              </Text>
+            </View>
+            <View style={styles.pointsRow}>
+              <Text style={[styles.pointsLabel, { color: tokens.inkMuted }]}>Points debited</Text>
+              <Text style={[styles.pointsValue, { color: tokens.ink }]}>
                 −{formatPoints(d.amount_kobo)} {t('wallet.points_suffix', { defaultValue: 'pts' })}
               </Text>
             </View>
 
             {d.fee_kobo > 0 && renderDetailRow('Fee', `${formatKobo(d.fee_kobo)} (${formatPoints(d.fee_kobo)} pts)`)}
-            {renderDetailRow('Total debited', `${formatPoints(netKobo)} pts`)}
+            {renderDetailRow('Total debited', `${formatPoints(d.amount_kobo + d.fee_kobo)} pts`)}
             {d.balance_after_debit > 0 && renderDetailRow('Balance after', `${formatPoints(d.balance_after_debit)} pts`)}
             {renderDetailRow('Status', d.status)}
             {d.reason && renderDetailRow('Reason', d.reason)}

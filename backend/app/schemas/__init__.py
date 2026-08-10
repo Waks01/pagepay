@@ -699,6 +699,7 @@ class WithdrawalResponse(BaseModel):
     new_balance_points: int
     fee_kobo: int
     amount_kobo: int
+    amount_points: int
 
 
 # ── Phase 3: Study / AI Exam Prep ────────────────────────────────────

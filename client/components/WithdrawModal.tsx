@@ -15,6 +15,9 @@ import { apiFetch } from '@/src/shared/api/client';
 import {
   formatKobo,
   previewWithdrawalFeeKobo,
+  pointsToNairaString,
+  koboToPoints,
+  POINTS_PER_NAIRA_VALUE,
 } from '@/src/shared/lib/money';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
@@ -28,11 +31,12 @@ type WithdrawalResponse = {
   new_balance_points: number;
   fee_kobo: number;
   amount_kobo: number;
+  amount_points: number;
 };
 
 type WithdrawModalProps = {
   visible: boolean;
-  /** User's current points balance (1 pt = 1 kobo). */
+  /** User's current points balance. */
   balancePoints: number;
   /** Linked payout account, or null when none. */
   payoutAccount: PayoutAccount | null;
@@ -92,22 +96,25 @@ export function WithdrawModal({
   // open so a half-completed form doesn't carry over.
   useEffect(() => {
     if (!visible) return;
-    const prefilled = Math.max(0, balancePoints - PREVIEW_FEE_KOBO);
-    setAmountText(prefilled > 0 ? String(prefilled) : '');
+    const maxPoints = Math.max(0, balancePoints - koboToPoints(PREVIEW_FEE_KOBO));
+    const maxNaira = Math.round(maxPoints / POINTS_PER_NAIRA_VALUE);
+    setAmountText(maxNaira > 0 ? String(maxNaira) : '');
     setSubmitState({ kind: 'idle' });
   }, [visible, balancePoints]);
 
-  const amountKobo = (() => {
+  const amountNaira = (() => {
     const n = parseInt(amountText, 10);
     return Number.isFinite(n) && n > 0 ? n : 0;
   })();
+
+  const amountKobo = amountNaira * 100;
 
   const previewFeeKobo = amountKobo > 0 ? previewWithdrawalFeeKobo(amountKobo) : 0;
   const previewReceiveKobo = Math.max(0, amountKobo - previewFeeKobo);
   const totalDebitKobo = amountKobo + previewFeeKobo;
 
   const isBelowMin = amountKobo > 0 && amountKobo < MIN_WITHDRAWAL_KOBO;
-  const exceedsBalance = totalDebitKobo > balancePoints;
+  const exceedsBalance = koboToPoints(totalDebitKobo) > balancePoints;
   const isEmpty = amountKobo === 0;
 
   // Surface an inline error when the user-typed value violates one of the
@@ -253,7 +260,8 @@ export function WithdrawModal({
                     Status: pending — usually settles in minutes.
                   </Text>
                   <Text style={[styles.successBalance, { color: tokens.ink }]}>
-                    New balance: {submitState.data.new_balance_points.toLocaleString()} pts
+                    {submitState.data.amount_points.toLocaleString()} pts deducted · New balance:{' '}
+                    {submitState.data.new_balance_points.toLocaleString()} pts
                   </Text>
                 </View>
                 <Pressable
@@ -328,20 +336,14 @@ export function WithdrawModal({
                   </Text>
                 </View>
 
-                <Text style={[styles.section, { color: tokens.inkMuted }]}>AMOUNT (POINTS)</Text>
+                <Text style={[styles.section, { color: tokens.inkMuted }]}>AMOUNT</Text>
                 <Field
                   label=""
                   placeholder="0"
                   value={amountText}
                   onChangeText={(v) => {
-                    // Strip non-digits. We let the input be empty (so the
-                    // user can clear and retype) and parseInt defaults to
-                    // 0 for empty strings.
                     const cleaned = v.replace(/\D/g, '');
                     setAmountText(cleaned);
-                    // Drop a server-side error as soon as the user types —
-                    // a stale 400 isn't actionable once the input has
-                    // changed.
                     if (submitState.kind === 'error') {
                       setSubmitState({ kind: 'idle' });
                     }
@@ -352,9 +354,18 @@ export function WithdrawModal({
                   helper={
                     amountKobo > 0
                       ? `Fee: ${formatKobo(previewFeeKobo)} · You'll receive: ${formatKobo(previewReceiveKobo)}`
-                      : `Min ${formatKobo(MIN_WITHDRAWAL_KOBO)} per withdrawal · Balance: ${balancePoints.toLocaleString()} pts`
+                      : `Min ${formatKobo(MIN_WITHDRAWAL_KOBO)} per withdrawal · Balance: ${pointsToNairaString(balancePoints)}`
                   }
                 />
+
+                {amountKobo > 0 && (
+                  <View style={[styles.pointsBadge, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
+                    <Ionicons name="logo-bitbucket" size={14} color={tokens.mint} />
+                    <Text style={[styles.pointsBadgeText, { color: tokens.mint }]}>
+                      {koboToPoints(amountKobo).toLocaleString()} pts will be deducted
+                    </Text>
+                  </View>
+                )}
 
                 <Text style={[styles.section, { color: tokens.inkMuted }]}>YOU&apos;LL RECEIVE</Text>
                 <View
@@ -552,5 +563,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  pointsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  pointsBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
