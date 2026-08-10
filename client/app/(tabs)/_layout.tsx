@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import { PagePay } from '@/constants/theme';
@@ -19,6 +19,7 @@ import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { apiFetch } from '@/src/shared/api/client';
 import { EmailVerificationGate } from '@/src/components/EmailVerificationGate';
 import { saveLastTab } from '@/src/shared/lib/screen-memory';
+import { queryClient } from '@/src/shared/lib/queryClient';
 
 type Tokens = (typeof PagePay)['light'];
 type DrawerItem = {
@@ -71,8 +72,9 @@ export default function TabLayout() {
   }, [activeTab]);
 
   return (
-    <>
-      <Tabs
+    <QueryClientProvider client={queryClient}>
+      <>
+        <Tabs
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: tokens.mint,
@@ -160,6 +162,7 @@ export default function TabLayout() {
       {/* Email verification gate - shown when email is not verified */}
       {showEmailGate && <EmailVerificationGate />}
     </>
+    </QueryClientProvider>
   );
 }
 
@@ -414,8 +417,8 @@ function MoreDrawer({
               </TouchableOpacity>
             ))}
           </Animated.View>
-        </Pressable>
       </Pressable>
+    </Pressable>
     </Modal>
   );
 }

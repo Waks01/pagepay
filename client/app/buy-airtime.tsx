@@ -37,9 +37,25 @@ type NetworkOption = {
   name: string;
 };
 
-const AMOUNTS = [25, 50, 100, 200, 500, 1000, 2000, 5000];
+type Beneficiary = {
+  id: number;
+  name: string;
+  phone: string;
+  network: string;
+};
 
 type PurchaseState = 'idle' | 'processing' | 'success' | 'failed';
+
+const AMOUNTS = [25, 50, 100, 200, 500, 1000, 2000, 5000];
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debouncedValue;
+}
 
 export default function BuyAirtimeScreen() {
   const { t } = useTranslation();
@@ -49,7 +65,7 @@ export default function BuyAirtimeScreen() {
   const qc = useQueryClient();
 
   const [phone, setPhone] = useState('');
-  const [selectedNetworkId, setSelectedNetworkId] = useState<string | null>(null);
+  const [selectedNetworkId, setSelectedNetworkId] = useState<string | number | null>(null);
   const [detectedNetwork, setDetectedNetwork] = useState<string | null>(null);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState('');
@@ -58,6 +74,10 @@ export default function BuyAirtimeScreen() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successData, setSuccessData] = useState<AirtimeResult | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<number | null>(null);
+  const [saveAsBeneficiary, setSaveAsBeneficiary] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const networksQ = useQuery({
     queryKey: ['airtime-networks'],
@@ -65,6 +85,46 @@ export default function BuyAirtimeScreen() {
       const res = await apiFetch('/api/v1/bills/airtime/networks');
       if (!res.ok) throw new Error(t('bills.airtime.load_error'));
       return (await res.json()) as NetworkOption[];
+    },
+  });
+
+  const beneficiariesQ = useQuery({
+    queryKey: ['beneficiaries'],
+    queryFn: async () => {
+      const res = await apiFetch('/api/v1/bills/beneficiaries');
+      if (!res.ok) throw new Error('Failed to load beneficiaries');
+      return (await res.json()) as Beneficiary[];
+    },
+  });
+
+  const createBeneficiaryMutation = useMutation({
+    mutationFn: async (payload: { name: string; phone: string; network: string }) => {
+      const res = await apiFetch('/api/v1/bills/beneficiaries', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to save beneficiary');
+      }
+      return (await res.json()) as Beneficiary;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['beneficiaries'] });
+    },
+  });
+
+  const deleteBeneficiaryMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiFetch(`/api/v1/bills/beneficiaries/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete beneficiary');
+      return (await res.json()) as { deleted: boolean };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['beneficiaries'] });
+      if (selectedBeneficiaryId === deleteBeneficiaryMutation.variables) {
+        setSelectedBeneficiaryId(null);
+      }
     },
   });
 
@@ -102,6 +162,49 @@ export default function BuyAirtimeScreen() {
     } finally {
       setIsDetecting(false);
     }
+  };
+
+  const beneficiaryList = beneficiariesQ.data ?? [];
+
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
+  const filteredBeneficiaries = beneficiaryList.filter((b) => {
+    if (!debouncedSearch) return true;
+    const q = debouncedSearch.toLowerCase();
+    return b.name.toLowerCase().includes(q) || b.phone.includes(q);
+  });
+
+  const handleSelectBeneficiary = (b: Beneficiary) => {
+    setPhone(b.phone);
+    setSelectedBeneficiaryId(b.id);
+    const matched = networkList.find(n => n.name.toLowerCase() === b.network.toLowerCase());
+    if (matched) setSelectedNetworkId(matched.id);
+    setShowDropdown(false);
+    setSearchQuery('');
+  };
+
+  const handleClearBeneficiary = () => {
+    setSelectedBeneficiaryId(null);
+  };
+
+  const handleSaveBeneficiary = async () => {
+    if (!phone || phone.length !== 11 || !selectedNetworkId) return;
+    const networkName = networkList.find(n => n.id === selectedNetworkId)?.name || 'mtn';
+    const name = `Beneficiary ${beneficiaryList.length + 1}`;
+    try {
+      await createBeneficiaryMutation.mutateAsync({
+        name,
+        phone,
+        network: networkName,
+      });
+      setSaveAsBeneficiary(false);
+    } catch {
+      // Silently ignore save failures
+    }
+  };
+
+  const handleDeleteBeneficiary = async (id: number) => {
+    await deleteBeneficiaryMutation.mutateAsync(id);
   };
 
   const selectedNetwork = networkList.find(n => n.id === selectedNetworkId);
@@ -153,7 +256,10 @@ export default function BuyAirtimeScreen() {
     setErrorMessage('');
   };
 
-  const handleSuccessDone = () => {
+  const handleSuccessDone = async () => {
+    if (saveAsBeneficiary && successData && !selectedBeneficiaryId) {
+      await handleSaveBeneficiary();
+    }
     setPurchaseState('idle');
     setSuccessData(null);
     setPhone('');
@@ -161,6 +267,8 @@ export default function BuyAirtimeScreen() {
     setDetectedNetwork(null);
     setSelectedAmount(null);
     setCustomAmount('');
+    setSelectedBeneficiaryId(null);
+    setSaveAsBeneficiary(false);
   };
 
   if (purchaseState === 'success' && successData) {
@@ -198,6 +306,27 @@ export default function BuyAirtimeScreen() {
             </Text>
           </View>
         </SectionCard>
+
+        {selectedBeneficiaryId === null && (
+          <View style={[styles.savePrompt, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.savePromptTitle, { color: tokens.ink }]}>Save this number?</Text>
+              <Text style={[styles.savePromptSub, { color: tokens.inkMuted }]}>
+                {successData.phone} for next time
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setSaveAsBeneficiary(!saveAsBeneficiary)}
+              style={[
+                styles.toggleTrack,
+                { backgroundColor: saveAsBeneficiary ? tokens.mint : tokens.border },
+              ]}
+            >
+              <View style={[styles.toggleThumb, { backgroundColor: '#fff' }]} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         <TouchableOpacity onPress={handleSuccessDone} style={[styles.payBtn, { backgroundColor: tokens.mint }]}>
           <Text style={[styles.payText, { color: tokens.mintText }]}>{t('common.done')}</Text>
         </TouchableOpacity>
@@ -259,6 +388,38 @@ export default function BuyAirtimeScreen() {
           <Text style={[styles.title, { color: tokens.ink }]}>{t('bills.airtime.title')}</Text>
         </View>
 
+        {/* Beneficiary chips */}
+        {beneficiaryList.length > 0 && (
+          <View style={styles.chipsRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {beneficiaryList.map((b) => {
+                const isActive = selectedBeneficiaryId === b.id;
+                return (
+                  <TouchableOpacity
+                    key={b.id}
+                    onPress={() => handleSelectBeneficiary(b)}
+                    onLongPress={() => handleDeleteBeneficiary(b.id)}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: isActive ? tokens.mintSoft : tokens.card,
+                        borderColor: isActive ? tokens.mint : tokens.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.chipText, { color: isActive ? tokens.mint : tokens.ink }]}>
+                      {b.name}
+                    </Text>
+                    <Text style={[styles.chipSub, { color: tokens.inkMuted }]}>
+                      {b.phone.slice(-4)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
         {/* SECTION 1: Phone */}
         <SectionCard label={t('bills.airtime.phone_label')}>
           <View style={{ position: 'relative' }}>
@@ -277,6 +438,14 @@ export default function BuyAirtimeScreen() {
               onChangeText={(text) => {
                 const cleaned = text.replace(/[^0-9]/g, '');
                 setPhone(cleaned);
+                setSelectedBeneficiaryId(null);
+                if (cleaned.length > 0 && cleaned.length < 11) {
+                  setSearchQuery(cleaned);
+                  setShowDropdown(true);
+                } else {
+                  setShowDropdown(false);
+                  setSearchQuery('');
+                }
                 if (cleaned.length === 11) {
                   detectNetwork(cleaned);
                 } else {
@@ -289,6 +458,30 @@ export default function BuyAirtimeScreen() {
             {phone.length === 11 && (
               <View style={styles.inputIconValid}>
                 <Ionicons name="checkmark-circle" size={20} color={tokens.mint} />
+              </View>
+            )}
+            {showDropdown && filteredBeneficiaries.length > 0 && (
+              <View style={[styles.dropdown, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+                {filteredBeneficiaries.map((b) => (
+                  <TouchableOpacity
+                    key={b.id}
+                    onPress={() => handleSelectBeneficiary(b)}
+                    style={[styles.dropdownRow, { borderBottomColor: tokens.border }]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.dropdownName, { color: tokens.ink }]}>{b.name}</Text>
+                      <Text style={[styles.dropdownPhone, { color: tokens.inkMuted }]}>
+                        {b.phone} · {b.network.toUpperCase()}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteBeneficiary(b.id)}
+                      style={styles.dropdownDelete}
+                    >
+                      <Ionicons name="close-circle" size={18} color={tokens.signal} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
           </View>
@@ -466,4 +659,88 @@ const styles = StyleSheet.create({
   processingTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'SpaceGrotesk_700Bold' },
   processingSub: { fontSize: 14, textAlign: 'center', lineHeight: 22 },
   skeletonGroup: { marginTop: 24, alignItems: 'center' },
+  chipsRow: {
+    minHeight: 44,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  chipSub: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  dropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    maxHeight: 200,
+    zIndex: 10,
+  },
+  dropdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  dropdownName: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  dropdownPhone: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  dropdownDelete: {
+    padding: 4,
+  },
+  savePrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  savePromptTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  savePromptSub: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  toggleTrack: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
 });

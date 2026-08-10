@@ -1,7 +1,8 @@
 ﻿import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { queryClient } from '@/src/shared/lib/queryClient';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFonts, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import { View } from 'react-native';
@@ -24,8 +25,6 @@ import { PaystackProvider } from 'expo-paystack';
 import '@/src/lib/i18n';
 
 const PAYSTACK_PUBLIC_KEY = Constants.expoConfig?.extra?.paystackPublicKey || process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY || '';
-
-const queryClient = new QueryClient();
 
 export const unstable_settings = {
   // Intentionally no anchor — the auth gate in useAuthGate controls

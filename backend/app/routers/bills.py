@@ -29,7 +29,7 @@ from sqlalchemy import select, update
 
 from app.config import settings
 from app.database import get_db
-from app.models import BillTransaction, User
+from app.models import BillTransaction, User, Beneficiary
 from app.routers.auth import get_current_user
 from app.schemas import (
     AirtimePurchaseRequest,
@@ -40,6 +40,9 @@ from app.schemas import (
     BillsPurchaseResponse,
     BillTransactionOut,
     BillsHistoryResponse,
+    BeneficiaryOut,
+    BeneficiaryCreate,
+    BeneficiaryDeleteResponse,
 )
 from app.services.money import kobo_to_points
 from app.services.peyflex import get_client as get_peyflex_client, get_public_client as get_peyflex_public_client, PeyflexError
@@ -1547,4 +1550,78 @@ async def get_bills_history(
         limit=limit,
         service=service,
     )
+
+
+# ── Beneficiaries ────────────────────────────────────────────────────
+
+@router.get("/beneficiaries", response_model=list[BeneficiaryOut])
+async def list_beneficiaries(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    q: str | None = Query(default=None, description="Search by name or phone"),
+) -> list[BeneficiaryOut]:
+    """List saved beneficiaries for the current user, optionally filtered by search query."""
+    query = select(Beneficiary).where(Beneficiary.user_id == current_user.id)
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.where(
+            (Beneficiary.name.ilike(like)) | (Beneficiary.phone.ilike(like))
+        )
+    query = query.order_by(Beneficiary.created_at.desc())
+    result = await db.execute(query)
+    rows = result.scalars().all()
+    return [BeneficiaryOut.model_validate(row) for row in rows]
+
+
+@router.post("/beneficiaries", response_model=BeneficiaryOut)
+async def create_beneficiary(
+    payload: BeneficiaryCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BeneficiaryOut:
+    """Save a new beneficiary for quick-repeat purchases."""
+    existing = (
+        await db.execute(
+            select(Beneficiary).where(
+                Beneficiary.user_id == current_user.id,
+                Beneficiary.phone == payload.phone,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=409, detail="Beneficiary already exists")
+
+    beneficiary = Beneficiary(
+        user_id=current_user.id,
+        name=payload.name.strip(),
+        phone=payload.phone.strip(),
+        network=payload.network.strip().lower(),
+    )
+    db.add(beneficiary)
+    await db.commit()
+    await db.refresh(beneficiary)
+    return BeneficiaryOut.model_validate(beneficiary)
+
+
+@router.delete("/beneficiaries/{beneficiary_id}", response_model=BeneficiaryDeleteResponse)
+async def delete_beneficiary(
+    beneficiary_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BeneficiaryDeleteResponse:
+    """Remove a saved beneficiary."""
+    row = (
+        await db.execute(
+            select(Beneficiary).where(
+                Beneficiary.id == beneficiary_id,
+                Beneficiary.user_id == current_user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Beneficiary not found")
+
+    await db.delete(row)
+    await db.commit()
+    return BeneficiaryDeleteResponse(deleted=True)
 

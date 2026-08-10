@@ -192,6 +192,27 @@ class BillsHistoryResponse(BaseModel):
     service: str | None = None
 
 
+class BeneficiaryOut(BaseModel):
+    """Saved beneficiary summary."""
+    id: int
+    name: str
+    phone: str
+    network: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BeneficiaryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    phone: str = Field(min_length=10, max_length=20)
+    network: str = Field(min_length=1, max_length=20)
+
+
+class BeneficiaryDeleteResponse(BaseModel):
+    deleted: bool
+
+
 class ContentItem(BaseModel):
     id: int
     title: str

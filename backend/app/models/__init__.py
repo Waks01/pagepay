@@ -1541,6 +1541,27 @@ class WorkCommentLike(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class Beneficiary(Base):
+    """Saved airtime/data beneficiary for quick-repeat purchases.
+
+    One row per saved contact. `user_id` + `phone` is UNIQUE so the
+    same number can't be saved twice under the same account.
+    """
+
+    __tablename__ = "beneficiaries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    phone: Mapped[str] = mapped_column(String(20), nullable=False)
+    network: Mapped[str] = mapped_column(String(20), nullable=False, default="mtn")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "phone", name="uq_beneficiary_user_phone"),
+    )
+
+
 class WorkShare(Base):
     """A share event — logged for analytics only.
 
