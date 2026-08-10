@@ -6,11 +6,12 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { queryClient } from '@/src/shared/lib/queryClient';
 import { PagePay } from '@/constants/theme';
 import {
   SectionCard,
@@ -62,7 +63,6 @@ export default function BuyAirtimeScreen() {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const insets = useSafeAreaInsets();
-  const qc = useQueryClient();
 
   const [phone, setPhone] = useState('');
   const [selectedNetworkId, setSelectedNetworkId] = useState<string | number | null>(null);
@@ -110,7 +110,7 @@ export default function BuyAirtimeScreen() {
       return (await res.json()) as Beneficiary;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['beneficiaries'] });
+      queryClient.invalidateQueries({ queryKey: ['beneficiaries'] });
     },
   });
 
@@ -121,7 +121,7 @@ export default function BuyAirtimeScreen() {
       return (await res.json()) as { deleted: boolean };
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['beneficiaries'] });
+      queryClient.invalidateQueries({ queryKey: ['beneficiaries'] });
       if (selectedBeneficiaryId === deleteBeneficiaryMutation.variables) {
         setSelectedBeneficiaryId(null);
       }
@@ -232,7 +232,7 @@ export default function BuyAirtimeScreen() {
     onSuccess: (data) => {
       setSuccessData(data);
       setPurchaseState('success');
-      qc.invalidateQueries({ queryKey: ['me'] });
+      queryClient.invalidateQueries({ queryKey: ['me'] });
     },
     onError: (error: Error) => {
       setErrorMessage(error.message);

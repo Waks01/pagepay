@@ -6,11 +6,12 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { queryClient } from '@/src/shared/lib/queryClient';
 import { PagePay } from '@/constants/theme';
 import { PagePaySpinner } from '@/components/PagePaySpinner';
 
@@ -27,7 +28,6 @@ export default function BeneficiariesScreen() {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const insets = useSafeAreaInsets();
-  const qc = useQueryClient();
 
   const [search, setSearch] = useState('');
   const [name, setName] = useState('');
@@ -58,7 +58,7 @@ export default function BeneficiariesScreen() {
       return (await res.json()) as Beneficiary;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['beneficiaries'] });
+      queryClient.invalidateQueries({ queryKey: ['beneficiaries'] });
       setName('');
       setPhone('');
       setNetwork('mtn');
@@ -73,7 +73,7 @@ export default function BeneficiariesScreen() {
       return (await res.json()) as { deleted: boolean };
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['beneficiaries'] });
+      queryClient.invalidateQueries({ queryKey: ['beneficiaries'] });
     },
   });
 

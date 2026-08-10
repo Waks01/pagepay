@@ -1,7 +1,7 @@
 ﻿import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/src/shared/lib/queryClient';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFonts, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
@@ -139,7 +139,6 @@ function AdsBootstrapComponent() {
 export default function RootLayout() {
   const colorScheme = useEffectiveScheme();
   const isReady = useAuthGate();
-  const qc = useQueryClient();
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_500Medium,
     SpaceGrotesk_700Bold,
@@ -187,7 +186,7 @@ export default function RootLayout() {
           connectSocket(me.id);
           onNotification((notification) => {
             console.log('In-app notification:', notification);
-            qc.invalidateQueries({ queryKey: ['notifications-unread-count'] });
+            queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
             setBannerNotifications((prev) => {
               const exists = prev.some((n) => n.id === notification.id);
               if (exists) return prev;
@@ -294,7 +293,8 @@ export default function RootLayout() {
         <Stack.Screen name="sponsor/dashboard" options={{ headerShown: false, title: 'Sponsor Dashboard' }} />
         <Stack.Screen name="sponsor/tasks/create" options={{ headerShown: false, title: 'Create Task' }} />
         <Stack.Screen name="sponsor/tasks/[id]" options={{ headerShown: false, title: 'Task Submissions' }} />
-        <Stack.Screen name="fund-wallet/success" options={{ headerShown: false, title: 'Deposit Success' }} />
+         <Stack.Screen name="fund-wallet" options={{ headerShown: false, title: 'Fund Wallet' }} />
+         <Stack.Screen name="fund-wallet/success" options={{ headerShown: false, title: 'Deposit Success' }} />
         <Stack.Screen name="billing/history" options={{ headerShown: false, title: 'Billing History' }} />
         <Stack.Screen name="billing/subscription" options={{ headerShown: false, title: 'Manage Subscription' }} />
         <Stack.Screen name="subscription/success" options={{ headerShown: false, title: 'Payment Success' }} />
