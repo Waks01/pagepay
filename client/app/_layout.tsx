@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFonts, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
+import { View } from 'react-native';
 import Constants from 'expo-constants';
 import 'react-native-reanimated';
 
@@ -258,16 +259,6 @@ export default function RootLayout() {
     });
   }, []);
 
-  if (!isReady || !fontsLoaded) {
-    // Show animated splash overlay during initialization.
-    // Native splash (expo-splash-screen) shows first, then we take over
-    // with the full animated sequence when JS loads and fonts are ready.
-    if (!splashDismissed) {
-      return <SplashOverlay onDone={() => setSplashDismissed(true)} />;
-    }
-    return null;
-  }
-
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -279,7 +270,14 @@ export default function RootLayout() {
             onPress={handleBannerPress}
           />
           <PaystackProvider publicKey={PAYSTACK_PUBLIC_KEY}>
-            <Stack>
+            {!isReady || !fontsLoaded ? (
+              <View style={{ flex: 1 }}>
+                {!splashDismissed ? (
+                  <SplashOverlay onDone={() => setSplashDismissed(true)} />
+                ) : null}
+              </View>
+            ) : (
+              <Stack>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -321,6 +319,7 @@ export default function RootLayout() {
         <Stack.Screen name="pin/setup" options={{ headerShown: false, title: 'Set PIN' }} />
         <Stack.Screen name="pin/change" options={{ headerShown: false, title: 'Change PIN' }} />
         </Stack>
+      )}
           </PaystackProvider>
         </AdSlotProvider>
         <StatusBar style="auto" />
