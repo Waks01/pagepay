@@ -47,8 +47,48 @@ export default function TabLayout() {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const { t } = useTranslation();
-  const qc = useQueryClient();
   const pathname = usePathname();
+
+  const activeTab = pathname.replace('/(tabs)/', '').split('/')[0] || 'index';
+
+  useEffect(() => {
+    saveLastTab(activeTab);
+  }, [activeTab]);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TabLayoutInner
+        drawerOpen={drawerOpen}
+        setDrawerOpen={setDrawerOpen}
+        showEmailGate={showEmailGate}
+        setShowEmailGate={setShowEmailGate}
+        tokens={tokens}
+        t={t}
+        activeTab={activeTab}
+      />
+    </QueryClientProvider>
+  );
+}
+
+function TabLayoutInner({
+  drawerOpen,
+  setDrawerOpen,
+  showEmailGate,
+  setShowEmailGate,
+  tokens,
+  t,
+  activeTab,
+}: {
+  drawerOpen: boolean;
+  setDrawerOpen: (open: boolean) => void;
+  showEmailGate: boolean;
+  setShowEmailGate: (open: boolean) => void;
+  tokens: Tokens;
+  t: (key: string) => string;
+  activeTab: string;
+}) {
+  const qc = useQueryClient();
+  const router = useRouter();
 
   const { data: me } = useQuery({
     queryKey: ['auth', 'me'],
@@ -63,18 +103,13 @@ export default function TabLayout() {
     if (me && !me.email_verified && me.email) {
       setShowEmailGate(true);
     }
-  }, [me]);
+  }, [me, setShowEmailGate]);
 
-  const activeTab = pathname.replace('/(tabs)/', '').split('/')[0] || 'index';
-
-  useEffect(() => {
-    saveLastTab(activeTab);
-  }, [activeTab]);
+  const unreadCount = (qc.getQueryData(['notifications-unread-count']) as { unread_count?: number } | undefined)?.unread_count ?? 0;
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <>
-        <Tabs
+    <>
+      <Tabs
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: tokens.mint,
@@ -162,7 +197,6 @@ export default function TabLayout() {
       {/* Email verification gate - shown when email is not verified */}
       {showEmailGate && <EmailVerificationGate />}
     </>
-    </QueryClientProvider>
   );
 }
 

@@ -12,7 +12,8 @@ import { formatKobo, formatPoints, pointsToNairaString } from '@/src/shared/lib/
 type TransactionItem =
   | { kind: 'session'; data: { id: number; type: string; points: number; description: string; date: string } }
   | { kind: 'payment'; data: { id: number; tier: string; tier_name: string; amount_kobo: number; amount_naira: number; provider: string; status: string; created_at: string; confirmed_at: string | null } }
-  | { kind: 'withdrawal'; data: { reference: string; amount_kobo: number; fee_kobo: number; status: string; reason: string | null; paystack_transfer_code: string | null; balance_after_debit: number; created_at: string | null; settled_at: string | null } };
+  | { kind: 'withdrawal'; data: { reference: string; amount_kobo: number; fee_kobo: number; status: string; reason: string | null; paystack_transfer_code: string | null; balance_after_debit: number; created_at: string | null; settled_at: string | null } }
+  | { kind: 'bill'; data: { id: number; service: string; provider: string; phone: string | null; meter_number: string | null; smartcard_number: string | null; amount_naira: number; commission_naira: number; points_earned: number; reference: string; status: string; external_ref: string | null; error_message: string | null; created_at: string; network_name?: string | null; customer_name?: string | null; token?: string | null; units?: string | null; total_cost?: number | null } };
 
 const formatDate = (iso: string | null) => {
   if (!iso) return '—';
@@ -279,26 +280,171 @@ export default function TransactionDetailScreen() {
     );
   }
 
-  return (
-    <View style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={20} color={tokens.ink} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
-            Transaction
-          </Text>
-          <View style={{ width: 36 }} />
+  if (item.kind === 'bill') {
+    const d = item.data;
+    const statusUpper = d.status ? d.status.toUpperCase() : 'UNKNOWN';
+    const isSuccess = d.status === 'success';
+    const isFailed = d.status === 'failed';
+    const subtitle = [d.service, d.network_name ? `· ${d.network_name}` : '', d.customer_name ? `· ${d.customer_name}` : ''].filter(Boolean).join(' ') || d.service;
+    const pointsValueNaira = pointsToNairaString(d.points_earned);
+
+    return (
+      <View style={{ flex: 1, backgroundColor: tokens.paper }}>
+        <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <Ionicons name="arrow-back" size={20} color={tokens.ink} />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
+              Transaction
+            </Text>
+            <View style={{ width: 36 }} />
+          </View>
         </View>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={[styles.txHero, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <View style={[styles.txStatusBadge, { backgroundColor: isSuccess ? '#E6F9F0' : isFailed ? '#FEECEC' : '#FFF7E6', borderColor: isSuccess ? '#34C759' : isFailed ? '#FF3B30' : '#FF9500' }]}>
+              <Text style={[styles.txStatusText, { color: isSuccess ? '#34C759' : isFailed ? '#FF3B30' : '#FF9500' }]}>
+                {isSuccess ? '✓ Success' : isFailed ? '✕ Failed' : '○ Pending'}
+              </Text>
+            </View>
+            <Text style={[styles.txHeroAmount, { color: tokens.ink }]}>₦{d.amount_naira.toLocaleString()}</Text>
+            <Text style={[styles.txHeroSubtitle, { color: tokens.inkMuted }]} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          </View>
+
+          {isFailed && d.error_message && (
+            <View style={[styles.txErrorBanner, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}>
+              <Text style={[styles.txErrorText, { color: tokens.signal }]}>{d.error_message}</Text>
+            </View>
+          )}
+
+          <View style={[styles.txSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text style={[styles.txSectionHeader, { color: tokens.ink }]}>📋 Order Information</Text>
+            <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+              <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Service</Text>
+              <Text style={[styles.txValue, { color: tokens.ink }]}>{d.service.charAt(0).toUpperCase() + d.service.slice(1)}</Text>
+            </View>
+            {d.network_name && (
+              <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+                <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Network</Text>
+                <Text style={[styles.txValue, { color: tokens.ink }]}>{d.network_name}</Text>
+              </View>
+            )}
+            {d.phone && (
+              <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+                <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Phone Number</Text>
+                <Text style={[styles.txValueMono, { color: tokens.ink }]}>
+                  {d.phone.slice(0, 4)}***{d.phone.slice(-4)}
+                </Text>
+              </View>
+            )}
+            {d.meter_number && (
+              <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+                <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Meter Number</Text>
+                <Text style={[styles.txValueMono, { color: tokens.ink }]}>{d.meter_number}</Text>
+              </View>
+            )}
+            {d.smartcard_number && (
+              <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+                <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Smartcard</Text>
+                <Text style={[styles.txValueMono, { color: tokens.ink }]}>{d.smartcard_number}</Text>
+              </View>
+            )}
+            {d.customer_name && (
+              <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+                <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Customer</Text>
+                <Text style={[styles.txValue, { color: tokens.ink }]}>{d.customer_name}</Text>
+              </View>
+            )}
+            <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+              <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Amount</Text>
+              <Text style={[styles.txValueHighlight, { color: tokens.mint }]}>₦{d.amount_naira.toLocaleString()}</Text>
+            </View>
+            <View style={styles.txRow}>
+              <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Commission</Text>
+              <Text style={[styles.txValue, { color: tokens.ink }]}>₦{(d.commission_naira / 100).toFixed(2)}</Text>
+            </View>
+          </View>
+
+          <View style={[styles.txSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text style={[styles.txSectionHeader, { color: tokens.ink }]}>⭐ Rewards</Text>
+            <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+              <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Points Earned</Text>
+              <Text style={[styles.txValueHighlight, { color: tokens.mint }]}>+{d.points_earned} pts</Text>
+            </View>
+            <View style={styles.txRow}>
+              <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Points Value</Text>
+              <Text style={[styles.txValue, { color: tokens.ink }]}>{pointsValueNaira}</Text>
+            </View>
+          </View>
+
+          <View style={[styles.txSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text style={[styles.txSectionHeader, { color: tokens.ink }]}>💳 Payment Information</Text>
+            <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+              <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Payment Method</Text>
+              <Text style={[styles.txValue, { color: tokens.ink }]}>Wallet Balance</Text>
+            </View>
+            <View style={styles.txRow}>
+              <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Status</Text>
+              <Text style={[styles.txValue, { color: tokens.ink }]}>{statusUpper}</Text>
+            </View>
+          </View>
+
+          <View style={[styles.txSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text style={[styles.txSectionHeader, { color: tokens.ink }]}>🔗 References</Text>
+            <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+              <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Transaction ID</Text>
+              <Text style={[styles.txValueMono, { color: tokens.ink }]}>#{d.id}</Text>
+            </View>
+            <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+              <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Reference</Text>
+              <Text style={[styles.txValueMono, { color: tokens.ink }]}>
+                {d.reference.slice(0, 16)}...
+              </Text>
+            </View>
+            {d.external_ref && (
+              <View style={styles.txRow}>
+                <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>External Ref</Text>
+                <Text style={[styles.txValueMono, { color: tokens.ink }]}>
+                  {d.external_ref.slice(0, 16)}...
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={[styles.txSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text style={[styles.txSectionHeader, { color: tokens.ink }]}>🕒 Timeline</Text>
+            <View style={[styles.txRow, { borderBottomColor: tokens.border }]}>
+              <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Created</Text>
+              <Text style={[styles.txValue, { color: tokens.ink }]}>{formatDate(d.created_at)}</Text>
+            </View>
+            <View style={styles.txRow}>
+              <Text style={[styles.txLabel, { color: tokens.inkMuted }]}>Status</Text>
+              <Text style={[styles.txValue, { color: tokens.ink }]}>{statusUpper}</Text>
+            </View>
+          </View>
+
+          <View style={styles.txActions}>
+            <TouchableOpacity style={[styles.txActionBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+              <Text style={[styles.txActionBtnText, { color: tokens.ink }]}>📤 Share Receipt</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.txActionBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+              <Text style={[styles.txActionBtnText, { color: tokens.ink }]}>💬 Support</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[styles.txBuyAgainBtn, { backgroundColor: tokens.mint }]}
+          >
+            <Text style={[styles.txBuyAgainBtnText, { color: tokens.mintText }]}>Buy Again</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
-      <View style={styles.center}>
-        <Text style={[styles.errorText, { color: tokens.inkMuted }]}>
-          Unknown transaction type
-        </Text>
-      </View>
-    </View>
-  );
+    );
+  }
 }
 
 const styles = StyleSheet.create({
@@ -426,5 +572,114 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  txHero: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  txStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  txStatusText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  txHeroAmount: {
+    fontSize: 32,
+    fontWeight: '700',
+    fontFamily: 'SpaceGrotesk_700Bold',
+    letterSpacing: -0.5,
+  },
+  txHeroSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  txErrorBanner: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    marginTop: 12,
+  },
+  txErrorText: {
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  txSection: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+    marginTop: 12,
+  },
+  txSectionHeader: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
+  txLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    flexShrink: 0,
+  },
+  txValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
+  },
+  txValueMono: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
+    fontFamily: 'monospace',
+  },
+  txValueHighlight: {
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'right',
+  },
+  txActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  txActionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    alignItems: 'center',
+  },
+  txActionBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  txBuyAgainBtn: {
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  txBuyAgainBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: 'SpaceGrotesk_700Bold',
   },
 });

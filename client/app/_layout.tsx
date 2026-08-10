@@ -303,7 +303,8 @@ export default function RootLayout() {
         <Stack.Screen name="reset-password" options={{ headerShown: false, title: 'New Password' }} />
         <Stack.Screen name="legal" options={{ headerShown: false, title: 'Legal' }} />
         <Stack.Screen name="notification/[id]" options={{ headerShown: false, title: 'Notification' }} />
-        <Stack.Screen name="buy-airtime" options={{ headerShown: false, title: 'Buy Airtime' }} />
+         <Stack.Screen name="buy-airtime" options={{ headerShown: false, title: 'Buy Airtime' }} />
+         <Stack.Screen name="beneficiaries" options={{ headerShown: false, title: 'Beneficiaries' }} />
         <Stack.Screen name="buy-data" options={{ headerShown: false, title: 'Buy Data' }} />
         <Stack.Screen name="buy-electricity" options={{ headerShown: false, title: 'Buy Electricity' }} />
         <Stack.Screen name="buy-tv" options={{ headerShown: false, title: 'Buy TV Subscription' }} />
