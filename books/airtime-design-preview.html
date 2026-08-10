@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>PagePay Design Preview</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f0f2f5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .phone-frame {
+    width: 375px;
+    height: 812px;
+    background: #F7F8FA;
+    border-radius: 40px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    border: 8px solid #1a1a1a;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .notch {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 150px;
+    height: 30px;
+    background: #1a1a1a;
+    border-radius: 0 0 20px 20px;
+    z-index: 100;
+  }
+  .screen {
+    flex: 1;
+    overflow-y: auto;
+    padding-top: 40px;
+    display: none;
+  }
+  .screen.active { display: block; }
+  .screen::-webkit-scrollbar { display: none; }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    background: #fff;
+    border-bottom: 1px solid #eee;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .back-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 20px;
+    color: #0E7C66;
+    border: none;
+    background: none;
+  }
+  .header-title {
+    flex: 1;
+    text-align: center;
+    font-size: 17px;
+    font-weight: 700;
+    color: #1a1a2e;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .header-spacer { width: 36px; }
+
+  /* Cards */
+  .section-card {
+    background: #fff;
+    border: 1px solid #E8ECEF;
+    border-radius: 14px;
+    padding: 16px;
+    margin: 12px 16px;
+  }
+  .section-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6B7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+  }
+
+  /* Inputs */
+  .input-group { position: relative; }
+  .input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1.5px solid #E5E7EB;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a2e;
+    background: #fff;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input:focus { border-color: #0E7C66; }
+  .input.valid { border-color: #0E7C66; }
+  .input::placeholder { color: #9CA3AF; }
+  .input-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+  }
+  .helper-text {
+    font-size: 12px;
+    margin-top: 6px;
+    color: #6B7280;
+  }
+  .helper-text.success { color: #0E7C66; font-weight: 600; }
+  .helper-text.error { color: #EF4444; }
+
+  /* Beneficiary Dropdown */
+  .beneficiary-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background: #fff;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    z-index: 20;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .beneficiary-dropdown.show { display: block; }
+  .beneficiary-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid #F3F4F6;
+    transition: background 0.15s;
+  }
+  .beneficiary-dropdown-item:hover { background: #F9FAFB; }
+  .beneficiary-dropdown-item:last-child { border-bottom: none; }
+  .beneficiary-dropdown-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #F0FDF6;
+    color: #0E7C66;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .beneficiary-dropdown-info { flex: 1; }
+  .beneficiary-dropdown-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a2e;
+  }
+  .beneficiary-dropdown-phone {
+    font-size: 12px;
+    color: #6B7280;
+  }
+  .beneficiary-dropdown-network {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: #F3F4F6;
+    color: #6B7280;
+  }
+  .beneficiary-dropdown-hint {
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #9CA3AF;
+    text-align: center;
+  }
+  .beneficiary-dropdown-actions {
+    display: flex;
+    gap: 8px;
+    padding: 8px 14px 12px;
+  }
+  .beneficiary-dropdown-action {
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+    background: #fff;
+    color: #374151;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+  }
+  .beneficiary-dropdown-action.primary {
+    background: #0E7C66;
+    color: #fff;
+    border-color: #0E7C66;
+  }
+  .beneficiary-header-action {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+    background: #fff;
+    color: #374151;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Beneficiary Chips */
+  .beneficiary-chips-header {
+    padding: 8px 16px 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6B7280;
+    display: none;
+  }
+  .beneficiary-chips-header.show { display: block; }
+</style>
+  .beneficiary-chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 0 8px 0;
+    margin-bottom: 8px;
+  }
+  .beneficiary-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #F0FDF6;
+    border: 1.5px solid #0E7C66;
+    border-radius: 24px;
+    padding: 8px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .beneficiary-chip:hover, .beneficiary-chip.selected {
+    background: #0E7C66;
+    color: #fff;
+  }
+  .beneficiary-chip .chip-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #0E7C66;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .beneficiary-chip:hover .chip-avatar, .beneficiary-chip.selected .chip-avatar {
+    background: #fff;
+    color: #0E7C66;
+  }
+  .chip-name { font-size: 13px; font-weight: 600; }
+  .chip-number { font-size: 11px; opacity: 0.8; }
+  .chip-delete {
+    font-size: 16px;
+    margin-left: 4px;
+    opacity: 0.6;
+  }
+  .beneficiary-chip:hover .chip-delete { opacity: 1; color: #fff; }
+
+  /* Network Picker */
+  .network-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .network-card {
+    padding: 12px 8px;
+    border: 1.5px solid #E5E7EB;
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    background: #fff;
+    transition: all 0.2s;
+  }
+  .network-card.active {
+    border-color: #0E7C66;
+    background: #F0FDF6;
+  }
+  .network-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin: 0 auto 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 800;
+  }
+  .network-name { font-size: 12px; font-weight: 600; color: #374151; }
+
+  /* Amount Grid */
+  .amount-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .amount-card {
+    padding: 14px 8px;
+    border: 1.5px solid #E5E7EB;
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    background: #fff;
+    position: relative;
+    transition: all 0.2s;
+  }
+  .amount-card.active {
+    border-color: #0E7C66;
+    background: #F0FDF6;
+  }
+  .amount-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a1a2e;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .amount-pts {
+    font-size: 11px;
+    font-weight: 600;
+    color: #0E7C66;
+    margin-top: 2px;
+  }
+  .amount-check {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #0E7C66;
+    color: #fff;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Save Beneficiary Toggle */
+  .save-beneficiary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #FFFBEB;
+    border: 1px solid #FCD34D;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin: 0 16px 12px;
+  }
+  .save-beneficiary-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .save-icon {
+    font-size: 20px;
+  }
+  .save-text { font-size: 14px; font-weight: 600; color: #374151; }
+  .save-sub { font-size: 11px; color: #6B7280; }
+  .toggle {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    background: #D1D5DB;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle.on { background: #0E7C66; }
+  .toggle-knob {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .toggle.on .toggle-knob { transform: translateX(20px); }
+
+  /* Save Modal */
+  .modal-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 50;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-sheet {
+    background: #fff;
+    border-radius: 24px 24px 0 0;
+    padding: 24px 20px 32px;
+    width: 100%;
+    animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .modal-handle {
+    width: 36px;
+    height: 4px;
+    background: #E5E7EB;
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+  .modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    width: calc(100% - 32px);
+    margin: 0 16px 16px;
+    padding: 16px;
+    background: #0E7C66;
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-primary:disabled {
+    background: #D1D5DB;
+    cursor: not-allowed;
+  }
+  .btn-secondary {
+    padding: 12px 24px;
+    background: #fff;
+    color: #0E7C66;
+    border: 1.5px solid #0E7C66;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* Transaction Detail */
+  .tx-hero {
+    background: linear-gradient(135deg, #0E7C66 0%, #14B8A6 100%);
+    color: #fff;
+    padding: 24px 20px;
+    text-align: center;
+  }
+  .tx-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+  }
+  .tx-status-badge.success { background: rgba(255,255,255,0.2); }
+  .tx-status-badge.pending { background: rgba(255,255,255,0.2); }
+  .tx-status-badge.failed { background: rgba(239,68,68,0.3); }
+  .tx-amount {
+    font-size: 36px;
+    font-weight: 700;
+    font-family: 'Space Grotesk', sans-serif;
+    margin: 8px 0 4px;
+  }
+  .tx-subtitle {
+    font-size: 14px;
+    opacity: 0.85;
+  }
+  .tx-section {
+    background: #fff;
+    border: 1px solid #E5E7EB;
+    border-radius: 14px;
+    margin: 12px 16px;
+    overflow: hidden;
+  }
+  .tx-section-header {
+    padding: 14px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #6B7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #F3F4F6;
+    background: #F9FAFB;
+  }
+  .tx-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 14px 16px;
+    border-bottom: 1px solid #F3F4F6;
+  }
+  .tx-row:last-child { border-bottom: none; }
+  .tx-label {
+    font-size: 14px;
+    color: #6B7280;
+    font-weight: 500;
+  }
+  .tx-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a2e;
+    text-align: right;
+    max-width: 60%;
+    word-break: break-word;
+  }
+  .tx-value.mono {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #0E7C66;
+  }
+  .tx-value.highlight {
+    color: #0E7C66;
+    font-size: 16px;
+  }
+  .tx-divider {
+    height: 8px;
+    background: #F3F4F6;
+  }
+  .tx-actions {
+    display: flex;
+    gap: 10px;
+    padding: 16px;
+  }
+  .tx-action-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1.5px solid #E5E7EB;
+    background: #fff;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  /* Success State */
+  .success-view {
+    text-align: center;
+    padding: 40px 24px;
+  }
+  .success-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: #F0FDF6;
+    border: 3px solid #0E7C66;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 36px;
+    color: #0E7C66;
+  }
+  .success-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 8px;
+  }
+  .success-sub {
+    font-size: 14px;
+    color: #6B7280;
+    margin-bottom: 24px;
+  }
+
+  /* Bottom Nav */
+  .bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0 20px;
+    background: #fff;
+    border-top: 1px solid #eee;
+  }
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    color: #9CA3AF;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .nav-item.active { color: #0E7C66; }
+  .nav-icon { font-size: 22px; }
+
+  /* Tab Switcher for Preview */
+  .preview-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .preview-tab {
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1.5px solid #ddd;
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+  }
+  .preview-tab.active {
+    background: #0E7C66;
+    color: #fff;
+    border-color: #0E7C66;
+  }
+  .page-title {
+    text-align: center;
+    color: #fff;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .page-subtitle {
+    text-align: center;
+    color: rgba(255,255,255,0.7);
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  /* Beneficiaries List Screen */
+  .beneficiary-list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: #fff;
+    border-bottom: 1px solid #F3F4F6;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  .beneficiary-list-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #F0FDF6;
+    color: #0E7C66;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .beneficiary-list-info { flex: 1; }
+  .beneficiary-list-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a2e;
+  }
+  .beneficiary-list-phone {
+    font-size: 13px;
+    color: #6B7280;
+    margin-top: 2px;
+  }
+  .beneficiary-list-network {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: #F3F4F6;
+    color: #6B7280;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: #9CA3AF;
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 6px;
+  }
+  .empty-text { font-size: 13px; }
+
+  .fab {
+    position: absolute;
+    bottom: 80px;
+    right: 16px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #0E7C66;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(14,124,102,0.4);
+    border: none;
+  }
+
+  /* Earn badge */
+  .earn-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #F0FDF6;
+    color: #0E7C66;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid #CCFBF1;
+  }
+
+  /* Confirmation modal */
+  .confirm-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 50;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .confirm-overlay.show { display: flex; }
+  .confirm-card {
+    background: #fff;
+    border-radius: 20px;
+    padding: 24px;
+    width: 100%;
+    max-width: 320px;
+  }
+  .confirm-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .confirm-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #F3F4F6;
+    font-size: 14px;
+  }
+  .confirm-label { color: #6B7280; }
+  .confirm-value { font-weight: 600; color: #1a1a2e; }
+  .confirm-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .confirm-cancel {
+    flex: 1;
+    padding: 12px;
+    border: 1.5px solid #E5E7EB;
+    border-radius: 12px;
+    background: #fff;
+    color: #374151;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .confirm-ok {
+    flex: 1;
+    padding: 12px;
+    background: #0E7C66;
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .tx-info-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border-bottom: 1px solid #F3F4F6;
+  }
+  .tx-info-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+  }
+  .tx-info-content { flex: 1; }
+  .tx-info-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a2e;
+  }
+  .tx-info-date {
+    font-size: 12px;
+    color: #9CA3AF;
+    margin-top: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div style="max-width: 420px; width: 100%;">
+  <div class="page-title">PagePay Design Preview</div>
+  <div class="page-subtitle">Buy Airtime + Transaction Detail + Beneficiaries</div>
+
+  <div class="preview-tabs">
+    <button class="preview-tab active" onclick="showScreen('buy', this)">Buy Airtime</button>
+    <button class="preview-tab" onclick="showScreen('tx-success', this)">Tx Success</button>
+    <button class="preview-tab" onclick="showScreen('tx-detail', this)">Tx Detail</button>
+    <button class="preview-tab" onclick="showScreen('beneficiaries', this)">Beneficiaries</button>
+  </div>
+
+  <div class="phone-frame">
+    <div class="notch"></div>
+
+    <!-- ==================== BUY AIRTIME SCREEN ==================== -->
+    <div id="screen-buy" class="screen active">
+      <div class="header">
+        <button class="back-btn">‹</button>
+        <div class="header-title">Buy Airtime</div>
+        <button class="back-btn" onclick="showScreen('beneficiaries', document.querySelectorAll('.preview-tab')[3])" style="font-size: 16px;">👥</button>
+      </div>
+
+      <!-- Beneficiary Chips Header (shown when phone input is empty and focused) -->
+      <div id="beneficiary-chips-header" class="beneficiary-chips-header">
+        Quick select — tap a beneficiary to fill:
+      </div>
+      <!-- Beneficiary Chips (shown when phone is empty or typing) -->
+      <div id="beneficiary-chips" class="beneficiary-chips" style="padding: 4px 16px 8px; display: none;">
+        <div class="beneficiary-chip" onclick="selectBeneficiary('Mum', '08012345678', 'MTN')">
+          <div class="chip-avatar">M</div>
+          <div>
+            <div class="chip-name">Mum</div>
+            <div class="chip-number">0801***5678</div>
+          </div>
+        </div>
+        <div class="beneficiary-chip" onclick="selectBeneficiary('Dad', '09098765432', 'Airtel')">
+          <div class="chip-avatar">D</div>
+          <div>
+            <div class="chip-name">Dad</div>
+            <div class="chip-number">0909***5432</div>
+          </div>
+        </div>
+        <div class="beneficiary-chip" onclick="selectBeneficiary('Office', '08123456789', 'GLO')">
+          <div class="chip-avatar">O</div>
+          <div>
+            <div class="chip-name">Office</div>
+            <div class="chip-number">0812***6789</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phone Section -->
+      <div class="section-card" style="position: relative;">
+        <div class="section-label">📱 Phone Number</div>
+        <div class="input-group">
+          <input type="tel" id="phone-input" class="input" placeholder="08012345678" maxlength="11" oninput="onPhoneInput(this)" onfocus="onPhoneFocus()" onblur="onPhoneBlur()">
+          <span id="phone-check" class="input-icon" style="display:none; color: #0E7C66;">✓</span>
+        </div>
+        <div id="phone-helper" class="helper-text">Enter 11-digit phone number</div>
+
+        <!-- Beneficiary Autocomplete Dropdown -->
+        <div id="beneficiary-dropdown" class="beneficiary-dropdown">
+          <div id="beneficiary-dropdown-content"></div>
+        </div>
+      </div>
+
+      <!-- Save Beneficiary Toggle -->
+      <div class="save-beneficiary">
+        <div class="save-beneficiary-info">
+          <span class="save-icon">⭐</span>
+          <div>
+            <div class="save-text">Save as Beneficiary</div>
+            <div class="save-sub">Quick access next time</div>
+          </div>
+        </div>
+        <div id="save-toggle" class="toggle" onclick="toggleSaveBeneficiary()">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+
+      <!-- Network Section -->
+      <div class="section-card">
+        <div class="section-label">📡 Select Network</div>
+        <div class="network-grid">
+          <div class="network-card active" onclick="selectNetwork(this, 'mtn')">
+            <div class="network-logo" style="background: #FFD700; color: #1a1a2e;">M</div>
+            <div class="network-name">MTN</div>
+          </div>
+          <div class="network-card" onclick="selectNetwork(this, 'airtel')">
+            <div class="network-logo" style="background: #EF4444; color: #fff;">A</div>
+            <div class="network-name">Airtel</div>
+          </div>
+          <div class="network-card" onclick="selectNetwork(this, 'glo')">
+            <div class="network-logo" style="background: #10B981; color: #fff;">G</div>
+            <div class="network-name">GLO</div>
+          </div>
+          <div class="network-card" onclick="selectNetwork(this, '9mobile')">
+            <div class="network-logo" style="background: #8B5CF6; color: #fff;">9</div>
+            <div class="network-name">9mobile</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Amount Section -->
+      <div class="section-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <div class="section-label" style="margin-bottom: 0;">💰 Select Amount</div>
+          <div class="earn-badge">⭐ +54 pts</div>
+        </div>
+        <div class="amount-grid">
+          <div class="amount-card" onclick="selectAmount(this, 25)">
+            <div class="amount-value">₦25</div>
+            <div class="amount-pts">+2 pts</div>
+          </div>
+          <div class="amount-card" onclick="selectAmount(this, 50)">
+            <div class="amount-value">₦50</div>
+            <div class="amount-pts">+5 pts</div>
+          </div>
+          <div class="amount-card" onclick="selectAmount(this, 100)">
+            <div class="amount-value">₦100</div>
+            <div class="amount-pts">+10 pts</div>
+          </div>
+          <div class="amount-card" onclick="selectAmount(this, 200)">
+            <div class="amount-value">₦200</div>
+            <div class="amount-pts">+21 pts</div>
+          </div>
+          <div class="amount-card active" onclick="selectAmount(this, 500)">
+            <div class="amount-check">✓</div>
+            <div class="amount-value">₦500</div>
+            <div class="amount-pts">+54 pts</div>
+          </div>
+          <div class="amount-card" onclick="selectAmount(this, 1000)">
+            <div class="amount-value">₦1,000</div>
+            <div class="amount-pts">+107 pts</div>
+          </div>
+          <div class="amount-card" onclick="selectAmount(this, 2000)">
+            <div class="amount-value">₦2,000</div>
+            <div class="amount-pts">+214 pts</div>
+          </div>
+          <div class="amount-card" onclick="selectAmount(this, 5000)">
+            <div class="amount-value">₦5,000</div>
+            <div class="amount-pts">+536 pts</div>
+          </div>
+          <div class="amount-card" onclick="selectAmount(this, 0)">
+            <div class="amount-value" style="font-size: 12px; color: #6B7280;">Custom</div>
+            <div class="amount-pts"></div>
+          </div>
+        </div>
+        <input type="number" class="input" placeholder="Or enter custom amount" style="margin-top: 12px;" oninput="onCustomAmount(this)">
+      </div>
+
+      <!-- Buy Button -->
+      <button class="btn-primary" onclick="showConfirm()">
+        <span>🛒</span>
+        <span>Buy Airtime for ₦500</span>
+      </button>
+
+      <div style="height: 20px;"></div>
+
+      <!-- Confirm Modal -->
+      <div id="confirm-modal" class="confirm-overlay" onclick="hideConfirm(event)">
+        <div class="confirm-card" onclick="event.stopPropagation()">
+          <div class="modal-handle"></div>
+          <div class="confirm-title">Confirm Purchase</div>
+          <div class="confirm-row">
+            <span class="confirm-label">Network</span>
+            <span class="confirm-value">MTN</span>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">Amount</span>
+            <span class="confirm-value" style="color: #0E7C66; font-size: 16px;">₦500</span>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">Phone</span>
+            <span class="confirm-value">0803****678</span>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">Points</span>
+            <span class="confirm-value" style="color: #0E7C66;">+54 pts</span>
+          </div>
+          <div class="confirm-actions">
+            <button class="confirm-cancel" onclick="hideConfirm()">Cancel</button>
+            <button class="confirm-ok" onclick="confirmPurchase()">Confirm</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Save Beneficiary Modal -->
+      <div id="save-modal" class="modal-overlay" onclick="hideSaveModal(event)">
+        <div class="modal-sheet" onclick="event.stopPropagation()">
+          <div class="modal-handle"></div>
+          <div class="modal-title">Save Beneficiary</div>
+          <div class="input-group">
+            <input type="text" id="beneficiary-name" class="input" placeholder="Name (e.g. Mum, Office)">
+          </div>
+          <div style="margin-top: 12px;">
+            <div class="section-label" style="margin-bottom: 8px;">Saved to:</div>
+            <div style="font-size: 14px; color: #374151; font-weight: 600;">0803****678</div>
+            <div style="font-size: 12px; color: #6B7280;">MTN Nigeria</div>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button class="confirm-cancel" style="flex: 1;" onclick="hideSaveModal()">Cancel</button>
+            <button class="confirm-ok" style="flex: 1;" onclick="saveBeneficiary()">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TX SUCCESS SCREEN ==================== -->
+    <div id="screen-tx-success" class="screen">
+      <div class="success-view">
+        <div class="success-icon">✓</div>
+        <div class="success-title">Airtime Purchased!</div>
+        <div class="success-sub">Your transaction was successful</div>
+
+        <div class="section-card" style="text-align: left;">
+          <div class="tx-row">
+            <span class="tx-label">Network</span>
+            <span class="tx-value">MTN</span>
+          </div>
+          <div class="tx-row">
+            <span class="tx-label">Amount</span>
+            <span class="tx-value" style="color: #0E7C66; font-weight: 700;">₦500</span>
+          </div>
+          <div class="tx-row">
+            <span class="tx-label">Phone</span>
+            <span class="tx-value">0803****678</span>
+          </div>
+          <div class="tx-row">
+            <span class="tx-label">Points Earned</span>
+            <span class="tx-value" style="color: #0E7C66;">+54 pts</span>
+          </div>
+          <div class="tx-row">
+            <span class="tx-label">Reference</span>
+            <span class="tx-value mono">PGHV482910...</span>
+          </div>
+          <div class="tx-row">
+            <span class="tx-label">Transaction ID</span>
+            <span class="tx-value mono">#TXN-982341</span>
+          </div>
+          <div class="tx-row">
+            <span class="tx-label">Date & Time</span>
+            <span class="tx-value">10 Aug 2025, 2:34 PM</span>
+          </div>
+          <div class="tx-row">
+            <span class="tx-label">Status</span>
+            <span class="tx-value" style="color: #0E7C66; font-weight: 600;">✓ Successful</span>
+          </div>
+        </div>
+
+        <!-- Save as Beneficiary Prompt -->
+        <div class="section-card" style="background: #FFFBEB; border-color: #FCD34D;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <div style="font-size: 24px;">⭐</div>
+            <div>
+              <div style="font-size: 15px; font-weight: 600; color: #1a1a2e;">Save as Beneficiary?</div>
+              <div style="font-size: 12px; color: #6B7280; margin-top: 2px;">0803****678 · MTN</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button class="confirm-cancel" style="flex: 1; font-size: 13px; padding: 10px;" onclick="showScreen('buy')">Not now</button>
+            <button class="confirm-ok" style="flex: 1; font-size: 13px; padding: 10px;" onclick="saveFromSuccess()">Save Contact</button>
+          </div>
+        </div>
+
+        <button class="btn-primary" onclick="showScreen('tx-detail', document.querySelectorAll('.preview-tab')[2])">View Full Details</button>
+        <button class="btn-secondary" style="margin-top: 8px;" onclick="showScreen('buy')">Done</button>
+      </div>
+    </div>
+
+    <!-- ==================== TX DETAIL SCREEN ==================== -->
+    <div id="screen-tx-detail" class="screen">
+      <div class="header">
+        <button class="back-btn" onclick="showScreen('tx-success')">‹</button>
+        <div class="header-title">Transaction Details</div>
+        <div class="header-spacer"></div>
+      </div>
+
+      <!-- Hero Card -->
+      <div class="tx-hero">
+        <div class="tx-status-badge success">✓ Success</div>
+        <div class="tx-amount">₦500</div>
+        <div class="tx-subtitle">Airtime Purchase · MTN</div>
+      </div>
+
+      <!-- Order Info -->
+      <div class="tx-section">
+        <div class="tx-section-header">📋 Order Information</div>
+        <div class="tx-row">
+          <span class="tx-label">Service</span>
+          <span class="tx-value">Airtime</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">Network</span>
+          <span class="tx-value">MTN Nigeria</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">Phone Number</span>
+          <span class="tx-value mono">0803***678</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">Amount</span>
+          <span class="tx-value highlight">₦500.00</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">Commission</span>
+          <span class="tx-value">₦0.00</span>
+        </div>
+      </div>
+
+      <!-- Rewards -->
+      <div class="tx-section">
+        <div class="tx-section-header">⭐ Rewards</div>
+        <div class="tx-row">
+          <span class="tx-label">Points Earned</span>
+          <span class="tx-value highlight">+54 pts</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">Points Value</span>
+          <span class="tx-value">₦5.40</span>
+        </div>
+      </div>
+
+      <!-- Payment Info -->
+      <div class="tx-section">
+        <div class="tx-section-header">💳 Payment Information</div>
+        <div class="tx-row">
+          <span class="tx-label">Payment Method</span>
+          <span class="tx-value">Wallet Balance</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">Balance Before</span>
+          <span class="tx-value">₦12,450.00</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">Balance After</span>
+          <span class="tx-value" style="color: #0E7C66; font-weight: 700;">₦11,950.00</span>
+        </div>
+      </div>
+
+      <!-- Reference -->
+      <div class="tx-section">
+        <div class="tx-section-header">🔗 References</div>
+        <div class="tx-row">
+          <span class="tx-label">Transaction ID</span>
+          <span class="tx-value mono">#TXN-982341</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">Reference</span>
+          <span class="tx-value mono">PGHV482910284756...</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">External Ref</span>
+          <span class="tx-value mono">MTN-AIRTIME-9283...</span>
+        </div>
+      </div>
+
+      <!-- Timeline -->
+      <div class="tx-section">
+        <div class="tx-section-header">🕒 Timeline</div>
+        <div class="tx-row">
+          <span class="tx-label">Created</span>
+          <span class="tx-value">10 Aug 2025, 2:34:12 PM</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">Processed</span>
+          <span class="tx-value">10 Aug 2025, 2:34:45 PM</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">Delivered</span>
+          <span class="tx-value">10 Aug 2025, 2:34:58 PM</span>
+        </div>
+        <div class="tx-row">
+          <span class="tx-label">Duration</span>
+          <span class="tx-value" style="color: #0E7C66;">~46 seconds</span>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="tx-actions">
+        <button class="tx-action-btn">📤 Share Receipt</button>
+        <button class="tx-action-btn">💬 Support</button>
+      </div>
+
+      <button class="btn-primary" onclick="showScreen('buy')">Buy Again</button>
+      <div style="height: 20px;"></div>
+    </div>
+
+    <!-- ==================== BENEFICIARIES LIST SCREEN ==================== -->
+    <div id="screen-beneficiaries" class="screen" style="position: relative;">
+      <div class="header">
+        <button class="back-btn" onclick="showScreen('buy')">‹</button>
+        <div class="header-title">Beneficiaries</div>
+        <div class="header-spacer"></div>
+      </div>
+
+      <!-- Search -->
+      <div class="section-card" style="margin-top: 12px;">
+        <div class="input-group">
+          <input type="text" id="beneficiary-search" class="input" placeholder="Search by name or number..." oninput="searchBeneficiaryList(this.value)">
+        </div>
+      </div>
+
+      <div id="beneficiaries-list">
+        <div class="beneficiary-list-item" data-name="mum" data-phone="08012345678">
+          <div class="beneficiary-list-avatar">M</div>
+          <div class="beneficiary-list-info">
+            <div class="beneficiary-list-name">Mum</div>
+            <div class="beneficiary-list-phone">0801 **** 5678</div>
+          </div>
+          <div class="beneficiary-list-network">MTN</div>
+          <button class="beneficiary-delete" onclick="deleteBeneficiary(this, 'Mum')" style="background:none;border:none;color:#EF4444;font-size:18px;cursor:pointer;padding:4px 8px;">🗑️</button>
+        </div>
+        <div class="beneficiary-list-item" data-name="dad" data-phone="09098765432">
+          <div class="beneficiary-list-avatar">D</div>
+          <div class="beneficiary-list-info">
+            <div class="beneficiary-list-name">Dad</div>
+            <div class="beneficiary-list-phone">0909 **** 5432</div>
+          </div>
+          <div class="beneficiary-list-network">Airtel</div>
+          <button class="beneficiary-delete" onclick="deleteBeneficiary(this, 'Dad')" style="background:none;border:none;color:#EF4444;font-size:18px;cursor:pointer;padding:4px 8px;">🗑️</button>
+        </div>
+        <div class="beneficiary-list-item" data-name="office" data-phone="08123456789">
+          <div class="beneficiary-list-avatar">O</div>
+          <div class="beneficiary-list-info">
+            <div class="beneficiary-list-name">Office</div>
+            <div class="beneficiary-list-phone">0812 **** 6789</div>
+          </div>
+          <div class="beneficiary-list-network">GLO</div>
+          <button class="beneficiary-delete" onclick="deleteBeneficiary(this, 'Office')" style="background:none;border:none;color:#EF4444;font-size:18px;cursor:pointer;padding:4px 8px;">🗑️</button>
+        </div>
+      </div>
+
+      <div style="height: 80px;"></div>
+
+      <button class="fab" onclick="showScreen('buy', document.querySelectorAll('.preview-tab')[0])">+</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let selectedNetwork = 'mtn';
+  let selectedAmount = 500;
+  let saveBeneficiaryOn = false;
+  let beneficiaries = [
+    { name: 'Mum', phone: '08012345678', network: 'MTN' },
+    { name: 'Dad', phone: '09098765432', network: 'Airtel' },
+    { name: 'Office', phone: '08123456789', network: 'GLO' },
+  ];
+
+  function saveFromSuccess() {
+    const name = prompt('Enter a name for this beneficiary:', '');
+    if (!name) return;
+    beneficiaries.push({
+      name: name.trim(),
+      phone: '0803456678',
+      network: 'MTN'
+    });
+    alert('Beneficiary "' + name.trim() + '" saved successfully!');
+  }
+
+  function showScreen(name, el) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
+    if (el) el.classList.add('active');
+  }
+
+  function onPhoneInput(el) {
+    let val = el.value.replace(/[^0-9]/g, '');
+    el.value = val;
+    const check = document.getElementById('phone-check');
+    const helper = document.getElementById('phone-helper');
+    const chips = document.getElementById('beneficiary-chips');
+    const chipsHeader = document.getElementById('beneficiary-chips-header');
+
+    if (val.length === 11) {
+      check.style.display = 'block';
+      helper.textContent = '✓ Detected: MTN';
+      helper.className = 'helper-text success';
+      chips.style.display = 'none';
+      chipsHeader.classList.remove('show');
+      hideBeneficiaryDropdown();
+    } else if (val.length > 0) {
+      check.style.display = 'none';
+      helper.textContent = val.length + '/11 digits';
+      helper.className = 'helper-text';
+      chips.style.display = 'flex';
+      chipsHeader.classList.add('show');
+      debouncedSearchBeneficiaries(val);
+    } else {
+      check.style.display = 'none';
+      helper.textContent = 'Enter 11-digit phone number';
+      helper.className = 'helper-text';
+      chips.style.display = 'flex';
+      chipsHeader.classList.add('show');
+      hideBeneficiaryDropdown();
+    }
+  }
+
+  function onPhoneFocus() {
+    const val = document.getElementById('phone-input').value;
+    const chips = document.getElementById('beneficiary-chips');
+    const chipsHeader = document.getElementById('beneficiary-chips-header');
+    if (val.length === 0) {
+      chips.style.display = 'flex';
+      chipsHeader.classList.add('show');
+    } else if (val.length > 0 && val.length < 11) {
+      chips.style.display = 'flex';
+      chipsHeader.classList.add('show');
+      debouncedSearchBeneficiaries(val);
+    }
+  }
+
+  function onPhoneBlur() {
+    setTimeout(() => {
+      const chips = document.getElementById('beneficiary-chips');
+      const chipsHeader = document.getElementById('beneficiary-chips-header');
+      const dropdown = document.getElementById('beneficiary-dropdown');
+      chips.style.display = 'none';
+      chipsHeader.classList.remove('show');
+      dropdown.classList.remove('show');
+    }, 200);
+  }
+
+  let searchTimeout;
+  function debouncedSearchBeneficiaries(query) {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      searchBeneficiaries(query);
+    }, 300);
+  }
+
+  function searchBeneficiaries(query) {
+    const dropdown = document.getElementById('beneficiary-dropdown');
+    const content = document.getElementById('beneficiary-dropdown-content');
+    const matches = beneficiaries.filter(b => b.phone.includes(query) || b.name.toLowerCase().includes(query.toLowerCase()));
+
+    if (matches.length === 0) {
+      content.innerHTML = `
+        <div class="beneficiary-dropdown-hint">No beneficiaries found for "${query}"</div>
+        <div class="beneficiary-dropdown-actions">
+          <button class="beneficiary-dropdown-action" onclick="showScreen('beneficiaries', document.querySelectorAll('.preview-tab')[3])">Manage Beneficiaries</button>
+          <button class="beneficiary-dropdown-action primary" onclick="toggleSaveBeneficiary()">Save This Number</button>
+        </div>
+      `;
+    } else {
+      content.innerHTML = matches.map(b => `
+        <div class="beneficiary-dropdown-item" onclick="selectBeneficiary('${b.name}', '${b.phone}', '${b.network}')">
+          <div class="beneficiary-dropdown-avatar">${b.name.charAt(0).toUpperCase()}</div>
+          <div class="beneficiary-dropdown-info">
+            <div class="beneficiary-dropdown-name">${b.name}</div>
+            <div class="beneficiary-dropdown-phone">${b.phone.replace(/(\d{4})(\d{3})(\d{4})/, '$1***$3')}</div>
+          </div>
+          <div class="beneficiary-dropdown-network">${b.network}</div>
+        </div>
+      `).join('');
+    }
+    dropdown.classList.add('show');
+  }
+
+  function hideBeneficiaryDropdown() {
+    document.getElementById('beneficiary-dropdown').classList.remove('show');
+  }
+
+  function selectBeneficiary(name, phone, network) {
+    document.getElementById('phone-input').value = phone;
+    onPhoneInput(document.getElementById('phone-input'));
+    document.getElementById('beneficiary-chips').style.display = 'none';
+    document.getElementById('beneficiary-chips-header').classList.remove('show');
+    hideBeneficiaryDropdown();
+
+    // Auto-select network based on beneficiary
+    const networkMap = { 'MTN': 'mtn', 'Airtel': 'airtel', 'GLO': 'glo', '9mobile': '9mobile' };
+    const netKey = networkMap[network];
+    if (netKey) {
+      const cards = document.querySelectorAll('.network-card');
+      cards.forEach(c => {
+        c.classList.remove('active');
+        if (c.textContent.includes(network)) {
+          c.classList.add('active');
+        }
+      });
+      selectedNetwork = netKey;
+    }
+  }
+
+  function selectNetwork(el, net) {
+    document.querySelectorAll('.network-card').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    selectedNetwork = net;
+  }
+
+  function selectAmount(el, amt) {
+    document.querySelectorAll('.amount-card').forEach(c => {
+      c.classList.remove('active');
+      const check = c.querySelector('.amount-check');
+      if (check) check.remove();
+    });
+    el.classList.add('active');
+    if (amt === 0) {
+      selectedAmount = null;
+    } else {
+      selectedAmount = amt;
+    }
+  }
+
+  function onCustomAmount(el) {
+    document.querySelectorAll('.amount-card').forEach(c => {
+      c.classList.remove('active');
+      const check = c.querySelector('.amount-check');
+      if (check) check.remove();
+    });
+    selectedAmount = null;
+  }
+
+  function toggleSaveBeneficiary() {
+    saveBeneficiaryOn = !saveBeneficiaryOn;
+    const toggle = document.getElementById('save-toggle');
+    toggle.classList.toggle('on', saveBeneficiaryOn);
+    if (saveBeneficiaryOn) {
+      document.getElementById('save-modal').classList.add('show');
+      toggle.classList.remove('on');
+      saveBeneficiaryOn = false;
+    }
+  }
+
+  function hideSaveModal(e) {
+    if (e && e.target !== e.currentTarget) return;
+    document.getElementById('save-modal').classList.remove('show');
+  }
+
+  function saveBeneficiary() {
+    const name = document.getElementById('beneficiary-name').value.trim();
+    if (!name) {
+      alert('Please enter a name for this beneficiary');
+      return;
+    }
+    beneficiaries.push({
+      name: name,
+      phone: document.getElementById('phone-input').value,
+      network: selectedNetwork.toUpperCase()
+    });
+    hideSaveModal();
+    alert('Beneficiary saved successfully!');
+    document.getElementById('beneficiary-name').value = '';
+  }
+
+  function showConfirm() {
+    document.getElementById('confirm-modal').classList.add('show');
+  }
+
+  function hideConfirm(e) {
+    if (e && e.target !== e.currentTarget) return;
+    document.getElementById('confirm-modal').classList.remove('show');
+  }
+
+  function confirmPurchase() {
+    hideConfirm();
+    setTimeout(() => showScreen('tx-success'), 300);
+  }
+
+  function searchBeneficiaryList(query) {
+    const list = document.getElementById('beneficiaries-list');
+    const items = list.querySelectorAll('.beneficiary-list-item');
+    const q = query.toLowerCase();
+    items.forEach(item => {
+      const name = item.getAttribute('data-name') || '';
+      const phone = item.getAttribute('data-phone') || '';
+      const match = name.includes(q) || phone.includes(q);
+      item.style.display = match ? 'flex' : 'none';
+    });
+  }
+
+  function deleteBeneficiary(btn, name) {
+    if (!confirm('Remove "' + name + '" from beneficiaries?')) return;
+    const item = btn.closest('.beneficiary-list-item');
+    item.style.opacity = '0';
+    item.style.transform = 'translateX(100%)';
+    item.style.transition = 'all 0.3s';
+    setTimeout(() => {
+      item.remove();
+      beneficiaries = beneficiaries.filter(b => b.name !== name);
+    }, 300);
+  }
+</script>
+
+</body>
+</html>

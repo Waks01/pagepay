@@ -14,9 +14,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as WebBrowser from "expo-web-browser";
 import { useTranslation } from "react-i18next";
 import { router } from "expo-router";
+import { usePaystack } from "expo-paystack";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { PagePay } from "@/constants/theme";
@@ -38,6 +38,7 @@ export default function PremiumScreen() {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const qc = useQueryClient();
+  const { initializePayment, isLoading: paystackLoading } = usePaystack();
   const [selectedTier, setSelectedTier] = useState<string>("premium_monthly");
   const [checkingPayment, setCheckingPayment] = useState(false);
 
@@ -146,28 +147,41 @@ export default function PremiumScreen() {
       const data = await res.json();
       console.log("✅ [PREMIUM] Backend success, response:", data);
       console.log("   Payment URL:", data.payment_url);
+      console.log("   Access code:", data.access_code);
       console.log("   Reference:", data.provider_tx_ref);
 
-      if (data.payment_url) {
-        console.log("🚀 [PREMIUM] Opening payment browser...");
+      if (data.access_code) {
+        console.log("🚀 [PREMIUM] Opening in-app payment...");
 
-        // Show "Payment Initiated" alert
+        const meRes = await apiFetch("/api/v1/auth/me");
+        const meData = meRes.ok ? await meRes.json() : {};
+        const userEmail = meData?.email || "";
+
         Alert.alert(
           t("premium.payment_initiated_title"),
           t("premium.payment_initiated_body"),
           [{ text: t("premium.ok") }],
         );
 
-        const result = await WebBrowser.openBrowserAsync(data.payment_url, {
-          presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
+        await initializePayment({
+          email: userEmail,
+          amount: data.amount_kobo,
+          currency: "NGN",
+          accessCode: data.access_code,
+          reference: data.provider_tx_ref,
+          onSuccess: (tx) => {
+            console.log("✅ [PREMIUM] Payment successful in-app:", tx);
+          },
+          onCancel: () => {
+            console.log("❌ [PREMIUM] Payment cancelled by user");
+          },
+          onError: (err) => {
+            console.error("❌ [PREMIUM] Payment error:", err);
+          },
         });
 
-        console.log("👤 [PREMIUM] Browser closed, result:", result);
+        console.log("👤 [PREMIUM] In-app payment closed");
 
-        // After payment browser closes, poll for subscription activation
-        // On iOS: "dismiss" or "cancel"
-        // On Android: can also return "opened"
-        // We poll in all cases to check if payment succeeded
         console.log(
           "🔍 [PREMIUM] User returned from payment - checking status...",
         );

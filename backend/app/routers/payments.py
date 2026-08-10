@@ -200,13 +200,16 @@ async def initiate_payment(
                     )
                 
                 authorization_url = data["data"]["authorization_url"]
+                access_code = data["data"].get("access_code", "")
                 logger.info("✅ Paystack initialization successful!")
                 logger.info("   Authorization URL: %s", authorization_url)
+                logger.info("   Access code: %s", access_code)
                 logger.info("🎉 Subscription payment initiated successfully!")
                 logger.info("=" * 80)
                 
                 return PaymentInitiateResponse(
                     payment_url=authorization_url,
+                    access_code=access_code,
                     provider_tx_ref=tx_ref,
                     provider=payload.provider,
                     amount_kobo=amount_kobo,

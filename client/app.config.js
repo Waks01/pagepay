@@ -53,6 +53,7 @@ module.exports = ({ config }) => {
         // Dynamic environment-specific values
         apiUrl: process.env.EXPO_PUBLIC_API_URL || "https://pagepay-fff6.onrender.com",
         adsEnv,
+        paystackPublicKey: process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY || "",
       },
     },
   };

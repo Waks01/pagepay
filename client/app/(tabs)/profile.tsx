@@ -35,6 +35,7 @@ import {
   type ThemePref,
 } from '@/src/shared/lib/preferences';
 import { clearToken } from '@/src/shared/lib/storage';
+import { clearLastTab } from '@/src/shared/lib/screen-memory';
 import { useBiometricAuth } from '@/src/shared/hooks/use-biometric-auth';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
@@ -295,6 +296,7 @@ export default function ProfileScreen() {
     const { clearToken } = await import('@/src/shared/lib/storage');
     const biometric = usePreferences.getState().biometricEnabled;
     await clearToken(!biometric);
+    await clearLastTab();
 
     qc.clear();
     router.replace('/(auth)/' as any);

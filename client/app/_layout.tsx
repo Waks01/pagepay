@@ -2,14 +2,16 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFonts, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
+import Constants from 'expo-constants';
 import 'react-native-reanimated';
 
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { useAdsConfig } from '@/src/shared/hooks/use-ads-config';
 import { bootstrapPreferences, usePreferences } from '@/src/shared/lib/preferences';
 import { getToken } from '@/src/shared/lib/storage';
+import { getLastTab, clearLastTab } from '@/src/shared/lib/screen-memory';
 import { initializeAdMob } from '@/src/shared/lib/ads-native';
 import { setOnUnauthenticated, apiFetch } from '@/src/shared/api/client';
 import { setupNotificationListeners, registerFCMToken, handleNotificationTap } from '@/src/lib/notifications';
@@ -17,7 +19,10 @@ import { connectSocket, disconnectSocket, onNotification } from '@/src/lib/socke
 import { SplashOverlay } from '@/components/SplashOverlay';
 import { AdSlotProvider } from '@/src/shared/contexts/AdSlot';
 import BannerNotification, { type BannerNotificationItem } from '@/src/components/BannerNotification';
+import { PaystackProvider } from 'expo-paystack';
 import '@/src/lib/i18n';
+
+const PAYSTACK_PUBLIC_KEY = Constants.expoConfig?.extra?.paystackPublicKey || process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY || '';
 
 const queryClient = new QueryClient();
 
@@ -27,12 +32,16 @@ export const unstable_settings = {
   // render the tabs layout before the auth check completes.
 };
 
+const VALID_TABS = ['index', 'catalog', 'study', 'wallet', 'notifications', 'tasks', 'community', 'profile', 'premium'] as const;
+type ValidTab = (typeof VALID_TABS)[number];
+
 function useAuthGate() {
   const segments = useSegments();
   const router = useRouter();
   const [isReady, setIsReady] = useState(false);
   const onboardingCompleted = usePreferences((s) => s.onboardingCompleted);
   const hydrated = usePreferences((s) => s.hydrated);
+  const hasRestoredTab = useRef(false);
 
   // Routes that are reachable while unauthenticated. These are
   // non-auth pages that we still want to show — onboarding, the
@@ -64,7 +73,20 @@ function useAuthGate() {
           (router as any).replace('/(auth)/');
         }
       } else if (token && inAuthGroup && segments[1] !== 'verify-email-code') {
-        (router as any).replace('/(tabs)');
+        const savedTab = await getLastTab();
+        const target = (VALID_TABS as readonly string[]).includes(savedTab as ValidTab)
+          ? `/(tabs)/${savedTab}`
+          : '/(tabs)';
+        (router as any).replace(target);
+      } else if (token && segments[0] === '(tabs)' && !hasRestoredTab.current) {
+        hasRestoredTab.current = true;
+        const currentTab = (segments[1] as ValidTab) || 'index';
+        if (currentTab === 'index') {
+          const savedTab = await getLastTab();
+          if ((VALID_TABS as readonly string[]).includes(savedTab as ValidTab) && savedTab !== 'index') {
+            (router as any).replace(`/(tabs)/${savedTab}`);
+          }
+        }
       }
       setIsReady(true);
     })();
@@ -256,7 +278,8 @@ export default function RootLayout() {
             onDismiss={handleBannerDismiss}
             onPress={handleBannerPress}
           />
-          <Stack>
+          <PaystackProvider publicKey={PAYSTACK_PUBLIC_KEY}>
+            <Stack>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -298,6 +321,7 @@ export default function RootLayout() {
         <Stack.Screen name="pin/setup" options={{ headerShown: false, title: 'Set PIN' }} />
         <Stack.Screen name="pin/change" options={{ headerShown: false, title: 'Change PIN' }} />
         </Stack>
+          </PaystackProvider>
         </AdSlotProvider>
         <StatusBar style="auto" />
       </ThemeProvider>

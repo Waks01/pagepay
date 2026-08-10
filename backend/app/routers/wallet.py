@@ -180,6 +180,7 @@ class WalletDepositRequest(BaseModel):
 class WalletDepositResponse(BaseModel):
     """Paystack checkout URL response."""
     payment_url: str
+    access_code: str
     reference: str
     amount_kobo: int
     deposit_amount_kobo: int
@@ -370,6 +371,7 @@ async def initiate_wallet_deposit(
     
     return WalletDepositResponse(
         payment_url=result["authorization_url"],
+        access_code=result.get("access_code", ""),
         reference=reference,
         amount_kobo=total_amount,
         deposit_amount_kobo=payload.deposit_amount_kobo,

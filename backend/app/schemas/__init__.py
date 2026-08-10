@@ -881,6 +881,7 @@ class PaymentInitiateRequest(BaseModel):
 class PaymentInitiateResponse(BaseModel):
     """Checkout response with provider-specific URL."""
     payment_url: str
+    access_code: str
     provider_tx_ref: str
     provider: str
     amount_kobo: int

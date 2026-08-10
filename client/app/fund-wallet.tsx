@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import * as WebBrowser from "expo-web-browser";
+import { usePaystack } from "expo-paystack";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
@@ -23,6 +23,7 @@ import { PagePay } from "@/constants/theme";
 
 type DepositResponse = {
   payment_url: string;
+  access_code: string;
   reference: string;
   amount_kobo: number;
   deposit_amount_kobo: number;
@@ -36,6 +37,7 @@ export default function FundWalletScreen() {
   const tokens = PagePay[scheme];
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
+  const { initializePayment, isLoading: paystackLoading } = usePaystack();
 
   const [amount, setAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
@@ -179,24 +181,33 @@ export default function FundWalletScreen() {
       return data as DepositResponse;
     },
     onSuccess: async (data) => {
-      console.log("🚀 [DEPOSIT] Opening payment browser...");
+      console.log("🚀 [DEPOSIT] Opening in-app payment...");
       try {
-        const result = await WebBrowser.openBrowserAsync(data.payment_url, {
-          presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
+        await initializePayment({
+          email: (await apiFetch("/api/v1/auth/me").then(r => r.json())).email,
+          amount: data.amount_kobo,
+          currency: "NGN",
+          accessCode: data.access_code,
+          reference: data.reference,
+          onSuccess: (tx) => {
+            console.log("✅ [DEPOSIT] Payment successful in-app:", tx);
+          },
+          onCancel: () => {
+            console.log("❌ [DEPOSIT] Payment cancelled by user");
+          },
+          onError: (err) => {
+            console.error("❌ [DEPOSIT] Payment error:", err);
+          },
         });
 
-        console.log("👤 [DEPOSIT] Browser closed, result:", result);
+        console.log("👤 [DEPOSIT] In-app payment closed");
 
-        // After payment browser closes, poll for payment confirmation
-        // On iOS: "dismiss" or "cancel"
-        // On Android: can also return "opened"
-        // We poll in all cases to check if payment succeeded
         console.log(
           "🔍 [DEPOSIT] User returned from payment - checking status...",
         );
         pollPaymentStatus(data.reference);
       } catch (e) {
-        console.error("❌ [DEPOSIT] Failed to open payment browser:", e);
+        console.error("❌ [DEPOSIT] Failed to open in-app payment:", e);
         Alert.alert(
           t("fund_wallet.errors.deposit_failed"),
           t("fund_wallet.could_not_open_payment"),
@@ -385,16 +396,16 @@ export default function FundWalletScreen() {
         {/* Pay button */}
         <TouchableOpacity
           onPress={() => depositMutation.mutate()}
-          disabled={!canSubmit || depositMutation.isPending || checkingPayment}
+          disabled={!canSubmit || depositMutation.isPending || checkingPayment || paystackLoading}
           style={[
             styles.payBtn,
             {
               backgroundColor: canSubmit ? tokens.mint : tokens.border,
-              opacity: depositMutation.isPending || checkingPayment ? 0.7 : 1,
+              opacity: depositMutation.isPending || checkingPayment || paystackLoading ? 0.7 : 1,
             },
           ]}
         >
-          {depositMutation.isPending || checkingPayment ? (
+          {depositMutation.isPending || checkingPayment || paystackLoading ? (
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
@@ -407,6 +418,16 @@ export default function FundWalletScreen() {
                   ]}
                 >
                   {t("fund_wallet.verifying_payment")}
+                </Text>
+              )}
+              {paystackLoading && !checkingPayment && (
+                <Text
+                  style={[
+                    styles.payText,
+                    { color: tokens.mintText, fontSize: 14 },
+                  ]}
+                >
+                  Opening payment...
                 </Text>
               )}
             </View>

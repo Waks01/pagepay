@@ -1,4 +1,4 @@
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs, useRouter, usePathname } from 'expo-router';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
@@ -18,6 +18,7 @@ import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { apiFetch } from '@/src/shared/api/client';
 import { EmailVerificationGate } from '@/src/components/EmailVerificationGate';
+import { saveLastTab } from '@/src/shared/lib/screen-memory';
 
 type Tokens = (typeof PagePay)['light'];
 type DrawerItem = {
@@ -46,6 +47,7 @@ export default function TabLayout() {
   const tokens = PagePay[scheme];
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const pathname = usePathname();
 
   const { data: me } = useQuery({
     queryKey: ['auth', 'me'],
@@ -61,6 +63,12 @@ export default function TabLayout() {
       setShowEmailGate(true);
     }
   }, [me]);
+
+  const activeTab = pathname.replace('/(tabs)/', '').split('/')[0] || 'index';
+
+  useEffect(() => {
+    saveLastTab(activeTab);
+  }, [activeTab]);
 
   return (
     <>
