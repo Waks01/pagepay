@@ -124,33 +124,22 @@ export default function ReaderScreen() {
   const [adUnit, setAdUnit] = useState('');
   // Pre-read gate: unlocks the session timer.
   const [preReadOpen, setPreReadOpen] = useState(false);
-  const { state: adSlotState } = useAdSlot();
+  const { state: adSlotState, release: releaseAdSlot } = useAdSlot();
   const preReadDismissedRef = useRef(false);
   const [preReadHasShown, setPreReadHasShown] = useState(false);
 
-  // Open the pre-read modal as soon as we have a ready ad (from the
-  // slot or from the RewardedAd preload's onReady callback). If the
-  // ad never becomes ready, open the modal after 10 s so the user
-  // can see the error/retry UI instead of a blank screen.
+  // Open the pre-read modal immediately. The RewardedAd component
+  // handles its own loading/ready/error states. The modal content
+  // (spinner / play button / retry) is driven by the ad's own
+  // lifecycle, not by adSlotState here.
   //
   // Guard: once the user has dismissed the pre-read, never reopen it.
-  // The slot reloads the next ad in the background after release(),
-  // which flips adSlotState back to ready — without this guard the
-  // modal would pop back open and stop the session timer.
   useEffect(() => {
     if (preReadDismissedRef.current) {
       return;
     }
-    if (adSlotState === 'ready') {
-      setPreReadOpen(true);
-      return;
-    }
-
-    const timeout = setTimeout(() => {
-      setPreReadOpen(true);
-    }, 10000);
-    return () => clearTimeout(timeout);
-  }, [adSlotState]);
+    setPreReadOpen(true);
+  }, []);
 
   // One-shot gate: timer must not start until the pre-read ad has
   // actually been shown and dismissed. We track this with state so
@@ -380,8 +369,10 @@ export default function ReaderScreen() {
   }, [id]);
 
   // Heartbeat + elapsed timer start AFTER the pre-read gate clears.
+  // Use sessionIdRef so the timer starts the instant the ref is set,
+  // without waiting for the asynchronous state update to propagate.
   useEffect(() => {
-    if (!sessionId || preReadOpen || !preReadHasShown) return;
+    if (!sessionIdRef.current || preReadOpen || !preReadHasShown) return;
 
     heartbeatRef.current = setInterval(() => {
       sendHeartbeat();
@@ -581,6 +572,7 @@ export default function ReaderScreen() {
     } catch (e) {
       console.warn('Progress finish failed', e);
     }
+    releaseAdSlot();
     router.back();
   };
 
@@ -590,6 +582,7 @@ export default function ReaderScreen() {
     finishFiredRef.current = false;
 
     if (!sessionIdRef.current) {
+      releaseAdSlot();
       router.replace('/(tabs)');
       return;
     }
@@ -603,6 +596,7 @@ export default function ReaderScreen() {
     } catch (e) {
       console.warn('Progress finish failed', e);
     }
+    releaseAdSlot();
     router.back();
   };
 
