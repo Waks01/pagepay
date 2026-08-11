@@ -170,15 +170,6 @@ function TabLayoutInner({
             ),
           }}
         />
-        <Tabs.Screen
-          name="wallet"
-          options={{
-            title: t('tabs.wallet'),
-            tabBarIcon: ({ color, size, focused }) => (
-              <TabIcon name="wallet" color={color} size={size} focused={focused} tokens={tokens} />
-            ),
-          }}
-        />
         {/* Hidden tabs — navigable via drawer, not shown in bar */}
         <Tabs.Screen name="notifications" />
         <Tabs.Screen name="tasks" />
