@@ -7,7 +7,6 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { QueryClientProvider } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
@@ -379,8 +378,7 @@ export default function BuyAirtimeScreen() {
   }));
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -609,7 +607,6 @@ export default function BuyAirtimeScreen() {
         />
        </ScrollView>
       </View>
-    </QueryClientProvider>
   );
 }
 

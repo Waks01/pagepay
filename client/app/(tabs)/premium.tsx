@@ -37,72 +37,8 @@ export default function PremiumScreen() {
   const { t } = useTranslation();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
-  const qc = useQueryClient();
-  const { initializePayment, isLoading: paystackLoading } = usePaystack();
   const [selectedTier, setSelectedTier] = useState<string>("premium_monthly");
   const [checkingPayment, setCheckingPayment] = useState(false);
-
-  const pollSubscriptionStatus = async (reference: string) => {
-    console.log(
-      "🔍 [PREMIUM] Starting subscription verification for reference:",
-      reference,
-    );
-    setCheckingPayment(true);
-    let attempts = 0;
-
-    const checkStatus = async (): Promise<boolean> => {
-      try {
-        attempts++;
-        console.log(`🔄 [PREMIUM] Polling attempt ${attempts}/10...`);
-
-        // Refresh subscription status
-        console.log("📊 [PREMIUM] Refetching subscription data...");
-        await qc.refetchQueries({ queryKey: ["payments", "subscription"] });
-        const status = qc.getQueryData(["payments", "subscription"]) as any;
-        console.log("📋 [PREMIUM] Subscription status:", status);
-
-        if (status?.is_premium) {
-          console.log(
-            "✅ [PREMIUM] Subscription CONFIRMED! User is now premium",
-          );
-          return true;
-        }
-
-        console.log("⏰ [PREMIUM] Not premium yet, continuing...");
-
-        if (attempts < 10) {
-          console.log(`⏳ [PREMIUM] Waiting 2s before next attempt...`);
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          return checkStatus();
-        }
-
-        console.log("⚠️ [PREMIUM] Max attempts reached");
-        return false;
-      } catch (e) {
-        console.error("❌ [PREMIUM] Error during check:", e);
-        return false;
-      }
-    };
-
-    const success = await checkStatus();
-    setCheckingPayment(false);
-
-    console.log("🏁 [PREMIUM] Polling complete. Success:", success);
-
-    Alert.alert(
-      success
-        ? t("premium.premium_activated_title")
-        : t("premium.processing_payment_title"),
-      success
-        ? t("premium.premium_activated_body")
-        : t("premium.processing_payment_body"),
-    );
-
-    console.log("🔄 [PREMIUM] Final query invalidation...");
-    await qc.invalidateQueries({ queryKey: ["payments", "subscription"] });
-    await qc.invalidateQueries({ queryKey: ["payments", "history"] });
-    await qc.invalidateQueries({ queryKey: ["me"] });
-  };
 
   const tiersQ = useQuery({
     queryKey: ["payments", "tiers"],
@@ -124,75 +60,6 @@ export default function PremiumScreen() {
 
   const handleSelectTier = (tierId: string) => {
     setSelectedTier(tierId);
-  };
-
-  const handleUpgrade = async (tier: string) => {
-    console.log("💳 [PREMIUM] Starting subscription upgrade, tier:", tier);
-    try {
-      console.log("🌐 [PREMIUM] Calling backend /api/v1/payments/initiate...");
-      const res = await apiFetch("/api/v1/payments/initiate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier, provider: "paystack" }),
-      });
-
-      console.log("📥 [PREMIUM] Backend response status:", res.status);
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        console.error("❌ [PREMIUM] Backend error:", err);
-        throw new Error(err.detail || t("premium.initiation_failed"));
-      }
-
-      const data = await res.json();
-      console.log("✅ [PREMIUM] Backend success, response:", data);
-      console.log("   Payment URL:", data.payment_url);
-      console.log("   Access code:", data.access_code);
-      console.log("   Reference:", data.provider_tx_ref);
-
-      if (data.access_code) {
-        console.log("🚀 [PREMIUM] Opening in-app payment...");
-
-        const meRes = await apiFetch("/api/v1/auth/me");
-        const meData = meRes.ok ? await meRes.json() : {};
-        const userEmail = meData?.email || "";
-
-        Alert.alert(
-          t("premium.payment_initiated_title"),
-          t("premium.payment_initiated_body"),
-          [{ text: t("premium.ok") }],
-        );
-
-        await initializePayment({
-          email: userEmail,
-          amount: data.amount_kobo,
-          currency: "NGN",
-          accessCode: data.access_code,
-          reference: data.provider_tx_ref,
-          onSuccess: (tx) => {
-            console.log("✅ [PREMIUM] Payment successful in-app:", tx);
-          },
-          onCancel: () => {
-            console.log("❌ [PREMIUM] Payment cancelled by user");
-          },
-          onError: (err) => {
-            console.error("❌ [PREMIUM] Payment error:", err);
-          },
-        });
-
-        console.log("👤 [PREMIUM] In-app payment closed");
-
-        console.log(
-          "🔍 [PREMIUM] User returned from payment - checking status...",
-        );
-        await pollSubscriptionStatus(data.provider_tx_ref);
-      }
-    } catch (e) {
-      console.error("❌ [PREMIUM] Upgrade error:", e);
-      const message =
-        e instanceof Error ? e.message : t("premium.payment_error");
-      Alert.alert(t("premium.payment_error"), message);
-    }
   };
 
   const tiers = tiersQ.data ?? [];
@@ -290,6 +157,196 @@ export default function PremiumScreen() {
   }
 
   return (
+    <PremiumBody
+      t={t}
+      tokens={tokens}
+      tiers={tiers}
+      userTier={userTier}
+      isPremium={isPremium}
+      tierInfoLoading={tierInfoQ.isLoading}
+      tierInfoError={tierInfoQ.error as Error | null}
+      refetchTierInfo={() => tierInfoQ.refetch()}
+      selectedTier={selectedTier}
+      setSelectedTier={setSelectedTier}
+      checkingPayment={checkingPayment}
+      setCheckingPayment={setCheckingPayment}
+      handleSelectTier={handleSelectTier}
+    />
+  );
+}
+
+/**
+ * `PremiumBody` is rendered only after `PremiumScreen` resolves the
+ * `tiers` query. It owns the `usePaystack()` hook so the parent
+ * `PremiumScreen` module never throws on first render — `usePaystack`
+ * requires a `<PaystackProvider>` in scope, and isolating the hook here
+ * guarantees the route module evaluates cleanly even before the
+ * provider is mounted (e.g. during HMR or a fast-refresh stall).
+ */
+function PremiumBody({
+  t,
+  tokens,
+  tiers,
+  userTier,
+  isPremium,
+  tierInfoLoading,
+  tierInfoError,
+  refetchTierInfo,
+  selectedTier,
+  setSelectedTier,
+  checkingPayment,
+  setCheckingPayment,
+  handleSelectTier,
+}: {
+  t: ReturnType<typeof useTranslation>["t"];
+  tokens: (typeof PagePay)["light"];
+  tiers: Tier[];
+  userTier: any;
+  isPremium: boolean;
+  tierInfoLoading: boolean;
+  tierInfoError: Error | null;
+  refetchTierInfo: () => void;
+  selectedTier: string;
+  setSelectedTier: (v: string) => void;
+  checkingPayment: boolean;
+  setCheckingPayment: (v: boolean) => void;
+  handleSelectTier: (tierId: string) => void;
+}) {
+  const qc = useQueryClient();
+  const { initializePayment, isLoading: paystackLoading } = usePaystack();
+
+  const pollSubscriptionStatus = async (reference: string) => {
+    console.log(
+      "🔍 [PREMIUM] Starting subscription verification for reference:",
+      reference,
+    );
+    setCheckingPayment(true);
+    let attempts = 0;
+
+    const checkStatus = async (): Promise<boolean> => {
+      try {
+        attempts++;
+        console.log(`🔄 [PREMIUM] Polling attempt ${attempts}/10...`);
+
+        // Refresh subscription status
+        console.log("📊 [PREMIUM] Refetching subscription data...");
+        await qc.refetchQueries({ queryKey: ["payments", "subscription"] });
+        const status = qc.getQueryData(["payments", "subscription"]) as any;
+        console.log("📋 [PREMIUM] Subscription status:", status);
+
+        if (status?.is_premium) {
+          console.log(
+            "✅ [PREMIUM] Subscription CONFIRMED! User is now premium",
+          );
+          return true;
+        }
+
+        console.log("⏰ [PREMIUM] Not premium yet, continuing...");
+
+        if (attempts < 10) {
+          console.log(`⏳ [PREMIUM] Waiting 2s before next attempt...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          return checkStatus();
+        }
+
+        console.log("⚠️ [PREMIUM] Max attempts reached");
+        return false;
+      } catch (e) {
+        console.error("❌ [PREMIUM] Error during check:", e);
+        return false;
+      }
+    };
+
+    const success = await checkStatus();
+    setCheckingPayment(false);
+
+    console.log("🏁 [PREMIUM] Polling complete. Success:", success);
+
+    Alert.alert(
+      success
+        ? t("premium.premium_activated_title")
+        : t("premium.processing_payment_title"),
+      success
+        ? t("premium.premium_activated_body")
+        : t("premium.processing_payment_body"),
+    );
+
+    console.log("🔄 [PREMIUM] Final query invalidation...");
+    await qc.invalidateQueries({ queryKey: ["payments", "subscription"] });
+    await qc.invalidateQueries({ queryKey: ["payments", "history"] });
+    await qc.invalidateQueries({ queryKey: ["me"] });
+  };
+
+  const handleUpgrade = async (tier: string) => {
+    console.log("💳 [PREMIUM] Starting subscription upgrade, tier:", tier);
+    try {
+      console.log("🌐 [PREMIUM] Calling backend /api/v1/payments/initiate...");
+      const res = await apiFetch("/api/v1/payments/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier, provider: "paystack" }),
+      });
+
+      console.log("📥 [PREMIUM] Backend response status:", res.status);
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        console.error("❌ [PREMIUM] Backend error:", err);
+        throw new Error(err.detail || t("premium.initiation_failed"));
+      }
+
+      const data = await res.json();
+      console.log("✅ [PREMIUM] Backend success, response:", data);
+      console.log("   Payment URL:", data.payment_url);
+      console.log("   Access code:", data.access_code);
+      console.log("   Reference:", data.provider_tx_ref);
+
+      if (data.access_code) {
+        console.log("🚀 [PREMIUM] Opening in-app payment...");
+
+        const meRes = await apiFetch("/api/v1/auth/me");
+        const meData = meRes.ok ? await meRes.json() : {};
+        const userEmail = meData?.email || "";
+
+        Alert.alert(
+          t("premium.payment_initiated_title"),
+          t("premium.payment_initiated_body"),
+          [{ text: t("premium.ok") }],
+        );
+
+        await initializePayment({
+          email: userEmail,
+          amount: data.amount_kobo,
+          currency: "NGN",
+          accessCode: data.access_code,
+          reference: data.provider_tx_ref,
+          onSuccess: (tx) => {
+            console.log("✅ [PREMIUM] Payment successful in-app:", tx);
+          },
+          onCancel: () => {
+            console.log("❌ [PREMIUM] Payment cancelled by user");
+          },
+          onError: (err) => {
+            console.error("❌ [PREMIUM] Payment error:", err);
+          },
+        });
+
+        console.log("👤 [PREMIUM] In-app payment closed");
+
+        console.log(
+          "🔍 [PREMIUM] User returned from payment - checking status...",
+        );
+        await pollSubscriptionStatus(data.provider_tx_ref);
+      }
+    } catch (e) {
+      console.error("❌ [PREMIUM] Upgrade error:", e);
+      const message =
+        e instanceof Error ? e.message : t("premium.payment_error");
+      Alert.alert(t("premium.payment_error"), message);
+    }
+  };
+
+  return (
     <SafeAreaView
       edges={["top"]}
       style={{ flex: 1, backgroundColor: tokens.paper }}
@@ -341,12 +398,12 @@ export default function PremiumScreen() {
           </View>
         ) : null}
 
-        {tierInfoQ.isLoading ? (
+        {tierInfoLoading ? (
           <ActivityIndicator
             color={tokens.mint}
             style={{ paddingVertical: 24 }}
           />
-        ) : tierInfoQ.error ? (
+        ) : tierInfoError ? (
           <View
             style={[
               styles.errorCard,
@@ -359,11 +416,11 @@ export default function PremiumScreen() {
               color={tokens.error}
             />
             <Text style={[styles.errorCardText, { color: tokens.ink }]}>
-              {tierInfoQ.error instanceof Error
-                ? tierInfoQ.error.message
+              {tierInfoError instanceof Error
+                ? tierInfoError.message
                 : t("premium.subscription_error")}
             </Text>
-            <TouchableOpacity onPress={() => tierInfoQ.refetch()}>
+            <TouchableOpacity onPress={refetchTierInfo}>
               <Text style={[styles.retryText, { color: tokens.mint }]}>
                 {t("premium.retry")}
               </Text>
@@ -431,7 +488,7 @@ export default function PremiumScreen() {
                       checkingPayment ||
                       (isPremium && userTier?.tier === tier.tier)
                     }
-                    loading={checkingPayment}
+                    loading={checkingPayment || paystackLoading}
                   />
                 </View>
               </TouchableOpacity>
