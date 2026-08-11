@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import Animated, {
@@ -7,7 +7,6 @@ import Animated, {
   SlideInDown,
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withSequence,
   withTiming,
   Easing,
@@ -16,9 +15,8 @@ import * as Haptics from 'expo-haptics';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { PLATFORM_ENV } from '@/src/shared/lib/ads';
-import { PagePay } from '@/constants/theme';
+import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { PrimaryButton } from '@/components/PrimaryButton';
 import { RewardedAd } from '@/components/ads/RewardedAd';
 
 type UnlockModalProps = {
@@ -182,57 +180,132 @@ export function UnlockModal({
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <Animated.View 
-        entering={FadeIn.duration(200)}
-        style={[styles.overlay, { backgroundColor: scheme === 'dark' ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.55)' }]}
+      <Pressable
+        style={styles.overlay}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close unlock dialog"
       >
-        <Animated.View 
-          entering={SlideInDown.duration(400).springify().damping(20).stiffness(300)}
-          style={[styles.sheet, { backgroundColor: tokens.card, borderColor: tokens.border }]}
-        >
-          <View style={styles.headerRow} accessibilityLabel="Unlock answer">
-            <AnimatedLockIcon color={tokens.mint} />
-            <Text style={[styles.title, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          style={[styles.overlayBg]}
+          pointerEvents="none"
+        />
+        <Pressable onPress={(e) => e.stopPropagation()} style={styles.sheetWrap}>
+          <Animated.View
+            entering={SlideInDown.duration(400).springify().damping(20).stiffness(300)}
+            style={[styles.sheet, { backgroundColor: tokens.card }]}
+            accessibilityLabel="Unlock answer"
+          >
+            <View style={styles.handleRow}>
+              <View style={[styles.handle, { backgroundColor: tokens.borderStrong }]} />
+            </View>
+
+            <Pressable
+              onPress={onClose}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel unlock"
+              style={({ pressed }) => [styles.close, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Ionicons name="close" size={18} color={tokens.inkMuted} />
+            </Pressable>
+
+            <View style={styles.iconWrap}>
+              <View style={[styles.iconCircle, { backgroundColor: tokens.mintFaint }]}>
+                <AnimatedLockIcon color={tokens.mint} />
+              </View>
+            </View>
+
+            <Text
+              style={[styles.title, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}
+            >
               Unlock answer
             </Text>
-          </View>
+            <Text style={[styles.sub, { color: tokens.inkMuted }]}>
+              Choose how you'd like to unlock this study asset.
+            </Text>
 
-          <Animated.Text 
-            entering={FadeIn.delay(300).duration(400)}
-            style={[styles.cost, { color: tokens.inkMuted }]}
-          >
-            This asset costs <Text style={{ color: tokens.mint, fontWeight: '700' }}>{pointsCost} pts</Text> to unlock.
-            {'\n'}Your balance: <Text style={{ color: canAfford ? tokens.mint : tokens.signal, fontWeight: '600' }}>{userBalance} pts</Text>
-          </Animated.Text>
+            <View style={styles.choices}>
+              <Pressable
+                onPress={canAfford ? handlePointsUnlock : undefined}
+                disabled={!canAfford || loadingMethod !== null}
+                accessibilityRole="button"
+                accessibilityLabel={`Spend ${pointsCost} points`}
+                accessibilityState={{ disabled: !canAfford }}
+                style={({ pressed }) => [
+                  styles.choice,
+                  {
+                    borderColor: canAfford ? tokens.border : tokens.border,
+                    backgroundColor: tokens.card,
+                    opacity: !canAfford ? 0.55 : pressed ? 0.92 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.choiceLabel, { color: tokens.inkMuted }]}>
+                  Pay with points
+                </Text>
+                <Text
+                  style={[styles.choicePrice, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}
+                >
+                  {pointsCost}
+                </Text>
+                <Text style={[styles.choiceSub, { color: tokens.inkMuted }]}>
+                  {canAfford ? 'Instant access' : `Need ${pointsCost - userBalance} more`}
+                </Text>
+                {loadingMethod === 'points' && (
+                  <ActivityIndicator size="small" color={tokens.mint} style={styles.choiceSpinner} />
+                )}
+              </Pressable>
 
-          <Animated.View 
-            entering={SlideInDown.delay(400).duration(300).springify()}
-            style={styles.buttons}
-          >
-            <PrimaryButton
-              title={canAfford ? `Spend ${pointsCost} pts` : 'Not enough points'}
-              onPress={handlePointsUnlock}
-              loading={loadingMethod === 'points'}
-              disabled={!canAfford || loadingMethod !== null}
-            />
-            <PrimaryButton
-              title="Watch ad instead"
-              onPress={handleAdStart}
-              loading={loadingMethod === 'ad'}
-              disabled={loadingMethod !== null}
-            />
+              <Pressable
+                onPress={handleAdStart}
+                disabled={loadingMethod !== null}
+                accessibilityRole="button"
+                accessibilityLabel="Watch a short ad to unlock for free"
+                style={({ pressed }) => [
+                  styles.choice,
+                  styles.choicePrimary,
+                  {
+                    borderColor: tokens.ink,
+                    backgroundColor: tokens.ink,
+                    opacity: pressed ? 0.92 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.choiceLabel, { color: 'rgba(255,255,255,0.7)' }]}>
+                  Watch a short ad
+                </Text>
+                <Text
+                  style={[
+                    styles.choicePrice,
+                    { color: tokens.paper, fontFamily: Fonts.editorialSemiBold as string },
+                  ]}
+                >
+                  Free
+                </Text>
+                <Text style={[styles.choiceSub, { color: 'rgba(255,255,255,0.7)' }]}>
+                  ~30 seconds
+                </Text>
+                {loadingMethod === 'ad' && (
+                  <ActivityIndicator size="small" color={tokens.paper} style={styles.choiceSpinner} />
+                )}
+              </Pressable>
+            </View>
+
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel unlock"
+              style={({ pressed }) => [styles.cancel, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Text style={[styles.cancelText, { color: tokens.inkMuted }]}>
+                Continue browsing
+              </Text>
+            </Pressable>
           </Animated.View>
-
-          <Pressable 
-            onPress={onClose} 
-            style={({ pressed }) => [styles.close, { opacity: pressed ? 0.5 : 1 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel unlock"
-          >
-            <Text style={[styles.closeText, { color: tokens.inkMuted }]}>Cancel</Text>
-          </Pressable>
-        </Animated.View>
-      </Animated.View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -240,39 +313,105 @@ export function UnlockModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+    justifyContent: 'flex-end',
+  },
+  overlayBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(14,17,22,0.55)',
+  },
+  sheetWrap: {
+    width: '100%',
   },
   sheet: {
     width: '100%',
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 24,
-    gap: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 22,
+    paddingTop: 8,
+    paddingBottom: 28,
+    gap: 14,
+    position: 'relative',
   },
-  headerRow: {
-    flexDirection: 'row',
+  handleRow: {
     alignItems: 'center',
-    gap: 10,
+    marginBottom: 4,
   },
-  title: {
-    fontSize: 20,
-    letterSpacing: -0.4,
-  },
-  cost: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
-  },
-  buttons: {
-    gap: 10,
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
   },
   close: {
-    alignSelf: 'center',
-    paddingVertical: 8,
+    position: 'absolute',
+    top: 14,
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  closeText: {
+  iconWrap: {
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 22,
+    textAlign: 'center',
+    letterSpacing: -0.4,
+    marginTop: 4,
+  },
+  sub: {
+    fontSize: 13.5,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 4,
+  },
+  choices: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  choice: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    gap: 6,
+    position: 'relative',
+  },
+  choicePrimary: {},
+  choiceLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 0.06,
+    textTransform: 'uppercase',
+  },
+  choicePrice: {
+    fontSize: 26,
+    letterSpacing: -0.4,
+  },
+  choiceSub: {
+    fontSize: 11.5,
+  },
+  choiceSpinner: {
+    marginTop: 4,
+  },
+  cancel: {
+    alignItems: 'center',
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
+  cancelText: {
     fontSize: 13,
     fontWeight: '500',
   },

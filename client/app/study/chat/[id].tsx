@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, FadeInDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
-import { PagePay } from '@/constants/theme';
+import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { StudyHeader } from '@/components/study/StudyHeader';
 
 function ShimmerBar({ style: extraStyle, color }: { style?: object; color?: string }) {
   const opacity = useSharedValue(0.4);
@@ -49,7 +50,6 @@ export default function StudyChatScreen() {
   const [educationLevel, setEducationLevel] = useState<string>('secondary');
   const [difficulty, setDifficulty] = useState<string>('medium');
   const [showSettings, setShowSettings] = useState(false);
-  const flatListRef = useRef<FlatList>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const materialQ = useQuery({
@@ -137,50 +137,58 @@ export default function StudyChatScreen() {
         setStreaming(false);
       }
     },
-    [materialId, streaming],
+    [materialId, streaming, educationLevel, difficulty],
   );
 
   const title = materialQ.data?.title ?? t('study_chat.title');
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <View style={[styles.header, { borderBottomColor: tokens.border }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={22} color={tokens.mint} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text style={[styles.subtitle, { color: tokens.inkMuted }]}>{t('study_chat.subtitle')}</Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => setShowSettings(!showSettings)}
-          style={styles.settingsBtn}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="settings-outline" size={22} color={tokens.mint} />
-        </TouchableOpacity>
-      </View>
+      <StudyHeader
+        title={title}
+        sub={t('study_chat.subtitle')}
+        onBack={() => router.back()}
+        right={
+          <Pressable
+            onPress={() => setShowSettings(!showSettings)}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle chat settings"
+            style={({ pressed }) => [
+              styles.iconBtn,
+              {
+                borderColor: showSettings ? tokens.mint : tokens.border,
+                backgroundColor: showSettings ? tokens.mintSoft : tokens.card,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Ionicons
+              name={showSettings ? 'settings' : 'settings-outline'}
+              size={18}
+              color={showSettings ? tokens.mint : tokens.ink}
+            />
+          </Pressable>
+        }
+      />
 
       {showSettings && (
-        <View style={[styles.settingsBar, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
+        <Animated.View
+          entering={FadeInDown.duration(200).springify()}
+          style={[styles.settingsBar, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}
+        >
           <View style={styles.settingGroup}>
             <Text style={[styles.settingLabel, { color: tokens.inkMuted }]}>Level</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.settingOptions}>
               {['primary', 'secondary', 'tertiary', 'research'].map((level) => (
-                <TouchableOpacity
+                <Pressable
                   key={level}
                   onPress={() => setEducationLevel(level)}
-                  style={[
+                  style={({ pressed }) => [
                     styles.settingChip,
                     {
                       backgroundColor: educationLevel === level ? tokens.mint : tokens.paper,
                       borderColor: educationLevel === level ? tokens.mint : tokens.border,
+                      opacity: pressed ? 0.85 : 1,
                     },
                   ]}
                 >
@@ -192,7 +200,7 @@ export default function StudyChatScreen() {
                   >
                     {level}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </ScrollView>
           </View>
@@ -200,14 +208,15 @@ export default function StudyChatScreen() {
             <Text style={[styles.settingLabel, { color: tokens.inkMuted }]}>Difficulty</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.settingOptions}>
               {['easy', 'medium', 'hard'].map((diff) => (
-                <TouchableOpacity
+                <Pressable
                   key={diff}
                   onPress={() => setDifficulty(diff)}
-                  style={[
+                  style={({ pressed }) => [
                     styles.settingChip,
                     {
                       backgroundColor: difficulty === diff ? tokens.mint : tokens.paper,
                       borderColor: difficulty === diff ? tokens.mint : tokens.border,
+                      opacity: pressed ? 0.85 : 1,
                     },
                   ]}
                 >
@@ -219,11 +228,11 @@ export default function StudyChatScreen() {
                   >
                     {diff}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </ScrollView>
           </View>
-        </View>
+        </Animated.View>
       )}
 
       <KeyboardAvoidingView
@@ -233,13 +242,20 @@ export default function StudyChatScreen() {
       >
         <ScrollView
           ref={scrollViewRef}
-          style={[styles.messagesArea, { backgroundColor: tokens.paper }]}
+          style={styles.messagesArea}
           contentContainerStyle={styles.messagesContent}
           keyboardShouldPersistTaps="handled"
         >
           {messages.length === 0 && (
             <View style={styles.emptyState}>
-              <Ionicons name="chatbubbles-outline" size={40} color={tokens.mint} />
+              <View style={[styles.emptyIcon, { backgroundColor: tokens.mintSoft }]}>
+                <Ionicons name="chatbubbles-outline" size={28} color={tokens.mint} />
+              </View>
+              <Text
+                style={[styles.emptyTitle, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}
+              >
+                Ask anything
+              </Text>
               <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>
                 {t('study_chat.empty_message')}
               </Text>
@@ -253,6 +269,11 @@ export default function StudyChatScreen() {
                 msg.role === 'user' ? styles.userRow : styles.assistantRow,
               ]}
             >
+              {msg.role === 'assistant' ? (
+                <View style={[styles.assistantAvatar, { backgroundColor: tokens.mintSoft }]}>
+                  <Ionicons name="sparkles" size={14} color={tokens.mint} />
+                </View>
+              ) : null}
               <View
                 style={[
                   styles.bubble,
@@ -269,16 +290,18 @@ export default function StudyChatScreen() {
                   ]}
                 >
                   {msg.text}
-                  {streaming && msg.role === 'assistant' && msg.text === '' && (
-                    <View style={styles.shimmerContainer}>
-                      <ShimmerBar style={{ width: '60%' }} color={tokens.border} />
-                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                        <ShimmerBar style={{ width: '40%' }} color={tokens.border} />
-                        <ShimmerBar style={{ width: '30%' }} color={tokens.border} />
-                      </View>
-                    </View>
-                  )}
                 </Text>
+                {streaming && msg.role === 'assistant' && msg.text === '' ? (
+                  <View style={styles.shimmerContainer}>
+                    <ShimmerBar style={{ width: '60%' }} color={tokens.border} />
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                      <ShimmerBar style={{ width: '40%' }} color={tokens.border} />
+                      <ShimmerBar style={{ width: '30%' }} color={tokens.border} />
+                    </View>
+                  </View>
+                ) : streaming && msg.role === 'assistant' ? (
+                  <View style={[styles.streamingDot, { backgroundColor: tokens.mint }]} />
+                ) : null}
               </View>
             </View>
           ))}
@@ -295,23 +318,23 @@ export default function StudyChatScreen() {
             multiline
             maxLength={2000}
           />
-          <TouchableOpacity
+          <Pressable
             onPress={() => sendMessage(input)}
             disabled={!input.trim() || streaming}
-            activeOpacity={0.7}
-            style={[
+            style={({ pressed }) => [
               styles.sendBtn,
               {
                 backgroundColor: input.trim() && !streaming ? tokens.mint : tokens.border,
+                opacity: pressed && input.trim() ? 0.85 : 1,
               },
             ]}
           >
             <Ionicons
-              name="send"
-              size={18}
+              name="arrow-up"
+              size={20}
               color={input.trim() && !streaming ? tokens.mintText : tokens.inkMuted}
             />
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -319,31 +342,17 @@ export default function StudyChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  backBtn: {
+  iconBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  settingsBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    borderRadius: 8,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   settingsBar: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -351,56 +360,65 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   settingLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   settingOptions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   settingChip: {
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 999,
     borderWidth: 1,
   },
   settingChipText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'capitalize',
   },
-  title: {
-    fontSize: 17,
-    letterSpacing: -0.3,
-  },
-  subtitle: {
-    fontSize: 12,
-    marginTop: 1,
-  },
   messagesArea: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
+    flex: 1,
   },
   messagesContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    gap: 10,
   },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingTop: 60,
+    gap: 8,
+    paddingTop: 80,
+    paddingHorizontal: 32,
+  },
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    letterSpacing: -0.3,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 13,
     textAlign: 'center',
+    lineHeight: 18,
   },
   msgRow: {
     flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
   },
   userRow: {
     justifyContent: 'flex-end',
@@ -408,16 +426,29 @@ const styles = StyleSheet.create({
   assistantRow: {
     justifyContent: 'flex-start',
   },
+  assistantAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bubble: {
-    maxWidth: '85%',
-    borderRadius: 16,
+    maxWidth: '78%',
+    borderRadius: 14,
     borderWidth: 1,
     padding: 12,
-    gap: 4,
   },
   bubbleText: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  streamingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 4,
+    opacity: 0.6,
   },
   inputBar: {
     flexDirection: 'row',

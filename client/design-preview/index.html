@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en" data-scheme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PagePay · Study — Visual Preview</title>
+
+    <!-- Space Grotesk + Fraunces (editorial display serif) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="./tokens.css" />
+    <link rel="stylesheet" href="./components.css" />
+  </head>
+  <body>
+    <!-- Top bar: brand + scheme toggle -->
+    <header class="topbar">
+      <div class="topbar__brand">
+        <span class="page-mark" aria-hidden="true"></span>
+        <span class="topbar__wordmark">PagePay</span>
+        <span class="topbar__divider">/</span>
+        <span class="topbar__crumb">Study · Visual preview</span>
+      </div>
+      <div class="scheme-toggle" role="radiogroup" aria-label="Color scheme">
+        <button class="scheme-toggle__btn is-active" data-scheme="light" role="radio" aria-checked="true">Light</button>
+        <button class="scheme-toggle__btn" data-scheme="dark" role="radio" aria-checked="false">Dark</button>
+        <button class="scheme-toggle__btn" data-scheme="sepia" role="radio" aria-checked="false">Sepia</button>
+      </div>
+    </header>
+
+    <!-- Workspace: sidebar + viewport -->
+    <div class="workspace">
+      <nav class="sidebar" aria-label="Study screens">
+        <div class="sidebar__section">Study</div>
+        <a class="sidebar__link is-active" data-screen="study-list" href="#study-list">
+          <span class="sidebar__num">01</span><span>Materials · list</span>
+        </a>
+        <a class="sidebar__link" data-screen="study-detail" href="#study-detail">
+          <span class="sidebar__num">02</span><span>Material · detail</span>
+        </a>
+
+        <div class="sidebar__section">Exam Mode</div>
+        <a class="sidebar__link" data-screen="exam-setup" href="#exam-setup">
+          <span class="sidebar__num">03</span><span>Exam · setup</span>
+        </a>
+        <a class="sidebar__link" data-screen="exam-active" href="#exam-active">
+          <span class="sidebar__num">04</span><span>Exam · in progress</span>
+        </a>
+        <a class="sidebar__link" data-screen="exam-result" href="#exam-result">
+          <span class="sidebar__num">05</span><span>Exam · result</span>
+        </a>
+
+        <div class="sidebar__section">Review</div>
+        <a class="sidebar__link" data-screen="srs" href="#srs">
+          <span class="sidebar__num">06</span><span>SRS dashboard</span>
+        </a>
+        <a class="sidebar__link" data-screen="chat" href="#chat">
+          <span class="sidebar__num">07</span><span>AI chat</span>
+        </a>
+
+        <div class="sidebar__section">Paywall</div>
+        <a class="sidebar__link" data-screen="unlock" href="#unlock">
+          <span class="sidebar__num">08</span><span>Unlock modal</span>
+        </a>
+        <a class="sidebar__link" data-screen="progress" href="#progress">
+          <span class="sidebar__num">09</span><span>Progress</span>
+        </a>
+      </nav>
+
+      <main class="viewport">
+        <!-- Phone frame — every screen renders inside -->
+        <div class="phone">
+          <div class="phone__notch" aria-hidden="true"></div>
+          <div class="phone__screen" id="screen-root">
+            <!-- Screens injected by app.js -->
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

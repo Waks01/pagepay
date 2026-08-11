@@ -257,7 +257,7 @@ export function VideoPlayer({ content, videoUri }: VideoPlayerProps) {
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     overflow: 'hidden',
     gap: 12,
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   },
   videoFrame: {
     marginHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   video: {

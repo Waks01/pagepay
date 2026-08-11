@@ -1,26 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTranslation } from 'react-i18next';
+import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 
 import { apiFetch } from '@/src/shared/api/client';
-import { PagePay } from '@/constants/theme';
+import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { StudyHeader } from '@/components/study/StudyHeader';
 
 type ExamType = 'jamb' | 'waec' | 'neco' | 'nabteb' | 'custom' | null;
 
@@ -50,7 +48,6 @@ const EXAM_TYPES: { value: ExamType; label: string; duration: number; questions:
 ];
 
 export default function ExamModeScreen() {
-  const { t } = useTranslation();
   const router = useRouter();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
@@ -191,27 +188,64 @@ export default function ExamModeScreen() {
     setScore(null);
   };
 
+  const handleExit = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    router.back();
+  };
+
   const currentQuestion = useMemo(() => questions[currentQuestionIndex], [questions, currentQuestionIndex]);
   const progress = useMemo(
     () => (questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0),
     [questions.length, currentQuestionIndex]
   );
 
+  const examConfig = EXAM_TYPES.find((e) => e.value === selectedExamType);
+  const isUrgent = timeLeft < 60 && examState === 'active';
+
+  // Pulsing animation for the timer under 60s
+  const pulse = useSharedValue(1);
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  useEffect(() => {
+    if (!isUrgent) {
+      pulse.value = 1;
+      return;
+    }
+    pulse.value = withRepeat(
+      withTiming(0.55, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true
+    );
+  }, [isUrgent, pulse]);
+
+  // ── ACTIVE ──────────────────────────────────────────────
   if (examState === 'active' && currentQuestion) {
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleSubmitExam} style={styles.exitBtn} accessibilityLabel="Exit exam">
-            <Ionicons name="close" size={22} color={tokens.signal} />
-          </TouchableOpacity>
-          <View style={styles.timerContainer}>
-            <Ionicons name="time-outline" size={18} color={timeLeft < 60 ? tokens.signal : tokens.mint} />
-            <Text style={[styles.timerText, { color: timeLeft < 60 ? tokens.signal : tokens.mint }]}>
+        <View style={styles.activeHeader}>
+          <Pressable
+            onPress={handleExit}
+            accessibilityRole="button"
+            accessibilityLabel="Exit exam"
+            style={({ pressed }) => [styles.exitBtn, { borderColor: tokens.border, backgroundColor: tokens.card, opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Ionicons name="close" size={20} color={tokens.ink} />
+          </Pressable>
+
+          <Animated.View
+            style={[
+              styles.timerPill,
+              { backgroundColor: isUrgent ? tokens.signalFaint : tokens.mintFaint, borderColor: isUrgent ? tokens.signal : tokens.mint },
+              pulseStyle,
+            ]}
+          >
+            <Ionicons name="time-outline" size={14} color={isUrgent ? tokens.signal : tokens.mint} />
+            <Text style={[styles.timerText, { color: isUrgent ? tokens.signal : tokens.mint }]}>
               {formatTime(timeLeft)}
             </Text>
-          </View>
+          </Animated.View>
+
           <Text style={[styles.progressText, { color: tokens.inkMuted }]}>
-            {currentQuestionIndex + 1}/{questions.length}
+            {String(currentQuestionIndex + 1).padStart(2, '0')}/{questions.length}
           </Text>
         </View>
 
@@ -219,132 +253,165 @@ export default function ExamModeScreen() {
           <View style={[styles.progressBar, { width: `${progress}%`, backgroundColor: tokens.mint }]} />
         </View>
 
-        <View style={styles.questionContainer}>
-          <Text style={[styles.questionText, { color: tokens.ink }]}>{currentQuestion.question}</Text>
+        <ScrollView contentContainerStyle={styles.questionContainer} showsVerticalScrollIndicator={false}>
+          <Animated.View
+            key={currentQuestionIndex}
+            entering={FadeIn.duration(200)}
+            style={styles.questionBlock}
+          >
+            <Text style={[styles.questionEyebrow, { color: tokens.inkMuted }]}>
+              QUESTION {String(currentQuestionIndex + 1).padStart(2, '0')} OF {questions.length}
+            </Text>
+            <Text style={[styles.questionText, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
+              {currentQuestion.question}
+            </Text>
+          </Animated.View>
 
           <View style={styles.optionsContainer}>
             {currentQuestion.options.map((option, idx) => {
               const isSelected = selectedAnswers[currentQuestion.id] === option;
+              const letter = String.fromCharCode(65 + idx);
               return (
-                <TouchableOpacity
+                <Pressable
                   key={idx}
                   onPress={() => setSelectedAnswers((prev) => ({ ...prev, [currentQuestion.id]: option }))}
-                  style={[
+                  style={({ pressed }) => [
                     styles.optionBtn,
                     {
                       borderColor: isSelected ? tokens.mint : tokens.border,
                       backgroundColor: isSelected ? tokens.mintSoft : tokens.card,
+                      opacity: pressed ? 0.85 : 1,
                     },
                   ]}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isSelected }}
                 >
-                  <View style={[styles.optionLetter, { backgroundColor: isSelected ? tokens.mint : tokens.border }]}>
-                    <Text style={[styles.optionLetterText, { color: isSelected ? '#fff' : tokens.inkMuted }]}>
-                      {String.fromCharCode(65 + idx)}
+                  <View style={[styles.optionLetter, { backgroundColor: isSelected ? tokens.mint : tokens.paper, borderColor: isSelected ? tokens.mint : tokens.border }]}>
+                    <Text style={[styles.optionLetterText, { color: isSelected ? tokens.mintText : tokens.ink }]}>
+                      {letter}
                     </Text>
                   </View>
                   <Text style={[styles.optionText, { color: tokens.ink }]}>{option}</Text>
-                </TouchableOpacity>
+                  {isSelected ? <Ionicons name="checkmark-circle" size={18} color={tokens.mint} /> : null}
+                </Pressable>
               );
             })}
           </View>
-        </View>
+        </ScrollView>
 
-        <View style={styles.footer}>
-          <TouchableOpacity
+        <View style={[styles.footer, { borderTopColor: tokens.border, backgroundColor: tokens.paper }]}>
+          <Pressable
             onPress={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
             disabled={currentQuestionIndex === 0}
-            style={[styles.navBtn, { borderColor: tokens.border }]}
+            style={({ pressed }) => [
+              styles.navBtn,
+              styles.navBtnGhost,
+              { borderColor: tokens.border, opacity: currentQuestionIndex === 0 ? 0.4 : pressed ? 0.7 : 1 },
+            ]}
             accessibilityState={{ disabled: currentQuestionIndex === 0 }}
           >
-            <Ionicons name="chevron-back" size={20} color={tokens.inkMuted} />
-            <Text style={[styles.navBtnText, { color: tokens.inkMuted }]}>Previous</Text>
-          </TouchableOpacity>
+            <Ionicons name="chevron-back" size={18} color={tokens.ink} />
+            <Text style={[styles.navBtnText, { color: tokens.ink }]}>Previous</Text>
+          </Pressable>
 
           {currentQuestionIndex < questions.length - 1 ? (
-            <TouchableOpacity
+            <Pressable
               onPress={() => setCurrentQuestionIndex((prev) => prev + 1)}
-              style={[styles.navBtn, { backgroundColor: tokens.mint }]}
+              style={({ pressed }) => [styles.navBtn, { backgroundColor: tokens.mint, opacity: pressed ? 0.85 : 1 }]}
             >
-              <Text style={[styles.navBtnText, { color: '#fff' }]}>Next</Text>
-              <Ionicons name="chevron-forward" size={20} color="#fff" />
-            </TouchableOpacity>
+              <Text style={[styles.navBtnText, { color: tokens.mintText }]}>Next</Text>
+              <Ionicons name="chevron-forward" size={18} color={tokens.mintText} />
+            </Pressable>
           ) : (
-            <TouchableOpacity onPress={handleSubmitExam} style={[styles.navBtn, { backgroundColor: tokens.mint }]}>
+            <Pressable
+              onPress={handleSubmitExam}
+              style={({ pressed }) => [styles.navBtn, { backgroundColor: tokens.signal, opacity: pressed ? 0.85 : 1 }]}
+            >
               <Text style={[styles.navBtnText, { color: '#fff' }]}>Submit</Text>
-              <Ionicons name="checkmark" size={20} color="#fff" />
-            </TouchableOpacity>
+              <Ionicons name="checkmark" size={18} color="#fff" />
+            </Pressable>
           )}
         </View>
       </SafeAreaView>
     );
   }
 
+  // ── COMPLETE ────────────────────────────────────────────
   if (examState === 'complete' && score !== null) {
     const passed = score >= 60;
+    const correctCount = Object.values(selectedAnswers).filter((a, i) => a === questions[i]?.answer).length;
+    const wrongCount = questions.length - correctCount;
+
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <View style={styles.resultContainer}>
-          <View style={[styles.scoreCircle, { borderColor: passed ? tokens.mint : tokens.signal }]}>
-            <Text style={[styles.scoreText, { color: passed ? tokens.mint : tokens.signal }]}>{score}%</Text>
-          </View>
-          <Text style={[styles.resultTitle, { color: tokens.ink }]}>
-            {passed ? 'Congratulations!' : 'Keep Practicing!'}
-          </Text>
-          <Text style={[styles.resultSubtitle, { color: tokens.inkMuted }]}>
-            {passed
-              ? `You scored ${score}%. You're ready!`
-              : `You scored ${score}%. Review your weak areas and try again.`}
-          </Text>
+        <StudyHeader title="Exam Result" onBack={() => router.back()} />
+        <ScrollView contentContainerStyle={styles.resultScroll}>
+          <Animated.View entering={FadeInDown.duration(320).springify()} style={styles.resultHero}>
+            <View style={[styles.resultBadge, { backgroundColor: passed ? tokens.mintSoft : tokens.signalFaint }]}>
+              <Ionicons
+                name={passed ? 'trophy' : 'refresh-circle'}
+                size={28}
+                color={passed ? tokens.mint : tokens.signal}
+              />
+            </View>
+            <Text
+              style={[styles.resultTitle, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}
+            >
+              {passed ? 'You passed!' : 'Almost there.'}
+            </Text>
+            <Text style={[styles.resultSubtitle, { color: tokens.inkMuted }]}>
+              {passed
+                ? `You scored ${score}%. You're ready for the real thing.`
+                : `You scored ${score}%. Review your weak areas and try again.`}
+            </Text>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(120).duration(240)} style={[styles.scoreCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text style={[styles.scorePct, { color: passed ? tokens.mint : tokens.signal, fontFamily: Fonts.editorialSemiBold as string }]}>
+              {score}
+              <Text style={[styles.scorePctSym, { color: passed ? tokens.mint : tokens.signal }]}>%</Text>
+            </Text>
+            <Text style={[styles.scoreLabel, { color: tokens.inkMuted }]}>FINAL SCORE</Text>
+          </Animated.View>
 
           <View style={styles.resultStats}>
-            <View style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-              <Text style={[styles.statValue, { color: tokens.mint }]}>
-                {Object.values(selectedAnswers).filter((a, i) => a === questions[i]?.answer).length}
-              </Text>
+            <Animated.View entering={FadeInDown.delay(200).duration(220)} style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+              <Text style={[styles.statValue, { color: tokens.mint, fontFamily: Fonts.editorialSemiBold as string }]}>{correctCount}</Text>
               <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>Correct</Text>
-            </View>
-            <View style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-              <Text style={[styles.statValue, { color: tokens.signal }]}>
-                {questions.length - Object.values(selectedAnswers).filter((a, i) => a === questions[i]?.answer).length}
-              </Text>
+            </Animated.View>
+            <Animated.View entering={FadeInDown.delay(260).duration(220)} style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+              <Text style={[styles.statValue, { color: tokens.signal, fontFamily: Fonts.editorialSemiBold as string }]}>{wrongCount}</Text>
               <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>Wrong</Text>
-            </View>
-            <View style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-              <Text style={[styles.statValue, { color: tokens.ink }]}>
-                {questions.length}
-              </Text>
+            </Animated.View>
+            <Animated.View entering={FadeInDown.delay(320).duration(220)} style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+              <Text style={[styles.statValue, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>{questions.length}</Text>
               <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>Total</Text>
-            </View>
+            </Animated.View>
           </View>
 
-          <PrimaryButton
-            title="Back to Exam Setup"
-            onPress={handleRestart}
-          />
-        </View>
+          <View style={styles.resultActions}>
+            <PrimaryButton title="Back to Setup" onPress={handleRestart} variant="mint" style={{ width: '100%' }} />
+            <PrimaryButton title="Done" onPress={() => router.back()} variant="ghost" style={{ width: '100%' }} />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
+  // ── SETUP ───────────────────────────────────────────────
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={tokens.mint} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>Exam Mode</Text>
-        </View>
-
-        <Text style={[styles.subtitle, { color: tokens.inkMuted }]}>
-          Select your exam type and material to start a timed mock test.
-        </Text>
+        <StudyHeader
+          title="Exam Mode"
+          sub="Timed mock test, scored automatically"
+          onBack={() => router.back()}
+        />
 
         {error && (
-          <View
-            style={[styles.errorBanner, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}
+          <Animated.View
+            entering={FadeIn.duration(180)}
+            style={[styles.errorBanner, { backgroundColor: tokens.signalFaint, borderColor: tokens.signal }]}
             accessibilityRole="alert"
             accessibilityLabel={`Error: ${error}`}
           >
@@ -371,79 +438,136 @@ export default function ExamModeScreen() {
             >
               <Ionicons name="close" size={16} color={tokens.signal} accessibilityLabel="" />
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         )}
 
-        <Text style={[styles.sectionLabel, { color: tokens.ink }]}>Exam Type</Text>
-        <View style={styles.examTypeGrid}>
-          {EXAM_TYPES.map((et) => (
-            <TouchableOpacity
-              key={et.value}
-              onPress={() => setSelectedExamType(et.value)}
-              style={[
-                styles.examTypeCard,
-                {
-                  borderColor: selectedExamType === et.value ? tokens.mint : tokens.border,
-                  backgroundColor: selectedExamType === et.value ? tokens.mintSoft : tokens.card,
-                },
-              ]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: selectedExamType === et.value }}
-            >
-              <Text style={[styles.examTypeLabel, { color: selectedExamType === et.value ? tokens.mint : tokens.ink }]}>
-                {et.label}
-              </Text>
-              <Text style={[styles.examTypeMeta, { color: tokens.inkMuted }]}>
-                {et.questions} questions · {et.duration} min
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionLabel, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
+              Pick exam type
+            </Text>
+            <Text style={[styles.sectionMeta, { color: tokens.inkMuted }]}>{EXAM_TYPES.length} options</Text>
+          </View>
+          <View style={styles.examTypeGrid}>
+            {EXAM_TYPES.map((et, idx) => (
+              <Animated.View
+                key={et.value}
+                entering={FadeInDown.delay(idx * 40).duration(240).springify()}
+                style={{ flex: 1, minWidth: '45%' }}
+              >
+                <Pressable
+                  onPress={() => setSelectedExamType(et.value)}
+                  style={({ pressed }) => [
+                    styles.examTypeCard,
+                    {
+                      borderColor: selectedExamType === et.value ? tokens.mint : tokens.border,
+                      backgroundColor: selectedExamType === et.value ? tokens.mintSoft : tokens.card,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: selectedExamType === et.value }}
+                >
+                  <View style={styles.examTypeTopRow}>
+                    <Text style={[styles.examTypeLabel, { color: selectedExamType === et.value ? tokens.mint : tokens.ink }]}>
+                      {et.label}
+                    </Text>
+                    {selectedExamType === et.value ? (
+                      <Ionicons name="checkmark-circle" size={16} color={tokens.mint} />
+                    ) : null}
+                  </View>
+                  <Text style={[styles.examTypeMeta, { color: tokens.inkMuted }]}>
+                    {et.questions} questions · {et.duration} min
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            ))}
+          </View>
         </View>
 
         {selectedExamType && (
-          <>
-            <Text style={[styles.sectionLabel, { color: tokens.ink }]}>Select Material</Text>
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionLabel, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
+                Choose material
+              </Text>
+              <Text style={[styles.sectionMeta, { color: tokens.inkMuted }]}>
+                {materialsQ.data?.length ?? 0} available
+              </Text>
+            </View>
             {materialsQ.isLoading ? (
-              <ActivityIndicator size="small" color={tokens.mint} />
+              <View style={[styles.stateBlock, { borderColor: tokens.border }]}>
+                <ActivityIndicator size="small" color={tokens.mint} />
+              </View>
             ) : materialsQ.data && materialsQ.data.length > 0 ? (
               <View style={styles.materialList}>
-                {materialsQ.data.map((m) => (
-                  <TouchableOpacity
+                {materialsQ.data.map((m, idx) => (
+                  <Animated.View
                     key={m.id}
-                    onPress={() => setSelectedMaterialId(m.id)}
-                    style={[
-                      styles.materialCard,
-                      {
-                        borderColor: selectedMaterialId === m.id ? tokens.mint : tokens.border,
-                        backgroundColor: selectedMaterialId === m.id ? tokens.mintSoft : tokens.card,
-                      },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: selectedMaterialId === m.id }}
+                    entering={FadeInDown.delay(280 + idx * 40).duration(220).springify()}
                   >
-                    <Text style={[styles.materialTitle, { color: tokens.ink }]}>{m.title}</Text>
-                    <Text style={[styles.materialMeta, { color: tokens.inkMuted }]}>
-                      {m.asset_types.join(', ')}
-                    </Text>
-                  </TouchableOpacity>
+                    <Pressable
+                      onPress={() => setSelectedMaterialId(m.id)}
+                      style={({ pressed }) => [
+                        styles.materialCard,
+                        {
+                          borderColor: selectedMaterialId === m.id ? tokens.mint : tokens.border,
+                          backgroundColor: selectedMaterialId === m.id ? tokens.mintSoft : tokens.card,
+                          opacity: pressed ? 0.85 : 1,
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: selectedMaterialId === m.id }}
+                    >
+                      <View style={[styles.materialIcon, { backgroundColor: tokens.card }]}>
+                        <Ionicons name="book-outline" size={16} color={tokens.mint} />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[styles.materialTitle, { color: tokens.ink }]} numberOfLines={1}>
+                          {m.title}
+                        </Text>
+                        <Text style={[styles.materialMeta, { color: tokens.inkMuted }]} numberOfLines={1}>
+                          {m.asset_types.join(' · ')}
+                        </Text>
+                      </View>
+                      {selectedMaterialId === m.id ? (
+                        <Ionicons name="checkmark-circle" size={18} color={tokens.mint} />
+                      ) : null}
+                    </Pressable>
+                  </Animated.View>
                 ))}
               </View>
             ) : (
-              <View style={[styles.emptyState, { borderColor: tokens.border }]}>
+              <View style={[styles.stateBlock, { borderColor: tokens.border }]}>
                 <Ionicons name="school-outline" size={28} color={tokens.inkMuted} />
                 <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>
                   No materials found for this exam type. Upload one first!
                 </Text>
               </View>
             )}
-          </>
+          </View>
+        )}
+
+        {selectedExamType && examConfig && (
+          <View style={[styles.summaryCard, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}>
+            <Ionicons name="hourglass-outline" size={18} color={tokens.mint} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.summaryText, { color: tokens.mint, fontFamily: Fonts.editorialSemiBold as string }]}>
+                {examConfig.duration} min · {examConfig.questions} questions
+              </Text>
+              <Text style={[styles.summarySub, { color: tokens.mint }]}>
+                60% required to pass · timed, single attempt
+              </Text>
+            </View>
+          </View>
         )}
 
         <PrimaryButton
-          title="Start Exam"
+          title={submitting ? 'Preparing exam…' : 'Start Exam'}
           onPress={handleStartExam}
           loading={submitting}
           disabled={!selectedExamType || !selectedMaterialId || submitting}
+          style={{ width: '100%' }}
         />
       </ScrollView>
     </SafeAreaView>
@@ -454,78 +578,106 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 16,
     paddingBottom: 48,
+    gap: 20,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  section: {
     gap: 12,
-    paddingTop: 8,
-    paddingBottom: 16,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 28,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 24,
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
   },
   sectionLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
+    fontSize: 18,
+    letterSpacing: -0.3,
+  },
+  sectionMeta: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   examTypeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    marginBottom: 24,
   },
   examTypeCard: {
-    flex: 1,
-    minWidth: '45%',
     borderRadius: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
     padding: 14,
-    gap: 4,
+    gap: 6,
+  },
+  examTypeTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   examTypeLabel: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    textTransform: 'uppercase',
+    letterSpacing: -0.2,
   },
   examTypeMeta: {
-    fontSize: 12,
+    fontSize: 11,
+    letterSpacing: 0.2,
   },
   materialList: {
-    gap: 10,
-    marginBottom: 24,
+    gap: 8,
   },
   materialCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     borderRadius: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
     padding: 14,
-    gap: 4,
+  },
+  materialIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   materialTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+    marginBottom: 2,
   },
   materialMeta: {
-    fontSize: 12,
+    fontSize: 11,
+    letterSpacing: 0.2,
   },
   emptyText: {
     fontSize: 13,
-    marginBottom: 24,
     textAlign: 'center',
+  },
+  stateBlock: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 28,
+    alignItems: 'center',
+    gap: 8,
+  },
+  summaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+  },
+  summaryText: {
+    fontSize: 14,
+    letterSpacing: -0.2,
+  },
+  summarySub: {
+    fontSize: 11,
+    marginTop: 2,
+    opacity: 0.8,
   },
   errorBanner: {
     flexDirection: 'row',
@@ -534,7 +686,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     padding: 12,
-    marginBottom: 16,
   },
   errorText: {
     flex: 1,
@@ -542,85 +693,99 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   retryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    marginRight: 4,
   },
   retryText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  emptyState: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 32,
+  // ── ACTIVE ──
+  activeHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 24,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
-  primaryBtn: {
-    borderRadius: 14,
-    paddingVertical: 16,
+  exitBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  timerContainer: {
+  timerPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   timerText: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
   progressText: {
-    fontSize: 13,
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 12,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
   progressBarContainer: {
-    height: 4,
-    borderRadius: 2,
+    height: 3,
     marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 12,
+    borderRadius: 2,
+    overflow: 'hidden',
   },
   progressBar: {
-    height: 4,
+    height: 3,
     borderRadius: 2,
   },
   questionContainer: {
-    flex: 1,
     paddingHorizontal: 16,
+    paddingBottom: 24,
     gap: 16,
   },
+  questionBlock: {
+    paddingTop: 4,
+    gap: 10,
+  },
+  questionEyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
   questionText: {
-    fontSize: 17,
-    lineHeight: 24,
-    fontWeight: '500',
+    fontSize: 19,
+    lineHeight: 26,
+    letterSpacing: -0.3,
   },
   optionsContainer: {
-    gap: 10,
+    gap: 8,
   },
   optionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     borderRadius: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
     padding: 14,
   },
   optionLetter: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -637,61 +802,82 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 12,
+    paddingVertical: 12,
+    gap: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   navBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderWidth: 1,
+  },
+  navBtnGhost: {
+    backgroundColor: 'transparent',
   },
   navBtnText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  exitBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resultContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
+  // ── COMPLETE ──
+  resultScroll: {
+    paddingHorizontal: 16,
+    paddingBottom: 48,
     gap: 16,
   },
-  scoreCircle: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 6,
+  resultHero: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+    gap: 10,
+  },
+  resultBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scoreText: {
-    fontSize: 48,
-    fontWeight: '700',
-  },
   resultTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 26,
+    letterSpacing: -0.5,
+    textAlign: 'center',
   },
   resultSubtitle: {
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+    maxWidth: 280,
+  },
+  scoreCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
+    gap: 4,
+  },
+  scorePct: {
+    fontSize: 56,
+    letterSpacing: -1.4,
+    lineHeight: 64,
+  },
+  scorePctSym: {
+    fontSize: 24,
+    fontWeight: '700',
+    opacity: 0.6,
+  },
+  scoreLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   resultStats: {
     flexDirection: 'row',
-    gap: 12,
-    width: '100%',
+    gap: 8,
   },
   statBox: {
     flex: 1,
@@ -703,9 +889,15 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 22,
-    fontWeight: '700',
+    letterSpacing: -0.4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  resultActions: {
+    gap: 8,
+    marginTop: 8,
   },
 });

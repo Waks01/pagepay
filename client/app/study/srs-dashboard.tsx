@@ -1,36 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
 import {
   ActivityIndicator,
-  FlatList,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTranslation } from 'react-i18next';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
-import { apiFetch } from '@/src/shared/api/client';
-import { PagePay } from '@/constants/theme';
+import { PagePay, Fonts } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { getDueCards, getStats, type SRSCard } from '@/src/features/study/spaced-repetition';
-
-type SRSStats = {
-  totalCards: number;
-  dueToday: number;
-  mastered: number;
-  learning: number;
-  reviewing: number;
-  averageSuccessRate: number;
-};
+import { getDueCards, type SRSCard } from '@/src/features/study/spaced-repetition';
+import { StudyHeader } from '@/components/study/StudyHeader';
 
 export default function SrsDashboardScreen() {
-  const { t } = useTranslation();
   const router = useRouter();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
@@ -41,10 +27,10 @@ export default function SrsDashboardScreen() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [stats, due] = await Promise.all([getStats(), getDueCards()]);
+      const due = await getDueCards();
       setDueCards(due);
     } catch (error) {
-      console.error('Failed to load SRS data:', error);
+      if (__DEV__) console.error('Failed to load SRS data:', error);
     } finally {
       setLoading(false);
     }
@@ -54,79 +40,95 @@ export default function SrsDashboardScreen() {
     loadData();
   }, [loadData]);
 
-  const renderCard = ({ item }: { item: SRSCard }) => {
-    const boxColor = item.box >= 4 ? tokens.mint : item.box >= 2 ? tokens.inkMuted : tokens.signal;
+  const masteredCount = dueCards.filter((c) => c.box === 5).length;
+  const learningCount = dueCards.filter((c) => c.box <= 2).length;
+
+  const renderCard = (item: SRSCard, idx: number) => {
+    const boxColor = item.box >= 4 ? tokens.mint : item.box >= 2 ? tokens.gold : tokens.signal;
     return (
-      <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-        <View style={[styles.boxBadge, { backgroundColor: boxColor }]}>
-          <Text style={styles.boxText}>Box {item.box}</Text>
+      <Animated.View
+        key={`${item.assetId}_${item.cardIndex}`}
+        entering={FadeInDown.delay(idx * 40).duration(220).springify()}
+        style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+      >
+        <View style={[styles.boxBadge, { backgroundColor: boxColor + '22', borderColor: boxColor }]}>
+          <Text style={[styles.boxText, { color: boxColor }]}>Box {item.box}</Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.cardTitle, { color: tokens.ink }]}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[styles.cardTitle, { color: tokens.ink }]} numberOfLines={1}>
             Asset #{item.assetId} · Card {item.cardIndex + 1}
           </Text>
-          <Text style={[styles.cardMeta, { color: tokens.inkMuted }]}>
-            Reviews: {item.reviewCount} · Success: {item.successRate}%
+          <Text style={[styles.cardMeta, { color: tokens.inkMuted }]} numberOfLines={1}>
+            {item.reviewCount} reviews · {item.successRate}% success
           </Text>
         </View>
-      </View>
+        <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} />
+      </Animated.View>
     );
   };
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={tokens.mint} />
-          </TouchableOpacity>
-          <Text style={[styles.title, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-            Review Dashboard
-          </Text>
-        </View>
+        <StudyHeader
+          title="Review Due"
+          sub={loading ? 'Loading…' : `${dueCards.length} ${dueCards.length === 1 ? 'card' : 'cards'} ready`}
+          onBack={() => router.back()}
+        />
 
         {loading ? (
-          <View style={{ marginTop: 32, alignItems: 'center', gap: 12 }}>
+          <View style={styles.loadingBlock}>
             <ActivityIndicator size="small" color={tokens.mint} />
             <Text style={[styles.loadingLabel, { color: tokens.inkMuted }]}>Loading review data…</Text>
           </View>
         ) : (
           <>
             <View style={styles.statsRow}>
-              <View style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-                <Text style={[styles.statValue, { color: tokens.mint }]}>{dueCards.length}</Text>
-                <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>Due Today</Text>
-              </View>
-              <View style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-                <Text style={[styles.statValue, { color: tokens.ink }]}>
-                  {dueCards.filter((c) => c.box === 5).length}
+              <Animated.View entering={FadeIn.duration(220)} style={[styles.statBox, { backgroundColor: tokens.mintFaint, borderColor: tokens.mint }]}>
+                <Text style={[styles.statValue, { color: tokens.mint, fontFamily: Fonts.editorialSemiBold as string }]}>
+                  {dueCards.length}
+                </Text>
+                <Text style={[styles.statLabel, { color: tokens.mint }]}>Due Today</Text>
+              </Animated.View>
+              <Animated.View entering={FadeIn.delay(60).duration(220)} style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+                <Text style={[styles.statValue, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
+                  {masteredCount}
                 </Text>
                 <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>Mastered</Text>
-              </View>
-              <View style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-                <Text style={[styles.statValue, { color: tokens.signal }]}>
-                  {dueCards.filter((c) => c.box <= 2).length}
+              </Animated.View>
+              <Animated.View entering={FadeIn.delay(120).duration(220)} style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+                <Text style={[styles.statValue, { color: tokens.signal, fontFamily: Fonts.editorialSemiBold as string }]}>
+                  {learningCount}
                 </Text>
                 <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>Learning</Text>
-              </View>
+              </Animated.View>
             </View>
 
-            <Text style={[styles.sectionTitle, { color: tokens.ink }]}>Due for Review</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionTitle, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
+                Due for Review
+              </Text>
+              <Text style={[styles.sectionMeta, { color: tokens.inkMuted }]}>
+                {dueCards.length} cards
+              </Text>
+            </View>
+
             {dueCards.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="checkmark-done-circle-outline" size={48} color={tokens.mint} />
+              <View style={[styles.emptyState, { borderColor: tokens.border, backgroundColor: tokens.card }]}>
+                <View style={[styles.emptyIcon, { backgroundColor: tokens.mintSoft }]}>
+                  <Ionicons name="checkmark-done-circle-outline" size={28} color={tokens.mint} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
+                  All caught up
+                </Text>
                 <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>
-                  No cards due today. Keep up the good work!
+                  No cards due today. Keep up the great work!
                 </Text>
               </View>
             ) : (
-              <FlatList
-                data={dueCards}
-                keyExtractor={(item) => `${item.assetId}_${item.cardIndex}`}
-                renderItem={renderCard}
-                scrollEnabled={false}
-                contentContainerStyle={styles.cardList}
-              />
+              <View style={styles.cardList}>
+                {dueCards.map((card, idx) => renderCard(card, idx))}
+              </View>
             )}
           </>
         )}
@@ -139,29 +141,19 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 16,
     paddingBottom: 48,
+    gap: 20,
   },
-  header: {
-    flexDirection: 'row',
+  loadingBlock: {
+    paddingVertical: 48,
     alignItems: 'center',
     gap: 12,
-    paddingTop: 8,
-    paddingBottom: 16,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 28,
-    letterSpacing: -0.5,
+  loadingLabel: {
+    fontSize: 13,
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 24,
+    gap: 8,
   },
   statBox: {
     flex: 1,
@@ -172,19 +164,32 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statValue: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    letterSpacing: -0.5,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
+    fontSize: 18,
+    letterSpacing: -0.3,
+  },
+  sectionMeta: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   cardList: {
-    gap: 10,
+    gap: 8,
   },
   card: {
     flexDirection: 'row',
@@ -196,33 +201,49 @@ const styles = StyleSheet.create({
   },
   boxBadge: {
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: 999,
+    borderWidth: 1,
   },
   boxText: {
-    color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
   cardTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: -0.1,
+    marginBottom: 2,
   },
   cardMeta: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 11,
+    letterSpacing: 0.2,
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 48,
-    gap: 12,
+    paddingHorizontal: 24,
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  emptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    letterSpacing: -0.3,
   },
   emptyText: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  loadingLabel: {
     fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
