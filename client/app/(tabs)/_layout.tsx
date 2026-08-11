@@ -180,11 +180,11 @@ function TabLayoutInner({
           }}
         />
         {/* Hidden tabs — navigable via drawer, not shown in bar */}
-        <Tabs.Screen name="notifications" options={{ href: null }} />
-        <Tabs.Screen name="tasks" options={{ href: null }} />
-        <Tabs.Screen name="community" options={{ href: null }} />
-        <Tabs.Screen name="profile" options={{ href: null }} />
-        <Tabs.Screen name="premium" options={{ href: null }} />
+        <Tabs.Screen name="notifications" />
+        <Tabs.Screen name="tasks" />
+        <Tabs.Screen name="community" />
+        <Tabs.Screen name="profile" />
+        <Tabs.Screen name="premium" />
       </Tabs>
 
       <MoreDrawer
