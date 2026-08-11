@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { setPendingWithdrawAfterPin } from '@/src/shared/lib/pin-verify-flag';
-import { getLastRoute } from '@/src/shared/lib/screen-memory';
 import { OtpInput } from '@/components/OtpInput';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
@@ -74,8 +73,7 @@ export default function VerifyPinScreen() {
             if (redirect === '/(tabs)/wallet') {
               setPendingWithdrawAfterPin(true);
             }
-            const lastRoute = await getLastRoute();
-            router.replace((lastRoute || redirect || '/(tabs)') as any);
+            router.replace((redirect || '/(tabs)') as any);
           } else {
             router.back();
           }

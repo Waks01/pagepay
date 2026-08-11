@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/src/shared/lib/queryClient';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFonts, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
+import { Fraunces_500Medium, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
 import { View } from 'react-native';
 import Constants from 'expo-constants';
 import 'react-native-reanimated';
@@ -13,7 +14,6 @@ import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { useAdsConfig } from '@/src/shared/hooks/use-ads-config';
 import { bootstrapPreferences, usePreferences } from '@/src/shared/lib/preferences';
 import { getToken } from '@/src/shared/lib/storage';
-import { getLastTab, clearLastTab } from '@/src/shared/lib/screen-memory';
 import { initializeAdMob } from '@/src/shared/lib/ads-native';
 import { setOnUnauthenticated, apiFetch } from '@/src/shared/api/client';
 import { setupNotificationListeners, registerFCMToken, handleNotificationTap } from '@/src/lib/notifications';
@@ -73,19 +73,12 @@ function useAuthGate() {
           (router as any).replace('/(auth)/');
         }
       } else if (token && inAuthGroup && segments[1] !== 'verify-email-code') {
-        const savedTab = await getLastTab();
-        const target = (VALID_TABS as readonly string[]).includes(savedTab as ValidTab)
-          ? `/(tabs)/${savedTab}`
-          : '/(tabs)';
-        (router as any).replace(target);
+        (router as any).replace('/(tabs)');
       } else if (token && segments[0] === '(tabs)' && !hasRestoredTab.current) {
         hasRestoredTab.current = true;
         const currentTab = (segments[1] as ValidTab) || 'index';
         if (currentTab === 'index') {
-          const savedTab = await getLastTab();
-          if ((VALID_TABS as readonly string[]).includes(savedTab as ValidTab) && savedTab !== 'index') {
-            (router as any).replace(`/(tabs)/${savedTab}`);
-          }
+          (router as any).replace('/(tabs)/index');
         }
       }
       setIsReady(true);
@@ -142,6 +135,8 @@ export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_500Medium,
     SpaceGrotesk_700Bold,
+    Fraunces_500Medium,
+    Fraunces_600SemiBold,
   });
 
   // Boot preferences once. The auth gate's `hydrated` selector means

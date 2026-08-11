@@ -1,10 +1,11 @@
-import { useCallback, useState, useEffect } from 'react';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { useMaterials, useUploadSow, useUploadSowImage, useUploadSowDocument, useClaimQuizBonus, useGenerateExample } from '@/src/features/study/hooks/use-study';
@@ -13,16 +14,14 @@ import { useDocumentPicker } from '@/src/shared/hooks/use-document-picker';
 import { SowUploadCard } from '@/components/study/SowUploadCard';
 import { AssetBrowser } from '@/components/study/AssetBrowser';
 import { ProgressDashboard } from '@/components/study/ProgressDashboard';
-import { PagePay } from '@/constants/theme';
+import { StudyHeader } from '@/components/study/StudyHeader';
+import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { PrimaryButton } from '@/components/PrimaryButton';
 import NotificationBell from '@/components/NotificationBell';
 import { SkeletonPage } from '@/components/skeletons';
 import { Skeleton } from '@/components/Skeleton';
 import { cacheAsset, getCachedAsset } from '@/src/features/study/storage';
 import { saveLastRoute, getLastRoute } from '@/src/shared/lib/screen-memory';
-
-const STUDY_ROUTE_MEMORY_KEY = 'pagepay_study_selected_material';
 
 // Error categorization helper
 function categorizeError(message: string, operation: string, t: (key: string, params?: Record<string, unknown>) => string): string {
@@ -116,7 +115,7 @@ export default function StudyScreen() {
       loadCachedAssets(selectedMaterial.id);
       startStudySession(selectedMaterial.id);
     }
-    
+
     return () => {
       if (studySessionId) {
         endStudySession(studySessionId);
@@ -149,7 +148,7 @@ export default function StudyScreen() {
   const loadCachedAssets = async (materialId: number) => {
     try {
       if (!selectedMaterial) return;
-      
+
       for (const asset of selectedMaterial.assets) {
         if (!(asset.id in unlockedAssets)) {
           const cached = await getCachedAsset(asset.id);
@@ -170,7 +169,7 @@ export default function StudyScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ material_id: materialId }),
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         setStudySessionId(data.session_id);
@@ -188,7 +187,7 @@ export default function StudyScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId }),
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         setStudyDuration(data.duration_seconds);
@@ -237,7 +236,7 @@ export default function StudyScreen() {
       if (text.length > 50000) {
         throw new Error(t('study.errors.text_too_long'));
       }
-      
+
       // Simulate initial progress
       setUploadProgress(20);
       const result = await uploadMutation.mutateAsync({ text, exam_type: examType });
@@ -268,7 +267,7 @@ export default function StudyScreen() {
         setUploadProgress(undefined);
         return;
       }
-      
+
       // Client-side file validation
       const maxSize = 10 * 1024 * 1024; // 10MB
       if (file.uri && file.uri.startsWith('file://')) {
@@ -276,13 +275,13 @@ export default function StudyScreen() {
         // Note: React Native doesn't provide direct file size access
         // This is a placeholder - actual implementation would need native module
       }
-      
+
       // Validate file type
       const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
       if (file.type && !validTypes.includes(file.type.toLowerCase())) {
         throw new Error(t('study.errors.invalid_file_type'));
       }
-      
+
       setUploadProgress(20);
       const result = await uploadImageMutation.mutateAsync({ file: { uri: file.uri, name: file.name, type: file.type }, exam_type: examType });
       setUploadProgress(80);
@@ -341,20 +340,20 @@ export default function StudyScreen() {
         setUploadProgress(undefined);
         return;
       }
-      
+
       // Client-side file validation
       const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
       if (file.type && !validTypes.includes(file.type.toLowerCase())) {
         throw new Error(t('study.errors.invalid_format'));
       }
-      
+
       // Validate file extension as fallback
       const validExtensions = ['.pdf', '.docx', '.doc'];
       const hasValidExtension = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
       if (!hasValidExtension) {
         throw new Error(t('study.errors.invalid_format'));
       }
-      
+
       setUploadProgress(20);
       const result = await uploadDocumentMutation.mutateAsync({ file: { uri: file.uri, name: file.name, type: file.type }, exam_type: examType });
       setUploadProgress(80);
@@ -438,7 +437,7 @@ export default function StudyScreen() {
     const data = await res.json();
     if (data.unlocked && data.content) {
       setUnlockedAssets((prev) => ({ ...prev, [assetId]: data.content }));
-      
+
       // Cache the unlocked asset for offline access
       if (selectedMaterialId) {
         try {
@@ -459,7 +458,7 @@ export default function StudyScreen() {
     if (res.ok) {
       const materialData = await res.json();
       setSelectedMaterial(materialData);
-      
+
       // Load already unlocked assets from backend response
       const unlockedFromBackend: Record<number, unknown> = {};
       for (const asset of materialData.assets) {
@@ -482,53 +481,101 @@ export default function StudyScreen() {
   const materials = materialsQ.data ?? [];
   const balance = meQ.data?.points_balance ?? 0;
   const isLoading = materialsQ.isLoading;
+  const totalAssets = selectedMaterial?.assets.length ?? 0;
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-        <View style={styles.headerRow}>
-          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
-          <View style={styles.headerTitleArea}>
-            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-              {selectedMaterial ? selectedMaterial.title : t('study.title')}
-            </Text>
-            {selectedMaterial && (
-              <Text style={[styles.headerSubtitle, { color: tokens.inkMuted }]}>
-                {t('study.assets_generated', { count: selectedMaterial.assets.length })}
-              </Text>
-            )}
-          </View>
-          <NotificationBell />
-        </View>
-      </View>
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl refreshing={materialsQ.isFetching} onRefresh={() => qc.invalidateQueries({ queryKey: ['study', 'materials'] })} tintColor={tokens.mint} />
         }
       >
-        <View style={styles.header}>
-          <Text style={[styles.headline, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-            {selectedMaterial ? selectedMaterial.title : t('study.title')}
-          </Text>
-          {selectedMaterial && (
-            <Text style={[styles.subline, { color: tokens.inkMuted }]}>
-              {t('study.assets_generated', { count: selectedMaterial.assets.length })}
-            </Text>
-          )}
-        </View>
+        {selectedMaterial ? (
+          <View style={styles.headerWrap}>
+            <StudyHeader
+              title={selectedMaterial.title}
+              sub={t('study.assets_generated', { count: totalAssets })}
+              onBack={handleBack}
+              right={
+                <Pressable
+                  onPress={() => handleChatPress(selectedMaterial.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('study.chat_ai')}
+                  style={({ pressed }) => [styles.headerIconBtn, { borderColor: tokens.border, backgroundColor: tokens.card, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={18} color={tokens.ink} />
+                </Pressable>
+              }
+            />
+
+            <Animated.View entering={FadeInDown.duration(240).springify()}>
+              <View style={[styles.detailHero, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+                {selectedMaterial.exam_type && (
+                  <View style={[styles.eyebrowPill, { backgroundColor: tokens.mintSoft }]}>
+                    <Ionicons name="ribbon-outline" size={12} color={tokens.mint} />
+                    <Text style={[styles.eyebrowText, { color: tokens.mint }]}>
+                      MATERIAL · {selectedMaterial.exam_type.toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <Text
+                  style={[styles.heroTitle, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}
+                >
+                  {selectedMaterial.title.replace(/^[A-Z]+ · /, '')}
+                </Text>
+                <View style={styles.heroMetaRow}>
+                  <View style={[styles.heroChip, { borderColor: tokens.border }]}>
+                    <Ionicons name="list-outline" size={12} color={tokens.inkMuted} />
+                    <Text style={[styles.heroChipText, { color: tokens.ink }]}>
+                      {getTopicNames(selectedMaterial.parsed_structure).length} topics
+                    </Text>
+                  </View>
+                  <View style={[styles.heroChip, { borderColor: tokens.border }]}>
+                    <Ionicons name="albums-outline" size={12} color={tokens.inkMuted} />
+                    <Text style={[styles.heroChipText, { color: tokens.ink }]}>
+                      {totalAssets} assets
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+
+            <Pressable
+              onPress={() => handleChatPress(selectedMaterial.id)}
+              style={({ pressed }) => [
+                styles.chatBtnFull,
+                { backgroundColor: tokens.mint, opacity: pressed ? 0.85 : 1 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t('study.chat_ai')}
+            >
+              <Ionicons name="chatbubble-ellipses" size={18} color={tokens.mintText} />
+              <Text style={[styles.chatBtnFullText, { color: tokens.mintText }]}>
+                {t('study.chat_ai')}
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <StudyHeader
+            title={t('study.title')}
+            sub={`${materials.length} ${materials.length === 1 ? 'material' : 'materials'}`}
+            right={<NotificationBell />}
+          />
+        )}
 
         {error && (
-          <View 
-            style={[styles.errorBanner, { backgroundColor: tokens.signalSoft, borderColor: tokens.signal }]}
+          <Animated.View
+            entering={FadeIn.duration(180)}
+            style={[styles.errorBanner, { backgroundColor: tokens.signalFaint, borderColor: tokens.signal }]}
             accessibilityRole="alert"
             accessibilityLabel={`Error: ${error}`}
           >
             <Ionicons name="alert-circle-outline" size={18} color={tokens.signal} accessibilityLabel="" />
             <Text style={[styles.errorText, { color: tokens.signal }]}>{error}</Text>
             {retryAction && (
-              <TouchableOpacity 
-                onPress={retryAction} 
+              <TouchableOpacity
+                onPress={retryAction}
                 style={[styles.retryBtn, { backgroundColor: tokens.signal }]}
                 accessibilityRole="button"
                 accessibilityLabel={t('study.retry')}
@@ -537,7 +584,7 @@ export default function StudyScreen() {
                 <Text style={styles.retryText}>{t('study.retry')}</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => {
                 setError(null);
                 setRetryAction(null);
@@ -548,67 +595,59 @@ export default function StudyScreen() {
             >
               <Ionicons name="close" size={16} color={tokens.signal} accessibilityLabel="" />
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         )}
 
         {bonusNotification && (
-          <View 
+          <Animated.View
+            entering={FadeIn.duration(180)}
             style={[styles.bonusBanner, { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }]}
             accessibilityRole="alert"
             accessibilityLabel={`Bonus earned: ${bonusNotification}`}
           >
             <Ionicons name="trophy-outline" size={18} color={tokens.mint} accessibilityLabel="" />
             <Text style={[styles.bonusText, { color: tokens.mint }]}>{bonusNotification}</Text>
-            <TouchableOpacity 
-              onPress={() => setBonusNotification(null)} 
+            <TouchableOpacity
+              onPress={() => setBonusNotification(null)}
               hitSlop={6}
               accessibilityRole="button"
               accessibilityLabel="Dismiss bonus notification"
             >
               <Ionicons name="close" size={16} color={tokens.mint} accessibilityLabel="" />
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         )}
 
         {selectedMaterial ? (
           <View style={styles.detailView}>
-            <View style={styles.detailActions}>
-              <TouchableOpacity
-                onPress={handleBack}
-                style={[styles.backBtn, { borderColor: tokens.border }]}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={t('study.all_materials')}
-              >
-                <Ionicons name="arrow-back" size={18} color={tokens.mint} accessibilityLabel="" />
-                <Text style={[styles.backText, { color: tokens.mint }]}>{t('study.all_materials')}</Text>
-              </TouchableOpacity>
-              <View style={styles.chatBtn}>
-                <PrimaryButton
-                  title={t('study.chat_ai')}
-                  onPress={() => handleChatPress(selectedMaterial.id)}
-                />
-              </View>
-            </View>
-
             {selectedMaterial.parsed_structure && (
-              <View style={[styles.outlineCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-                <Text style={[styles.outlineTitle, { color: tokens.ink }]}>{t('study.topics_covered')}</Text>
-                {Object.entries(selectedMaterial.parsed_structure as Record<string, unknown>).length > 0 && (
+              <Animated.View entering={FadeInDown.delay(120).duration(240).springify()}>
+                <View style={[styles.outlineCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={[styles.outlineTitle, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
+                      {t('study.topics_covered')}
+                    </Text>
+                    <Text style={[styles.outlineMeta, { color: tokens.inkMuted }]}>
+                      {getTopicNames(selectedMaterial.parsed_structure).length} total
+                    </Text>
+                  </View>
                   <View style={styles.outlineList}>
                     {((selectedMaterial.parsed_structure as Record<string, unknown>).topics as Array<Record<string, unknown>> | undefined) &&
-                 Array.isArray((selectedMaterial.parsed_structure as Record<string, unknown>).topics) &&
-                 ((selectedMaterial.parsed_structure as Record<string, unknown>).topics as Array<Record<string, unknown>>).map((topic: Record<string, unknown>, idx: number) => (
-                      <View key={idx} style={styles.outlineItem}>
-                        <View style={[styles.outlineDot, { backgroundColor: tokens.mint }]} />
-                        <Text style={[styles.outlineText, { color: tokens.ink }]}>
-                          {String(topic.name)}
-                        </Text>
-                      </View>
-                    ))}
+                      Array.isArray((selectedMaterial.parsed_structure as Record<string, unknown>).topics) &&
+                      ((selectedMaterial.parsed_structure as Record<string, unknown>).topics as Array<Record<string, unknown>>).map((topic: Record<string, unknown>, idx: number) => (
+                        <View key={idx} style={styles.outlineItem}>
+                          <Text style={[styles.outlineNum, { color: tokens.inkFaint }]}>
+                            {String(idx + 1).padStart(2, '0')}
+                          </Text>
+                          <View style={[styles.outlineDot, { backgroundColor: tokens.mint }]} />
+                          <Text style={[styles.outlineText, { color: tokens.ink }]}>
+                            {String(topic.name)}
+                          </Text>
+                        </View>
+                      ))}
                   </View>
-                )}
-              </View>
+                </View>
+              </Animated.View>
             )}
 
             {selectedMaterial.content && (
@@ -617,16 +656,17 @@ export default function StudyScreen() {
                 style={({ pressed }) => [
                   styles.readBtn,
                   {
-                    backgroundColor: tokens.mint,
-                    opacity: pressed ? 0.8 : 1,
+                    backgroundColor: tokens.paper,
+                    borderColor: tokens.border,
+                    opacity: pressed ? 0.85 : 1,
                   },
                 ]}
               >
-                <Ionicons name="book-outline" size={20} color={tokens.mintText} />
-                <Text style={[styles.readBtnText, { color: tokens.mintText }]}>
+                <Ionicons name="book-outline" size={18} color={tokens.mint} />
+                <Text style={[styles.readBtnText, { color: tokens.ink }]}>
                   Read Material
                 </Text>
-                <Ionicons name="chevron-forward" size={18} color={tokens.mintText} />
+                <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} />
               </Pressable>
             )}
 
@@ -670,144 +710,155 @@ export default function StudyScreen() {
               />
             )}
 
-            <View style={styles.generateRow}>
-              <GenerateButton
-                label={t('study.generate.mcqs')}
-                icon="help-circle-outline"
-                assetType="mcq"
-                onPress={() => {
-                  const count = generateMode === 'topic' ? 15 : 20;
-                  handleGenerateAsset(selectedMaterial.id, 'mcq', count, selectedTopic, generateMode);
-                }}
-                loading={generatingType === 'mcq'}
-                tokens={tokens}
-              />
-              <GenerateButton
-                label={t('study.generate.flashcards')}
-                icon="albums-outline"
-                assetType="flashcard"
-                onPress={() => {
-                  const count = generateMode === 'topic' ? 15 : 20;
-                  handleGenerateAsset(selectedMaterial.id, 'flashcard', count, selectedTopic, generateMode);
-                }}
-                loading={generatingType === 'flashcard'}
-                tokens={tokens}
-              />
-              <GenerateButton
-                label={t('study.generate.essays')}
-                icon="document-text-outline"
-                assetType="essay"
-                onPress={() => {
-                  const count = generateMode === 'topic' ? 15 : 20;
-                  handleGenerateAsset(selectedMaterial.id, 'essay', count, selectedTopic, generateMode);
-                }}
-                loading={generatingType === 'essay'}
-                tokens={tokens}
-              />
-            </View>
-
-            <View style={styles.generateRow}>
-              <GenerateButton
-                label="Diagram"
-                icon="git-branch-outline"
-                assetType="diagram"
-                onPress={() => handleGenerateAsset(selectedMaterial.id, 'diagram', 1, selectedTopic, generateMode)}
-                loading={generatingType === 'diagram'}
-                tokens={tokens}
-              />
-              <GenerateButton
-                label="Video (200 pts)"
-                icon="play-circle-outline"
-                assetType="video"
-                onPress={() => handleGenerateAsset(selectedMaterial.id, 'video', 1, selectedTopic, generateMode)}
-                loading={generatingType === 'video'}
-                tokens={tokens}
-              />
-            </View>
-
-            <View style={styles.generateRow}>
-              <GenerateButton
-                label="Try It Yourself"
-                icon="create-outline"
-                assetType="example"
-                onPress={() => {
-                  generateExampleMutation.mutate({
-                    material_id: selectedMaterial.id,
-                    topic: selectedTopic,
-                    mode: generateMode,
-                    education_level: 'secondary',
-                    subject_hints: 'general',
-                  });
-                }}
-                loading={generateExampleMutation.isPending}
-                tokens={tokens}
-              />
-            </View>
-
-            <View style={[styles.generateOptions, { borderTopColor: tokens.border }]}>
-              <Text style={[styles.generateOptionsLabel, { color: tokens.ink }]}>
-                Generation Mode:
-              </Text>
-              <View style={styles.modeSelector}>
-                <TouchableOpacity
-                  onPress={() => { setGenerateMode('all'); setSelectedTopic(null); }}
-                  style={[
-                    styles.modeBtn,
-                    {
-                      backgroundColor: generateMode === 'all' ? tokens.mint : tokens.card,
-                      borderColor: tokens.border,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                >
-                  <Text style={[styles.modeBtnText, { color: generateMode === 'all' ? tokens.mintText : tokens.ink }]}>
-                    All Topics (20 questions)
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setGenerateMode('topic')}
-                  style={[
-                    styles.modeBtn,
-                    {
-                      backgroundColor: generateMode === 'topic' ? tokens.mint : tokens.card,
-                      borderColor: tokens.border,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                >
-                  <Text style={[styles.modeBtnText, { color: generateMode === 'topic' ? tokens.mintText : tokens.ink }]}>
-                    By Topic (15 questions)
-                  </Text>
-                </TouchableOpacity>
+            <View style={styles.generateBlock}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={[styles.genHeading, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
+                  Generate
+                </Text>
+                <Text style={[styles.outlineMeta, { color: tokens.inkMuted }]}>
+                  {generateMode === 'topic' ? '15 / topic' : '20 / material'}
+                </Text>
+              </View>
+              <View style={styles.generateRow}>
+                <GenerateButton
+                  label={t('study.generate.mcqs')}
+                  icon="help-circle-outline"
+                  assetType="mcq"
+                  onPress={() => {
+                    const count = generateMode === 'topic' ? 15 : 20;
+                    handleGenerateAsset(selectedMaterial.id, 'mcq', count, selectedTopic, generateMode);
+                  }}
+                  loading={generatingType === 'mcq'}
+                  tokens={tokens}
+                />
+                <GenerateButton
+                  label={t('study.generate.flashcards')}
+                  icon="albums-outline"
+                  assetType="flashcard"
+                  onPress={() => {
+                    const count = generateMode === 'topic' ? 15 : 20;
+                    handleGenerateAsset(selectedMaterial.id, 'flashcard', count, selectedTopic, generateMode);
+                  }}
+                  loading={generatingType === 'flashcard'}
+                  tokens={tokens}
+                />
+                <GenerateButton
+                  label={t('study.generate.essays')}
+                  icon="document-text-outline"
+                  assetType="essay"
+                  onPress={() => {
+                    const count = generateMode === 'topic' ? 15 : 20;
+                    handleGenerateAsset(selectedMaterial.id, 'essay', count, selectedTopic, generateMode);
+                  }}
+                  loading={generatingType === 'essay'}
+                  tokens={tokens}
+                />
               </View>
 
-              {generateMode === 'topic' && (
-                <View style={styles.topicSelector}>
-                  <Text style={[styles.topicSelectorLabel, { color: tokens.inkMuted }]}>
-                    Select Topic:
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.topicChips}>
-                    {getTopicNames(selectedMaterial?.parsed_structure ?? null).map((topicName) => (
-                      <TouchableOpacity
-                        key={topicName}
-                        onPress={() => setSelectedTopic(topicName)}
-                        style={[
-                          styles.topicChip,
-                          {
-                            backgroundColor: selectedTopic === topicName ? tokens.mint : tokens.card,
-                            borderColor: tokens.border,
-                          },
-                        ]}
-                        accessibilityRole="button"
-                      >
-                        <Text style={[styles.topicChipText, { color: selectedTopic === topicName ? tokens.mintText : tokens.ink }]}>
-                          {topicName}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+              <View style={styles.generateRow}>
+                <GenerateButton
+                  label="Diagram"
+                  icon="git-branch-outline"
+                  assetType="diagram"
+                  onPress={() => handleGenerateAsset(selectedMaterial.id, 'diagram', 1, selectedTopic, generateMode)}
+                  loading={generatingType === 'diagram'}
+                  tokens={tokens}
+                />
+                <GenerateButton
+                  label="Video"
+                  icon="play-circle-outline"
+                  assetType="video"
+                  onPress={() => handleGenerateAsset(selectedMaterial.id, 'video', 1, selectedTopic, generateMode)}
+                  loading={generatingType === 'video'}
+                  tokens={tokens}
+                />
+              </View>
+
+              <View style={styles.generateRow}>
+                <GenerateButton
+                  label="Try It Yourself"
+                  icon="create-outline"
+                  assetType="example"
+                  onPress={() => {
+                    generateExampleMutation.mutate({
+                      material_id: selectedMaterial.id,
+                      topic: selectedTopic,
+                      mode: generateMode,
+                      education_level: 'secondary',
+                      subject_hints: 'general',
+                    });
+                  }}
+                  loading={generateExampleMutation.isPending}
+                  tokens={tokens}
+                  full
+                />
+              </View>
+
+              <View style={[styles.generateOptions, { borderTopColor: tokens.border }]}>
+                <Text style={[styles.generateOptionsLabel, { color: tokens.inkMuted }]}>
+                  Generation Mode
+                </Text>
+                <View style={styles.modeSelector}>
+                  <TouchableOpacity
+                    onPress={() => { setGenerateMode('all'); setSelectedTopic(null); }}
+                    style={[
+                      styles.modeBtn,
+                      {
+                        backgroundColor: generateMode === 'all' ? tokens.mint : tokens.card,
+                        borderColor: generateMode === 'all' ? tokens.mint : tokens.border,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[styles.modeBtnText, { color: generateMode === 'all' ? tokens.mintText : tokens.ink }]}>
+                      All Topics · 20
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setGenerateMode('topic')}
+                    style={[
+                      styles.modeBtn,
+                      {
+                        backgroundColor: generateMode === 'topic' ? tokens.mint : tokens.card,
+                        borderColor: generateMode === 'topic' ? tokens.mint : tokens.border,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[styles.modeBtnText, { color: generateMode === 'topic' ? tokens.mintText : tokens.ink }]}>
+                      By Topic · 15
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-              )}
+
+                {generateMode === 'topic' && (
+                  <View style={styles.topicSelector}>
+                    <Text style={[styles.topicSelectorLabel, { color: tokens.inkMuted }]}>
+                      Select Topic
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.topicChips}>
+                      {getTopicNames(selectedMaterial?.parsed_structure ?? null).map((topicName) => (
+                        <TouchableOpacity
+                          key={topicName}
+                          onPress={() => setSelectedTopic(topicName)}
+                          style={[
+                            styles.topicChip,
+                            {
+                              backgroundColor: selectedTopic === topicName ? tokens.mint : tokens.card,
+                              borderColor: selectedTopic === topicName ? tokens.mint : tokens.border,
+                            },
+                          ]}
+                          accessibilityRole="button"
+                        >
+                          <Text style={[styles.topicChipText, { color: selectedTopic === topicName ? tokens.mintText : tokens.ink }]}>
+                            {topicName}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
         ) : (
@@ -823,27 +874,35 @@ export default function StudyScreen() {
               onUploadDocument={handleUploadDocument}
             />
 
-            <TouchableOpacity
-              onPress={() => router.push('/study/exam-mode')}
-              style={[styles.examModeBtn, { backgroundColor: tokens.mint }]}
-              accessibilityRole="button"
-              accessibilityLabel="Start exam mode"
-            >
-              <Ionicons name="school-outline" size={20} color={tokens.mintText} />
-              <Text style={[styles.examModeBtnText, { color: tokens.mintText }]}>Exam Mode</Text>
-              <Ionicons name="chevron-forward" size={18} color={tokens.mintText} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => router.push('/study/srs-dashboard')}
-              style={[styles.examModeBtn, { backgroundColor: tokens.card, borderColor: tokens.border, borderWidth: 1 }]}
-              accessibilityRole="button"
-              accessibilityLabel="Review dashboard"
-            >
-              <Ionicons name="repeat-outline" size={20} color={tokens.mint} />
-              <Text style={[styles.examModeBtnText, { color: tokens.mint }]}>Review Due</Text>
-              <Ionicons name="chevron-forward" size={18} color={tokens.mint} />
-            </TouchableOpacity>
+            <View style={styles.quickActionsRow}>
+              <Pressable
+                onPress={() => router.push('/study/exam-mode')}
+                style={({ pressed }) => [
+                  styles.quickAction,
+                  styles.quickActionPrimary,
+                  { backgroundColor: tokens.mint, opacity: pressed ? 0.85 : 1 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Start exam mode"
+              >
+                <Ionicons name="school-outline" size={20} color={tokens.mintText} />
+                <Text style={[styles.quickActionText, { color: tokens.mintText }]}>Exam Mode</Text>
+                <Ionicons name="chevron-forward" size={16} color={tokens.mintText} />
+              </Pressable>
+              <Pressable
+                onPress={() => router.push('/study/srs-dashboard')}
+                style={({ pressed }) => [
+                  styles.quickAction,
+                  { backgroundColor: tokens.card, borderColor: tokens.border, opacity: pressed ? 0.85 : 1 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Review dashboard"
+              >
+                <Ionicons name="repeat-outline" size={20} color={tokens.mint} />
+                <Text style={[styles.quickActionText, { color: tokens.ink }]}>Review</Text>
+                <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} />
+              </Pressable>
+            </View>
 
             {isLoading ? (
               <View style={styles.stateBlock}>
@@ -851,30 +910,41 @@ export default function StudyScreen() {
               </View>
             ) : materials.length > 0 ? (
               <View style={styles.materialList}>
-                <Text style={[styles.listTitle, { color: tokens.ink }]}>{t('study.your_materials')}</Text>
-                {materials.map((m) => (
-                  <TouchableOpacity
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={[styles.listTitle, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
+                    {t('study.your_materials')}
+                  </Text>
+                  <Text style={[styles.outlineMeta, { color: tokens.inkMuted }]}>
+                    {materials.length} active
+                  </Text>
+                </View>
+                {materials.map((m, idx) => (
+                  <Animated.View
                     key={m.id}
-                    onPress={() => handleMaterialPress(m.id)}
-                    activeOpacity={0.7}
-                    style={[styles.materialCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${m.title}, ${m.exam_type || 'custom'}, ${m.asset_types.join(', ')}, created ${new Date(m.created_at).toLocaleDateString()}`}
-                    accessibilityHint="Open this study material"
+                    entering={FadeInDown.delay(idx * 60).duration(240).springify().damping(20).stiffness(220)}
                   >
-                    <View style={[styles.materialIcon, { backgroundColor: tokens.mintSoft }]}>
-                      <Ionicons name="book-outline" size={20} color={tokens.mint} accessibilityLabel="" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.materialTitle, { color: tokens.ink }]} numberOfLines={1}>
-                        {m.title}
-                      </Text>
-                      <Text style={[styles.materialMeta, { color: tokens.inkMuted }]}>
-                        {(m.exam_type ? m.exam_type.toUpperCase() : 'CUSTOM')} · {m.asset_types.join(', ')} · {new Date(m.created_at).toLocaleDateString()}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={tokens.inkMuted} accessibilityLabel="" />
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleMaterialPress(m.id)}
+                      activeOpacity={0.7}
+                      style={[styles.materialCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${m.title}, ${m.exam_type || 'custom'}, ${m.asset_types.join(', ')}, created ${new Date(m.created_at).toLocaleDateString()}`}
+                      accessibilityHint="Open this study material"
+                    >
+                      <View style={[styles.materialIcon, { backgroundColor: tokens.mintSoft }]}>
+                        <Ionicons name="book-outline" size={18} color={tokens.mint} accessibilityLabel="" />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[styles.materialTitle, { color: tokens.ink }]} numberOfLines={1}>
+                          {m.title}
+                        </Text>
+                        <Text style={[styles.materialMeta, { color: tokens.inkMuted }]} numberOfLines={1}>
+                          {(m.exam_type ? m.exam_type.toUpperCase() : 'CUSTOM')} · {m.asset_types.join(' · ')}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} accessibilityLabel="" />
+                    </TouchableOpacity>
+                  </Animated.View>
                 ))}
               </View>
             ) : (
@@ -899,6 +969,7 @@ function GenerateButton({
   onPress,
   loading,
   tokens,
+  full,
 }: {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
@@ -906,16 +977,18 @@ function GenerateButton({
   onPress: () => void;
   loading: boolean;
   tokens: (typeof PagePay)['light'];
+  full?: boolean;
 }) {
   if (loading) {
     return (
       <View
         style={[
-          styles.genBtn, 
-          { 
+          styles.genBtn,
+          full && styles.genBtnFull,
+          {
             borderColor: tokens.border,
             backgroundColor: tokens.paper,
-          }
+          },
         ]}
       >
         <View style={styles.genBtnShimmer}>
@@ -936,15 +1009,16 @@ function GenerateButton({
       accessibilityState={{ disabled: loading, busy: loading }}
       accessibilityHint={`Generate new ${label} study materials`}
       style={[
-        styles.genBtn, 
-        { 
-          borderColor: tokens.mint,
-          backgroundColor: tokens.mintSoft,
-        }
+        styles.genBtn,
+        full && styles.genBtnFull,
+        {
+          borderColor: tokens.border,
+          backgroundColor: tokens.card,
+        },
       ]}
     >
-      <Ionicons name={icon} size={16} color={tokens.mint} accessibilityLabel="" />
-      <Text style={[styles.genText, { color: tokens.mint, fontWeight: '600' }]} numberOfLines={1}>
+      <Ionicons name={icon} size={18} color={tokens.mint} accessibilityLabel="" />
+      <Text style={[styles.genText, { color: tokens.ink }]} numberOfLines={1}>
         {label}
       </Text>
     </TouchableOpacity>
@@ -956,97 +1030,127 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 48,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 10,
+  headerWrap: {
+    gap: 14,
   },
-  headerRow: {
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailHero: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 18,
+    gap: 12,
+  },
+  eyebrowPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
-  headerIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+  eyebrowText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
-  headerTitleArea: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    lineHeight: 20,
-    letterSpacing: -0.2,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    lineHeight: 16,
-    marginTop: 1,
-  },
-  headline: {
-    fontSize: 28,
-    lineHeight: 34,
+  heroTitle: {
+    fontSize: 26,
+    lineHeight: 32,
     letterSpacing: -0.5,
   },
-  subline: {
-    fontSize: 14,
-    lineHeight: 20,
+  heroMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
   },
-  listView: {
-    gap: 20,
-  },
-  detailView: {
-    gap: 16,
-  },
-  detailActions: {
+  heroChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
   },
-  backText: {
-    fontSize: 13,
+  heroChipText: {
+    fontSize: 11,
     fontWeight: '600',
   },
-  chatBtn: {
-    flex: 1,
+  chatBtnFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 14,
+  },
+  chatBtnFullText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  detailView: {
+    gap: 16,
   },
   outlineCard: {
     borderRadius: 14,
     borderWidth: 1,
     padding: 16,
-    gap: 10,
+    gap: 12,
   },
   outlineTitle: {
-    fontSize: 14,
+    fontSize: 16,
+    letterSpacing: -0.2,
+  },
+  outlineMeta: {
+    fontSize: 11,
     fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   outlineList: {
-    gap: 6,
+    gap: 8,
   },
   outlineItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
+  outlineNum: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    width: 22,
+  },
   outlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   outlineText: {
+    flex: 1,
     fontSize: 14,
     lineHeight: 18,
+  },
+  generateBlock: {
+    gap: 12,
+  },
+  genHeading: {
+    fontSize: 16,
+    letterSpacing: -0.2,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   generateRow: {
     flexDirection: 'row',
@@ -1054,30 +1158,29 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   genBtn: {
-    minWidth: 42,
     flex: 1,
-    flexDirection: 'column',
+    minWidth: 90,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 5,
-    paddingHorizontal: 2,
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
     borderRadius: 12,
-    borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+  },
+  genBtnFull: {
+    flexBasis: '100%',
   },
   genBtnShimmer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
   },
   genText: {
     fontSize: 13,
-    letterSpacing: -0.2,
-    textAlign: 'center',
+    fontWeight: '600',
+    letterSpacing: -0.1,
   },
   generateOptions: {
     gap: 10,
@@ -1085,8 +1188,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   generateOptionsLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   modeSelector: {
     flexDirection: 'row',
@@ -1094,7 +1199,7 @@ const styles = StyleSheet.create({
   },
   modeBtn: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
@@ -1102,14 +1207,17 @@ const styles = StyleSheet.create({
   },
   modeBtnText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   topicSelector: {
-    gap: 6,
+    gap: 8,
   },
   topicSelectorLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   topicChips: {
     flexDirection: 'row',
@@ -1117,7 +1225,7 @@ const styles = StyleSheet.create({
   },
   topicChip: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 999,
     borderWidth: 1,
   },
@@ -1129,13 +1237,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginHorizontal: 16,
-    paddingVertical: 12,
+    gap: 10,
+    paddingVertical: 13,
     borderRadius: 12,
+    borderWidth: 1,
   },
   readBtnText: {
-    fontSize: 15,
+    flex: 1,
+    fontSize: 14,
     fontWeight: '600',
   },
   readerOverlay: {
@@ -1156,8 +1265,8 @@ const styles = StyleSheet.create({
   },
   readerTitle: {
     flex: 1,
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
   },
   readerCloseBtn: {
     width: 36,
@@ -1173,13 +1282,38 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 24,
   },
+  listView: {
+    gap: 16,
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  quickAction: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  quickActionPrimary: {
+    borderWidth: 0,
+  },
+  quickActionText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
   materialList: {
     gap: 10,
   },
   listTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
+    letterSpacing: -0.3,
   },
   materialCard: {
     flexDirection: 'row',
@@ -1190,32 +1324,21 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   materialIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   materialTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.1,
     marginBottom: 2,
   },
   materialMeta: {
-    fontSize: 12,
-  },
-  examModeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginBottom: 16,
-  },
-  examModeBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 11,
+    letterSpacing: 0.2,
   },
   stateBlock: {
     borderRadius: 14,

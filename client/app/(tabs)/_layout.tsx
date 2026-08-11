@@ -1,4 +1,4 @@
-import { Tabs, useRouter, usePathname } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
@@ -18,7 +18,6 @@ import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { apiFetch } from '@/src/shared/api/client';
 import { EmailVerificationGate } from '@/src/components/EmailVerificationGate';
-import { saveLastTab } from '@/src/shared/lib/screen-memory';
 import { queryClient } from '@/src/shared/lib/queryClient';
 
 type Tokens = (typeof PagePay)['light'];
@@ -47,13 +46,6 @@ export default function TabLayout() {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const { t } = useTranslation();
-  const pathname = usePathname();
-
-  const activeTab = pathname.replace('/(tabs)/', '').split('/')[0] || 'index';
-
-  useEffect(() => {
-    saveLastTab(activeTab);
-  }, [activeTab]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -64,7 +56,6 @@ export default function TabLayout() {
         setShowEmailGate={setShowEmailGate}
         tokens={tokens}
         t={t}
-        activeTab={activeTab}
       />
     </QueryClientProvider>
   );
@@ -77,7 +68,6 @@ function TabLayoutInner({
   setShowEmailGate,
   tokens,
   t,
-  activeTab,
 }: {
   drawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
@@ -85,7 +75,6 @@ function TabLayoutInner({
   setShowEmailGate: (open: boolean) => void;
   tokens: Tokens;
   t: (key: string) => string;
-  activeTab: string;
 }) {
   const qc = useQueryClient();
   const router = useRouter();
@@ -236,6 +225,7 @@ function CustomTabBar({
 
         const { options } = descriptors[route.key];
         const isFocused = state.index === index;
+        const tabBarIcon = typeof options.tabBarIcon === 'function' ? options.tabBarIcon : null;
 
         const onPress = () => {
           const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -251,11 +241,13 @@ function CustomTabBar({
             activeOpacity={0.7}
             style={styles.tabItem}
           >
-            {options.tabBarIcon({
-              color: isFocused ? tokens.mint : tokens.inkMuted,
-              size: 24,
-              focused: isFocused,
-            })}
+            {tabBarIcon
+              ? tabBarIcon({
+                  color: isFocused ? tokens.mint : tokens.inkMuted,
+                  size: 24,
+                  focused: isFocused,
+                })
+              : null}
             <Text
               style={[
                 styles.tabLabel,
