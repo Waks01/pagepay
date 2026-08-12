@@ -38,7 +38,7 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "2.2.0",
+            "kotlinVersion": "2.1.20",
             "extraBackgroundColor": "#FBFAF6",
             "packagingOptions": {
               "pickFirst": [
@@ -81,7 +81,7 @@
       "paystackPublicKey": "pk_live_c2966d1498e3d6aec4bff764f03d3105847d6aa7",
       "router": {},
       "eas": {
-        "projectId": "13efeb7a-d58e-46c0-8ff9-0e7deac9d775"
+        "projectId": "cd073eef-398e-4fd3-bba5-b5c4cb98df79"
       }
     }
   }
