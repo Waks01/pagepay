@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, AppState, AppStateStatus, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, AppState, AppStateStatus, Platform, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -29,6 +29,7 @@ import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { useAdSlot } from '@/src/shared/contexts/AdSlot';
 import { SkeletonDetailPage } from '@/components/skeletons';
+import { PagePaySpinner } from '@/components/PagePaySpinner';
 
 type ContentDetail = {
   id: number;
@@ -119,6 +120,13 @@ export default function ReaderScreen() {
   const lastSavedOffset = useRef(0);
   const finishFiredRef = useRef(false);
   const finishedManuallyRef = useRef(false);
+  // Guard against the post-read ad's onClaimed/onSkipped firing more than once
+  // (AdMob CLOSED can fire twice in some SDK versions, or both the slot path
+  // and the component-level listener can race). Without this, the user would
+  // see the post-read ad open, watch it, then immediately see another one
+  // queued behind it before navigation completes.
+  const claimProcessedRef = useRef(false);
+  const [finishing, setFinishing] = useState(false);
 
   const { data: user } = useQuery({
     queryKey: ['me'],
@@ -209,6 +217,8 @@ export default function ReaderScreen() {
     loadContent();
     finishFiredRef.current = false;
     finishedManuallyRef.current = false;
+    claimProcessedRef.current = false;
+    setFinishing(false);
 
     (async () => {
       try {
@@ -380,6 +390,10 @@ export default function ReaderScreen() {
   const onFinishTap = async () => {
     if (finishFiredRef.current) return;
     finishFiredRef.current = true;
+    // Flip the button into its loading state immediately — the user gets
+    // visual confirmation the tap registered even before the post-read ad
+    // modal renders on top of the screen.
+    setFinishing(true);
     await triggerFinish();
   };
 
@@ -409,6 +423,12 @@ export default function ReaderScreen() {
     newBalance: number;
     pending?: boolean;
   }) => {
+    // Idempotency: AdMob's CLOSED event can fire twice in some SDK versions,
+    // and the slot path's onClosed plus the component-level listener can
+    // race to call this. Without this guard, the user would see another
+    // post-read ad open behind the first before navigation completes.
+    if (claimProcessedRef.current) return;
+    claimProcessedRef.current = true;
     console.log('[Reader] Post-read ad claimed, closing modal and ending session...');
     setPostReadAdOpen(false);
     queryClient.invalidateQueries({ queryKey: ['me'] });
@@ -431,6 +451,10 @@ export default function ReaderScreen() {
   };
 
   const onPostReadAdSkipped = async () => {
+    // Same idempotency guard as onPostReadAdClaimed — a skip event that
+    // races with a closed/earned event must not retrigger the whole flow.
+    if (claimProcessedRef.current) return;
+    claimProcessedRef.current = true;
     console.log('[Reader] Post-read ad skipped, closing modal and ending session...');
     setPostReadAdOpen(false);
 
@@ -553,24 +577,39 @@ export default function ReaderScreen() {
               <Text style={[styles.endLabel, { color: tokens.inkMuted }]}>
                 {t('reader.end_label_reached')}
               </Text>
-              <TouchableOpacity
+              <Pressable
                 onPress={onFinishTap}
                 disabled={!sessionId || finishFiredRef.current}
                 accessibilityRole="button"
                 accessibilityLabel={t('reader.finish_claim')}
-                activeOpacity={0.85}
-                style={[
+                accessibilityState={{ disabled: !sessionId || finishFiredRef.current, busy: finishing }}
+                style={({ pressed }) => [
                   styles.finishBtn,
                   { backgroundColor: tokens.mint },
                   (!sessionId || finishFiredRef.current) && {
                     backgroundColor: tokens.border,
                   },
+                  pressed && !finishFiredRef.current && {
+                    opacity: 0.85,
+                    transform: [{ scale: 0.98 }],
+                  },
                 ]}
               >
-                <Text style={styles.finishBtnText}>
-                  {finishFiredRef.current ? t('reader.finishing') : t('reader.finish_claim')}
-                </Text>
-              </TouchableOpacity>
+                {finishing ? (
+                  <View style={styles.finishBtnContent}>
+                    <View style={styles.finishBtnSpinner}>
+                      <PagePaySpinner size={18} />
+                    </View>
+                    <Text style={styles.finishBtnText}>
+                      {t('reader.finishing')}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.finishBtnText}>
+                    {t('reader.finish_claim')}
+                  </Text>
+                )}
+              </Pressable>
             </>
           ) : (
             <Text style={[styles.endLabel, { color: tokens.inkMuted }]}>
@@ -719,8 +758,19 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     minWidth: 220,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   finishBtnDisabled: {},
+  finishBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  finishBtnSpinner: {
+    width: 18,
+    height: 18,
+  },
   finishBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   socialCard: {
     marginTop: 24,

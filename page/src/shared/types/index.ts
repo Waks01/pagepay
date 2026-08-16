@@ -10,3 +10,19 @@ export type UserMe = {
   email_verified: boolean;
   created_at: string;
 };
+
+/** One row from GET /api/v1/wallet/history. Mirrors backend/app/routers/wallet.py. */
+export type HistoryItem = {
+  kind: 'read' | 'ad' | 'bill' | 'payment' | 'withdrawal' | 'study' | 'bonus' | 'history';
+  type: string;
+  status: 'success' | 'pending' | 'failed';
+  txId: string;
+  ref: string;
+  description: string;
+  /** Earned points (positive for credits, negative for debits). */
+  points: number;
+  /** Signed amount: positive kobo for credits, negative for debits. */
+  amount: number;
+  date: string;
+  details: Record<string, unknown>;
+};

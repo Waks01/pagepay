@@ -9,6 +9,7 @@ import { usePlatformConfig } from '@/src/shared/hooks/use-platform-config';
 import { useTaskRateCard, TaskRateEntry } from '@/src/shared/hooks/use-task-rate-card';
 import { TASK_TEMPLATES, getTemplatesForCategory, getTemplateByType, type TaskTemplate } from '@/src/features/tasks/templates';
 import { PagePay } from '@/constants/theme';
+import { PageHeader } from '@/components/PageHeader';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 
 const PLATFORMS = [
@@ -225,12 +226,13 @@ export default function CreateTaskScreen() {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: tokens.paper }]} contentContainerStyle={styles.contentContainer}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { backgroundColor: tokens.card }]}>
-          <Ionicons name="arrow-back" size={24} color={tokens.ink} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: tokens.ink }]}>{t('sponsor_create_task.title')}</Text>
-      </View>
+      <PageHeader
+        title={t('sponsor_create_task.title')}
+        showBack
+        backgroundColor={tokens.paper}
+        borderBottomColor={tokens.border}
+        tokens={tokens}
+      />
 
       {renderCategoryPicker()}
       {renderTemplatePicker()}

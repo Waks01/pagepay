@@ -1,30 +1,30 @@
-import { useCallback, useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
-  FlatList,
+  SectionList,
   ScrollView,
   RefreshControl,
-  ActivityIndicator,
   StyleSheet,
   TouchableOpacity,
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useQuery } from '@tanstack/react-query';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { PagePay, Fonts } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { formatPoints, pointsToNairaString } from '@/src/shared/lib/money';
+import { formatPoints, pointsToNairaString, koboToPoints } from '@/src/shared/lib/money';
 import NotificationBell from '@/components/NotificationBell';
-import { SkeletonTransactionRow } from '@/components/skeletons';
-import type { UserMe } from '@/src/shared/types';
+import { SkeletonTransactionRow, SkeletonBalanceCard } from '@/components/skeletons';
+import { PageHeader } from '@/components/PageHeader';
+import type { HistoryItem, UserMe } from '@/src/shared/types';
 
-type TxType = 'airtime' | 'data' | 'electricity' | 'internet' | 'tv' | 'recharge' | 'betting' | 'isp' | 'education' | 'sms' | 'wallet' | 'withdraw' | 'ad' | 'read' | 'study' | 'premium' | 'bonus' | 'earn' | 'spend';
+type TxType = HistoryItem['type'] | 'airtime' | 'data' | 'electricity' | 'internet' | 'tv' | 'recharge' | 'betting' | 'isp' | 'education' | 'sms' | 'wallet' | 'withdraw' | 'ad' | 'read' | 'study' | 'premium' | 'bonus' | 'earn' | 'spend';
 
 type TxItem = {
   id: string;
@@ -39,45 +39,59 @@ type TxItem = {
 };
 
 const getTxMeta = (type: string, tokens: (typeof PagePay)['light']) => {
-  const map: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string; accent: string }> = {
-    airtime:     { label: 'Airtime',          icon: 'call-outline',       color: tokens.mint, accent: tokens.mintFaint },
-    data:        { label: 'Data Bundle',      icon: 'wifi-outline',       color: tokens.indigo, accent: tokens.mintFaint },
-    electricity: { label: 'Electricity',      icon: 'flash-outline',      color: tokens.gold, accent: tokens.pendingSoft },
-    internet:    { label: 'Internet',         icon: 'globe-outline',      color: tokens.indigo, accent: tokens.mintFaint },
-    tv:          { label: 'TV Subscription',  icon: 'tv-outline',         color: tokens.signal, accent: tokens.signalFaint },
-    recharge:    { label: 'Recharge Pin',     icon: 'ticket-outline',     color: tokens.indigo, accent: tokens.mintFaint },
-    betting:     { label: 'Betting',          icon: 'diamond-outline',    color: tokens.mint, accent: tokens.mintFaint },
-    isp:         { label: 'ISP',              icon: 'globe-outline',      color: tokens.indigo, accent: tokens.mintFaint },
-    education:   { label: 'Education',        icon: 'school-outline',     color: tokens.gold, accent: tokens.pendingSoft },
-    sms:         { label: 'Bulk SMS',         icon: 'chatbubbles-outline',color: tokens.inkMuted, accent: tokens.paper2 },
-    wallet:      { label: 'Wallet Funding',   icon: 'wallet-outline',     color: tokens.mint, accent: tokens.mintFaint },
-    withdraw:    { label: 'Withdrawal',       icon: 'arrow-up-circle-outline', color: tokens.gold, accent: tokens.pendingSoft },
-    ad:          { label: 'Ad Reward',        icon: 'play-circle-outline',color: tokens.signal, accent: tokens.signalFaint },
-    read:        { label: 'Reading Reward',   icon: 'book-outline',       color: tokens.indigo, accent: tokens.mintFaint },
-    study:       { label: 'Study Session',    icon: 'school-outline',     color: tokens.indigo, accent: tokens.mintFaint },
-    premium:     { label: 'Premium Subscription', icon: 'star-outline',   color: tokens.gold, accent: tokens.pendingSoft },
-    bonus:       { label: 'Bonus Reward',     icon: 'gift-outline',       color: tokens.signal, accent: tokens.signalFaint },
-    earn:        { label: 'Points Earned',    icon: 'trending-up-outline',color: tokens.mint, accent: tokens.mintFaint },
-    spend:       { label: 'Points Spent',     icon: 'trending-down-outline', color: tokens.inkMuted, accent: tokens.paper2 },
+  const map: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string; accent: string; accentHex: string }> = {
+    airtime:     { label: 'Airtime',          icon: 'call-outline',       color: tokens.mint, accent: tokens.mintFaint,    accentHex: '#10B981' },
+    data:        { label: 'Data Bundle',      icon: 'wifi-outline',       color: tokens.indigo, accent: tokens.mintFaint,   accentHex: '#3B82F6' },
+    electricity: { label: 'Electricity',      icon: 'flash-outline',      color: tokens.gold, accent: tokens.signalSoft,  accentHex: '#F59E0B' },
+    internet:    { label: 'Internet',         icon: 'globe-outline',      color: tokens.indigo, accent: tokens.mintFaint,   accentHex: '#8B5CF6' },
+    tv:          { label: 'TV Subscription',  icon: 'tv-outline',         color: tokens.signal, accent: tokens.signalFaint, accentHex: '#EC4899' },
+    recharge:    { label: 'Recharge Pin',     icon: 'ticket-outline',     color: tokens.indigo, accent: tokens.mintFaint,   accentHex: '#06B6D4' },
+    betting:     { label: 'Betting',          icon: 'diamond-outline',    color: tokens.mint, accent: tokens.mintFaint,    accentHex: '#10B981' },
+    isp:         { label: 'ISP',              icon: 'globe-outline',      color: tokens.indigo, accent: tokens.mintFaint,   accentHex: '#14B8A6' },
+    education:   { label: 'Education',        icon: 'school-outline',     color: tokens.gold, accent: tokens.signalSoft,  accentHex: '#F97316' },
+    sms:         { label: 'Bulk SMS',         icon: 'chatbubbles-outline',color: tokens.inkMuted, accent: tokens.paper2,   accentHex: '#64748B' },
+    wallet:      { label: 'Wallet Funding',   icon: 'wallet-outline',     color: tokens.mint, accent: tokens.mintFaint,    accentHex: '#0E7C66' },
+    withdraw:    { label: 'Withdrawal',       icon: 'arrow-up-circle-outline', color: tokens.gold, accent: tokens.signalSoft, accentHex: '#F59E0B' },
+    ad:          { label: 'Ad Reward',        icon: 'play-circle-outline',color: tokens.signal, accent: tokens.signalFaint, accentHex: '#EF4444' },
+    read:        { label: 'Reading Reward',   icon: 'book-outline',       color: tokens.indigo, accent: tokens.mintFaint,   accentHex: '#8B5CF6' },
+    study:       { label: 'Study Session',    icon: 'school-outline',     color: tokens.indigo, accent: tokens.mintFaint,   accentHex: '#6366F1' },
+    premium:     { label: 'Premium Subscription', icon: 'star-outline',   color: tokens.gold, accent: tokens.signalSoft,  accentHex: '#D97706' },
+    bonus:       { label: 'Bonus Reward',     icon: 'gift-outline',       color: tokens.signal, accent: tokens.signalFaint, accentHex: '#EC4899' },
+    earn:        { label: 'Points Earned',    icon: 'trending-up-outline',color: tokens.mint, accent: tokens.mintFaint,    accentHex: '#0E7C66' },
+    spend:       { label: 'Points Spent',     icon: 'trending-down-outline', color: tokens.inkMuted, accent: tokens.paper2, accentHex: '#64748B' },
   };
-  return map[type] || map['spend'];
+  return map[type] || { ...map['spend'] };
 };
 
 const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'earn', label: 'Earned' },
   { key: 'spend', label: 'Spent' },
-  { key: 'withdraw', label: 'Withdrawals' },
   { key: 'airtime', label: 'Airtime' },
   { key: 'data', label: 'Data' },
   { key: 'electricity', label: 'Electricity' },
+  { key: 'internet', label: 'Internet' },
   { key: 'tv', label: 'TV' },
+  { key: 'recharge', label: 'Recharge' },
   { key: 'betting', label: 'Betting' },
   { key: 'isp', label: 'ISP' },
   { key: 'education', label: 'Education' },
   { key: 'sms', label: 'Bulk SMS' },
+  { key: 'wallet', label: 'Wallet' },
+  { key: 'withdraw', label: 'Withdrawals' },
+  { key: 'ad', label: 'Ad Reward' },
+  { key: 'read', label: 'Reading' },
   { key: 'study', label: 'Study' },
   { key: 'premium', label: 'Premium' },
+  { key: 'bonus', label: 'Bonus' },
+] as const;
+
+const DATE_FILTERS = [
+  { key: 'all', label: 'All Dates' },
+  { key: 'Today', label: 'Today' },
+  { key: 'Yesterday', label: 'Yesterday' },
+  { key: 'This Week', label: 'This Week' },
+  { key: 'This Month', label: 'This Month' },
 ] as const;
 
 function dateLabel(d: Date) {
@@ -94,6 +108,11 @@ function dateLabel(d: Date) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+const fmtTime = (d: Date) => {
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
 export default function TransactionHistoryScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -101,91 +120,101 @@ export default function TransactionHistoryScreen() {
   const tokens = PagePay[scheme];
   const insets = useSafeAreaInsets();
 
-  const [transactions, setTransactions] = useState<TxItem[]>([]);
   const [filter, setFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 100;
 
-  const loadTransactions = useCallback(async () => {
-    try {
-      const res = await apiFetch('/wallet/history');
-      if (!res.ok) throw new Error('history endpoint not available');
-      const data = await res.json();
-      const mapped: TxItem[] = (data || []).map((tx: any) => ({
-        id: tx.txId || tx.ref || String(tx.date),
-        type: tx.type || 'spend',
+  const resetPage = () => setPage(0);
+
+  const meQ = useQuery({
+    queryKey: ['me'],
+    queryFn: async () => {
+      try {
+        const res = await apiFetch('/api/v1/auth/me');
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `Server returned ${res.status}`);
+        }
+        return (await res.json()) as UserMe;
+      } catch (e) {
+        if (e instanceof Error) throw e;
+        throw new Error(typeof e === 'string' ? e : 'Failed to load profile');
+      }
+    },
+  });
+  const balance = meQ.data?.points_balance ?? 0;
+
+   const historyQ = useQuery({
+    queryKey: ['wallet', 'history', filter, dateFilter, search, page],
+    queryFn: async () => {
+      try {
+        const params = new URLSearchParams({
+          limit: String(PAGE_SIZE),
+          offset: String(page * PAGE_SIZE),
+        });
+        if (filter !== 'all') {
+          if (filter === 'earn' || filter === 'spend') {
+            params.set('direction', filter);
+          } else {
+            params.set('type', filter);
+          }
+        }
+        if (dateFilter !== 'all') params.set('date', dateFilter);
+        if (search) params.set('search', search);
+        const res = await apiFetch(`/api/v1/wallet/history?${params.toString()}`);
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `Server returned ${res.status}`);
+        }
+        return (await res.json()) as HistoryItem[];
+      } catch (e) {
+        if (e instanceof Error) throw e;
+        throw new Error(typeof e === 'string' ? e : 'Failed to load history');
+      }
+    },
+  });
+
+  const loadMore = () => setPage((p) => p + 1);
+  const hasMore = historyQ.data ? historyQ.data.length >= PAGE_SIZE : false;
+
+  const transactions: TxItem[] = useMemo(() => {
+    return (historyQ.data ?? []).map((tx, index) => {
+      // The backend returns `amount` in two different units depending on the
+      // transaction kind:
+      //   - 'read' | 'ad' | 'study' | 'bonus' → POINTS (signed: +earn / -spend)
+      //   - 'bill' | 'payment' | 'withdrawal'  → KOBO   (signed: +credit / -debit)
+      // Normalise both to a signed points value so the list always shows "pts".
+      const FIAT_KINDS = new Set(['bill', 'payment', 'withdrawal']);
+      const rawAmount = tx.amount ?? 0;
+      const signedPoints = FIAT_KINDS.has(tx.kind)
+        ? Math.sign(rawAmount) * koboToPoints(Math.abs(rawAmount))
+        : rawAmount;
+
+      return {
+        id: tx.txId || tx.ref || `tx-${index}`,
+        type: tx.type as TxType,
         description: tx.description || 'Transaction',
-        amount: tx.amount ?? 0,
+        amount: signedPoints,
         status: tx.status || 'success',
-        date: tx.date ? (typeof tx.date === 'string' ? tx.date : new Date(tx.date).toISOString()) : new Date().toISOString(),
+        date: typeof tx.date === 'string' ? tx.date : new Date(tx.date).toISOString(),
         txId: tx.txId || '',
         ref: tx.ref || '',
         details: tx.details || {},
-      }));
-      setTransactions(mapped);
-    } catch {
-      try {
-        const res = await apiFetch('/wallet/transactions');
-        if (!res.ok) throw new Error('transactions endpoint not available');
-        const data = await res.json();
-        const mapped: TxItem[] = (Array.isArray(data) ? data : []).map((tx: any) => ({
-          id: String(tx.id),
-          type: tx.type === 'ad_reward' ? 'ad' : tx.type === 'pending' ? 'spend' : 'earn',
-          description: tx.description || 'Transaction',
-          amount: tx.points || 0,
-          status: 'success',
-          date: tx.date ? (typeof tx.date === 'string' ? tx.date : new Date(tx.date).toISOString()) : new Date().toISOString(),
-          txId: String(tx.id),
-          ref: String(tx.id),
-          details: {},
-        }));
-        setTransactions(mapped);
-      } catch {
-        setTransactions([]);
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    setLoading(true);
-    loadTransactions();
-  }, [loadTransactions]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadTransactions();
-  }, [loadTransactions]);
-
-  const filtered = useMemo(() => {
-    return transactions.filter((tx) => {
-      if (filter !== 'all') {
-        if (filter === 'earn' && !['earn', 'ad', 'read', 'study', 'premium', 'bonus'].includes(tx.type)) return false;
-        if (filter === 'spend' && ['earn', 'ad', 'read', 'study', 'premium', 'bonus', 'wallet'].includes(tx.type)) return false;
-        if (filter !== 'earn' && filter !== 'spend' && tx.type !== filter) return false;
-      }
-      if (search) {
-        const q = search.toLowerCase();
-        if (!tx.description.toLowerCase().includes(q) && !tx.txId.toLowerCase().includes(q) && !tx.ref.toLowerCase().includes(q)) {
-          return false;
-        }
-      }
-      return true;
+      };
     });
-  }, [transactions, filter, search]);
+  }, [historyQ.data]);
 
   const grouped = useMemo(() => {
     const map: Record<string, TxItem[]> = {};
-    filtered.forEach((tx) => {
+    transactions.forEach((tx) => {
       const label = dateLabel(new Date(tx.date));
       if (!map[label]) map[label] = [];
       map[label].push(tx);
     });
     return map;
-  }, [filtered]);
+  }, [transactions]);
 
   const order = ['Today', 'Yesterday', 'This Week', 'This Month'];
   const sortedKeys = Object.keys(grouped).sort((a, b) => {
@@ -196,14 +225,19 @@ export default function TransactionHistoryScreen() {
     return 0;
   });
 
-  const openDetail = (tx: TxItem) => {
+  const sections = useMemo(
+    () => sortedKeys.map((label) => ({ title: label, data: grouped[label] })),
+    [sortedKeys, grouped],
+  );
+
+  const openDetail = useCallback((tx: TxItem) => {
     const kindMap: Record<string, string> = {
       BT: 'bill',
       PAY: 'payment',
       WD: 'withdrawal',
-      RS: 'history',
-      AD: 'history',
-      ST: 'history',
+      RS: 'session',
+      AD: 'ad',
+      ST: 'study',
       PC: 'bonus',
     };
     const prefix = (tx.txId || '').split('-')[0];
@@ -213,113 +247,178 @@ export default function TransactionHistoryScreen() {
       params: {
         id: tx.txId || tx.id,
         kind,
+        // Pass the full payload so the detail screen can render immediately
+        // without a second round-trip. URL-encoded JSON in a query param.
+        item: JSON.stringify(tx),
       },
     });
-  };
+  }, [router]);
 
-  const renderItem = ({ item, index }: { item: TxItem; index: number }) => {
+  const renderItem = useCallback(({ item, index }: { item: TxItem; index: number }) => {
     const meta = getTxMeta(item.type, tokens) || getTxMeta('spend', tokens);
     const isPositive = item.amount > 0;
-    const amtClass = isPositive ? 'positive' : 'negative';
     const prefix = isPositive ? '+' : '';
-    const iconBg = isPositive ? 'earn' : 'spend';
+    const status = item.status || 'success';
+    const statusBg = status === 'success' ? tokens.mintSoft : status === 'pending' ? '#FFFBEB' : tokens.signalFaint;
+    const statusColor = status === 'success' ? tokens.mint : status === 'pending' ? '#92400E' : tokens.error;
+    const accentBg = meta.accent || tokens.paper2;
+    const iconColor = meta.color || tokens.inkMuted;
+    const cardBg = tokens.card || tokens.paper;
+    const borderC = tokens.border || tokens.paper2;
+    const inkC = tokens.ink || '#000';
+    const mutedC = tokens.inkMuted || '#666';
+    const mintC = tokens.mint || '#0E7C66';
 
     return (
-      <Animated.View entering={FadeInDown.delay(index * 30).duration(220)}>
+      <View style={{ marginBottom: 8 }}>
         <TouchableOpacity
           onPress={() => openDetail(item)}
           activeOpacity={0.7}
           style={[
             styles.txCard,
-            { backgroundColor: tokens.card, borderColor: tokens.border },
+            { backgroundColor: cardBg, borderColor: borderC, borderLeftColor: meta.accentHex, borderLeftWidth: 3 },
           ]}
         >
-          <View style={[styles.txIcon, { backgroundColor: meta.accent }]}>
-            <Ionicons name={meta.icon} size={20} color={meta.color} />
+          <View style={[styles.txIcon, { backgroundColor: accentBg }]}>
+            <Ionicons name={meta.icon} size={20} color={iconColor} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[styles.txTitle, { color: tokens.ink }]} numberOfLines={1}>
+            <Text style={[styles.txTitle, { color: inkC }]} numberOfLines={1}>
               {item.description}
             </Text>
-            <Text style={[styles.txMeta, { color: tokens.inkMuted }]}>
+            <Text style={[styles.txMeta, { color: mutedC }]}>
               {fmtTime(new Date(item.date))} · {item.txId}
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-            <Text style={[styles.txAmount, { color: isPositive ? tokens.mint : tokens.ink }]}>
+            <Text style={[styles.txAmount, { color: isPositive ? mintC : inkC }]}>
               {prefix}{Math.abs(item.amount).toLocaleString()} pts
             </Text>
-            <View style={[styles.statusBadge, { backgroundColor: item.status === 'success' ? tokens.mintSoft : item.status === 'pending' ? tokens.signalSoft : tokens.signalFaint }]}>
-              <Text style={[styles.statusText, { color: item.status === 'success' ? tokens.mint : item.status === 'pending' ? tokens.gold : tokens.error }]}>
-                {item.status}
+            <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
+              <Text style={[styles.statusText, { color: statusColor }]}>
+                {status}
               </Text>
             </View>
           </View>
         </TouchableOpacity>
-      </Animated.View>
-    );
-  };
-
-  const renderSection = (label: string) => {
-    const items = grouped[label] || [];
-    if (items.length === 0) return null;
-    return (
-      <View style={{ marginBottom: 20 }}>
-        <Text style={[styles.dateHeader, { color: tokens.inkMuted }]}>{label}</Text>
-        {items.map((tx, i) => renderItem({ item: tx, index: i }))}
       </View>
     );
-  };
+  }, [tokens, openDetail]);
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border, marginTop: insets.top }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={20} color={tokens.ink} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
-            Transaction History
-          </Text>
-          <NotificationBell />
-        </View>
-      </View>
+      <PageHeader
+        title="Wallet"
+        showBack
+        right={<NotificationBell />}
+        backgroundColor={tokens.card}
+        borderBottomColor={tokens.border}
+        marginTop={insets.top}
+        tokens={tokens}
+      />
 
-      {loading ? (
+      {historyQ.isLoading ? (
         <View style={{ padding: 16 }}>
           {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonTransactionRow key={i} />
           ))}
         </View>
+      ) : historyQ.isError ? (
+        <View style={styles.center}>
+          <Text style={{ fontSize: 40, marginBottom: 12 }}>⚠️</Text>
+          <Text style={[styles.errorTitle, { color: tokens.ink }]}>Couldn't load transactions</Text>
+          <Text style={[styles.errorText, { color: tokens.inkMuted }]}>
+            {(() => {
+              const err: any = historyQ.error;
+              if (err && typeof err === 'object' && 'message' in err) return String(err.message);
+              if (typeof err === 'string') return err;
+              return 'Network error';
+            })()}
+          </Text>
+          <TouchableOpacity
+            onPress={() => historyQ.refetch()}
+            style={[styles.retryBtn, { backgroundColor: tokens.mint }]}
+          >
+            <Text style={[styles.retryText, { color: tokens.mintText }]}>Tap to retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
-        <FlatList
-          data={[]}
-          renderItem={null}
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => `${item.id}-${item.date}`}
+          renderItem={renderItem}
+          renderSectionHeader={({ section }) => {
+            const isActive = dateFilter === section.title;
+            return (
+              <TouchableOpacity
+                onPress={() => { setDateFilter(isActive ? 'all' : section.title); resetPage(); }}
+                activeOpacity={0.7}
+                style={styles.dateHeaderRow}
+              >
+                <Text style={[styles.dateHeader, { color: isActive ? tokens.mint : tokens.inkMuted }]}>
+                  {section.title}
+                </Text>
+                {isActive && (
+                  <Ionicons name="close-circle" size={14} color={tokens.mint} />
+                )}
+              </TouchableOpacity>
+            );
+          }}
           ListHeaderComponent={
             <View>
               {/* Balance Card */}
-              <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-                <View style={[styles.balanceCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-                  <Text style={[styles.balanceLabel, { color: tokens.inkMuted }]}>Available Balance</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                    <Text style={[styles.balanceAmount, { color: tokens.ink, fontFamily: Fonts.display }]}>
-                      24,580
+              <View style={{ paddingTop: 16, paddingBottom: 8 }}>
+                {meQ.isLoading ? (
+                  <SkeletonBalanceCard />
+                ) : (
+                  <View style={[styles.balanceCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+                    <Text style={[styles.balanceLabel, { color: tokens.inkMuted }]}>Available Balance</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                      <Text style={[styles.balanceAmount, { color: tokens.ink, fontFamily: Fonts.display }]}>
+                        {formatPoints(balance)}
+                      </Text>
+                      <Text style={[styles.balanceSuffix, { color: tokens.inkMuted }]}> pts</Text>
+                    </View>
+                    <Text style={[styles.balanceSub, { color: tokens.inkMuted }]}>
+                      ≈ {pointsToNairaString(balance)}
                     </Text>
-                    <Text style={[styles.balanceSuffix, { color: tokens.inkMuted }]}> pts</Text>
                   </View>
-                  <Text style={[styles.balanceSub, { color: tokens.inkMuted }]}>
-                    ≈ {pointsToNairaString(24580)}
-                  </Text>
-                </View>
+                )}
               </View>
 
-              {/* Filters */}
-              <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+              {/* Date Filters */}
+              <View style={{ marginBottom: 8 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
+                  {DATE_FILTERS.map((f) => (
+                    <TouchableOpacity
+                      key={f.key}
+                      onPress={() => { setDateFilter(f.key); resetPage(); }}
+                      style={[
+                        styles.filterChip,
+                        dateFilter === f.key ? { backgroundColor: tokens.mint, borderColor: tokens.mint } : { backgroundColor: tokens.card, borderColor: tokens.border },
+                      ]}
+                    >
+                      <Ionicons
+                        name="calendar-outline"
+                        size={12}
+                        color={dateFilter === f.key ? tokens.mintText : tokens.inkMuted}
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={[styles.filterLabel, { color: dateFilter === f.key ? tokens.mintText : tokens.inkMuted }]}>
+                        {f.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Type Filters */}
+              <View style={{ marginBottom: 12 }}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
                   {FILTERS.map((f) => (
                     <TouchableOpacity
                       key={f.key}
-                      onPress={() => setFilter(f.key)}
+                      onPress={() => { setFilter(f.key); resetPage(); }}
                       style={[
                         styles.filterChip,
                         filter === f.key ? { backgroundColor: tokens.mint, borderColor: tokens.mint } : { backgroundColor: tokens.card, borderColor: tokens.border },
@@ -341,7 +440,7 @@ export default function TransactionHistoryScreen() {
                   placeholder="Search transactions..."
                   placeholderTextColor={tokens.inkMuted}
                   value={search}
-                  onChangeText={setSearch}
+                  onChangeText={(text) => { setSearch(text); resetPage(); }}
                   autoCapitalize="none"
                   returnKeyType="search"
                 />
@@ -351,11 +450,6 @@ export default function TransactionHistoryScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-
-              {/* Section Title */}
-              <Text style={[styles.sectionTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
-                Transaction History
-              </Text>
             </View>
           }
           ListEmptyComponent={
@@ -369,7 +463,25 @@ export default function TransactionHistoryScreen() {
           }
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 48 }}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={tokens.mint} />
+            <RefreshControl
+              refreshing={historyQ.isRefetching}
+              onRefresh={() => historyQ.refetch()}
+              tintColor={tokens.mint}
+            />
+          }
+          stickySectionHeadersEnabled={false}
+          ListFooterComponent={
+            hasMore ? (
+              <TouchableOpacity
+                onPress={loadMore}
+                disabled={historyQ.isFetching}
+                style={[styles.loadMoreBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+              >
+                <Text style={[styles.loadMoreText, { color: tokens.mint }]}>
+                  {historyQ.isFetching ? 'Loading...' : 'Load More'}
+                </Text>
+              </TouchableOpacity>
+            ) : null
           }
         />
       )}
@@ -401,6 +513,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     flex: 1,
     textAlign: 'center',
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
   },
   balanceCard: {
     borderRadius: 20,
@@ -435,6 +553,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
@@ -453,7 +573,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-    marginHorizontal: 20,
     marginBottom: 12,
   },
   searchInput: {
@@ -461,20 +580,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     padding: 0,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    marginBottom: 12,
-    paddingHorizontal: 20,
-  },
   dateHeader: {
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 10,
+    marginTop: 8,
     paddingLeft: 4,
+  },
+  dateHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
   },
   txCard: {
     flexDirection: 'row',
@@ -484,6 +603,12 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 8,
     borderWidth: 1,
+    // Subtle elevation per the design preview (line 142: box-shadow).
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   txIcon: {
     width: 40,
@@ -526,5 +651,36 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 13,
     textAlign: 'center',
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  errorText: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  retryText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  loadMoreBtn: {
+    marginTop: 16,
+    marginBottom: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

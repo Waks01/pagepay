@@ -1,14 +1,12 @@
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { apiFetch } from '@/src/shared/api/client';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import type { UserMe } from '@/src/shared/types';
+import { useCurrentUser } from '@/src/shared/lib/current-user';
 
 export default function SubscriptionManagementScreen() {
   const { t } = useTranslation();
@@ -16,14 +14,8 @@ export default function SubscriptionManagementScreen() {
   const tokens = PagePay[scheme];
   const router = useRouter();
 
-  const { data: user } = useQuery({
-    queryKey: ['me'],
-    queryFn: async () => {
-      const res = await apiFetch('/api/v1/auth/me');
-      if (!res.ok) throw new Error(t('subscription.load_profile_failed'));
-      return (await res.json()) as UserMe;
-    },
-  });
+  // Read the user from the global store — loaded once at app start.
+  const user = useCurrentUser();
 
   const isPremiumMonthly = user?.tier === 'premium_monthly';
   const isPremiumYearly = user?.tier === 'premium_yearly';

@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { apiFetch } from "@/src/shared/api/client";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PagePay } from "@/constants/theme";
+import { PageHeader } from "@/components/PageHeader";
 
 type PaymentHistoryItem = {
   id: number;
@@ -106,20 +107,13 @@ export default function PaymentHistoryScreen() {
       style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}
     >
       {/* Header */}
-      <View
-        style={[
-          styles.header,
-          { backgroundColor: tokens.card, borderBottomColor: tokens.border },
-        ]}
-      >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={tokens.ink} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: tokens.ink }]}>
-          {t("premium.view_payment_history")}
-        </Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <PageHeader
+        title={t("premium.view_payment_history")}
+        showBack
+        backgroundColor={tokens.card}
+        borderBottomColor={tokens.border}
+        tokens={tokens}
+      />
 
       {/* Content */}
       {historyQ.isLoading ? (

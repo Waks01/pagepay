@@ -18,7 +18,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
-import { PLATFORM_ENV } from '@/src/shared/lib/ads';
 import { useCatalogFilter } from '@/src/shared/lib/catalog-filter';
 import { ContentCard, ContentItem } from '@/components/ContentCard';
 import { ResumeCard } from '@/components/ResumeCard';
@@ -28,8 +27,11 @@ import { CategoryChip } from '@/components/CategoryChip';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { StateBlock } from '@/components/StateBlock';
+import { PageHeader } from '@/components/PageHeader';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { useAdsConfig } from '@/src/shared/hooks/use-ads-config';
+import { useCurrentUser } from '@/src/shared/lib/current-user';
 
 // Education level options for the catalog level grid. Each entry has
 // a label (English, the i18n key is for future localization) and a
@@ -116,16 +118,11 @@ export default function CatalogScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-  // Fetch ad config for native unit
+  // Fetch ad config for native unit. useAdsConfig has its own
+  // 1-hour staleTime and is shared with the AdSlotProvider and
+  // the home tab — the data is fetched once and reused.
   const [nativeAdUnit, setNativeAdUnit] = useState('');
-  const { data: adConfig } = useQuery({
-    queryKey: ['ads-config'],
-    queryFn: async () => {
-      const res = await apiFetch(`/api/v1/config/ads?env=${PLATFORM_ENV}`);
-      if (!res.ok) return {};
-      return (await res.json()) as Record<string, string>;
-    },
-  });
+  const { data: adConfig } = useAdsConfig();
 
   useEffect(() => {
     if (adConfig) {
@@ -140,22 +137,12 @@ export default function CatalogScreen() {
   // spec. The legacy `/content/catalog` endpoint is kept (admin + raw
   // browse) but the user-facing tab now goes through the feed.
   //
-  // We need the user_id for the per-user ad shuffle. Auth'd users
-  // pass their real id (read from the `me` cache that the layout
-  // populates on app start). Anonymous browsers fall back to a
-  // fixed id so the shuffle is stable across refreshes.
-  const meQuery = useQuery({
-    queryKey: ['me'],
-    queryFn: async () => {
-      const token = await (await import('@/src/shared/lib/storage')).getToken();
-      if (!token) return null;
-      const res = await apiFetch('/api/v1/auth/me');
-      if (!res.ok) return null;
-      return (await res.json()) as { id: number };
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-  const userId = meQuery.data?.id ?? ANONYMOUS_USER_ID;
+  // The user id comes from the global current-user store, which is
+  // populated once at app start by the auth gate. There is no
+  // per-screen /me fetch — anonymous users fall back to a fixed id
+  // so the shuffle is stable across refreshes.
+  const user = useCurrentUser();
+  const userId = user?.id ?? ANONYMOUS_USER_ID;
 
   // In-progress works (for the "Keep Reading" carousel, v3 §4.1).
   // We only show the carousel when the catalog is unfiltered — when
@@ -163,6 +150,11 @@ export default function CatalogScreen() {
   // something specific and the resume list would be noise. Same data
   // shape the home tab uses, so the deep-link fix from the home
   // fix carries over.
+  //
+  // The resume carousel only makes sense for authenticated users, so
+  // we gate it on `user` being non-null. The feed below runs
+  // unconditionally with the anonymous id as a fallback so the
+  // catalog list is never blocked.
   const inProgressQuery = useQuery({
     queryKey: ['progress', 'in-progress'],
     queryFn: async () => {
@@ -183,7 +175,7 @@ export default function CatalogScreen() {
       }>;
       return data.filter((w) => !w.is_finished);
     },
-    enabled: !!meQuery.data, // only fetch when we have a user
+    enabled: !!user, // only fetch when we have a user
   });
 
   const resumes = useMemo(() => {
@@ -269,22 +261,15 @@ export default function CatalogScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: tokens.paper }]}>
-      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-        <View style={styles.headerRow}>
-          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
-          <View style={styles.headerTitleArea}>
-            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-              {t('catalog.title')}
-            </Text>
-            {storeCategory && (
-              <Text style={[styles.headerSubtitle, { color: tokens.inkMuted }]}>
-                {t('catalog.subtitle_filtered', { category: storeCategory })}
-              </Text>
-            )}
-          </View>
-          <NotificationBell />
-        </View>
-      </View>
+      <PageHeader
+        title={t('catalog.title')}
+        subtitle={storeCategory ? t('catalog.subtitle_filtered', { category: storeCategory }) : undefined}
+        left={<Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />}
+        right={<NotificationBell />}
+        backgroundColor={tokens.card}
+        borderBottomColor={tokens.border}
+        tokens={tokens}
+      />
       {/* Search bar (v3 §4.3). Server-side filtered on
           (education_level, class_level, subject, search). Debounced
           300ms in the parent state. Empty + blur = no filter. */}

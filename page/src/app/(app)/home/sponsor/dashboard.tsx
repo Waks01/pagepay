@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { fetchSponsorTasks, type TaskResponseFull } from '@/src/features/sponsor/api';
 import { SkeletonPage } from '@/components/skeletons';
+import { PageHeader } from '@/components/PageHeader';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePay } from '@/constants/theme';
 
@@ -85,12 +86,17 @@ export default function SponsorDashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: tokens.paper }]}>
-      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-        <Text style={[styles.headerTitle, { color: tokens.ink }]}>{t('sponsor_dashboard.title')}</Text>
-        <TouchableOpacity onPress={() => router.push('/sponsor/tasks/create')}>
-          <Ionicons name="add-circle" size={32} color={tokens.mint} />
-        </TouchableOpacity>
-      </View>
+      <PageHeader
+        title={t('sponsor_dashboard.title')}
+        right={
+          <TouchableOpacity onPress={() => router.push('/sponsor/tasks/create')}>
+            <Ionicons name="add-circle" size={32} color={tokens.mint} />
+          </TouchableOpacity>
+        }
+        backgroundColor={tokens.card}
+        borderBottomColor={tokens.border}
+        tokens={tokens}
+      />
 
       <View style={[styles.filterContainer, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
         {['all', 'draft', 'active', 'completed'].map((status) => (

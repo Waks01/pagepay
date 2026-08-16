@@ -15,9 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
-import { PLATFORM_ENV } from '@/src/shared/lib/ads';
 import { useCatalogFilter } from '@/src/shared/lib/catalog-filter';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { useAdsConfig } from '@/src/shared/hooks/use-ads-config';
+import { useCurrentUser, useCurrentUserStore } from '@/src/shared/lib/current-user';
 import { useStreak } from '@/src/features/community/hooks/use-community';
 import { displayName } from '@/src/shared/lib/display-name';
 import { formatPointsCompact } from '@/src/shared/lib/money';
@@ -31,7 +32,6 @@ import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
 import { PagePay } from '@/constants/theme';
 import { SkeletonPage } from '@/components/skeletons';
 import { StateBlock } from '@/components/StateBlock';
-import type { UserMe } from '@/src/shared/types';
 
 const CATEGORIES = ['Fiction', 'Classics', 'News', 'Study'] as const;
 
@@ -43,25 +43,16 @@ export default function HomeScreen() {
 
   const setCatalogCategory = useCatalogFilter((s) => s.setCategory);
 
-  const meQuery = useQuery({
-    queryKey: ['me'],
-    queryFn: async () => {
-      const res = await apiFetch('/api/v1/auth/me');
-      if (!res.ok) throw new Error('Failed to load profile');
-      return (await res.json()) as UserMe;
-    },
-  });
+  // Read the current user from the global store — loaded once at
+  // app start by the auth gate. No per-screen /me fetch, no loading
+  // state, no re-auth on tab switch.
+  const user = useCurrentUser();
 
-  // Fetch ad config for native unit
+  // Fetch ad config for native unit. useAdsConfig has its own
+  // 1-hour staleTime and the same queryKey as the AdSlotProvider
+  // and the catalog tab — the data is fetched once and reused.
   const [nativeAdUnit, setNativeAdUnit] = useState('');
-  const { data: adConfig } = useQuery({
-    queryKey: ['ads-config'],
-    queryFn: async () => {
-      const res = await apiFetch(`/api/v1/config/ads?env=${PLATFORM_ENV}`);
-      if (!res.ok) return {};
-      return (await res.json()) as Record<string, string>;
-    },
-  });
+  const { data: adConfig } = useAdsConfig();
 
   useEffect(() => {
     if (adConfig) {
@@ -71,14 +62,18 @@ export default function HomeScreen() {
     }
   }, [adConfig]);
 
+  // The feed query uses the cached user id from the store. If the
+  // store hasn't populated yet (shouldn't happen — auth gate loads
+  // it before the (app) group mounts), we fall back to 0 (anonymous)
+  // so the screen still paints instead of blocking.
   const feedQuery = useQuery({
-    queryKey: ['feed', 'featured', meQuery.data?.id ?? 0],
+    queryKey: ['feed', 'featured', user?.id ?? 0],
     queryFn: async () => {
       // Phase 2: use the feed endpoint so the featured strip
       // includes the same per-user sponsored rotation the
       // catalog tab does. Anonymous users fall back to id=0
       // (the server treats 0 as a stable anonymous bucket).
-      const userId = meQuery.data?.id ?? 0;
+      const userId = user?.id ?? 0;
       const res = await apiFetch(`/api/v1/content/feed/${userId}?limit=10`);
       if (!res.ok) throw new Error('Failed to load feed');
       return (await res.json()) as ContentItem[];
@@ -165,11 +160,15 @@ export default function HomeScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([meQuery.refetch(), feedQuery.refetch(), inProgressQuery.refetch()]);
+      await Promise.all([
+        useCurrentUserStore.getState().refresh(),
+        feedQuery.refetch(),
+        inProgressQuery.refetch(),
+      ]);
     } finally {
       setRefreshing(false);
     }
-  }, [meQuery, feedQuery, inProgressQuery]);
+  }, [feedQuery, inProgressQuery]);
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
@@ -180,11 +179,10 @@ export default function HomeScreen() {
     return t('home.greeting_night');
   }, [t]);
 
-  const points = meQuery.data?.points_balance ?? 0;
+  const points = user?.points_balance ?? 0;
   const items = feedQuery.data ?? [];
   const streakData = streakQuery.data as { current_streak: number } | undefined;
 
-  const meError = meQuery.isError;
   const inProgressError = inProgressQuery.isError;
 
   return (
@@ -216,21 +214,13 @@ export default function HomeScreen() {
                 { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' },
               ]}
             >
-              {meQuery.isLoading ? '—' : formatPointsCompact(points)}
+              {formatPointsCompact(points)}
             </Text>
             <Text style={[styles.balanceLabel, { color: tokens.inkMuted }]}>{t('home.points_label')}</Text>
           </TouchableOpacity>
 
           <NotificationBell />
         </View>
-
-        {meError && (
-          <StateBlock
-            message={t('home.feed_error')}
-            onRetry={() => meQuery.refetch()}
-            tokens={tokens}
-          />
-        )}
 
         {/* Row 2: greeting + username */}
         <View style={styles.greetingRow}>
@@ -240,7 +230,7 @@ export default function HomeScreen() {
             {greeting},
           </Text>
           <Text style={[styles.greeting, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-            {meQuery.data?.username || displayName(meQuery.data)}
+            {user?.username || displayName(user)}
           </Text>
         </View>
       </View>

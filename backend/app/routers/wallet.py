@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from math import ceil
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -472,7 +472,12 @@ def _map_bill_row(tx: BillTransaction) -> dict:
 async def get_wallet_history(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    type: str | None = Query(default=None),
+    date: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    direction: str | None = Query(default=None),
 ):
     items: list[dict] = []
 
@@ -483,7 +488,6 @@ async def get_wallet_history(
             .where(ReadingSession.end_time.is_not(None))
             .where(ReadingSession.points_earned > 0)
             .order_by(ReadingSession.end_time.desc())
-            .limit(limit)
         )
     ).all()
     for session, title in sessions:
@@ -514,7 +518,6 @@ async def get_wallet_history(
             .where(AdEvent.credit_status == "credited")
             .where(AdEvent.user_points_credited > 0)
             .order_by(AdEvent.created_at.desc())
-            .limit(limit)
         )
     ).scalars().all()
     for event in ad_events:
@@ -540,7 +543,6 @@ async def get_wallet_history(
             select(BillTransaction)
             .where(BillTransaction.user_id == current_user.id)
             .order_by(BillTransaction.created_at.desc())
-            .limit(limit)
         )
     ).scalars().all()
     for tx in bill_txs:
@@ -551,7 +553,6 @@ async def get_wallet_history(
             select(Payment)
             .where(Payment.user_id == current_user.id)
             .order_by(Payment.created_at.desc())
-            .limit(limit)
         )
     ).scalars().all()
     for payment in payments:
@@ -597,7 +598,6 @@ async def get_wallet_history(
             select(PayoutTransaction)
             .where(PayoutTransaction.user_id == current_user.id)
             .order_by(PayoutTransaction.created_at.desc())
-            .limit(limit)
         )
     ).scalars().all()
     account = (
@@ -631,7 +631,6 @@ async def get_wallet_history(
             select(StudyTransaction)
             .where(StudyTransaction.user_id == current_user.id)
             .order_by(StudyTransaction.created_at.desc())
-            .limit(limit)
         )
     ).scalars().all()
     for st in study_txs:
@@ -685,7 +684,6 @@ async def get_wallet_history(
             select(PointCredit)
             .where(PointCredit.user_id == current_user.id)
             .order_by(PointCredit.created_at.desc())
-            .limit(limit)
         )
     ).scalars().all()
     for credit in point_credits:
@@ -711,7 +709,37 @@ async def get_wallet_history(
         })
 
     items.sort(key=lambda x: x["date"], reverse=True)
-    return items[:limit]
+    if type:
+        items = [item for item in items if item.get("type") == type]
+    if direction == 'earn':
+        items = [item for item in items if (item.get("amount") or 0) > 0]
+    elif direction == 'spend':
+        items = [item for item in items if (item.get("amount") or 0) < 0]
+    if date:
+        now = datetime.utcnow()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        yesterday_start = today_start - timedelta(days=1)
+        week_start = today_start - timedelta(days=7)
+        month_start = today_start - timedelta(days=30)
+        filtered = []
+        for item in items:
+            try:
+                item_date = datetime.fromisoformat(item.get("date", "").replace("Z", "+00:00")).replace(tzinfo=None)
+            except Exception:
+                continue
+            if date == 'Today' and today_start <= item_date:
+                filtered.append(item)
+            elif date == 'Yesterday' and yesterday_start <= item_date < today_start:
+                filtered.append(item)
+            elif date == 'This Week' and week_start <= item_date:
+                filtered.append(item)
+            elif date == 'This Month' and month_start <= item_date:
+                filtered.append(item)
+        items = filtered
+    if search:
+        q = search.lower()
+        items = [item for item in items if q in item.get("description", "").lower() or q in item.get("txId", "").lower() or q in item.get("ref", "").lower()]
+    return items[offset:offset + limit]
 
 
 @router.get("/history/{type}/{item_id}", response_model=dict)

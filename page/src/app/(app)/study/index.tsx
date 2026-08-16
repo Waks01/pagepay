@@ -11,6 +11,7 @@ import { apiFetch } from '@/src/shared/api/client';
 import { useMaterials, useUploadSow, useUploadSowImage, useUploadSowDocument, useClaimQuizBonus, useGenerateExample } from '@/src/features/study/hooks/use-study';
 import { useImagePicker } from '@/src/shared/hooks/use-image-picker';
 import { useDocumentPicker } from '@/src/shared/hooks/use-document-picker';
+import { useCurrentUser } from '@/src/shared/lib/current-user';
 import { SowUploadCard } from '@/components/study/SowUploadCard';
 import { AssetBrowser } from '@/components/study/AssetBrowser';
 import { ProgressDashboard } from '@/components/study/ProgressDashboard';
@@ -207,14 +208,9 @@ export default function StudyScreen() {
     setSelectedMaterial(null);
   };
 
-  const meQ = useQuery({
-    queryKey: ['me'],
-    queryFn: async () => {
-      const res = await apiFetch('/api/v1/auth/me');
-      if (!res.ok) throw new Error('Failed');
-      return res.json() as Promise<{ points_balance: number }>;
-    },
-  });
+  // Read the user from the global store. The user object is loaded
+  // once at app start — no per-screen /me fetch.
+  const meQ = useCurrentUser();
 
   const uploadMutation = useUploadSow();
   const uploadImageMutation = useUploadSowImage();
@@ -479,7 +475,7 @@ export default function StudyScreen() {
   };
 
   const materials = materialsQ.data ?? [];
-  const balance = meQ.data?.points_balance ?? 0;
+  const balance = meQ?.points_balance ?? 0;
   const isLoading = materialsQ.isLoading;
   const totalAssets = selectedMaterial?.assets.length ?? 0;
 

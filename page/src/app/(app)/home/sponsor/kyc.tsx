@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 import { submitSponsorKYC } from '@/src/features/sponsor/api';
+import { PageHeader } from '@/components/PageHeader';
 
 const ID_TYPES = [
   { value: 'nin', label: 'sponsor_kyc.id_types.nin' },
@@ -92,12 +93,15 @@ export default function SponsorKYCScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('sponsor_kyc.title')}</Text>
-      </View>
+      <PageHeader
+        title={t('sponsor_kyc.title')}
+        left={
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+        }
+        tokens={tokens}
+      />
 
       <View style={styles.infoCard}>
         <Ionicons name="shield-checkmark" size={32} color="#6C5CE7" />

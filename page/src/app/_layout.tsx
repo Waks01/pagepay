@@ -8,7 +8,8 @@ import { Fraunces_500Medium, Fraunces_600SemiBold } from '@expo-google-fonts/fra
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/src/shared/lib/queryClient';
 import { bootstrapPreferences, usePreferences } from '@/src/shared/lib/preferences';
-import { getToken } from '@/src/shared/lib/storage';
+import { getToken, warmTokenCache } from '@/src/shared/lib/storage';
+import { bootstrapCurrentUser } from '@/src/shared/lib/current-user';
 import '@/src/lib/i18n';
 import { SplashOverlay } from '@/components/SplashOverlay';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -34,6 +35,12 @@ export default function RootLayout() {
 
   useEffect(() => {
     void bootstrapPreferences();
+    // Eagerly load the auth token into memory so the first
+    // apiFetch on any screen is a memory read, not a bridge
+    // roundtrip to expo-secure-store. Without this, every tab
+    // switch waits on multiple secure-store reads before its
+    // useQuery hooks can issue their network requests.
+    warmTokenCache();
   }, []);
 
   if (!fontsLoaded || !hydrated || !isReady) {
@@ -84,6 +91,13 @@ function useAuthGate() {
           }
         } else if (token && (inAuth || inOnboarding)) {
           router.replace('/home');
+        } else if (token) {
+          // Token is present and we're inside the (app) group — load
+          // the current user once into the global store so every tab
+          // can read it as a pure memory access. Without this, each
+          // tab would re-fetch /auth/me on mount and the user would
+          // see "checking auth" on every tab switch.
+          void bootstrapCurrentUser();
         }
       } catch (e) {
         console.error('Auth gate failed', e);

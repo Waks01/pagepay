@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/src/shared/api/client';
 import { PagePay, Fonts } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { formatKobo, formatPoints, pointsToNairaString } from '@/src/shared/lib/money';
+import { koboToPoints } from '@/src/shared/lib/money';
 import { SkeletonTransactionRow } from '@/components/skeletons';
 
 type TransactionItem =
@@ -56,32 +56,32 @@ const statusColor = (status: string, tokens: (typeof PagePay)['light']) => {
   }
 };
 
-const TX_TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }> = {
-  airtime:     { icon: 'call-outline',       color: 'mint', label: 'Airtime' },
-  data:        { icon: 'wifi-outline',       color: 'indigo', label: 'Data Bundle' },
-  electricity: { icon: 'flash-outline',      color: 'gold', label: 'Electricity' },
-  internet:    { icon: 'globe-outline',      color: 'indigo', label: 'Internet' },
-  tv:          { icon: 'tv-outline',         color: 'signal', label: 'TV Subscription' },
-  recharge:    { icon: 'ticket-outline',     color: 'indigo', label: 'Recharge Pin' },
-  betting:     { icon: 'diamond-outline',    color: 'mint', label: 'Betting' },
-  isp:         { icon: 'globe-outline',      color: 'indigo', label: 'ISP' },
-  education:   { icon: 'school-outline',     color: 'gold', label: 'Education' },
-  sms:         { icon: 'chatbubbles-outline',color: 'inkMuted', label: 'Bulk SMS' },
-  wallet:      { icon: 'wallet-outline',     color: 'mint', label: 'Wallet Funding' },
-  withdraw:    { icon: 'arrow-up-circle-outline', color: 'gold', label: 'Withdrawal' },
-  ad:          { icon: 'play-circle-outline',color: 'signal', label: 'Ad Reward' },
-  read:        { icon: 'book-outline',       color: 'indigo', label: 'Reading Reward' },
-  study:       { icon: 'school-outline',     color: 'indigo', label: 'Study Session' },
-  premium:     { icon: 'star-outline',       color: 'gold', label: 'Premium Subscription' },
-  bonus:       { icon: 'gift-outline',       color: 'signal', label: 'Bonus Reward' },
-  earn:        { icon: 'trending-up-outline',color: 'mint', label: 'Points Earned' },
-  spend:       { icon: 'trending-down-outline', color: 'inkMuted', label: 'Points Spent' },
+const TX_TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; label: string; accentHex: string }> = {
+  airtime:     { icon: 'call-outline',       color: 'mint', label: 'Airtime', accentHex: '#10B981' },
+  data:        { icon: 'wifi-outline',       color: 'indigo', label: 'Data Bundle', accentHex: '#3B82F6' },
+  electricity: { icon: 'flash-outline',      color: 'gold', label: 'Electricity', accentHex: '#F59E0B' },
+  internet:    { icon: 'globe-outline',      color: 'indigo', label: 'Internet', accentHex: '#8B5CF6' },
+  tv:          { icon: 'tv-outline',         color: 'signal', label: 'TV Subscription', accentHex: '#EC4899' },
+  recharge:    { icon: 'ticket-outline',     color: 'indigo', label: 'Recharge Pin', accentHex: '#06B6D4' },
+  betting:     { icon: 'diamond-outline',    color: 'mint', label: 'Betting', accentHex: '#10B981' },
+  isp:         { icon: 'globe-outline',      color: 'indigo', label: 'ISP', accentHex: '#14B8A6' },
+  education:   { icon: 'school-outline',     color: 'gold', label: 'Education', accentHex: '#F97316' },
+  sms:         { icon: 'chatbubbles-outline',color: 'inkMuted', label: 'Bulk SMS', accentHex: '#64748B' },
+  wallet:      { icon: 'wallet-outline',     color: 'mint', label: 'Wallet Funding', accentHex: '#0E7C66' },
+  withdraw:    { icon: 'arrow-up-circle-outline', color: 'gold', label: 'Withdrawal', accentHex: '#F59E0B' },
+  ad:          { icon: 'play-circle-outline',color: 'signal', label: 'Ad Reward', accentHex: '#EF4444' },
+  read:        { icon: 'book-outline',       color: 'indigo', label: 'Reading Reward', accentHex: '#8B5CF6' },
+  study:       { icon: 'school-outline',     color: 'indigo', label: 'Study Session', accentHex: '#6366F1' },
+  premium:     { icon: 'star-outline',       color: 'gold', label: 'Premium Subscription', accentHex: '#D97706' },
+  bonus:       { icon: 'gift-outline',       color: 'signal', label: 'Bonus Reward', accentHex: '#EC4899' },
+  earn:        { icon: 'trending-up-outline',color: 'mint', label: 'Points Earned', accentHex: '#0E7C66' },
+  spend:       { icon: 'trending-down-outline', color: 'inkMuted', label: 'Points Spent', accentHex: '#64748B' },
 };
 
-function DetailRow(label: string, value: string, mono?: boolean, tokens?: (typeof PagePay)['light']) {
+function DetailRow(label: string, value: string, mono: boolean = false, tokens?: (typeof PagePay)['light'], isLast: boolean = false) {
   const t = tokens || PagePay.light;
   return (
-    <View style={[styles.detailRow, { borderBottomColor: t.border }]}>
+    <View style={[styles.detailRow, { borderBottomColor: t.border, borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth }]}>
       <Text style={[styles.detailLabel, { color: t.inkMuted }]}>{label}</Text>
       <Text style={[styles.detailValue, { color: t.ink }, mono && { fontFamily: 'monospace', fontSize: 12 }]} numberOfLines={3}>
         {value}
@@ -115,18 +115,14 @@ export default function TransactionDetailScreen() {
   useEffect(() => {
     let cancelled = false;
 
-    console.log('[TransactionDetail] params:', JSON.stringify(params));
-
     if (params.item) {
       try {
         const parsed = JSON.parse(params.item) as CombinedItem;
-        console.log('[TransactionDetail] parsed item from params.item:', parsed);
         if (!cancelled) {
           setItem(parsed);
           setLoading(false);
         }
-      } catch (e) {
-        console.log('[TransactionDetail] JSON.parse error for params.item:', e);
+      } catch {
         if (!cancelled) {
           setError('Transaction not found');
           setLoading(false);
@@ -137,7 +133,6 @@ export default function TransactionDetailScreen() {
 
     const fetchDetail = async () => {
       const itemId = params.id;
-      console.log('[TransactionDetail] fetchDetail itemId:', itemId, 'kind:', params.kind);
       if (!itemId) {
         setError('Transaction not found');
         setLoading(false);
@@ -147,21 +142,17 @@ export default function TransactionDetailScreen() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         const url = `/api/v1/wallet/history/${encodeURIComponent(params.kind || 'history')}/${encodeURIComponent(itemId)}`;
-        console.log('[TransactionDetail] fetching', url);
         const res = await apiFetch(url, {
           signal: controller.signal as any,
         });
         clearTimeout(timeoutId);
-        console.log('[TransactionDetail] response status:', res.status, 'ok:', res.ok);
         if (!res.ok) throw new Error('Failed to fetch transaction detail');
         const data = await res.json();
-        console.log('[TransactionDetail] response data:', data);
         if (!cancelled) {
           setItem(data as CombinedItem);
           setLoading(false);
         }
-      } catch (e) {
-        console.log('[TransactionDetail] fetchDetail error:', e);
+      } catch {
         if (!cancelled) {
           setError('Transaction not found');
           setLoading(false);
@@ -177,7 +168,10 @@ export default function TransactionDetailScreen() {
       <View style={{ flex: 1, backgroundColor: tokens.paper }}>
         <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
           <View style={styles.headerRow}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <TouchableOpacity
+            onPress={() => router.back()}
+            style={[styles.backBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+          >
               <Ionicons name="arrow-back" size={20} color={tokens.ink} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
@@ -200,7 +194,10 @@ export default function TransactionDetailScreen() {
       <View style={{ flex: 1, backgroundColor: tokens.paper }}>
         <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
           <View style={styles.headerRow}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <TouchableOpacity
+            onPress={() => router.back()}
+            style={[styles.backBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+          >
               <Ionicons name="arrow-back" size={20} color={tokens.ink} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
@@ -211,7 +208,10 @@ export default function TransactionDetailScreen() {
         </View>
         <View style={styles.center}>
           <Text style={[styles.errorText, { color: tokens.inkMuted }]}>{error || 'Transaction not found'}</Text>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[styles.backBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+          >
             <Text style={{ color: tokens.mint, fontWeight: '600' }}>Go back</Text>
           </TouchableOpacity>
         </View>
@@ -220,19 +220,31 @@ export default function TransactionDetailScreen() {
   }
 
   const isHistory = item.kind === 'history';
-  const d = isHistory ? (item as any) : item.data;
+  const d = (item as any).data || (item as any);
   const txType = d.type || d.tier || 'unknown';
-  const meta = TX_TYPE_META[txType] || { icon: 'receipt-outline', color: 'inkMuted', label: 'Transaction' };
+  const meta = TX_TYPE_META[txType] || { icon: 'receipt-outline', color: 'inkMuted', label: 'Transaction', accentHex: '#64748B' };
   const status = d.status || 'success';
+  // Status badge backgrounds per the design preview:
+  //   success → mint-soft + dark mint text
+  //   pending → gold-soft + amber-900 text
+  //   failed  → signal-soft + red-900 text
   const statusColors = {
     success: { bg: tokens.mintSoft, text: tokens.mint },
-    pending: { bg: tokens.signalSoft, text: tokens.gold },
-    failed: { bg: tokens.signalFaint, text: tokens.error },
+    pending: { bg: '#FFFBEB', text: '#92400E' },
+    failed:  { bg: tokens.signalSoft, text: '#991B1B' },
   };
   const sc = statusColors[status as keyof typeof statusColors] || statusColors.success;
 
-  const absPoints = Math.abs(d.points || 0);
-  const isPositive = (d.points || 0) > 0;
+  // Normalise the hero amount to signed points (same logic as history.tsx).
+  // `points` is reliable for earn/spend types; `amount` is in kobo for fiat
+  // (bill / payment / withdrawal) so convert via koboToPoints.
+  const FIAT_KINDS = new Set(['bill', 'payment', 'withdrawal']);
+  const rawAmount = (d.amount ?? 0) as number;
+  const signedPoints = FIAT_KINDS.has(item.kind)
+    ? Math.sign(rawAmount) * koboToPoints(Math.abs(rawAmount))
+    : (d.points ?? rawAmount);
+  const absPoints = Math.abs(signedPoints);
+  const isPositive = signedPoints > 0;
   const dateStr = formatDate(d.date);
   const timeStr = new Date(d.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -263,7 +275,6 @@ export default function TransactionDetailScreen() {
 
   const renderTypeDetails = () => {
     const details = (d as any).details || {};
-    console.log('[TransactionDetail] renderTypeDetails txType=', txType, 'details=', JSON.stringify(details), 'absPoints=', absPoints);
     switch (txType) {
       case 'airtime':
         return (
@@ -271,7 +282,7 @@ export default function TransactionDetailScreen() {
             {DetailRow('Network', details.network as string || 'N/A', false, tokens)}
             {DetailRow('Phone Number', details.phone as string || 'N/A', false, tokens)}
             {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'data':
@@ -282,7 +293,7 @@ export default function TransactionDetailScreen() {
             {DetailRow('Plan', details.plan as string || 'N/A', false, tokens)}
             {DetailRow('Validity', details.validity as string || 'N/A', false, tokens)}
             {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'electricity':
@@ -292,7 +303,7 @@ export default function TransactionDetailScreen() {
             {DetailRow('Meter Number', details.meterNumber as string || 'N/A', false, tokens)}
             {DetailRow('Units Purchased', `${details.units as number || 0} kWh`, false, tokens)}
             {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'internet':
@@ -302,7 +313,7 @@ export default function TransactionDetailScreen() {
             {DetailRow('Account', details.account as string || 'N/A', false, tokens)}
             {DetailRow('Plan', details.plan as string || 'N/A', false, tokens)}
             {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'tv':
@@ -312,7 +323,7 @@ export default function TransactionDetailScreen() {
             {DetailRow('Smartcard No.', details.smartcard as string || 'N/A', false, tokens)}
             {DetailRow('Package', details.package as string || 'N/A', false, tokens)}
             {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'recharge':
@@ -320,7 +331,7 @@ export default function TransactionDetailScreen() {
           <DetailSection title="Recharge Pin Details" tokens={tokens}>
             {DetailRow('Pin Code', details.pin as string || 'N/A', false, tokens)}
             {DetailRow('Pin Value', `₦${((details.value as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'betting':
@@ -329,7 +340,7 @@ export default function TransactionDetailScreen() {
             {DetailRow('Platform', details.site as string || 'N/A', false, tokens)}
             {DetailRow('Username', details.username as string || 'N/A', false, tokens)}
             {DetailRow('Amount Funded', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'isp':
@@ -339,7 +350,7 @@ export default function TransactionDetailScreen() {
             {DetailRow('Account', details.account as string || 'N/A', false, tokens)}
             {DetailRow('Plan', details.plan as string || 'N/A', false, tokens)}
             {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'education':
@@ -348,7 +359,7 @@ export default function TransactionDetailScreen() {
             {DetailRow('Exam Type', details.examType as string || 'N/A', false, tokens)}
             {DetailRow('Registration ID', details.registrationId as string || 'N/A', false, tokens)}
             {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'sms':
@@ -357,7 +368,7 @@ export default function TransactionDetailScreen() {
             {DetailRow('Sender ID', details.senderId as string || 'N/A', false, tokens)}
             {DetailRow('Units Purchased', `${details.units as number || 0}`, false, tokens)}
             {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'wallet':
@@ -365,8 +376,7 @@ export default function TransactionDetailScreen() {
           <DetailSection title="Wallet Funding Details" tokens={tokens}>
             {DetailRow('Source', details.source as string || 'N/A', false, tokens)}
             {DetailRow('Amount', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Reference', details.reference as string || 'N/A', false, tokens)}
-            {DetailRow('New Balance', `${formatPoints(24580)} pts`, false, tokens)}
+            {DetailRow('Reference', details.reference as string || 'N/A', false, tokens, true)}
           </DetailSection>
         );
       case 'withdraw':
@@ -374,13 +384,13 @@ export default function TransactionDetailScreen() {
           <>
             <DetailSection title="Withdrawal Details" tokens={tokens}>
               {DetailRow('Amount', `${absPoints} pts`, false, tokens)}
-              {DetailRow('Fee', `${((d as any).fee || 0).toLocaleString()} pts`, false, tokens)}
-              {DetailRow('Total Debited', `${(absPoints + ((d as any).fee || 0)).toLocaleString()} pts`, false, tokens)}
-              {DetailRow('Balance After', `${((d as any).balanceAfter || 0).toLocaleString()} pts`, false, tokens)}
+              {DetailRow('Fee', `${(details.fee || 0).toLocaleString()} pts`, false, tokens)}
+              {DetailRow('Total Debited', `${(absPoints + (details.fee || 0)).toLocaleString()} pts`, false, tokens)}
+              {DetailRow('Balance After', `${(details.balanceAfter || 0).toLocaleString()} pts`, false, tokens, true)}
             </DetailSection>
             <DetailSection title="Bank Details" tokens={tokens}>
-              {DetailRow('Bank', (d as any).bank || 'N/A', false, tokens)}
-              {DetailRow('Account', `****${(d as any).accountLast4 || '0000'}`, false, tokens)}
+              {DetailRow('Bank', (details.bank as string) || 'N/A', false, tokens)}
+              {DetailRow('Account', `****${(details.accountLast4 as string) || '0000'}`, false, tokens, true)}
             </DetailSection>
           </>
         );
@@ -389,16 +399,15 @@ export default function TransactionDetailScreen() {
           <DetailSection title="Ad Reward Details" tokens={tokens}>
             {DetailRow('Ad Type', details.adType as string || 'N/A', false, tokens)}
             {DetailRow('Reward Earned', `+${absPoints} pts`, false, tokens)}
-            {DetailRow('Campaign ID', details.campaign as string || 'N/A', false, tokens)}
+            {DetailRow('Campaign ID', details.campaign as string || 'N/A', false, tokens, true)}
           </DetailSection>
         );
       case 'read':
-        console.log('[TransactionDetail] read case details=', JSON.stringify(details), 'absPoints=', absPoints);
         return (
           <DetailSection title="Reading Reward Details" tokens={tokens}>
             {DetailRow('Book Title', details.title as string || 'N/A', false, tokens)}
             {DetailRow('Pages Read', `${details.pages as number || 0}`, false, tokens)}
-            {DetailRow('Reward Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Reward Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'study':
@@ -406,7 +415,7 @@ export default function TransactionDetailScreen() {
           <DetailSection title="Study Session Details" tokens={tokens}>
             {DetailRow('Topic', details.topic as string || 'N/A', false, tokens)}
             {DetailRow('Duration', details.duration as string || 'N/A', false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       case 'premium':
@@ -414,14 +423,14 @@ export default function TransactionDetailScreen() {
           <DetailSection title="Subscription Details" tokens={tokens}>
             {DetailRow('Plan', details.plan as string || 'N/A', false, tokens)}
             {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Next Billing', details.nextBilling as string || 'N/A', false, tokens)}
+            {DetailRow('Next Billing', details.nextBilling as string || 'N/A', false, tokens, true)}
           </DetailSection>
         );
       case 'bonus':
         return (
           <DetailSection title="Bonus Details" tokens={tokens}>
             {DetailRow('Reason', details.reason as string || 'N/A', false, tokens)}
-            {DetailRow('Bonus Points', `+${absPoints} pts`, false, tokens)}
+            {DetailRow('Bonus Points', `+${absPoints} pts`, false, tokens, true)}
           </DetailSection>
         );
       default:
@@ -436,7 +445,10 @@ export default function TransactionDetailScreen() {
     <View style={{ flex: 1, backgroundColor: tokens.paper }}>
       <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[styles.backBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+          >
             <Ionicons name="arrow-back" size={20} color={tokens.ink} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
@@ -448,8 +460,13 @@ export default function TransactionDetailScreen() {
 
       <View style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Hero */}
-        <View style={[styles.hero, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+        {/* Hero — accent left border (3px) matches the design's per-type accent. */}
+        <View
+          style={[
+            styles.hero,
+            { backgroundColor: tokens.card, borderColor: tokens.border, borderLeftColor: meta.accentHex, borderLeftWidth: 3 },
+          ]}
+        >
           <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
             <Text style={[styles.statusText, { color: sc.text }]}>
               {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -473,25 +490,27 @@ export default function TransactionDetailScreen() {
           {DetailRow('Reference', ref as string, true, tokens)}
           {DetailRow('Date & Time', `${dateStr} · ${timeStr}`, false, tokens)}
           {DetailRow('Type', meta.label, false, tokens)}
-          {DetailRow('Status', status.charAt(0).toUpperCase() + status.slice(1), false, tokens)}
+          {DetailRow('Status', status.charAt(0).toUpperCase() + status.slice(1), false, tokens, true)}
         </DetailSection>
 
-        {/* Actions */}
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            onPress={openShare}
-            style={[styles.actionBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
-          >
-            <Ionicons name="share-outline" size={18} color={tokens.ink} />
-            <Text style={[styles.actionBtnText, { color: tokens.ink }]}>Share Receipt</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {}}
-            style={[styles.actionBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
-          >
-            <Ionicons name="chatbubble-outline" size={18} color={tokens.ink} />
-            <Text style={[styles.actionBtnText, { color: tokens.ink }]}>Support</Text>
-          </TouchableOpacity>
+        {/* Actions — wrapped in a card section per the design preview. */}
+        <View style={[styles.detailSection, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              onPress={openShare}
+              style={[styles.actionBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+            >
+              <Ionicons name="share-outline" size={18} color={tokens.ink} />
+              <Text style={[styles.actionBtnText, { color: tokens.ink }]}>Share Receipt</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {}}
+              style={[styles.actionBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+            >
+              <Ionicons name="chatbubble-outline" size={18} color={tokens.ink} />
+              <Text style={[styles.actionBtnText, { color: tokens.ink }]}>Support</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
       </View>
@@ -596,7 +615,8 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 18,
+    borderRadius: 10,
+    borderWidth: 1,
   },
   headerTitle: {
     fontSize: 17,
@@ -617,7 +637,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   hero: {
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     padding: 24,
     alignItems: 'center',

@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { fetchTaskSubmissions, approveSubmission, rejectSubmission, type TaskSubmissionDetail } from '@/src/features/sponsor/api';
 import { SkeletonDetailPage } from '@/components/skeletons';
+import { PageHeader } from '@/components/PageHeader';
 
 export default function SponsorTaskDetailScreen() {
   const { t } = useTranslation();
@@ -181,12 +182,15 @@ export default function SponsorTaskDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('sponsor_task_detail.title')}</Text>
-      </View>
+      <PageHeader
+        title={t('sponsor_task_detail.title')}
+        left={
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+        }
+        tokens={tokens}
+      />
 
       <FlatList
         data={submissions || []}

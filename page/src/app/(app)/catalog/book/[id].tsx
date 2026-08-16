@@ -21,6 +21,7 @@ import { AttributionCard } from '@/components/AttributionCard';
 import { SocialBar } from '@/components/SocialBar';
 import { ShareSheet, type ShareTarget } from '@/components/ShareSheet';
 import { CommentsSection } from '@/components/CommentsSection';
+import { PageHeader } from '@/components/PageHeader';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { SkeletonDetailPage } from '@/components/skeletons';
@@ -159,24 +160,13 @@ export default function BookDetailScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: tokens.paper }]}>
-      <View style={styles.headerRow}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel={t('book_detail.go_back')}
-          hitSlop={8}
-          style={styles.backBtn}
-        >
-          <Ionicons name="chevron-back" size={22} color={tokens.ink} />
-        </TouchableOpacity>
-        <Text
-          style={[styles.headerTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}
-          numberOfLines={1}
-        >
-          {bookQuery.data?.title ?? t('book_detail.book_title')}
-        </Text>
-        <View style={styles.headerRight} />
-      </View>
+      <PageHeader
+        title={bookQuery.data?.title ?? t('book_detail.book_title')}
+        showBack
+        backgroundColor={tokens.paper}
+        borderBottomColor={tokens.border}
+        tokens={tokens}
+      />
 
       {loading ? (
         <SkeletonDetailPage />

@@ -8,10 +8,11 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { apiFetch } from '@/src/shared/api/client';
-import { PLATFORM_ENV } from '@/src/shared/lib/ads';
 import { consumePendingWithdrawAfterPin } from '@/src/shared/lib/pin-verify-flag';
 import { formatKobo, formatPoints, pointsToNairaString, koboToPoints } from '@/src/shared/lib/money';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { useAdsConfig } from '@/src/shared/hooks/use-ads-config';
+import { useCurrentUser, useCurrentUserStore } from '@/src/shared/lib/current-user';
 import { PagePay, Fonts } from '@/constants/theme';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import NotificationBell from '@/components/NotificationBell';
@@ -22,7 +23,6 @@ import {
 } from '@/components/LinkPayoutAccountModal';
 import { SkeletonBalanceCard, SkeletonTransactionRow } from '@/components/skeletons';
 import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
-import type { UserMe } from '@/src/shared/types';
 
 type Transaction = {
   id: number;
@@ -88,16 +88,11 @@ export default function WalletScreen() {
   const welcomeBonus = Number(params.welcomeBonus ?? 0);
   const insets = useSafeAreaInsets();
 
-  // Fetch ad config for native unit
+  // Fetch ad config for native unit. useAdsConfig has its own
+  // 1-hour staleTime and is shared with the AdSlotProvider, home,
+  // and catalog — fetched once and reused.
   const [nativeAdUnit, setNativeAdUnit] = useState('');
-  const { data: adConfig } = useQuery({
-    queryKey: ['ads-config'],
-    queryFn: async () => {
-      const res = await apiFetch(`/api/v1/config/ads?env=${PLATFORM_ENV}`);
-      if (!res.ok) return {};
-      return (await res.json()) as Record<string, string>;
-    },
-  });
+  const { data: adConfig } = useAdsConfig();
 
   useEffect(() => {
     if (adConfig) {
@@ -130,14 +125,12 @@ export default function WalletScreen() {
     }, [payoutAccount]),
   );
 
-  const meQ = useQuery({
-    queryKey: ['me'],
-    queryFn: async () => {
-      const res = await apiFetch('/api/v1/auth/me');
-      if (!res.ok) throw new Error('Failed to load profile');
-      return (await res.json()) as UserMe;
-    },
-  });
+  // Read the current user from the global store. The auth gate
+  // loads /auth/me exactly once at app start; subsequent renders
+  // (including the pull-to-refresh below) read from memory and
+  // only hit the network when the user explicitly asks to refresh.
+  const meQ = useCurrentUser();
+  const userLoading = useCurrentUser((s) => !s.loaded);
 
   const txQ = useQuery({
     queryKey: ['wallet', 'transactions'],
@@ -200,8 +193,8 @@ export default function WalletScreen() {
     [qc],
   );
 
-  const balance = meQ.data?.points_balance ?? 0;
-  const tier = meQ.data?.tier ?? 'free';
+  const balance = meQ?.points_balance ?? 0;
+  const tier = meQ?.tier ?? 'free';
   const getTierLabel = (tier: string) => {
     const key = tier as 'free' | 'premium_monthly' | 'premium_yearly';
     return t(`wallet.tier.${key}`, { defaultValue: tier });
@@ -211,7 +204,11 @@ export default function WalletScreen() {
   const belowMin = balance < MIN_WITHDRAWAL_POINTS;
 
   const onRefresh = () => {
-    qc.invalidateQueries({ queryKey: ['me'] });
+    // The user object is in the global store — refresh it explicitly
+    // (instead of going through TanStack Query's invalidation, which
+    // doesn't know about the store). The other wallet queries below
+    // are still TanStack-Query-managed and use invalidation.
+    void useCurrentUserStore.getState().refresh();
     qc.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
     qc.invalidateQueries({ queryKey: ['payout', 'account'] });
     qc.invalidateQueries({ queryKey: ['payouts', 'transactions'] });
@@ -281,7 +278,7 @@ export default function WalletScreen() {
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}
         refreshControl={
           <RefreshControl
-            refreshing={meQ.isFetching || txQ.isFetching || paymentsQ.isFetching}
+            refreshing={txQ.isFetching || paymentsQ.isFetching}
             onRefresh={onRefresh}
             tintColor={c.mint}
           />
@@ -343,7 +340,7 @@ export default function WalletScreen() {
               >
                 {t('wallet.balance_label')}
               </Text>
-              {meQ.isLoading ? (
+              {userLoading ? (
                 <SkeletonBalanceCard />
               ) : (
                 <>
@@ -373,7 +370,7 @@ export default function WalletScreen() {
                 {getTierLabel(tier)}
               </Text>
 
-              {meQ.isLoading || payoutQ.isLoading ? (
+              {userLoading || payoutQ.isLoading ? (
                 <ActivityIndicator color={c.mint} style={{ alignSelf: 'flex-start' }} />
               ) : (
                 <View style={{ gap: 10 }}>

@@ -124,7 +124,13 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
       if (data.refresh_token) {
         await saveRefreshToken(data.refresh_token);
       }
-      
+
+      // Pre-populate the global user store before navigating so the
+      // first screen render (Home) can read the user object from
+      // memory instead of waiting for the auth gate's bootstrap.
+      const { bootstrapCurrentUser } = await import('@/src/shared/lib/current-user');
+      await bootstrapCurrentUser();
+
       await registerFCMToken();
       router.replace('/');
     } catch {
