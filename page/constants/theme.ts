@@ -86,11 +86,6 @@ export const PagePay = {
     indigo: '#8E93C8',
   },
   sepia: {
-    // Warm paper tone — easier on the eyes for long reading sessions
-    // than pure white. Inspired by Kindle's classic sepia + a slightly
-    // darker text than Kindle uses (we have less rendering finesse on
-    // mid-range Android panels). Pairs with a brand-tinted mint that's
-    // a touch warmer than the light/dark mints.
     ink: '#3E2C1C',
     inkMuted: '#7A6650',
     inkFaint: '#A89175',

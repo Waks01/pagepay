@@ -38,26 +38,29 @@ type TxItem = {
   details: Record<string, unknown>;
 };
 
-const TX_META: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string; accent: string }> = {
-  airtime:     { label: 'Airtime',          icon: 'call-outline',       color: '#10B981', accent: '#E6F9F0' },
-  data:        { label: 'Data Bundle',      icon: 'wifi-outline',       color: '#3B82F6', accent: '#EFF6FF' },
-  electricity: { label: 'Electricity',      icon: 'flash-outline',      color: '#F59E0B', accent: '#FFFBEB' },
-  internet:    { label: 'Internet',         icon: 'globe-outline',      color: '#8B5CF6', accent: '#F5F3FF' },
-  tv:          { label: 'TV Subscription',  icon: 'tv-outline',         color: '#EC4899', accent: '#FDF2F8' },
-  recharge:    { label: 'Recharge Pin',     icon: 'ticket-outline',     color: '#06B6D4', accent: '#ECFEFF' },
-  betting:     { label: 'Betting',          icon: 'diamond-outline',    color: '#10B981', accent: '#E6F9F0' },
-  isp:         { label: 'ISP',              icon: 'globe-outline',      color: '#14B8A6', accent: '#F0FDFA' },
-  education:   { label: 'Education',        icon: 'school-outline',     color: '#F97316', accent: '#FFF7ED' },
-  sms:         { label: 'Bulk SMS',         icon: 'chatbubbles-outline',color: '#64748B', accent: '#F8FAFC' },
-  wallet:      { label: 'Wallet Funding',   icon: 'wallet-outline',     color: '#0E7C66', accent: '#E6F1ED' },
-  withdraw:    { label: 'Withdrawal',       icon: 'arrow-up-circle-outline', color: '#F59E0B', accent: '#FFFBEB' },
-  ad:          { label: 'Ad Reward',        icon: 'play-circle-outline',color: '#EF4444', accent: '#FEF2F2' },
-  read:        { label: 'Reading Reward',   icon: 'book-outline',       color: '#8B5CF6', accent: '#F5F3FF' },
-  study:       { label: 'Study Session',    icon: 'school-outline',     color: '#6366F1', accent: '#EEF2FF' },
-  premium:     { label: 'Premium Subscription', icon: 'star-outline',   color: '#D97706', accent: '#FFFBEB' },
-  bonus:       { label: 'Bonus Reward',     icon: 'gift-outline',       color: '#EC4899', accent: '#FDF2F8' },
-  earn:        { label: 'Points Earned',    icon: 'trending-up-outline',color: '#0E7C66', accent: '#E6F1ED' },
-  spend:       { label: 'Points Spent',     icon: 'trending-down-outline', color: '#6B7280', accent: '#F9FAFB' },
+const getTxMeta = (type: string, tokens: (typeof PagePay)['light']) => {
+  const map: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap; color: string; accent: string }> = {
+    airtime:     { label: 'Airtime',          icon: 'call-outline',       color: tokens.mint, accent: tokens.mintFaint },
+    data:        { label: 'Data Bundle',      icon: 'wifi-outline',       color: tokens.indigo, accent: tokens.mintFaint },
+    electricity: { label: 'Electricity',      icon: 'flash-outline',      color: tokens.gold, accent: tokens.pendingSoft },
+    internet:    { label: 'Internet',         icon: 'globe-outline',      color: tokens.indigo, accent: tokens.mintFaint },
+    tv:          { label: 'TV Subscription',  icon: 'tv-outline',         color: tokens.signal, accent: tokens.signalFaint },
+    recharge:    { label: 'Recharge Pin',     icon: 'ticket-outline',     color: tokens.indigo, accent: tokens.mintFaint },
+    betting:     { label: 'Betting',          icon: 'diamond-outline',    color: tokens.mint, accent: tokens.mintFaint },
+    isp:         { label: 'ISP',              icon: 'globe-outline',      color: tokens.indigo, accent: tokens.mintFaint },
+    education:   { label: 'Education',        icon: 'school-outline',     color: tokens.gold, accent: tokens.pendingSoft },
+    sms:         { label: 'Bulk SMS',         icon: 'chatbubbles-outline',color: tokens.inkMuted, accent: tokens.paper2 },
+    wallet:      { label: 'Wallet Funding',   icon: 'wallet-outline',     color: tokens.mint, accent: tokens.mintFaint },
+    withdraw:    { label: 'Withdrawal',       icon: 'arrow-up-circle-outline', color: tokens.gold, accent: tokens.pendingSoft },
+    ad:          { label: 'Ad Reward',        icon: 'play-circle-outline',color: tokens.signal, accent: tokens.signalFaint },
+    read:        { label: 'Reading Reward',   icon: 'book-outline',       color: tokens.indigo, accent: tokens.mintFaint },
+    study:       { label: 'Study Session',    icon: 'school-outline',     color: tokens.indigo, accent: tokens.mintFaint },
+    premium:     { label: 'Premium Subscription', icon: 'star-outline',   color: tokens.gold, accent: tokens.pendingSoft },
+    bonus:       { label: 'Bonus Reward',     icon: 'gift-outline',       color: tokens.signal, accent: tokens.signalFaint },
+    earn:        { label: 'Points Earned',    icon: 'trending-up-outline',color: tokens.mint, accent: tokens.mintFaint },
+    spend:       { label: 'Points Spent',     icon: 'trending-down-outline', color: tokens.inkMuted, accent: tokens.paper2 },
+  };
+  return map[type] || map['spend'];
 };
 
 const FILTERS = [
@@ -215,7 +218,7 @@ export default function TransactionHistoryScreen() {
   };
 
   const renderItem = ({ item, index }: { item: TxItem; index: number }) => {
-    const meta = TX_META[item.type] || TX_META['spend'];
+    const meta = getTxMeta(item.type, tokens) || getTxMeta('spend', tokens);
     const isPositive = item.amount > 0;
     const amtClass = isPositive ? 'positive' : 'negative';
     const prefix = isPositive ? '+' : '';
@@ -246,8 +249,8 @@ export default function TransactionHistoryScreen() {
             <Text style={[styles.txAmount, { color: isPositive ? tokens.mint : tokens.ink }]}>
               {prefix}{Math.abs(item.amount).toLocaleString()} pts
             </Text>
-            <View style={[styles.statusBadge, { backgroundColor: item.status === 'success' ? '#D1FAE5' : item.status === 'pending' ? '#FFFBEB' : '#FEF2F2' }]}>
-              <Text style={[styles.statusText, { color: item.status === 'success' ? '#065F46' : item.status === 'pending' ? '#92400E' : '#991B1B' }]}>
+            <View style={[styles.statusBadge, { backgroundColor: item.status === 'success' ? tokens.mintSoft : item.status === 'pending' ? tokens.signalSoft : tokens.signalFaint }]}>
+              <Text style={[styles.statusText, { color: item.status === 'success' ? tokens.mint : item.status === 'pending' ? tokens.gold : tokens.error }]}>
                 {item.status}
               </Text>
             </View>
@@ -322,7 +325,7 @@ export default function TransactionHistoryScreen() {
                         filter === f.key ? { backgroundColor: tokens.mint, borderColor: tokens.mint } : { backgroundColor: tokens.card, borderColor: tokens.border },
                       ]}
                     >
-                      <Text style={[styles.filterLabel, { color: filter === f.key ? '#fff' : tokens.inkMuted }]}>
+                      <Text style={[styles.filterLabel, { color: filter === f.key ? tokens.mintText : tokens.inkMuted }]}>
                         {f.label}
                       </Text>
                     </TouchableOpacity>

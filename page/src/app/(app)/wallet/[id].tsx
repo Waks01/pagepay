@@ -47,38 +47,38 @@ const formatDate = (iso: string | null) => {
   });
 };
 
-const statusColor = (status: string) => {
+const statusColor = (status: string, tokens: (typeof PagePay)['light']) => {
   switch (status) {
-    case 'success': return '#34C759';
-    case 'pending': return '#FF9500';
-    case 'failed': return '#FF3B30';
-    default: return '#666';
+    case 'success': return tokens.success;
+    case 'pending': return tokens.pending;
+    case 'failed': return tokens.failed;
+    default: return tokens.inkMuted;
   }
 };
 
 const TX_TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }> = {
-  airtime:     { icon: 'call-outline',       color: '#10B981', label: 'Airtime' },
-  data:        { icon: 'wifi-outline',       color: '#3B82F6', label: 'Data Bundle' },
-  electricity: { icon: 'flash-outline',      color: '#F59E0B', label: 'Electricity' },
-  internet:    { icon: 'globe-outline',      color: '#8B5CF6', label: 'Internet' },
-  tv:          { icon: 'tv-outline',         color: '#EC4899', label: 'TV Subscription' },
-  recharge:    { icon: 'ticket-outline',     color: '#06B6D4', label: 'Recharge Pin' },
-  betting:     { icon: 'diamond-outline',    color: '#10B981', label: 'Betting' },
-  isp:         { icon: 'globe-outline',      color: '#14B8A6', label: 'ISP' },
-  education:   { icon: 'school-outline',     color: '#F97316', label: 'Education' },
-  sms:         { icon: 'chatbubbles-outline',color: '#64748B', label: 'Bulk SMS' },
-  wallet:      { icon: 'wallet-outline',     color: '#0E7C66', label: 'Wallet Funding' },
-  withdraw:    { icon: 'arrow-up-circle-outline', color: '#F59E0B', label: 'Withdrawal' },
-  ad:          { icon: 'play-circle-outline',color: '#EF4444', label: 'Ad Reward' },
-  read:        { icon: 'book-outline',       color: '#8B5CF6', label: 'Reading Reward' },
-  study:       { icon: 'school-outline',     color: '#6366F1', label: 'Study Session' },
-  premium:     { icon: 'star-outline',       color: '#D97706', label: 'Premium Subscription' },
-  bonus:       { icon: 'gift-outline',       color: '#EC4899', label: 'Bonus Reward' },
-  earn:        { icon: 'trending-up-outline',color: '#0E7C66', label: 'Points Earned' },
-  spend:       { icon: 'trending-down-outline', color: '#6B7280', label: 'Points Spent' },
+  airtime:     { icon: 'call-outline',       color: 'mint', label: 'Airtime' },
+  data:        { icon: 'wifi-outline',       color: 'indigo', label: 'Data Bundle' },
+  electricity: { icon: 'flash-outline',      color: 'gold', label: 'Electricity' },
+  internet:    { icon: 'globe-outline',      color: 'indigo', label: 'Internet' },
+  tv:          { icon: 'tv-outline',         color: 'signal', label: 'TV Subscription' },
+  recharge:    { icon: 'ticket-outline',     color: 'indigo', label: 'Recharge Pin' },
+  betting:     { icon: 'diamond-outline',    color: 'mint', label: 'Betting' },
+  isp:         { icon: 'globe-outline',      color: 'indigo', label: 'ISP' },
+  education:   { icon: 'school-outline',     color: 'gold', label: 'Education' },
+  sms:         { icon: 'chatbubbles-outline',color: 'inkMuted', label: 'Bulk SMS' },
+  wallet:      { icon: 'wallet-outline',     color: 'mint', label: 'Wallet Funding' },
+  withdraw:    { icon: 'arrow-up-circle-outline', color: 'gold', label: 'Withdrawal' },
+  ad:          { icon: 'play-circle-outline',color: 'signal', label: 'Ad Reward' },
+  read:        { icon: 'book-outline',       color: 'indigo', label: 'Reading Reward' },
+  study:       { icon: 'school-outline',     color: 'indigo', label: 'Study Session' },
+  premium:     { icon: 'star-outline',       color: 'gold', label: 'Premium Subscription' },
+  bonus:       { icon: 'gift-outline',       color: 'signal', label: 'Bonus Reward' },
+  earn:        { icon: 'trending-up-outline',color: 'mint', label: 'Points Earned' },
+  spend:       { icon: 'trending-down-outline', color: 'inkMuted', label: 'Points Spent' },
 };
 
-function DetailRow({ label, value, mono, tokens }: { label: string; value: string; mono?: boolean; tokens?: (typeof PagePay)['light'] }) {
+function DetailRow(label: string, value: string, mono?: boolean, tokens?: (typeof PagePay)['light']) {
   const t = tokens || PagePay.light;
   return (
     <View style={[styles.detailRow, { borderBottomColor: t.border }]}>
@@ -220,14 +220,14 @@ export default function TransactionDetailScreen() {
   }
 
   const isHistory = item.kind === 'history';
-  const d = isHistory ? item.data : item.data;
+  const d = isHistory ? (item as any) : item.data;
   const txType = d.type || d.tier || 'unknown';
-  const meta = TX_TYPE_META[txType] || { icon: 'receipt-outline', color: '#6B7280', label: 'Transaction' };
+  const meta = TX_TYPE_META[txType] || { icon: 'receipt-outline', color: 'inkMuted', label: 'Transaction' };
   const status = d.status || 'success';
   const statusColors = {
-    success: { bg: '#D1FAE5', text: '#065F46' },
-    pending: { bg: '#FFFBEB', text: '#92400E' },
-    failed: { bg: '#FEF2F2', text: '#991B1B' },
+    success: { bg: tokens.mintSoft, text: tokens.mint },
+    pending: { bg: tokens.signalSoft, text: tokens.gold },
+    failed: { bg: tokens.signalFaint, text: tokens.error },
   };
   const sc = statusColors[status as keyof typeof statusColors] || statusColors.success;
 
@@ -263,6 +263,7 @@ export default function TransactionDetailScreen() {
 
   const renderTypeDetails = () => {
     const details = (d as any).details || {};
+    console.log('[TransactionDetail] renderTypeDetails txType=', txType, 'details=', JSON.stringify(details), 'absPoints=', absPoints);
     switch (txType) {
       case 'airtime':
         return (
@@ -392,6 +393,7 @@ export default function TransactionDetailScreen() {
           </DetailSection>
         );
       case 'read':
+        console.log('[TransactionDetail] read case details=', JSON.stringify(details), 'absPoints=', absPoints);
         return (
           <DetailSection title="Reading Reward Details" tokens={tokens}>
             {DetailRow('Book Title', details.title as string || 'N/A', false, tokens)}
@@ -444,7 +446,8 @@ export default function TransactionDetailScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <View style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Hero */}
         <View style={[styles.hero, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
           <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
@@ -491,6 +494,7 @@ export default function TransactionDetailScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      </View>
 
       {/* Share Sheet Modal */}
       <Modal visible={showShare} transparent animationType="slide" onRequestClose={closeShare}>
@@ -505,8 +509,8 @@ export default function TransactionDetailScreen() {
               onPress={() => handleShareAction('share-image')}
               disabled={sharing}
             >
-              <View style={[styles.shareIcon, { backgroundColor: '#EFF6FF' }]}>
-                <Ionicons name="image-outline" size={22} color="#3B82F6" />
+              <View style={[styles.shareIcon, { backgroundColor: tokens.mintFaint }]}>
+                <Ionicons name="image-outline" size={22} color={tokens.mint} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>Share as Image</Text>
@@ -520,8 +524,8 @@ export default function TransactionDetailScreen() {
               onPress={() => handleShareAction('save-image')}
               disabled={sharing}
             >
-              <View style={[styles.shareIcon, { backgroundColor: '#EFF6FF' }]}>
-                <Ionicons name="download-outline" size={22} color="#3B82F6" />
+              <View style={[styles.shareIcon, { backgroundColor: tokens.mintFaint }]}>
+                <Ionicons name="download-outline" size={22} color={tokens.mint} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>Save as Image</Text>
@@ -537,8 +541,8 @@ export default function TransactionDetailScreen() {
               onPress={() => handleShareAction('share-pdf')}
               disabled={sharing}
             >
-              <View style={[styles.shareIcon, { backgroundColor: '#FEF2F2' }]}>
-                <Ionicons name="document-outline" size={22} color="#EF4444" />
+              <View style={[styles.shareIcon, { backgroundColor: tokens.failedFaint }]}>
+                <Ionicons name="document-outline" size={22} color={tokens.error} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>Share as PDF</Text>
@@ -552,8 +556,8 @@ export default function TransactionDetailScreen() {
               onPress={() => handleShareAction('save-pdf')}
               disabled={sharing}
             >
-              <View style={[styles.shareIcon, { backgroundColor: '#FEF2F2' }]}>
-                <Ionicons name="download-outline" size={22} color="#EF4444" />
+              <View style={[styles.shareIcon, { backgroundColor: tokens.failedFaint }]}>
+                <Ionicons name="download-outline" size={22} color={tokens.error} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>Save as PDF</Text>
