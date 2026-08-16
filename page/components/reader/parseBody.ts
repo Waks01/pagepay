@@ -136,21 +136,16 @@ export function parseBody(bodyText: string): RenderSegment[] {
   let lastWasImage = false;
 
   for (const hit of raw) {
-    // Text before this hit.
+    // Text before this hit. Preserve blank lines between segments
+    // so paragraphs maintain their spacing.
     if (hit.start > cursor) {
       const text = bodyText.slice(cursor, hit.start);
-      if (text.trim().length > 0) {
+      if (text.length > 0) {
         out.push({ kind: 'text', key: key(), text, bodyStart: cursor });
         lastWasImage = false;
       }
     }
     out.push(hit.segment);
-    // A caption that immediately follows an image gets the
-    // 'caption' kind (it already does in the match — no-op here).
-    // The renderer decides presentation: it always renders a
-    // caption in muted text below the previous element. We
-    // record whether the last non-text segment was an image so the
-    // renderer can tighten its top-margin for that case.
     lastWasImage = hit.segment.kind === 'image';
     cursor = hit.end;
   }
@@ -158,7 +153,7 @@ export function parseBody(bodyText: string): RenderSegment[] {
   // Trailing text after the last hit.
   if (cursor < bodyText.length) {
     const text = bodyText.slice(cursor);
-    if (text.trim().length > 0) {
+    if (text.length > 0) {
       out.push({ kind: 'text', key: key(), text, bodyStart: cursor });
     }
   }

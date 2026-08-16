@@ -296,24 +296,24 @@ export function setupNotificationListeners() {
       const data = response.notification.request.content.data;
 
       if (data?.type === "study_reminder") {
-        router.push("/(tabs)/study" as any);
+        router.push("/study" as any);
       } else if (data?.type === "task_alert") {
-        router.push("/(tabs)/tasks" as any);
+        router.push("/tasks" as any);
       } else if (data?.type === "referral_bonus") {
-        router.push("/(tabs)/profile" as any);
+        router.push("/profile" as any);
       } else if (
         data?.type === "wallet_update" ||
         data?.type === "payment_initiated" ||
         data?.type === "payment_success"
       ) {
-        router.push("/(tabs)/wallet" as any);
+        router.push("/wallet" as any);
       } else if (
         data?.type === "subscription_initiated" ||
         data?.type === "subscription_success"
       ) {
-        router.push("/(tabs)/premium" as any);
+        router.push("/premium" as any);
       } else if (data?.type === "ad_reward") {
-        router.push("/(tabs)/home" as any);
+        router.push("/" as any);
       }
     });
 
@@ -374,27 +374,27 @@ export function handleNotificationTap(
   const nav = navigation || router;
 
   if (data.type === "study_reminder") {
-    nav.push("/(tabs)/study" as any);
+    nav.push("/study" as any);
   } else if (data.type === "task_alert") {
-    nav.push("/(tabs)/tasks" as any);
+    nav.push("/tasks" as any);
   } else if (data.type === "referral_bonus") {
-    nav.push("/(tabs)/profile" as any);
+    nav.push("/profile" as any);
   } else if (
     data.type === "wallet_update" ||
     data.type === "payment_initiated" ||
     data.type === "payment_success"
   ) {
-    nav.push("/(tabs)/wallet" as any);
+    nav.push("/wallet" as any);
   } else if (
     data.type === "subscription_initiated" ||
     data.type === "subscription_success"
   ) {
-    nav.push("/(tabs)/premium" as any);
+    nav.push("/premium" as any);
   } else if (data.type === "ad_reward") {
-    nav.push("/(tabs)/home" as any);
+    nav.push("/" as any);
   } else if (category === "wallet_updates") {
-    nav.push("/(tabs)/wallet" as any);
+    nav.push("/wallet" as any);
   } else {
-    nav.push("/(tabs)/notifications" as any);
+    nav.push("/notifications" as any);
   }
 }

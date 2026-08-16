@@ -126,7 +126,7 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
       }
       
       await registerFCMToken();
-      router.replace('/(tabs)');
+      router.replace('/');
     } catch {
       setFormError(t('auth.login.errors.connection_error'));
       setErrorTrigger(true);

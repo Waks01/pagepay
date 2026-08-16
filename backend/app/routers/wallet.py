@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 from pydantic import BaseModel, Field
 
 from app.database import get_db
-from app.models import ReadingSession, ContentCatalog, AdEvent, User, Payment, BillTransaction
+from app.models import ReadingSession, ContentCatalog, AdEvent, User, Payment, BillTransaction, PayoutTransaction, PointCredit, StudyTransaction, StudyMaterial, PayoutAccount as PayoutAccountRow
 from app.routers.auth import get_current_user
 from app.routers.payouts import paystack_webhook as _payouts_paystack_webhook
 from app.services.paystack import get_client
@@ -376,3 +376,734 @@ async def initiate_wallet_deposit(
         amount_kobo=total_amount,
         deposit_amount_kobo=payload.deposit_amount_kobo,
     )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# UNIFIED WALLET HISTORY
+# ══════════════════════════════════════════════════════════════════════
+
+from fastapi import Query
+
+
+def _norm(v):
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.isoformat()
+    return str(v)
+
+
+def _safe_meta(details, *keys):
+    if not details:
+        return None
+    if isinstance(details, dict):
+        for k in keys:
+            if k in details and details[k] is not None:
+                return details[k]
+    return None
+
+
+def _normalise_service(raw: str | None) -> str | None:
+    if not raw:
+        return raw
+    value = raw.strip().lower()
+    aliases = {
+        "recharge_pin": "recharge",
+        "isp_smile": "isp",
+        "isp_spectranet": "isp",
+    }
+    return aliases.get(value, value)
+
+
+def _map_bill_row(tx: BillTransaction) -> dict:
+    service = _normalise_service(tx.service)
+    amount_naira = tx.amount_naira / 100
+    details = {
+        "provider": tx.provider,
+        "amountNaira": amount_naira,
+    }
+    if tx.phone:
+        details["phone"] = tx.phone
+    if tx.meter_number:
+        details["meterNumber"] = tx.meter_number
+    if tx.smartcard_number:
+        details["smartcard"] = tx.smartcard_number
+    if hasattr(tx, 'network_name') and tx.network_name:
+        details["network"] = tx.network_name
+    if hasattr(tx, 'customer_name') and tx.customer_name:
+        details["customerName"] = tx.customer_name
+    if hasattr(tx, 'token') and tx.token:
+        details["token"] = tx.token
+    if hasattr(tx, 'units') and tx.units:
+        details["units"] = str(tx.units)
+    if hasattr(tx, 'total_cost') and tx.total_cost is not None:
+        details["totalCost"] = tx.total_cost / 100
+    if tx.details:
+        details.update(tx.details)
+
+    descriptions = {
+        "airtime": f"Airtime Top-up - {_safe_meta(details, 'network') or tx.provider}",
+        "data": f"Data Bundle - {_safe_meta(details, 'network') or tx.provider}",
+        "electricity": f"Electricity Bill - {_safe_meta(details, 'network') or tx.provider}",
+        "tv": f"TV Subscription - {tx.provider}",
+        "recharge": "Recharge Pin Purchase",
+        "betting": f"Betting Funding - {_safe_meta(details, 'network') or tx.provider}",
+        "isp": f"ISP Payment - {_safe_meta(details, 'network') or tx.provider}",
+        "education": f"Education Payment - {_safe_meta(details, 'network') or tx.provider}",
+        "sms": f"Bulk SMS - {_safe_meta(details, 'units', 'amountNaira') or tx.provider}",
+    }
+    description = descriptions.get(service, f"Bought {service}" if service else "Bill payment")
+
+    return {
+        "kind": "bill",
+        "type": service or "spend",
+        "status": tx.status,
+        "txId": f"BT-{tx.id}",
+        "ref": tx.reference,
+        "description": description,
+        "points": tx.points_earned,
+        "amount": -int(amount_naira * 100),
+        "date": tx.created_at,
+        "details": details,
+    }
+
+
+@router.get("/history", response_model=list[dict])
+async def get_wallet_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    items: list[dict] = []
+
+    sessions = (
+        await db.execute(
+            select(ReadingSession, ContentCatalog.title)
+            .where(ReadingSession.user_id == current_user.id)
+            .where(ReadingSession.end_time.is_not(None))
+            .where(ReadingSession.points_earned > 0)
+            .order_by(ReadingSession.end_time.desc())
+            .limit(limit)
+        )
+    ).all()
+    for session, title in sessions:
+        read_order = getattr(session, "read_order", None)
+        total_slices = getattr(session, "total_slices", None)
+        slice_info = _slice_label(read_order, total_slices)
+        items.append({
+            "kind": "read",
+            "type": "read",
+            "status": "success",
+            "txId": f"RS-{session.id}",
+            "ref": f"RS-{session.id}",
+            "description": f'Read "{title}{slice_info}"',
+            "points": session.points_earned,
+            "amount": session.points_earned,
+            "date": session.end_time,
+            "details": {
+                "title": title,
+                "pages": session.duration_seconds // 60,
+                "reward": session.points_earned,
+            },
+        })
+
+    ad_events = (
+        await db.execute(
+            select(AdEvent)
+            .where(AdEvent.user_id == current_user.id)
+            .where(AdEvent.credit_status == "credited")
+            .where(AdEvent.user_points_credited > 0)
+            .order_by(AdEvent.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    for event in ad_events:
+        items.append({
+            "kind": "ad",
+            "type": "ad",
+            "status": "success",
+            "txId": f"AD-{event.id}",
+            "ref": event.transaction_id or f"AD-{event.id}",
+            "description": f"{event.ad_type.replace('_', ' ').title()} Reward",
+            "points": event.user_points_credited or 0,
+            "amount": event.user_points_credited or 0,
+            "date": event.created_at,
+            "details": {
+                "adType": event.ad_type,
+                "campaign": event.ad_unit,
+                "reward": event.user_points_credited,
+            },
+        })
+
+    bill_txs = (
+        await db.execute(
+            select(BillTransaction)
+            .where(BillTransaction.user_id == current_user.id)
+            .order_by(BillTransaction.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    for tx in bill_txs:
+        items.append(_map_bill_row(tx))
+
+    payments = (
+        await db.execute(
+            select(Payment)
+            .where(Payment.user_id == current_user.id)
+            .order_by(Payment.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    for payment in payments:
+        if payment.tier == "wallet_deposit":
+            amount_naira = payment.amount_kobo / 100
+            items.append({
+                "kind": "payment",
+                "type": "wallet",
+                "status": payment.status,
+                "txId": f"PAY-{payment.id}",
+                "ref": payment.provider_tx_ref,
+                "description": f"Wallet Funding - {payment.provider}",
+                "points": 0,
+                "amount": payment.amount_kobo,
+                "date": payment.created_at,
+                "details": {
+                    "source": payment.provider.title(),
+                    "amountNaira": amount_naira,
+                    "reference": payment.provider_tx_ref,
+                },
+            })
+        elif payment.tier in ("premium_monthly", "premium_yearly"):
+            amount_naira = payment.amount_kobo / 100
+            items.append({
+                "kind": "payment",
+                "type": "premium",
+                "status": payment.status,
+                "txId": f"PAY-{payment.id}",
+                "ref": payment.provider_tx_ref,
+                "description": f"Premium Subscription - {payment.tier.replace('premium_', '').title()}",
+                "points": 0,
+                "amount": -payment.amount_kobo,
+                "date": payment.created_at,
+                "details": {
+                    "plan": payment.tier.replace("premium_", "").title(),
+                    "amountNaira": amount_naira,
+                    "nextBilling": _norm(payment.confirmed_at) if payment.confirmed_at else None,
+                },
+            })
+
+    withdrawals = (
+        await db.execute(
+            select(PayoutTransaction)
+            .where(PayoutTransaction.user_id == current_user.id)
+            .order_by(PayoutTransaction.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    account = (
+        await db.execute(
+            select(PayoutAccountRow)
+            .where(PayoutAccountRow.user_id == current_user.id)
+        )
+    ).scalar_one_or_none()
+    for w in withdrawals:
+        points = w.amount_kobo
+        items.append({
+            "kind": "withdrawal",
+            "type": "withdraw",
+            "status": w.status,
+            "txId": f"WD-{w.id}",
+            "ref": w.reference,
+            "description": w.reason or "Wallet Withdrawal",
+            "points": points,
+            "amount": -points,
+            "date": w.created_at,
+            "details": {
+                "fee": w.fee_kobo,
+                "balanceAfter": w.balance_after_debit,
+                "bank": account.bank_name if account else None,
+                "accountLast4": account.account_number_last4 if account else None,
+            },
+        })
+
+    study_txs = (
+        await db.execute(
+            select(StudyTransaction)
+            .where(StudyTransaction.user_id == current_user.id)
+            .order_by(StudyTransaction.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    for st in study_txs:
+        material = (
+            await db.execute(
+                select(StudyMaterial.title, StudyMaterial.exam_type)
+                .where(StudyMaterial.id == st.asset_id)
+            )
+        ).first()
+        title = material[0] if material else None
+        exam_type = material[1] if material else None
+        if st.method == "points" and st.points_spent > 0:
+            items.append({
+                "kind": "study",
+                "type": "study",
+                "status": "success" if st.reward_granted else "failed",
+                "txId": f"ST-{st.id}",
+                "ref": f"ST-{st.id}",
+                "description": f"Study Session - {title or 'Study Material'}",
+                "points": -st.points_spent,
+                "amount": -st.points_spent,
+                "date": st.created_at,
+                "details": {
+                    "topic": title,
+                    "duration": "N/A",
+                    "pointsEarned": 0,
+                    "examType": exam_type,
+                },
+            })
+        elif st.method == "ad":
+            items.append({
+                "kind": "study",
+                "type": "study",
+                "status": "success" if st.reward_granted else "failed",
+                "txId": f"ST-{st.id}",
+                "ref": f"ST-{st.id}",
+                "description": f"Study Reward - {title or 'Study Material'}",
+                "points": st.points_spent,
+                "amount": st.points_spent,
+                "date": st.created_at,
+                "details": {
+                    "topic": title,
+                    "duration": "N/A",
+                    "pointsEarned": st.points_spent,
+                    "examType": exam_type,
+                },
+            })
+
+    point_credits = (
+        await db.execute(
+            select(PointCredit)
+            .where(PointCredit.user_id == current_user.id)
+            .order_by(PointCredit.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    for credit in point_credits:
+        label = {
+            "welcome_bonus": "Welcome Bonus",
+            "referral_referee": "Referral Bonus",
+            "referral_referrer": "Referral Bonus",
+        }.get(credit.source, credit.source.replace("_", " ").title())
+        items.append({
+            "kind": "bonus",
+            "type": "bonus",
+            "status": "success",
+            "txId": f"PC-{credit.id}",
+            "ref": f"PC-{credit.id}",
+            "description": label,
+            "points": credit.points,
+            "amount": credit.points,
+            "date": credit.created_at,
+            "details": {
+                "reason": credit.source,
+                "points": credit.points,
+            },
+        })
+
+    items.sort(key=lambda x: x["date"], reverse=True)
+    return items[:limit]
+
+
+@router.get("/history/{type}/{item_id}", response_model=dict)
+async def get_wallet_history_detail(
+    type: str,
+    item_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    prefix = item_id.split("-")[0] if "-" in item_id else ""
+    if prefix == "BT":
+        bill_id = int(item_id.split("-")[1])
+        result = await db.execute(
+            select(BillTransaction).where(
+                BillTransaction.id == bill_id,
+                BillTransaction.user_id == current_user.id,
+            )
+        )
+        tx = result.scalar_one_or_none()
+        if not tx:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        return _map_bill_row(tx)
+    if prefix == "PAY":
+        payment_id = int(item_id.split("-")[1])
+        result = await db.execute(
+            select(Payment).where(
+                Payment.id == payment_id,
+                Payment.user_id == current_user.id,
+            )
+        )
+        payment = result.scalar_one_or_none()
+        if not payment:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        if payment.tier == "wallet_deposit":
+            return {
+                "kind": "payment",
+                "type": "wallet",
+                "status": payment.status,
+                "txId": f"PAY-{payment.id}",
+                "ref": payment.provider_tx_ref,
+                "description": f"Wallet Funding - {payment.provider}",
+                "points": 0,
+                "amount": payment.amount_kobo,
+                "date": payment.created_at,
+                "details": {
+                    "source": payment.provider.title(),
+                    "amountNaira": payment.amount_kobo / 100,
+                    "reference": payment.provider_tx_ref,
+                },
+            }
+        return {
+            "kind": "payment",
+            "type": "premium",
+            "status": payment.status,
+            "txId": f"PAY-{payment.id}",
+            "ref": payment.provider_tx_ref,
+            "description": f"Premium Subscription - {payment.tier.replace('premium_', '').title()}",
+            "points": 0,
+            "amount": -payment.amount_kobo,
+            "date": payment.created_at,
+            "details": {
+                "plan": payment.tier.replace("premium_", "").title(),
+                "amountNaira": payment.amount_kobo / 100,
+            },
+        }
+    if prefix == "WD":
+        w_id = int(item_id.split("-")[1])
+        result = await db.execute(
+            select(PayoutTransaction).where(
+                PayoutTransaction.id == w_id,
+                PayoutTransaction.user_id == current_user.id,
+            )
+        )
+        w = result.scalar_one_or_none()
+        if not w:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        account = (
+            await db.execute(
+                select(PayoutAccountRow).where(
+                    PayoutAccountRow.user_id == current_user.id
+                )
+            )
+        ).scalar_one_or_none()
+        return {
+            "kind": "withdrawal",
+            "type": "withdraw",
+            "status": w.status,
+            "txId": f"WD-{w.id}",
+            "ref": w.reference,
+            "description": w.reason or "Wallet Withdrawal",
+            "points": w.amount_kobo,
+            "amount": -w.amount_kobo,
+            "date": w.created_at,
+            "details": {
+                "fee": w.fee_kobo,
+                "balanceAfter": w.balance_after_debit,
+                "bank": account.bank_name if account else None,
+                "accountLast4": account.account_number_last4 if account else None,
+            },
+        }
+    if prefix == "RS":
+        session_id = int(item_id.split("-")[1])
+        result = await db.execute(
+            select(ReadingSession, ContentCatalog.title)
+            .where(
+                ReadingSession.id == session_id,
+                ReadingSession.user_id == current_user.id,
+            )
+            .join(ContentCatalog, ContentCatalog.id == ReadingSession.content_id)
+        )
+        row = result.first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        session, title = row
+        read_order = getattr(session, "read_order", None)
+        total_slices = getattr(session, "total_slices", None)
+        slice_info = _slice_label(read_order, total_slices)
+        return {
+            "kind": "history",
+            "type": "read",
+            "status": "success",
+            "txId": f"RS-{session.id}",
+            "ref": f"RS-{session.id}",
+            "description": f'Read "{title}{slice_info}"',
+            "points": session.points_earned,
+            "amount": session.points_earned,
+            "date": session.end_time,
+            "details": {
+                "title": title,
+                "pages": session.duration_seconds // 60,
+                "reward": session.points_earned,
+            },
+        }
+    if prefix == "AD":
+        event_id = int(item_id.split("-")[1])
+        result = await db.execute(
+            select(AdEvent).where(
+                AdEvent.id == event_id,
+                AdEvent.user_id == current_user.id,
+            )
+        )
+        event = result.scalar_one_or_none()
+        if not event:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        return {
+            "kind": "history",
+            "type": "ad",
+            "status": "success",
+            "txId": f"AD-{event.id}",
+            "ref": event.transaction_id or f"AD-{event.id}",
+            "description": f"{event.ad_type.replace('_', ' ').title()} Reward",
+            "points": event.user_points_credited or 0,
+            "amount": event.user_points_credited or 0,
+            "date": event.created_at,
+            "details": {
+                "adType": event.ad_type,
+                "campaign": event.ad_unit,
+                "reward": event.user_points_credited,
+            },
+        }
+    if prefix == "ST":
+        st_id = int(item_id.split("-")[1])
+        result = await db.execute(
+            select(StudyTransaction).where(
+                StudyTransaction.id == st_id,
+                StudyTransaction.user_id == current_user.id,
+            )
+        )
+        st = result.scalar_one_or_none()
+        if not st:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        material = (
+            await db.execute(
+                select(StudyMaterial.title, StudyMaterial.exam_type)
+                .where(StudyMaterial.id == st.asset_id)
+            )
+        ).first()
+        title = material[0] if material else None
+        return {
+            "kind": "history",
+            "type": "study",
+            "status": "success" if st.reward_granted else "failed",
+            "txId": f"ST-{st.id}",
+            "ref": f"ST-{st.id}",
+            "description": f"Study Session - {title or 'Study Material'}",
+            "points": st.points_spent,
+            "amount": st.points_spent,
+            "date": st.created_at,
+            "details": {
+                "topic": title,
+                "duration": "N/A",
+                "pointsEarned": st.points_spent,
+                "examType": material[1] if material else None,
+            },
+        }
+    if prefix == "PC":
+        pc_id = int(item_id.split("-")[1])
+        result = await db.execute(
+            select(PointCredit).where(
+                PointCredit.id == pc_id,
+                PointCredit.user_id == current_user.id,
+            )
+        )
+        credit = result.scalar_one_or_none()
+        if not credit:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        label = {
+            "welcome_bonus": "Welcome Bonus",
+            "referral_referee": "Referral Bonus",
+            "referral_referrer": "Referral Bonus",
+        }.get(credit.source, credit.source.replace("_", " ").title())
+        return {
+            "kind": "bonus",
+            "type": "bonus",
+            "status": "success",
+            "txId": f"PC-{credit.id}",
+            "ref": f"PC-{credit.id}",
+            "description": label,
+            "points": credit.points,
+            "amount": credit.points,
+            "date": credit.created_at,
+            "details": {
+                "reason": credit.source,
+                "points": credit.points,
+            },
+        }
+
+    # Backward-compatible lookup for unprefixed IDs from the legacy
+    # wallet home screen. The old UI passes plain numeric IDs with
+    # kind values like `session`, `payment`, `withdrawal`, or `bill`.
+    # We resolve them here so the detail screen does not need frontend
+    # fallbacks.
+    try:
+        raw_id = int(item_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    if type == "withdrawal":
+        raw_id_val = None
+        try:
+            raw_id_val = int(item_id)
+        except (ValueError, TypeError):
+            pass
+
+        result = await db.execute(
+            select(PayoutTransaction).where(
+                PayoutTransaction.user_id == current_user.id,
+                (
+                    (PayoutTransaction.id == raw_id_val)
+                    if raw_id_val is not None
+                    else (PayoutTransaction.reference == item_id)
+                ),
+            )
+        )
+        w = result.scalar_one_or_none()
+        if not w:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        account = (
+            await db.execute(
+                select(PayoutAccountRow).where(
+                    PayoutAccountRow.user_id == current_user.id
+                )
+            )
+        ).scalar_one_or_none()
+        return {
+            "kind": "withdrawal",
+            "type": "withdraw",
+            "status": w.status,
+            "txId": f"WD-{w.id}",
+            "ref": w.reference,
+            "description": w.reason or "Wallet Withdrawal",
+            "points": w.amount_kobo,
+            "amount": -w.amount_kobo,
+            "date": w.created_at,
+            "details": {
+                "fee": w.fee_kobo,
+                "balanceAfter": w.balance_after_debit,
+                "bank": account.bank_name if account else None,
+                "accountLast4": account.account_number_last4 if account else None,
+            },
+        }
+
+    if type == "payment":
+        result = await db.execute(
+            select(Payment).where(
+                Payment.id == raw_id,
+                Payment.user_id == current_user.id,
+            )
+        )
+        payment = result.scalar_one_or_none()
+        if not payment:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        if payment.tier == "wallet_deposit":
+            return {
+                "kind": "payment",
+                "type": "wallet",
+                "status": payment.status,
+                "txId": f"PAY-{payment.id}",
+                "ref": payment.provider_tx_ref,
+                "description": f"Wallet Funding - {payment.provider}",
+                "points": 0,
+                "amount": payment.amount_kobo,
+                "date": payment.created_at,
+                "details": {
+                    "source": payment.provider.title(),
+                    "amountNaira": payment.amount_kobo / 100,
+                    "reference": payment.provider_tx_ref,
+                },
+            }
+        return {
+            "kind": "payment",
+            "type": "premium",
+            "status": payment.status,
+            "txId": f"PAY-{payment.id}",
+            "ref": payment.provider_tx_ref,
+            "description": f"Premium Subscription - {payment.tier.replace('premium_', '').title()}",
+            "points": 0,
+            "amount": -payment.amount_kobo,
+            "date": payment.created_at,
+            "details": {
+                "plan": payment.tier.replace("premium_", "").title(),
+                "amountNaira": payment.amount_kobo / 100,
+            },
+        }
+
+    if type == "bill":
+        result = await db.execute(
+            select(BillTransaction).where(
+                BillTransaction.id == raw_id,
+                BillTransaction.user_id == current_user.id,
+            )
+        )
+        tx = result.scalar_one_or_none()
+        if not tx:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        return _map_bill_row(tx)
+
+    if type in ("session", "history"):
+        session_result = await db.execute(
+            select(ReadingSession, ContentCatalog.title)
+            .where(
+                ReadingSession.id == raw_id,
+                ReadingSession.user_id == current_user.id,
+            )
+            .join(ContentCatalog, ContentCatalog.id == ReadingSession.content_id)
+        )
+        row = session_result.first()
+        if row:
+            session, title = row
+            read_order = getattr(session, "read_order", None)
+            total_slices = getattr(session, "total_slices", None)
+            slice_info = _slice_label(read_order, total_slices)
+            return {
+                "kind": "history",
+                "type": "read",
+                "status": "success",
+                "txId": f"RS-{session.id}",
+                "ref": f"RS-{session.id}",
+                "description": f'Read "{title}{slice_info}"',
+                "points": session.points_earned,
+                "amount": session.points_earned,
+                "date": session.end_time,
+                "details": {
+                    "title": title,
+                    "pages": session.duration_seconds // 60,
+                    "reward": session.points_earned,
+                },
+            }
+
+        event_result = await db.execute(
+            select(AdEvent).where(
+                AdEvent.id == raw_id,
+                AdEvent.user_id == current_user.id,
+            )
+        )
+        event = event_result.scalar_one_or_none()
+        if event:
+            return {
+                "kind": "history",
+                "type": "ad",
+                "status": "success",
+                "txId": f"AD-{event.id}",
+                "ref": event.transaction_id or f"AD-{event.id}",
+                "description": f"{event.ad_type.replace('_', ' ').title()} Reward",
+                "points": event.user_points_credited or 0,
+                "amount": event.user_points_credited or 0,
+                "date": event.created_at,
+                "details": {
+                    "adType": event.ad_type,
+                    "campaign": event.ad_unit,
+                    "reward": event.user_points_credited,
+                },
+            }
+
+    raise HTTPException(status_code=404, detail="Transaction not found")

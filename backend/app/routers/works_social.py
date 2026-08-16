@@ -170,13 +170,15 @@ def _resolve_work_id(target_id: int, db: AsyncSession) -> int:
 def _user_display_name(user: User | None) -> str:
     """Best-effort user label for the comment thread.
 
-    Privacy default: never expose email/phone to other users. We use
-    "Reader" + the last 4 digits of the user id, which is enough to
-    distinguish two readers in a thread without leaking PII.
+    Privacy default: never expose email/phone to other users. We prefer
+    the public username when set; otherwise we fall back to a generic
+    label without leaking the user id.
     """
     if user is None:
         return "Anonymous"
-    return f"Reader #{user.id % 10000:04d}"
+    if getattr(user, "username", None):
+        return user.username
+    return "Reader"
 
 
 # ════════════════════════════════════════════════════════════════════════

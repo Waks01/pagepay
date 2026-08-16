@@ -38,7 +38,7 @@ export default function NotificationBell({ onPress }: Props) {
     } else if (isNotificationsScreen) {
       router.back();
     } else {
-      router.push("/(tabs)/notifications");
+      router.push("/notifications");
     }
   }, [onPress, isNotificationsScreen, router]);
 

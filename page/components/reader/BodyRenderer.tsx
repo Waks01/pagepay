@@ -153,26 +153,34 @@ function PlainBodyWithHighlights({
   onLongPress?: BodyRendererProps['onLongPress'];
   onHighlightPress?: BodyRendererProps['onHighlightPress'];
 }) {
+  const paragraphs = bodyText.split(/\n{2,}/);
   if (!highlights.length && !onLongPress) {
     return (
-      <Text style={{ color: inkColor, fontSize: 17, lineHeight: 26 }}>
-        {bodyText}
-      </Text>
+      <View>
+        {paragraphs.map((p, i) => (
+          <Text key={i} style={{ color: inkColor, fontSize: 17, lineHeight: 26, marginBottom: 16 }}>
+            {p.trim()}
+          </Text>
+        ))}
+      </View>
     );
   }
   return (
     <View>
-      <TextSegment
-        text={bodyText}
-        inkColor={inkColor}
-        highlights={highlights}
-        onLongPress={onLongPress ? (e) => {
-          const sel = e.nativeEvent.selection;
-          if (!sel) return;
-          onLongPress(0, sel);
-        } : undefined}
-        onHighlightPress={onHighlightPress}
-      />
+      {paragraphs.map((p, i) => (
+        <TextSegment
+          key={i}
+          text={p.trim()}
+          inkColor={inkColor}
+          highlights={highlights}
+          onLongPress={onLongPress ? (e) => {
+            const sel = e.nativeEvent.selection;
+            if (!sel) return;
+            onLongPress(0, sel);
+          } : undefined}
+          onHighlightPress={onHighlightPress}
+        />
+      ))}
     </View>
   );
 }

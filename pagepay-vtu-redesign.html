@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PagePay — VTU Screens Redesign (Visual Concept)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet" />
+<style>
+/* ===================================================================
+   PagePay VTU Redesign — Visual Concept
+   - Structure & data mirror the existing screens in page/src/app/
+   - Visual treatment only: refined type, layered depth, soft surfaces,
+     tasteful gradients over the existing mint / cream / paper system.
+   =================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  /* Brand-aligned mint + paper tones (same family as existing tokens) */
+  --ink:        #0E1116;
+  --ink-2:      #1F2330;
+  --ink-muted:  #6B7280;
+  --ink-faint:  #9CA3AF;
+  --paper:      #FBFAF6;          /* warm cream — matches existing */
+  --paper-2:    #F5F2EA;
+  --card:       #FFFFFF;
+  --card-soft:  #FBFAF6;
+  --border:     #E5E2DA;
+  --border-2:   #D1CDC2;
+  --mint:       #0E7C66;          /* primary mint */
+  --mint-2:     #0A6453;
+  --mint-soft:  #E6F1ED;
+  --mint-faint: #F2F8F5;
+  --mint-text:  #FFFFFF;
+  --gold:       #B8862C;
+  --indigo:     #2A2F58;
+  --signal:     #C2410C;
+  --signal-soft:#FDEFE7;
+  --error:      #DC2626;
+
+  /* Surfaces */
+  --shadow-1: 0 1px 2px rgba(14,17,22,0.04), 0 4px 14px rgba(14,17,22,0.06);
+  --shadow-2: 0 10px 30px rgba(14,17,22,0.08), 0 24px 60px rgba(14,124,102,0.10);
+  --shadow-mint: 0 8px 24px rgba(14,124,102,0.18);
+
+  /* Brand network accents (kept close to real brand colors) */
+  --mtn:     #FFCC00;
+  --mtn-2:   #FFA600;
+  --airtel:  #E60000;
+  --glo:     #0C8442;
+  --mobile9: #0066B3;
+
+  /* Service icon hues (from real bills-history.tsx) */
+  --svc-airtime:    #0E7C66;
+  --svc-data:       #2563EB;
+  --svc-electricity:#F59E0B;
+  --svc-tv:         #7C3AED;
+  --svc-pin:        #059669;
+  --svc-betting:    #DC2626;
+  --svc-isp:        #0891B2;
+  --svc-education:  #4F46E5;
+  --svc-sms:        #DB2777;
+}
+
+html, body {
+  margin: 0; padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.page {
+  min-height: 100vh;
+  /* Soft ambient gradient — sits over the cream paper, doesn't replace it */
+  background:
+    radial-gradient(900px 500px at 8% -5%,   rgba(14,124,102,0.06) 0%, transparent 60%),
+    radial-gradient(800px 500px at 100% 10%, rgba(184,134,44,0.05) 0%, transparent 60%),
+    var(--paper);
+  padding: 40px 24px 80px;
+}
+
+.container { max-width: 1480px; margin: 0 auto; }
+
+/* ===== Header ============================================== */
+.page-header {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  flex-wrap: wrap; gap: 18px; margin-bottom: 28px;
+}
+.page-header h1 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 38px; line-height: 1.05; letter-spacing: -0.02em;
+  margin: 0 0 8px 0; font-weight: 600; color: var(--ink);
+}
+.page-header h1 em { font-style: italic; color: var(--mint); font-weight: 500; }
+.page-header p { margin: 0; color: var(--ink-muted); font-size: 15px; max-width: 640px; line-height: 1.5; }
+.badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.badge {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 6px 10px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--ink-2);
+}
+.badge.mint   { color: var(--mint);   background: var(--mint-soft); border-color: rgba(14,124,102,0.20); }
+.badge.gold   { color: var(--gold);   background: rgba(184,134,44,0.08); border-color: rgba(184,134,44,0.20); }
+
+/* ===== Controls ============================================ */
+.controls {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-1);
+  position: sticky; top: 14px; z-index: 30;
+  margin-bottom: 32px;
+}
+.controls .seg {
+  display: inline-flex; background: var(--paper-2);
+  border: 1px solid var(--border);
+  padding: 4px; border-radius: 12px; gap: 2px;
+}
+.controls .seg button {
+  border: 0; background: transparent; padding: 8px 14px;
+  border-radius: 9px; font-weight: 600; font-size: 13px; color: var(--ink-muted);
+  cursor: pointer; font-family: inherit; transition: all 0.15s ease;
+}
+.controls .seg button.active {
+  background: var(--card); color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+.controls .spacer { flex: 1; }
+.controls .label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ===== Stage layout ======================================== */
+.stage { display: grid; gap: 36px; }
+.row { display: grid; gap: 24px; }
+.row.cols-2 { grid-template-columns: 1fr 1fr; }
+.row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 1100px) {
+  .row.cols-2 { grid-template-columns: 1fr; }
+  .row.cols-3 { grid-template-columns: 1fr; }
+}
+
+.block-head {
+  display: flex; align-items: baseline; gap: 12px;
+  margin-bottom: 12px; padding: 0 4px;
+}
+.block-head .num {
+  font-family: 'Fraunces', serif; font-weight: 600;
+  font-size: 13px; color: var(--mint); letter-spacing: 0.04em;
+  border: 1px solid rgba(14,124,102,0.20); background: var(--mint-soft);
+  padding: 2px 8px; border-radius: 6px;
+}
+.block-head .t {
+  font-family: 'Fraunces', serif; font-weight: 600; font-size: 22px;
+  color: var(--ink); letter-spacing: -0.01em;
+}
+.block-head .s {
+  font-size: 12px; color: var(--ink-muted);
+}
+
+/* ===== Phone frame ========================================= */
+.phones { display: grid; gap: 20px; }
+.phones.cols-2 { grid-template-columns: 1fr 1fr; }
+.phones.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 900px) { .phones.cols-2, .phones.cols-3 { grid-template-columns: 1fr; } }
+
+.phone {
+  position: relative;
+  width: 100%; max-width: 340px; margin: 0 auto;
+  background: linear-gradient(145deg, #1A1B2E, #0E0F1F);
+  border-radius: 38px; padding: 14px;
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,0.04) inset,
+    0 30px 60px rgba(14,17,22,0.25),
+    0 12px 24px rgba(14,17,22,0.15);
+}
+.phone::before {
+  content: ''; position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
+  width: 110px; height: 26px; background: #0B0C18; border-radius: 16px; z-index: 2;
+}
+.phone .screen {
+  position: relative;
+  border-radius: 26px; overflow: hidden;
+  background: var(--paper);
+  aspect-ratio: 9 / 19.5;
+  display: flex; flex-direction: column;
+}
+.status-bar {
+  height: 38px; display: flex; align-items: flex-end; justify-content: space-between;
+  padding: 0 22px 6px; font-size: 12px; font-weight: 600; color: var(--ink);
+}
+.status-bar .right { display: inline-flex; gap: 5px; align-items: center; }
+
+.screen-body {
+  flex: 1; overflow-y: auto; padding: 0 0 24px;
+  background: var(--paper);
+  scrollbar-width: none;
+}
+.screen-body::-webkit-scrollbar { display: none; }
+
+.home-indicator {
+  position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+  width: 110px; height: 4px; border-radius: 4px;
+  background: var(--ink); opacity: 0.35;
+}
+
+/* ============================================================ */
+/* REUSABLE PRIMITIVES — mirroring existing components            */
+/* ============================================================ */
+
+/* PagePay tokens for type */
+.t-display {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700; letter-spacing: -0.01em;
+}
+.t-editorial {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600; letter-spacing: -0.01em;
+}
+
+/* App bar */
+.appbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 4px 18px 16px;
+}
+.appbar .title {
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17px; color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.icon-btn-circle {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--card); border: 1px solid var(--border);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink); cursor: pointer;
+  box-shadow: var(--shadow-1);
+}
+.appbar .right { margin-left: auto; display: inline-flex; gap: 8px; }
+
+/* ===== SectionCard (existing component, refined) ========== */
+.section-card {
+  margin: 0 16px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+  box-shadow: var(--shadow-1);
+  position: relative;
+  /* Subtle top sheen */
+  background-image: linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0.96) 60%);
+}
+.section-card .header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.section-card .label {
+  font-size: 13px; font-weight: 500; color: var(--ink-muted);
+  font-family: 'Inter', sans-serif;
+}
+
+/* ===== EarnBadge (existing component, refined) ============ */
+.earn-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: 999px;
+  background: var(--mint-soft);
+  border: 1px solid rgba(14,124,102,0.22);
+  color: var(--mint);
+  font-size: 12px; font-weight: 600;
+}
+.earn-badge svg { width: 14px; height: 14px; }
+
+/* ===== Phone field (existing input pattern, refined) ====== */
+.field {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px;
+  background: var(--card-soft);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  position: relative;
+}
+.field.valid { border-color: var(--mint); background: var(--mint-faint); }
+.field .icon { color: var(--ink-muted); display: inline-flex; }
+.field input {
+  flex: 1; border: 0; outline: 0; background: transparent;
+  font-size: 17px; font-weight: 600; color: var(--ink); font-family: 'Inter', sans-serif;
+  letter-spacing: 0.02em;
+}
+.field input::placeholder { color: var(--ink-faint); font-weight: 500; }
+.field .valid-icon {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--mint); color: white;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.field .valid-icon svg { width: 12px; height: 12px; stroke-width: 3; }
+
+/* Detected row (existing "✓ Detected: MTN" pattern) */
+.detect-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: var(--mint);
+  margin-top: -4px;
+}
+.detect-row svg { width: 12px; height: 12px; }
+
+/* Phone error */
+.field-error { font-size: 12px; color: var(--error); font-weight: 500; margin-top: -4px; }
+
+/* ===== NetworkPicker (existing component, refined) ======== */
+.network-grid { display: flex; flex-wrap: wrap; gap: 10px 10px; }
+.network-chip {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 6px; border-radius: 14px;
+  background: var(--card-soft);
+  border: 1.5px solid transparent;
+  cursor: pointer; position: relative;
+  width: calc(25% - 8px);
+  transition: all 0.15s ease;
+}
+.network-chip .logo {
+  width: 44px; height: 44px; border-radius: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 18px; color: white;
+  border: 1px solid var(--border);
+  background: white;
+  overflow: hidden;
+}
+.network-chip .name { font-size: 11px; font-weight: 600; color: var(--ink-muted); }
+.network-chip.active {
+  background: var(--mint-soft);
+  border-color: var(--mint);
+}
+.network-chip.active .name { color: var(--ink); font-weight: 700; }
+.network-chip.active .logo { border-color: var(--mint); }
+.network-chip .active-dot {
+  position: absolute; top: 4px; right: 4px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--mint);
+}
+
+/* Network logo fallbacks (real fallback uses first letter on brand color) */
+.logo-mtn     { background: var(--mtn);     color: #1A1A1A; }
+.logo-airtel  { background: var(--airtel);  color: white; }
+.logo-glo     { background: var(--glo);     color: white; }
+.logo-9mobile { background: var(--mobile9); color: white; }
+
+/* ===== Amount grid (existing 3-col amount cards) ========== */
+.amount-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.amount-card {
+  width: calc(33.333% - 7px);
+  min-width: 96px;
+  padding: 12px 6px;
+  border-radius: 12px;
+  background: var(--card-soft);
+  border: 1.5px solid var(--border);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  position: relative;
+  cursor: pointer;
+}
+.amount-card .v { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px; color: var(--ink); }
+.amount-card .p { font-size: 11px; font-weight: 600; color: var(--mint); }
+.amount-card.active {
+  background: var(--mint-soft);
+  border-color: var(--mint);
+}
+.amount-card .check {
+  position: absolute; top: 6px; right: 6px;
+  width: 16px; height: 16px; border-radius: 8px;
+  background: var(--mint); color: white;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700;
+}
+
+/* Custom amount */
+.custom-amount {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px;
+  background: var(--card-soft);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+}
+.custom-amount .prefix { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px; color: var(--ink-muted); }
+.custom-amount input {
+  flex: 1; border: 0; outline: 0; background: transparent;
+  font-size: 18px; font-weight: 700; color: var(--ink); font-family: 'Space Grotesk', sans-serif;
+}
+.custom-amount input::placeholder { color: var(--ink-faint); font-weight: 500; }
+
+/* ===== Beneficiary chips (existing horizontal chips row) === */
+.beneficiaries {
+  display: flex; gap: 8px; overflow-x: auto; padding: 0 16px 4px;
+  scrollbar-width: none;
+}
+.beneficiaries::-webkit-scrollbar { display: none; }
+.benef-chip {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.benef-chip.active {
+  background: var(--mint-soft);
+  border-color: var(--mint);
+}
+.benef-chip .n { font-size: 13px; font-weight: 600; color: var(--ink); }
+.benef-chip .p { font-size: 11px; font-weight: 500; color: var(--ink-muted); }
+.benef-chip.active .n { color: var(--mint); }
+.benef-chip.active .p { color: var(--mint); opacity: 0.8; }
+
+/* ===== Pay button (existing CTA pattern) ================== */
+.pay-btn {
+  margin: 6px 16px 0;
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--mint);
+  color: var(--mint-text);
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px;
+  cursor: pointer;
+  box-shadow: var(--shadow-mint);
+  letter-spacing: -0.01em;
+  width: calc(100% - 32px);
+}
+.pay-btn.disabled {
+  background: var(--border-2); color: var(--ink-faint);
+  box-shadow: none; cursor: not-allowed;
+}
+.pay-btn svg { width: 20px; height: 20px; }
+
+/* ============================================================ */
+/* BUY AIRTIME SCREEN                                           */
+/* ============================================================ */
+.airtime-hero {
+  margin: 0 16px 14px;
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, var(--mint) 0%, #0A6453 100%);
+  color: var(--mint-text);
+  position: relative; overflow: hidden;
+  box-shadow: var(--shadow-mint);
+}
+.airtime-hero::after {
+  content: ''; position: absolute; right: -20px; top: -20px;
+  width: 120px; height: 120px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.10) 0%, transparent 70%);
+}
+.airtime-hero .h-row { display: flex; align-items: center; justify-content: space-between; }
+.airtime-hero .label-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; opacity: 0.8; }
+.airtime-hero .pts-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 8px; border-radius: 999px;
+  background: rgba(255,255,255,0.18); font-size: 11px; font-weight: 700;
+}
+.airtime-hero .pts-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: #FFD66B; }
+.airtime-hero .amount-display {
+  font-family: 'Fraunces', serif; font-weight: 600; font-size: 24px;
+  margin-top: 4px; letter-spacing: -0.01em;
+}
+.airtime-hero .amount-display .sub { font-size: 11px; opacity: 0.75; font-weight: 500; font-family: 'Inter', sans-serif; margin-left: 6px; }
+
+/* ============================================================ */
+/* BUY DATA SCREEN                                              */
+/* ============================================================ */
+.plantype-tabs {
+  display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px;
+  scrollbar-width: none;
+}
+.plantype-tabs::-webkit-scrollbar { display: none; }
+.plantype-tab {
+  flex-shrink: 0;
+  padding: 6px 12px; border-radius: 8px;
+  background: var(--card-soft); border: 1px solid var(--border);
+  font-size: 11px; font-weight: 600; color: var(--ink);
+  cursor: pointer; text-transform: capitalize;
+}
+.plantype-tab.active {
+  background: var(--mint); border-color: var(--mint); color: var(--mint-text);
+}
+
+/* PlanGrid (existing 2-col card pattern) */
+.plan-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.plan-card {
+  width: calc(50% - 5px);
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--card-soft);
+  border: 1.5px solid var(--border);
+  display: flex; flex-direction: column; gap: 4px;
+  position: relative;
+  cursor: pointer;
+}
+.plan-card.active {
+  background: var(--mint-soft);
+  border-color: var(--mint);
+}
+.plan-card .check {
+  position: absolute; top: 6px; right: 6px;
+  width: 16px; height: 16px; border-radius: 8px;
+  background: var(--mint); color: white;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700;
+}
+.plan-card .primary {
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; color: var(--ink);
+}
+.plan-card .secondary { font-size: 10px; font-weight: 500; color: var(--ink-muted); }
+.plan-card .tertiary { font-size: 13px; font-weight: 600; color: var(--mint); }
+
+/* PlanGrid error/loading/empty */
+.error-box {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px; border-radius: 12px;
+  background: var(--signal-soft); border: 1px solid rgba(194,65,12,0.30);
+  color: var(--signal);
+}
+.error-box svg { width: 20px; height: 20px; flex-shrink: 0; }
+.error-box .t { flex: 1; font-size: 13px; font-weight: 500; }
+.error-box .retry { font-size: 13px; font-weight: 700; color: var(--mint); }
+
+.loading-pad { padding: 32px 0; text-align: center; }
+.empty-pad { padding: 24px 0; text-align: center; color: var(--ink-muted); font-size: 13px; }
+
+/* ============================================================ */
+/* BILLS HISTORY SCREEN                                         */
+/* ============================================================ */
+.history-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 4px 18px 14px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.history-header .title {
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17px; color: var(--ink);
+}
+.history-header .right { margin-left: auto; }
+.history-list { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.txn-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex; gap: 12px;
+  align-items: flex-start;
+  box-shadow: var(--shadow-1);
+}
+.txn-card .icon {
+  width: 40px; height: 40px; border-radius: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: white; flex-shrink: 0;
+}
+.txn-card .icon svg { width: 20px; height: 20px; }
+.txn-card .icon.airtime     { background: rgba(14,124,102,0.14); color: var(--svc-airtime); }
+.txn-card .icon.data        { background: rgba(37,99,235,0.12);  color: var(--svc-data); }
+.txn-card .icon.electricity { background: rgba(245,158,11,0.14); color: var(--svc-electricity); }
+.txn-card .icon.tv          { background: rgba(124,58,237,0.12); color: var(--svc-tv); }
+.txn-card .icon.pin         { background: rgba(5,150,105,0.12);  color: var(--svc-pin); }
+.txn-card .icon.betting     { background: rgba(220,38,38,0.12);  color: var(--svc-betting); }
+
+.txn-card .body { flex: 1; min-width: 0; }
+.txn-card .body .ttl { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+.txn-card .body .dt  { font-size: 12px; color: var(--ink-muted); margin-bottom: 2px; }
+.txn-card .body .dt-detail { font-size: 12px; color: var(--ink-muted); }
+.txn-card .body .err { font-size: 12px; color: var(--error); margin-top: 4px; }
+
+.txn-card .right { text-align: right; }
+.txn-card .right .amt {
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 16px; color: var(--ink);
+  margin-bottom: 4px;
+}
+.txn-card .right .pts { font-size: 13px; font-weight: 600; color: var(--mint); margin-bottom: 4px; }
+.status-row { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; }
+.status-row svg { width: 14px; height: 14px; }
+.status-row.success { color: var(--mint); }
+.status-row.pending { color: var(--ink-muted); }
+.status-row.failed  { color: var(--error); }
+.status-row .text { text-transform: capitalize; }
+
+/* ============================================================ */
+/* CONFIRM MODAL — refined visual                                */
+/* ============================================================ */
+.modal-overlay {
+  position: absolute; inset: 0;
+  background: rgba(14,17,22,0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; z-index: 40;
+}
+.modal-card {
+  width: 100%; max-width: 360px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: var(--shadow-2);
+  position: relative;
+  animation: pop 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes pop {
+  from { transform: scale(0.96) translateY(8px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+.modal-title {
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px;
+  color: var(--ink); letter-spacing: -0.01em; margin: 0;
+}
+.modal-sub {
+  font-size: 12px; color: var(--ink-muted); margin: 4px 0 0;
+}
+.modal-divider { height: 1px; background: var(--border); margin: 14px 0; }
+.modal-rows { display: flex; flex-direction: column; gap: 12px; margin: 4px 0 16px; }
+.modal-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.modal-row .k { font-size: 14px; font-weight: 500; color: var(--ink-muted); }
+.modal-row .v { font-size: 14px; font-weight: 600; color: var(--ink); text-align: right; }
+.modal-row .v.mint { color: var(--mint); font-weight: 700; }
+.modal-row .v.mono { font-family: 'Space Grotesk', monospace; }
+
+.modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+.modal-btn {
+  flex: 1; padding: 14px; border-radius: 12px;
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px;
+  border: 0; cursor: pointer;
+}
+.modal-btn.cancel {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  color: var(--ink-muted);
+}
+.modal-btn.confirm {
+  background: var(--mint); color: var(--mint-text);
+  box-shadow: var(--shadow-mint);
+}
+
+/* Success state (full screen) */
+.success-state {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 6px 0;
+}
+.success-icon {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: var(--mint-soft); border: 2px solid var(--mint);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--mint);
+  position: relative;
+}
+.success-icon::before {
+  content: ''; position: absolute; inset: -8px; border-radius: 50%;
+  background: var(--mint-soft); opacity: 0.4;
+  animation: pulse 2.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50%      { transform: scale(1.15); opacity: 0; }
+}
+.success-icon svg { width: 36px; height: 36px; stroke-width: 3; position: relative; z-index: 1; }
+.success-title { font-family: 'Fraunces', serif; font-weight: 600; font-size: 22px; color: var(--ink); margin: 0; letter-spacing: -0.01em; }
+.success-msg  { font-size: 13px; color: var(--ink-muted); text-align: center; line-height: 1.5; margin: 0; }
+
+/* Failed state */
+.failed-icon {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: var(--signal-soft); border: 2px solid var(--signal);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--signal);
+}
+.failed-icon svg { width: 36px; height: 36px; stroke-width: 3; }
+
+/* Save beneficiary prompt (existing toggle) */
+.save-prompt {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px;
+  background: var(--card-soft);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  width: 100%;
+  box-shadow: var(--shadow-1);
+}
+.save-prompt .info { flex: 1; }
+.save-prompt .info .t { font-size: 14px; font-weight: 700; color: var(--ink); }
+.save-prompt .info .s { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
+.switch {
+  width: 46px; height: 26px; border-radius: 13px;
+  background: var(--border-2); padding: 2px;
+  display: flex; align-items: center;
+  cursor: pointer;
+}
+.switch.on { background: var(--mint); justify-content: flex-end; }
+.switch .knob {
+  width: 22px; height: 22px; border-radius: 11px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+}
+
+/* Processing state */
+.spinner-lg {
+  width: 56px; height: 56px; border-radius: 50%;
+  border: 3px solid var(--mint-soft);
+  border-top-color: var(--mint);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.skeleton {
+  height: 12px; border-radius: 6px; background: var(--border);
+  margin: 0 auto 8px;
+  position: relative; overflow: hidden;
+}
+.skeleton::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.skeleton-bar { display: block; }
+
+/* Footnote */
+.footnote {
+  text-align: center; margin-top: 48px;
+  font-size: 12px; color: var(--ink-muted);
+  line-height: 1.6;
+}
+.footnote a { color: var(--mint); text-decoration: none; font-weight: 600; }
+
+/* SVG icons */
+.icon-svg { width: 18px; height: 18px; stroke-width: 2; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="container">
+
+    <!-- ============ HEADER ============ -->
+    <div class="page-header">
+      <div>
+        <div class="badges">
+          <span class="badge mint">Visual Concept</span>
+          <span class="badge gold">VTU Flow</span>
+          <span class="badge">page/src/app/*</span>
+        </div>
+        <h1>Buy Airtime, Data, History &amp; Confirm — <em>redesigned</em></h1>
+        <p>Same screens, same data, same components from <code>page/src/app/</code> — refined visual treatment. SectionCard, NetworkPicker, PlanGrid, EarnBadge, ConfirmModal, and the success / failed / processing states all kept; only the styling is upgraded.</p>
+      </div>
+    </div>
+
+    <!-- ============ CONTROLS ============ -->
+    <div class="controls">
+      <div class="seg" id="seg-screen">
+        <button data-screen="all" class="active">All screens</button>
+        <button data-screen="airtime">Buy Airtime</button>
+        <button data-screen="data">Buy Data</button>
+        <button data-screen="history">History</button>
+        <button data-screen="confirm">Confirm Modal</button>
+      </div>
+      <div class="spacer"></div>
+      <span class="label">VTU screens</span>
+    </div>
+
+    <!-- ============ STAGE ============ -->
+    <div id="stage">
+
+      <!-- ============================================ -->
+      <!-- BLOCK 1: BUY AIRTIME                          -->
+      <!-- ============================================ -->
+      <div class="block" data-block="airtime">
+        <div class="block-head">
+          <span class="num">01</span>
+          <span class="t">Buy Airtime</span>
+          <span class="s">— beneficiary chips, phone, network picker, amount grid, pay button</span>
+        </div>
+        <div class="row cols-2">
+          <div class="phones">
+            <!-- IDLE FORM (default view, mirroring existing flow) -->
+            <div class="phone">
+              <div class="screen">
+                <div class="status-bar"><span>9:41</span><span class="right">●●● 5G ▮</span></div>
+                <div class="screen-body">
+
+                  <div class="appbar">
+                    <div class="icon-btn-circle">
+                      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+                    </div>
+                    <div class="title">Buy Airtime</div>
+                  </div>
+
+                  <!-- Optional hero treatment (refined, still restrained) -->
+                  <div class="airtime-hero">
+                    <div class="h-row">
+                      <span class="label-eyebrow">Top-up</span>
+                      <span class="pts-pill"><span class="dot"></span> Earn 12 pts</span>
+                    </div>
+                    <div class="amount-display">₦100<span class="sub">on MTN</span></div>
+                  </div>
+
+                  <!-- Beneficiary chips (horizontal scroll, mirrors existing) -->
+                  <div class="beneficiaries" style="margin-bottom: 12px;">
+                    <div class="benef-chip">
+                      <span class="n">Beneficiary 1</span>
+                      <span class="p">5678</span>
+                    </div>
+                    <div class="benef-chip active">
+                      <span class="n">Beneficiary 2</span>
+                      <span class="p">1234</span>
+                    </div>
+                    <div class="benef-chip">
+                      <span class="n">Beneficiary 3</span>
+                      <span class="p">9012</span>
+                    </div>
+                  </div>
+
+                  <!-- SectionCard: Phone -->
+                  <div class="section-card">
+                    <div class="header">
+                      <span class="label">Phone Number</span>
+                    </div>
+                    <div class="field valid">
+                      <span class="icon">
+                        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+                      </span>
+                      <input value="08012345678" readonly />
+                      <span class="valid-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5"/></svg>
+                      </span>
+                    </div>
+                    <div class="detect-row">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                      Detected: MTN
+                    </div>
+                  </div>
+
+                  <!-- SectionCard: Network (NetworkPicker) -->
+                  <div class="section-card">
+                    <div class="header">
+                      <span class="label">Network</span>
+                    </div>
+                    <div class="network-grid">
+                      <div class="network-chip active">
+                        <div class="logo logo-mtn">M</div>
+                        <div class="name">MTN</div>
+                        <div class="active-dot"></div>
+                      </div>
+                      <div class="network-chip">
+                        <div class="logo logo-airtel">A</div>
+                        <div class="name">Airtel</div>
+                      </div>
+                      <div class="network-chip">
+                        <div class="logo logo-glo">G</div>
+                        <div class="name">Glo</div>
+                      </div>
+                      <div class="network-chip">
+                        <div class="logo logo-9mobile">9</div>
+                        <div class="name">9mobile</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- SectionCard: Amount (EarnBadge + 3-col grid) -->
+                  <div class="section-card">
+                    <div class="header">
+                      <span class="label">Amount</span>
+                      <span class="earn-badge">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="14"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>
+                        +12 pts
+                      </span>
+                    </div>
+                    <div class="amount-grid">
+                      <div class="amount-card"><div class="v">₦25</div><div class="p">+3 pts</div></div>
+                      <div class="amount-card"><div class="v">₦50</div><div class="p">+6 pts</div></div>
+                      <div class="amount-card active"><div class="v">₦100</div><div class="p">+12 pts</div><span class="check">✓</span></div>
+                      <div class="amount-card"><div class="v">₦200</div><div class="p">+24 pts</div></div>
+                      <div class="amount-card"><div class="v">₦500</div><div class="p">+60 pts</div></div>
+                      <div class="amount-card"><div class="v">₦1,000</div><div class="p">+120 pts</div></div>
+                      <div class="amount-card"><div class="v">₦2,000</div><div class="p">+241 pts</div></div>
+                      <div class="amount-card"><div class="v">₦5,000</div><div class="p">+602 pts</div></div>
+                    </div>
+                    <div class="custom-amount">
+                      <span class="prefix">₦</span>
+                      <input placeholder="Custom amount" />
+                    </div>
+                  </div>
+
+                  <!-- Pay button -->
+                  <button class="pay-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
+                    Buy ₦100 airtime
+                  </button>
+
+                </div>
+                <div class="home-indicator"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- States: Success / Failed / Processing -->
+          <div class="phones">
+            <!-- SUCCESS STATE -->
+            <div class="phone">
+              <div class="screen">
+                <div class="status-bar"><span>9:41</span><span class="right">●●● 5G ▮</span></div>
+                <div class="screen-body" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 18px;">
+                  <div class="success-state">
+                    <div class="success-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                    </div>
+                    <h3 class="success-title">Successful</h3>
+                    <p class="success-msg">Airtime of ₦100 has been credited to<br/>0801 234 5678</p>
+                  </div>
+
+                  <!-- SectionCard: Summary (mirrors existing) -->
+                  <div class="section-card" style="width: 100%; margin: 0;">
+                    <div class="header"><span class="label">Network</span><span style="font-size: 13px; font-weight: 600;">MTN</span></div>
+                    <div style="height: 1px; background: var(--border);"></div>
+                    <div class="header"><span class="label">Amount</span><span style="font-family: 'Space Grotesk', sans-serif; font-size: 14px; font-weight: 700; color: var(--mint);">₦100</span></div>
+                    <div style="height: 1px; background: var(--border);"></div>
+                    <div class="header"><span class="label">Phone</span><span style="font-size: 13px; font-weight: 600;">0801 234 5678</span></div>
+                    <div style="height: 1px; background: var(--border);"></div>
+                    <div class="header"><span class="label">Points Earned</span><span style="font-size: 13px; font-weight: 700; color: var(--mint);">+12 pts</span></div>
+                    <div style="height: 1px; background: var(--border);"></div>
+                    <div class="header"><span class="label">Reference</span><span style="font-family: 'Space Grotesk', monospace; font-size: 12px;">8XQ7M2A4P1...</span></div>
+                  </div>
+
+                  <!-- Save beneficiary prompt (existing toggle) -->
+                  <div class="save-prompt" style="margin: 0;">
+                    <div class="info">
+                      <div class="t">Save this number?</div>
+                      <div class="s">0801 234 5678 for next time</div>
+                    </div>
+                    <div class="switch on"><div class="knob"></div></div>
+                  </div>
+
+                  <button class="pay-btn" style="margin: 0; width: 100%;">Done</button>
+                </div>
+                <div class="home-indicator"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================ -->
+      <!-- BLOCK 2: BUY DATA                             -->
+      <!-- ============================================ -->
+      <div class="block" data-block="data">
+        <div class="block-head">
+          <span class="num">02</span>
+          <span class="t">Buy Data</span>
+          <span class="s">— phone, network picker, plantype tabs, PlanGrid, pay button</span>
+        </div>
+        <div class="row cols-2">
+          <div class="phones">
+            <!-- IDLE FORM -->
+            <div class="phone">
+              <div class="screen">
+                <div class="status-bar"><span>9:41</span><span class="right">●●● 5G ▮</span></div>
+                <div class="screen-body">
+
+                  <div class="appbar">
+                    <div class="icon-btn-circle">
+                      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+                    </div>
+                    <div class="title">Buy Data</div>
+                  </div>
+
+                  <!-- SectionCard: Phone -->
+                  <div class="section-card">
+                    <div class="header"><span class="label">Phone Number</span></div>
+                    <div class="field valid">
+                      <span class="icon">
+                        <svg class="icon-svg" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+                      </span>
+                      <input value="08012345678" readonly />
+                      <span class="valid-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5"/></svg>
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- SectionCard: Network -->
+                  <div class="section-card">
+                    <div class="header"><span class="label">Network</span></div>
+                    <div class="network-grid">
+                      <div class="network-chip active">
+                        <div class="logo logo-mtn">M</div>
+                        <div class="name">MTN</div>
+                        <div class="active-dot"></div>
+                      </div>
+                      <div class="network-chip">
+                        <div class="logo logo-airtel">A</div>
+                        <div class="name">Airtel</div>
+                      </div>
+                      <div class="network-chip">
+                        <div class="logo logo-glo">G</div>
+                        <div class="name">Glo</div>
+                      </div>
+                      <div class="network-chip">
+                        <div class="logo logo-9mobile">9</div>
+                        <div class="name">9mobile</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- SectionCard: Plans (EarnBadge + plantype tabs + PlanGrid) -->
+                  <div class="section-card">
+                    <div class="header">
+                      <span class="label">Plans</span>
+                      <span class="earn-badge">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="14"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>
+                        +36 pts
+                      </span>
+                    </div>
+
+                    <div class="plantype-tabs">
+                      <div class="plantype-tab active">SME</div>
+                      <div class="plantype-tab">Gifting</div>
+                      <div class="plantype-tab">Corporate</div>
+                    </div>
+
+                    <div class="plan-grid">
+                      <div class="plan-card">
+                        <div class="primary">₦150</div>
+                        <div class="secondary">500MB</div>
+                        <div class="tertiary">+18 pts</div>
+                      </div>
+                      <div class="plan-card active">
+                        <span class="check">✓</span>
+                        <div class="primary">₦300</div>
+                        <div class="secondary">1GB</div>
+                        <div class="tertiary">+36 pts</div>
+                      </div>
+                      <div class="plan-card">
+                        <div class="primary">₦600</div>
+                        <div class="secondary">2GB</div>
+                        <div class="tertiary">+72 pts</div>
+                      </div>
+                      <div class="plan-card">
+                        <div class="primary">₦900</div>
+                        <div class="secondary">3GB</div>
+                        <div class="tertiary">+108 pts</div>
+                      </div>
+                      <div class="plan-card">
+                        <div class="primary">₦1,500</div>
+                        <div class="secondary">5GB</div>
+                        <div class="tertiary">+181 pts</div>
+                      </div>
+                      <div class="plan-card">
+                        <div class="primary">₦3,000</div>
+                        <div class="secondary">10GB</div>
+                        <div class="tertiary">+361 pts</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button class="pay-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
+                    Buy 1GB for ₦300
+                  </button>
+
+                </div>
+                <div class="home-indicator"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- States: Failed + Processing -->
+          <div class="phones">
+            <!-- FAILED STATE -->
+            <div class="phone">
+              <div class="screen">
+                <div class="status-bar"><span>9:41</span><span class="right">●●● 5G ▮</span></div>
+                <div class="screen-body" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 18px;">
+                  <div class="success-state">
+                    <div class="failed-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    </div>
+                    <h3 class="success-title">Transaction failed</h3>
+                    <p class="success-msg">We couldn't complete your data purchase.<br/>Please try again.</p>
+                  </div>
+
+                  <div class="section-card" style="width: 100%; margin: 0;">
+                    <div style="font-size: 13px; color: var(--ink-muted); text-align: center; line-height: 1.5;">
+                      No points were deducted from your wallet. Your balance is unchanged.
+                    </div>
+                  </div>
+
+                  <button class="pay-btn" style="margin: 0; width: 100%;">Try again</button>
+                </div>
+                <div class="home-indicator"></div>
+              </div>
+            </div>
+
+            <!-- PROCESSING STATE -->
+            <div class="phone">
+              <div class="screen">
+                <div class="status-bar"><span>9:41</span><span class="right">●●● 5G ▮</span></div>
+                <div class="screen-body" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 18px;">
+                  <div class="spinner-lg"></div>
+                  <h3 class="success-title" style="font-family: 'Space Grotesk', sans-serif; font-size: 18px;">Processing your purchase</h3>
+                  <p class="success-msg">Hang tight — we're topping up 0801 234 5678.</p>
+                  <div style="width: 80%; margin-top: 12px;">
+                    <span class="skeleton" style="width: 80%; display: block;"></span>
+                    <span class="skeleton" style="width: 60%; display: block;"></span>
+                    <span class="skeleton" style="width: 70%; display: block; margin-bottom: 0;"></span>
+                  </div>
+                </div>
+                <div class="home-indicator"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================ -->
+      <!-- BLOCK 3: BILLS HISTORY                        -->
+      <!-- ============================================ -->
+      <div class="block" data-block="history">
+        <div class="block-head">
+          <span class="num">03</span>
+          <span class="t">Bills History</span>
+          <span class="s">— FlatList of service transactions with status &amp; points</span>
+        </div>
+        <div class="row cols-2">
+          <!-- LOADED LIST -->
+          <div class="phones">
+            <div class="phone">
+              <div class="screen">
+                <div class="status-bar"><span>9:41</span><span class="right">●●● 5G ▮</span></div>
+                <div class="screen-body" style="padding: 0;">
+                  <div class="history-header">
+                    <div class="icon-btn-circle" style="width: 32px; height: 32px;">
+                      <svg class="icon-svg" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path d="M15 18l-6-6 6-6"/></svg>
+                    </div>
+                    <div class="title">Bills History</div>
+                  </div>
+
+                  <div class="history-list">
+                    <!-- Airtime -->
+                    <div class="txn-card">
+                      <div class="icon airtime">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+                      </div>
+                      <div class="body">
+                        <div class="ttl">Airtime</div>
+                        <div class="dt">Aug 12, 2026 • 9:30 AM</div>
+                        <div class="dt-detail">08012345678</div>
+                      </div>
+                      <div class="right">
+                        <div class="amt">₦100</div>
+                        <div class="pts">+12 pts</div>
+                        <div class="status-row success">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                          <span class="text">success</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Data -->
+                    <div class="txn-card">
+                      <div class="icon data">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0114 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0M12 20h.01"/></svg>
+                      </div>
+                      <div class="body">
+                        <div class="ttl">Data</div>
+                        <div class="dt">Aug 11, 2026 • 6:14 PM</div>
+                        <div class="dt-detail">08012345678</div>
+                      </div>
+                      <div class="right">
+                        <div class="amt">₦300</div>
+                        <div class="pts">+36 pts</div>
+                        <div class="status-row success">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                          <span class="text">success</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Electricity -->
+                    <div class="txn-card">
+                      <div class="icon electricity">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                      </div>
+                      <div class="body">
+                        <div class="ttl">Electricity</div>
+                        <div class="dt">Aug 10, 2026 • 1:08 PM</div>
+                        <div class="dt-detail">Meter: 123456789</div>
+                      </div>
+                      <div class="right">
+                        <div class="amt">₦5,000</div>
+                        <div class="pts">+602 pts</div>
+                        <div class="status-row success">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                          <span class="text">success</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- TV -->
+                    <div class="txn-card">
+                      <div class="icon tv">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>
+                      </div>
+                      <div class="body">
+                        <div class="ttl">TV</div>
+                        <div class="dt">Aug 9, 2026 • 4:20 PM</div>
+                        <div class="dt-detail">Smartcard: 7012345678</div>
+                      </div>
+                      <div class="right">
+                        <div class="amt">₦2,450</div>
+                        <div class="pts">+295 pts</div>
+                        <div class="status-row success">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                          <span class="text">success</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Recharge PIN -->
+                    <div class="txn-card">
+                      <div class="icon pin">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                      </div>
+                      <div class="body">
+                        <div class="ttl">Recharge Pin</div>
+                        <div class="dt">Aug 9, 2026 • 10:11 AM</div>
+                      </div>
+                      <div class="right">
+                        <div class="amt">₦1,000</div>
+                        <div class="pts">+120 pts</div>
+                        <div class="status-row pending">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                          <span class="text">pending</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Betting (failed) -->
+                    <div class="txn-card">
+                      <div class="icon betting">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                      </div>
+                      <div class="body">
+                        <div class="ttl">Betting</div>
+                        <div class="dt">Aug 8, 2026 • 11:24 PM</div>
+                        <div class="err">Insufficient balance</div>
+                      </div>
+                      <div class="right">
+                        <div class="amt">₦500</div>
+                        <div class="status-row failed">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                          <span class="text">failed</span>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+                <div class="home-indicator"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- EMPTY + ERROR STATES -->
+          <div class="phones">
+            <!-- EMPTY STATE -->
+            <div class="phone">
+              <div class="screen">
+                <div class="status-bar"><span>9:41</span><span class="right">●●● 5G ▮</span></div>
+                <div class="screen-body" style="padding: 0;">
+                  <div class="history-header">
+                    <div class="icon-btn-circle" style="width: 32px; height: 32px;">
+                      <svg class="icon-svg" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path d="M15 18l-6-6 6-6"/></svg>
+                    </div>
+                    <div class="title">Bills History</div>
+                  </div>
+                  <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 12px;">
+                    <div style="width: 64px; height: 64px; border-radius: 50%; background: var(--paper-2); border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; color: var(--ink-faint);">
+                      <svg class="icon-svg" viewBox="0 0 24 24" style="width: 32px; height: 32px;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <h3 class="success-title" style="font-family: 'Fraunces', serif; font-size: 18px;">No transactions yet</h3>
+                    <p class="success-msg">Your bills payments will show up here.</p>
+                  </div>
+                </div>
+                <div class="home-indicator"></div>
+              </div>
+            </div>
+
+            <!-- ERROR STATE -->
+            <div class="phone">
+              <div class="screen">
+                <div class="status-bar"><span>9:41</span><span class="right">●●● 5G ▮</span></div>
+                <div class="screen-body" style="padding: 0;">
+                  <div class="history-header">
+                    <div class="icon-btn-circle" style="width: 32px; height: 32px;">
+                      <svg class="icon-svg" viewBox="0 0 24 24" style="width: 16px; height: 16px;"><path d="M15 18l-6-6 6-6"/></svg>
+                    </div>
+                    <div class="title">Bills History</div>
+                  </div>
+                  <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 10px;">
+                    <div style="width: 64px; height: 64px; border-radius: 50%; background: var(--signal-soft); border: 1.5px solid var(--signal); color: var(--signal); display: inline-flex; align-items: center; justify-content: center;">
+                      <svg class="icon-svg" viewBox="0 0 24 24" style="width: 32px; height: 32px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    </div>
+                    <h3 class="success-title" style="font-family: 'Fraunces', serif; font-size: 18px;">Couldn't load history</h3>
+                    <p class="success-msg">Check your connection and try again.</p>
+                    <button class="pay-btn" style="margin-top: 8px; width: auto; padding: 12px 24px; font-size: 14px;">Retry</button>
+                  </div>
+                </div>
+                <div class="home-indicator"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================ -->
+      <!-- BLOCK 4: CONFIRM MODAL                        -->
+      <!-- ============================================ -->
+      <div class="block" data-block="confirm">
+        <div class="block-head">
+          <span class="num">04</span>
+          <span class="t">Confirm Modal</span>
+          <span class="s">— ConfirmModal component, refined visual treatment</span>
+        </div>
+        <div class="row cols-2">
+          <div class="phones">
+            <!-- CONFIRM MODAL -->
+            <div class="phone">
+              <div class="screen">
+                <div class="status-bar"><span>9:41</span><span class="right">●●● 5G ▮</span></div>
+                <div class="screen-body" style="position: relative;">
+                  <!-- Faded background hint of the underlying screen -->
+                  <div style="padding: 60px 20px 0; opacity: 0.35; filter: blur(0.3px);">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                      <span style="font-size: 20px;">‹</span>
+                      <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17px;">Buy Airtime</span>
+                    </div>
+                    <div style="background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+                      <div style="font-size: 11px; color: var(--ink-muted); margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;">Phone Number</div>
+                      <div style="font-size: 16px; font-weight: 600;">0801 234 5678</div>
+                    </div>
+                  </div>
+
+                  <div class="modal-overlay">
+                    <div class="modal-card">
+                      <h3 class="modal-title">Confirm purchase</h3>
+                      <p class="modal-sub">Review the details before topping up.</p>
+                      <div class="modal-divider"></div>
+                      <div class="modal-rows">
+                        <div class="modal-row"><span class="k">Network</span><span class="v">MTN</span></div>
+                        <div class="modal-row"><span class="k">Amount</span><span class="v mint">₦100</span></div>
+                        <div class="modal-row"><span class="k">Phone</span><span class="v">0801 234 5678</span></div>
+                        <div class="modal-row"><span class="k">Points</span><span class="v mint">+12 pts</span></div>
+                      </div>
+                      <div class="modal-actions">
+                        <button class="modal-btn cancel">Cancel</button>
+                        <button class="modal-btn confirm">Confirm</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="home-indicator"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="phones">
+            <!-- DATA CONFIRM MODAL -->
+            <div class="phone">
+              <div class="screen">
+                <div class="status-bar"><span>9:41</span><span class="right">●●● 5G ▮</span></div>
+                <div class="screen-body" style="position: relative;">
+                  <div style="padding: 60px 20px 0; opacity: 0.35; filter: blur(0.3px);">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                      <span style="font-size: 20px;">‹</span>
+                      <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17px;">Buy Data</span>
+                    </div>
+                  </div>
+
+                  <div class="modal-overlay">
+                    <div class="modal-card">
+                      <h3 class="modal-title">Confirm data plan</h3>
+                      <p class="modal-sub">Review the details before subscribing.</p>
+                      <div class="modal-divider"></div>
+                      <div class="modal-rows">
+                        <div class="modal-row"><span class="k">Plan</span><span class="v">1GB · 30 days</span></div>
+                        <div class="modal-row"><span class="k">Phone</span><span class="v">0801 234 5678</span></div>
+                        <div class="modal-row"><span class="k">Amount</span><span class="v mint">₦300</span></div>
+                        <div class="modal-row"><span class="k">Points</span><span class="v mint">+36 pts</span></div>
+                      </div>
+                      <div class="modal-actions">
+                        <button class="modal-btn cancel">Cancel</button>
+                        <button class="modal-btn confirm">Confirm</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="home-indicator"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============ FOOTNOTE ============ -->
+    <div class="footnote">
+      Pure visual concept. Structure mirrors the actual code in <code style="background: var(--paper-2); padding: 2px 6px; border-radius: 4px;">page/src/app/buy-airtime.tsx</code>, <code style="background: var(--paper-2); padding: 2px 6px; border-radius: 4px;">buy-data.tsx</code>, <code style="background: var(--paper-2); padding: 2px 6px; border-radius: 4px;">bills-history.tsx</code> &amp; <code style="background: var(--paper-2); padding: 2px 6px; border-radius: 4px;">ConfirmModal.tsx</code>. Tokens, palette &amp; component shapes from <code style="background: var(--paper-2); padding: 2px 6px; border-radius: 4px;">page/constants/theme.ts</code>.
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* Screen filter */
+const blocks = document.querySelectorAll('.block');
+document.querySelectorAll('[data-screen]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-screen]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const s = btn.dataset.screen;
+    blocks.forEach(b => {
+      if (s === 'all' || b.dataset.block === s) {
+        b.style.display = '';
+      } else {
+        b.style.display = 'none';
+      }
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+});
+
+/* Make chips/cards interactive */
+document.querySelectorAll('.amount-card, .network-chip, .plan-card, .benef-chip, .plantype-tab').forEach(el => {
+  el.addEventListener('click', e => {
+    const parent = el.parentElement;
+    if (!parent) return;
+    parent.querySelectorAll('.amount-card.active, .network-chip.active, .plan-card.active, .benef-chip.active, .plantype-tab.active')
+      .forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+  });
+});
+
+/* Toggle switch */
+document.querySelectorAll('.switch').forEach(el => {
+  el.addEventListener('click', () => el.classList.toggle('on'));
+});
+</script>
+</body>
+</html>

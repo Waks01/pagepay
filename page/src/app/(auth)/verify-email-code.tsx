@@ -64,7 +64,7 @@ export default function VerifyEmailCodeScreen() {
           setTimeout(
             () =>
               router.replace({
-                pathname: '/(tabs)/wallet',
+                pathname: '/wallet',
                 params: welcomeBonus > 0 ? { welcomeBonus: String(welcomeBonus) } : {},
               }),
             1200,

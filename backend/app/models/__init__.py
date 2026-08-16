@@ -113,7 +113,8 @@ class BillTransaction(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
     # ── User profile (kept for historical transaction records) ────────
     # Note: is_worker, is_sponsor, sponsor_*, business_*, and profile fields
     # are now stored on the User table. These columns remain for historical

@@ -1,4 +1,5 @@
 import { apiFetch } from '@/src/shared/api/client';
+import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
 
 export type MaterialSummary = {
   id: number;
@@ -102,11 +103,7 @@ export async function uploadSowText(text: string, exam_type?: string | null): Pr
 
 export async function uploadSowImage(file: { uri: string; name: string; type: string }, exam_type?: string | null): Promise<SowUploadResponse> {
   const form = new FormData();
-  form.append('file', {
-    uri: file.uri,
-    name: file.name,
-    type: file.type || 'image/jpeg',
-  } as any);
+  form.append('file', await toFormDataFile(file, 'image'));
   if (exam_type) {
     form.append('exam_type', exam_type);
   }
@@ -124,11 +121,7 @@ export async function uploadSowImage(file: { uri: string; name: string; type: st
 
 export async function uploadSowDocument(file: { uri: string; name: string; type: string }, exam_type?: string | null): Promise<SowUploadResponse> {
   const form = new FormData();
-  form.append('file', {
-    uri: file.uri,
-    name: file.name,
-    type: file.type || 'application/pdf',
-  } as any);
+  form.append('file', await toFormDataFile(file, 'application/pdf'));
   if (exam_type) {
     form.append('exam_type', exam_type);
   }
@@ -142,6 +135,14 @@ export async function uploadSowDocument(file: { uri: string; name: string; type:
     throw new Error(err.detail || 'Document upload failed');
   }
   return res.json();
+}
+
+async function toFormDataFile(file: { uri: string; name: string; type: string }, fallbackType: string): Promise<string> {
+  const base64 = await readAsStringAsync(file.uri, {
+    encoding: EncodingType.Base64,
+  });
+  const mimeType = file.type || fallbackType;
+  return `data:${mimeType};base64,${base64}`;
 }
 
 export async function fetchMaterials(): Promise<MaterialSummary[]> {

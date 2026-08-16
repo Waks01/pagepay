@@ -9,8 +9,10 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/src/shared/lib/queryClient';
 import { bootstrapPreferences, usePreferences } from '@/src/shared/lib/preferences';
 import { getToken } from '@/src/shared/lib/storage';
+import '@/src/lib/i18n';
 import { SplashOverlay } from '@/components/SplashOverlay';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { AdSlotProvider } from '@/src/shared/contexts/AdSlot';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,6 +32,10 @@ export default function RootLayout() {
   const isReady = useAuthGate();
   const hydrated = usePreferences((s) => s.hydrated);
 
+  useEffect(() => {
+    void bootstrapPreferences();
+  }, []);
+
   if (!fontsLoaded || !hydrated || !isReady) {
     return (
       <View style={styles.splashContainer}>
@@ -41,11 +47,13 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <AdSlotProvider>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(onboarding)" />
           <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(app)" />
         </Stack>
+        </AdSlotProvider>
         <StatusBar style="auto" />
       </ThemeProvider>
     </QueryClientProvider>
@@ -63,21 +71,25 @@ function useAuthGate() {
     if (!hydrated) return;
 
     (async () => {
-      const token = await getToken();
-      const inOnboarding = segments[0] === '(onboarding)';
-      const inAuth = segments[0] === '(auth)';
+      try {
+        const token = await getToken();
+        const inOnboarding = segments[0] === '(onboarding)';
+        const inAuth = segments[0] === '(auth)';
 
-      if (!token) {
-        if (!onboardingCompleted && !inOnboarding) {
-          router.replace('/(onboarding)/');
-        } else if (onboardingCompleted && !inAuth) {
-          router.replace('/(auth)/');
+        if (!token) {
+          if (!onboardingCompleted && !inOnboarding) {
+            router.replace('/(onboarding)/');
+          } else if (onboardingCompleted && !inAuth) {
+            router.replace('/(auth)/');
+          }
+        } else if (token && (inAuth || inOnboarding)) {
+          router.replace('/home');
         }
-      } else if (token && (inAuth || inOnboarding)) {
-        router.replace('/(tabs)/');
+      } catch (e) {
+        console.error('Auth gate failed', e);
+      } finally {
+        setIsReady(true);
       }
-
-      setIsReady(true);
     })();
   }, [hydrated, segments, router, onboardingCompleted]);
 

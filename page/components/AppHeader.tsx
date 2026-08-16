@@ -23,7 +23,7 @@ export default function AppHeader({ title, subtitle, showBack }: Props) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
 
-  const isNotificationsScreen = pathname.includes('/(tabs)/notifications');
+  const isNotificationsScreen = pathname.includes('/notifications');
 
   const handleBackPress = useCallback(() => {
     router.back();

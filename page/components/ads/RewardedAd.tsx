@@ -187,11 +187,7 @@ export function RewardedAd(props: RewardedAdProps) {
     // internal slot naming convention.
     const acquired = slot.acquire(adUnitName as AdSlotName);
     if (acquired) {
-      acquiredRef.current = {
-        show: acquired.show,
-        customData: acquired.customData,
-        tokenIssuedAt: acquired.tokenIssuedAt,
-      };
+      acquiredRef.current = acquired;
       tokenIssuedAtRef.current = acquired.tokenIssuedAt;
       setAdState('ready');
       setErrorMessage(null);
@@ -399,10 +395,11 @@ export function RewardedAd(props: RewardedAdProps) {
         // CLOSED handler via /recent-credits.
       };
       acquired.onClosed = async () => {
-        // The slot's CLOSED event fires after the user dismissed
-        // the ad. If EARNED_REWARD fired first, we know to expect
-        // a credit. Otherwise the user skipped — no credit.
         const since = acquired.tokenIssuedAt;
+        // Dismiss the pre-read gate immediately so the reading
+        // timer can start without waiting for the credit poll.
+        onCloseRef.current();
+        slot.release();
         if (watchedToCompletion) {
           try {
             const { pollRecentCredits } = await import('@/src/shared/lib/ads');
@@ -413,9 +410,6 @@ export function RewardedAd(props: RewardedAdProps) {
                 newBalance: credit.new_balance,
               });
             } else {
-              // SSV is taking longer than the poll window. Tell
-              // the parent a credit is pending; their next
-              // /auth/me refresh will surface it.
               onClaimedRef.current({ pointsCredited: 0, newBalance: 0, pending: true });
             }
           } catch {
@@ -424,9 +418,6 @@ export function RewardedAd(props: RewardedAdProps) {
         } else {
           onSkippedRef.current?.();
         }
-        // Hand the slot back so it can re-load the next one.
-        slot.release();
-        onCloseRef.current();
       };
       try {
         setAdState('showing');

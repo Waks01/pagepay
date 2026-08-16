@@ -282,14 +282,9 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
   const acquire = useCallback(
     (adSlot: AdSlotName): AcquiredAd | null => {
       if (adSlot !== defaultSlot()) {
-        // We only manage the default platform's rewarded slot. Other
-        // slots fall through to their own component-level loaders.
         return null;
       }
       if (state !== 'ready' || !adInstanceRef.current) {
-        // Not ready — kick off a load for next time, but return null
-        // so the caller can decide what to do (show a brief spinner,
-        // surface a retry button, etc.).
         if (state === 'error' || state === 'uninitialized') {
           triggerBackgroundLoad();
         }
@@ -333,7 +328,6 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
         return;
       }
       if (!adsConfig) {
-        // wait for config — the second effect below triggers when ready.
         return;
       }
       triggerBackgroundLoad();
