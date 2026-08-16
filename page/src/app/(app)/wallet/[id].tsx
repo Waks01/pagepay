@@ -1,14 +1,16 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, Share, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
-import { PagePay, Fonts } from '@/constants/theme';
+import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { koboToPoints } from '@/src/shared/lib/money';
 import { SkeletonTransactionRow } from '@/components/skeletons';
+import { PageHeader } from '@/components/PageHeader';
 
 type TransactionItem =
   | { kind: 'session'; data: { id: number; type: string; points: number; description: string; date: string } }
@@ -104,6 +106,7 @@ export default function TransactionDetailScreen() {
   const router = useRouter();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string; kind: string; item: string }>();
   const [item, setItem] = useState<CombinedItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,20 +169,14 @@ export default function TransactionDetailScreen() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
-          >
-              <Ionicons name="arrow-back" size={20} color={tokens.ink} />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
-              Transaction
-            </Text>
-            <View style={{ width: 36 }} />
-          </View>
-        </View>
+        <PageHeader
+          title="Transaction"
+          showBack
+          backgroundColor={tokens.card}
+          borderBottomColor={tokens.border}
+          marginTop={insets.top}
+          tokens={tokens}
+        />
         <View style={{ padding: 16 }}>
           <SkeletonTransactionRow />
           <SkeletonTransactionRow />
@@ -192,20 +189,14 @@ export default function TransactionDetailScreen() {
   if (error || !item) {
     return (
       <View style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
-          >
-              <Ionicons name="arrow-back" size={20} color={tokens.ink} />
-            </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
-              Transaction
-            </Text>
-            <View style={{ width: 36 }} />
-          </View>
-        </View>
+        <PageHeader
+          title="Transaction"
+          showBack
+          backgroundColor={tokens.card}
+          borderBottomColor={tokens.border}
+          marginTop={insets.top}
+          tokens={tokens}
+        />
         <View style={styles.center}>
           <Text style={[styles.errorText, { color: tokens.inkMuted }]}>{error || 'Transaction not found'}</Text>
           <TouchableOpacity
@@ -443,20 +434,14 @@ export default function TransactionDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <View style={[styles.header, { backgroundColor: tokens.card, borderBottomColor: tokens.border }]}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
-          >
-            <Ionicons name="arrow-back" size={20} color={tokens.ink} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: tokens.ink, fontFamily: Fonts.display }]}>
-            {meta.label} Details
-          </Text>
-          <View style={{ width: 36 }} />
-        </View>
-      </View>
+      <PageHeader
+        title={`${meta.label} Details`}
+        showBack
+        backgroundColor={tokens.card}
+        borderBottomColor={tokens.border}
+        marginTop={insets.top}
+        tokens={tokens}
+      />
 
       <View style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -600,16 +585,6 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 48,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 10,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   backBtn: {
     width: 36,
     height: 36,
@@ -617,13 +592,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 10,
     borderWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 17,
-    lineHeight: 20,
-    letterSpacing: -0.2,
-    flex: 1,
-    textAlign: 'center',
   },
   center: {
     flex: 1,

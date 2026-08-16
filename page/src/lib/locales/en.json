@@ -941,7 +941,11 @@
     "premium_activated_title": "Premium Activated!",
     "premium_activated_body": "Welcome to Premium! Enjoy ad-free reading and 2x earning points.",
     "processing_payment_title": "Processing Payment",
-    "processing_payment_body": "Your subscription is being activated. This may take a few moments."
+    "processing_payment_body": "Your subscription is being activated. This may take a few moments.",
+    "payment_cancelled_title": "Payment Cancelled",
+    "payment_cancelled_body": "You cancelled the payment. Your subscription will not be activated until payment is completed.",
+    "payment_error_title": "Payment Failed",
+    "payment_error_body": "Something went wrong during payment. Please try again."
   },
   "tabs": {
     "home": "Home",

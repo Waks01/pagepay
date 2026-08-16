@@ -18,7 +18,7 @@ import { apiFetch } from '@/src/shared/api/client';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { StudyHeader } from '@/components/study/StudyHeader';
+import { PageHeader } from '@/components/PageHeader';
 
 type ExamType = 'jamb' | 'waec' | 'neco' | 'nabteb' | 'custom' | null;
 
@@ -344,7 +344,7 @@ export default function ExamModeScreen() {
 
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <StudyHeader title="Exam Result" onBack={() => router.back()} />
+        <PageHeader title="Exam Result" showBack onBack={() => router.back()} backgroundColor={tokens.card} borderBottomColor={tokens.border} tokens={tokens} />
         <ScrollView contentContainerStyle={styles.resultScroll}>
           <Animated.View entering={FadeInDown.duration(320).springify()} style={styles.resultHero}>
             <View style={[styles.resultBadge, { backgroundColor: passed ? tokens.mintSoft : tokens.signalFaint }]}>
@@ -402,10 +402,14 @@ export default function ExamModeScreen() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <StudyHeader
+        <PageHeader
           title="Exam Mode"
-          sub="Timed mock test, scored automatically"
+          subtitle="Timed mock test, scored automatically"
+          showBack
           onBack={() => router.back()}
+          backgroundColor={tokens.card}
+          borderBottomColor={tokens.border}
+          tokens={tokens}
         />
 
         {error && (

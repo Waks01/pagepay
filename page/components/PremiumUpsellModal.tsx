@@ -32,7 +32,7 @@ export function PremiumUpsellModal({
 
   const handleUpgrade = () => {
     onClose();
-    router.push('/(tabs)/premium');
+    router.push('/(app)/premium');
   };
 
   return (

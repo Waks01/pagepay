@@ -15,7 +15,7 @@ import { useCurrentUser } from '@/src/shared/lib/current-user';
 import { SowUploadCard } from '@/components/study/SowUploadCard';
 import { AssetBrowser } from '@/components/study/AssetBrowser';
 import { ProgressDashboard } from '@/components/study/ProgressDashboard';
-import { StudyHeader } from '@/components/study/StudyHeader';
+import { PageHeader } from '@/components/PageHeader';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import NotificationBell from '@/components/NotificationBell';
@@ -482,10 +482,14 @@ export default function StudyScreen() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
       {selectedMaterial ? (
-        <StudyHeader
+        <PageHeader
           title={selectedMaterial.title}
-          sub={t('study.assets_generated', { count: totalAssets })}
+          subtitle={t('study.assets_generated', { count: totalAssets })}
+          showBack
           onBack={handleBack}
+          backgroundColor={tokens.card}
+          borderBottomColor={tokens.border}
+          tokens={tokens}
           right={
             <Pressable
               onPress={() => handleChatPress(selectedMaterial.id)}
@@ -498,9 +502,12 @@ export default function StudyScreen() {
           }
         />
       ) : (
-        <StudyHeader
+        <PageHeader
           title={t('study.title')}
-          sub={`${materials.length} ${materials.length === 1 ? 'material' : 'materials'}`}
+          subtitle={`${materials.length} ${materials.length === 1 ? 'material' : 'materials'}`}
+          backgroundColor={tokens.card}
+          borderBottomColor={tokens.border}
+          tokens={tokens}
           right={<NotificationBell />}
         />
       )}

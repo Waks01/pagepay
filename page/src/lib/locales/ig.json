@@ -711,6 +711,10 @@
     "faq_title": "Enwere m ike ịgbanwe atụmatụ m?",
     "faq_text": "Ee. Kwalite ma ọ bụ wedata n'oge ọ bụla. Ndenye aha gị ga-emegharị ya n'onwe ya.",
     "payment_error": "Njehie Ịkwụ Ụgwọ",
+    "payment_cancelled_title": "A Hapụ Ịkwụ Ụgwọ",
+    "payment_cancelled_body": "Ihapụrụ ịkwụ ụgwọ. Ndenye aha gị agaghị eme ihe ruo mgbe ị kwụchara ụgwọ.",
+    "payment_error_title": "Njehie Ịkwụ Ụgwọ",
+    "payment_error_body": "Ihe mere njem njem mgbe ị na-akwụ ụgwọ. Biko nwaa ọzọ.",
     "days_suffix": "ụbọchị"
   },
   "verify_email": {

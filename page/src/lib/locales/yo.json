@@ -621,6 +621,10 @@
     "faq_title": "Ṣe MO le yi eto mi pada?",
     "faq_text": "Bẹẹni. Goke tabi isalẹ nigbakugba. Alabapin rẹ yoo tun ṣe laifọwọyi.",
     "payment_error": "Aṣiṣe Isanwo",
+    "payment_cancelled_title": "A Fagilee Isanwo",
+    "payment_cancelled_body": "O fagilee isanwo naa. Iforukọsilẹ rẹ ko ni ṣiṣe titi ti o ba pari isanwo.",
+    "payment_error_title": "Aṣiṣe Isanwo",
+    "payment_error_body": "Nkan ti salọ lakoko isanwo. Jọwọ gbiyanju lẹẹkansi.",
     "days_suffix": "awọn ọjọ"
   },
   "verify_email": {

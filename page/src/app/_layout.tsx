@@ -14,12 +14,18 @@ import '@/src/lib/i18n';
 import { SplashOverlay } from '@/components/SplashOverlay';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AdSlotProvider } from '@/src/shared/contexts/AdSlot';
+import { PaystackProvider } from 'expo-paystack';
+import Constants from 'expo-constants';
 
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
   anchor: '/(auth)/',
 };
+
+const PAYSTACK_PUBLIC_KEY = __DEV__
+  ? process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY_TEST || process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY
+  : Constants.expoConfig?.extra?.paystackPublicKey || process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY;
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -55,11 +61,21 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AdSlotProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(onboarding)" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(app)" />
-        </Stack>
+        <PaystackProvider publicKey={PAYSTACK_PUBLIC_KEY}>
+        {!isReady || !fontsLoaded ? (
+          <View style={{ flex: 1 }}>
+            {!splashDismissed ? (
+              <SplashOverlay onDone={() => setSplashDismissed(true)} />
+            ) : null}
+          </View>
+        ) : (
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(onboarding)" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(app)" />
+          </Stack>
+        )}
+        </PaystackProvider>
         </AdSlotProvider>
         <StatusBar style="auto" />
       </ThemeProvider>

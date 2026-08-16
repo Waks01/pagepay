@@ -14,7 +14,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { PagePay, Fonts } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { getDueCards, type SRSCard } from '@/src/features/study/spaced-repetition';
-import { StudyHeader } from '@/components/study/StudyHeader';
+import { PageHeader } from '@/components/PageHeader';
 
 export default function SrsDashboardScreen() {
   const router = useRouter();
@@ -70,10 +70,14 @@ export default function SrsDashboardScreen() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <StudyHeader
+        <PageHeader
           title="Review Due"
-          sub={loading ? 'Loading…' : `${dueCards.length} ${dueCards.length === 1 ? 'card' : 'cards'} ready`}
+          subtitle={loading ? 'Loading…' : `${dueCards.length} ${dueCards.length === 1 ? 'card' : 'cards'} ready`}
+          showBack
           onBack={() => router.back()}
+          backgroundColor={tokens.card}
+          borderBottomColor={tokens.border}
+          tokens={tokens}
         />
 
         {loading ? (

@@ -711,6 +711,10 @@
     "faq_title": "Zan iya canza tsarin na?",
     "faq_text": "I. Inganta ko rage kowane lokaci. Biyan kuɗin ku zai sabunta kai tsaye.",
     "payment_error": "Kuskuren Biyan Kuɗi",
+    "payment_cancelled_title": "An Soke Biyan Kuɗi",
+    "payment_cancelled_body": "An soke biyan kuɗi. Biyan kuɗi zai cika kafin a kunna rajista.",
+    "payment_error_title": "Kuskuren Biyan Kuɗi",
+    "payment_error_body": "Wani abu ya ɓaci lokacin biyan kuɗi. Da fatan za a sake gwadawa.",
     "days_suffix": "kwanaki"
   },
   "verify_email": {

@@ -711,6 +711,10 @@
     "faq_title": "I fit change my plan?",
     "faq_text": "Yes. Upgrade or downgrade anytime. Your subscription go automatically renew.",
     "payment_error": "Payment Problem",
+    "payment_cancelled_title": "Payment Cancel",
+    "payment_cancelled_body": "You cancel the payment. Your subscription no go activate until you finish payment.",
+    "payment_error_title": "Payment Problem",
+    "payment_error_body": "Something happen for payment. Try again abeg.",
     "days_suffix": "days"
   },
   "verify_email": {

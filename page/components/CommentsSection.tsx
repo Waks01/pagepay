@@ -41,8 +41,12 @@ function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
   const diff = Date.now() - then;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
+  // Server clock skew would land here — show the user a sensible label
+  // rather than a negative "Xm ago".
+  if (diff < 0) return 'just now';
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return 'just now';
+  const mins = Math.floor(secs / 60);
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;

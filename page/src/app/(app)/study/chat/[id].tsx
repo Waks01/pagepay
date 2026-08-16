@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { apiFetch } from '@/src/shared/api/client';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { StudyHeader } from '@/components/study/StudyHeader';
+import { PageHeader } from '@/components/PageHeader';
 
 function ShimmerBar({ style: extraStyle, color }: { style?: object; color?: string }) {
   const opacity = useSharedValue(0.4);
@@ -144,10 +144,14 @@ export default function StudyChatScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-      <StudyHeader
+      <PageHeader
         title={title}
-        sub={t('study_chat.subtitle')}
+        subtitle={t('study_chat.subtitle')}
+        showBack
         onBack={() => router.back()}
+        backgroundColor={tokens.card}
+        borderBottomColor={tokens.border}
+        tokens={tokens}
         right={
           <Pressable
             onPress={() => setShowSettings(!showSettings)}
