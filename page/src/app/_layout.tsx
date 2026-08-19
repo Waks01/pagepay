@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, useColorScheme } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
@@ -89,11 +89,13 @@ function useAuthGate() {
   const [isReady, setIsReady] = useState(false);
   const hydrated = usePreferences((s) => s.hydrated);
   const onboardingCompleted = usePreferences((s) => s.onboardingCompleted);
+  const hasRouted = useRef(false);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || hasRouted.current) return;
 
     (async () => {
+      hasRouted.current = true;
       try {
         const token = await getToken();
         const inOnboarding = segments[0] === '(onboarding)';
@@ -108,11 +110,6 @@ function useAuthGate() {
         } else if (token && (inAuth || inOnboarding)) {
           router.replace('/home');
         } else if (token) {
-          // Token is present and we're inside the (app) group — load
-          // the current user once into the global store so every tab
-          // can read it as a pure memory access. Without this, each
-          // tab would re-fetch /auth/me on mount and the user would
-          // see "checking auth" on every tab switch.
           void bootstrapCurrentUser();
         }
       } catch (e) {
@@ -121,7 +118,7 @@ function useAuthGate() {
         setIsReady(true);
       }
     })();
-  }, [hydrated, segments, router, onboardingCompleted]);
+  }, [hydrated, router, onboardingCompleted]);
 
   return isReady;
 }
