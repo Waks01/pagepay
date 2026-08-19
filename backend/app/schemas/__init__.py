@@ -81,12 +81,14 @@ class UserMe(BaseModel):
     is_worker: bool = True
     is_sponsor: bool = False
     email_verified: bool = False
+    avatar_url: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class UserUpdate(BaseModel):
     username: str | None = None
+    avatar_url: str | None = None
 
     @field_validator("username")
     @classmethod

@@ -71,6 +71,7 @@ class User(Base):
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     country: Mapped[str] = mapped_column(String(50), default="Nigeria")
     languages: Mapped[str | None] = mapped_column(Text, nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # ── v3 Study data blob ───────────────────────────────────────────
     # Per-user highlights + notes, keyed by reading_unit_id. Stored as a

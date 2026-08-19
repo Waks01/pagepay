@@ -123,12 +123,6 @@ export default function BookDetailScreen() {
     [logShare],
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      resumeQuery.refetch();
-    }, []),
-  );
-
   const unlockedIds = useMemo(() => {
     const book = bookQuery.data;
     const resume = resumeQuery.data;

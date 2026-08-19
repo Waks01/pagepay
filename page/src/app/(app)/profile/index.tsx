@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
+import { launchImageLibraryAsync, MediaType } from 'expo-image-picker';
 
 import { apiFetch } from '@/src/shared/api/client';
 import {
@@ -94,6 +95,7 @@ export default function ProfileScreen() {
   const [usernameValue, setUsernameValue] = useState('');
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [savingUsername, setSavingUsername] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Fetch ad config for native unit. useAdsConfig has its own
   // 1-hour staleTime and is shared with the AdSlotProvider, home
@@ -299,6 +301,42 @@ export default function ProfileScreen() {
     router.replace('/(auth)/' as any);
   }, [qc, router]);
 
+  const handleAvatarPress = useCallback(async () => {
+    try {
+      const result = await launchImageLibraryAsync({
+        mediaTypes: MediaType.Images,
+        allowsEditing: true,
+        quality: 0.8,
+        base64: true,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      if (!asset.base64) {
+        Alert.alert(t('common.error', { defaultValue: 'Error' }), 'Image data not available');
+        return;
+      }
+      setUploadingAvatar(true);
+      const mimeType = asset.type || 'image/jpeg';
+      const base64Data = `data:${mimeType};base64,${asset.base64}`;
+      const res = await apiFetch('/api/v1/auth/me/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64: base64Data }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ detail: 'Failed to upload avatar' }));
+        throw new Error(typeof data?.detail === 'string' ? data.detail : 'Failed to upload avatar');
+      }
+      const updated = await res.json() as { avatar_url: string | null };
+      useCurrentUserStore.getState().setUser({ ...useCurrentUserStore.getState().user, avatar_url: updated.avatar_url } as any);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert(t('common.error', { defaultValue: 'Error' }), e instanceof Error ? e.message : 'Failed to upload avatar');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }, [t, qc, router]);
+
   const version =
     (Constants.expoConfig?.version as string | undefined) ||
     ((Constants.manifest as { version?: string } | undefined)?.version as string | undefined) ||
@@ -318,11 +356,25 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* ── Header ───────────────────────────────────────────── */}
         <View style={styles.profileHeader}>
-          <View style={[styles.avatar, { backgroundColor: tokens.mintSoft, borderColor: tokens.border }]}>
-            <Text style={[styles.avatarText, { color: tokens.mint, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-              {initials(meQuery)}
-            </Text>
-          </View>
+          <TouchableOpacity
+            onPress={handleAvatarPress}
+            disabled={uploadingAvatar}
+            activeOpacity={0.7}
+            style={styles.avatarTouch}
+          >
+            <View style={[styles.avatar, { backgroundColor: tokens.mintSoft, borderColor: tokens.border }]}>
+              {meQuery?.avatar_url ? (
+                <Image source={{ uri: meQuery.avatar_url }} style={styles.avatarImage} />
+              ) : (
+                <Text style={[styles.avatarText, { color: tokens.mint, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+                  {initials(meQuery)}
+                </Text>
+              )}
+              <View style={[styles.avatarCameraBadge, { backgroundColor: tokens.mint }]}>
+                <Ionicons name={uploadingAvatar ? "ellipsis-horizontal" : "camera"} size={14} color={tokens.mintText} />
+              </View>
+            </View>
+          </TouchableOpacity>
           <View style={styles.headerInfo}>
             <Text style={[styles.displayName, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
               {displayName(meQuery)}
@@ -1062,10 +1114,31 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarTouch: {
+    position: 'relative',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 36,
   },
   avatarText: {
     fontSize: 24,
     letterSpacing: 0.5,
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   headerInfo: {
     flex: 1,

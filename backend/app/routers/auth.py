@@ -5,6 +5,7 @@ import string
 import bcrypt
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from pydantic import BaseModel, Field
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert
@@ -14,6 +15,7 @@ from app.models import User, PasswordResetToken, RefreshToken
 from app.schemas import UserRegister, TokenResponse, UserMe, UserUpdate, ChangePasswordRequest, ForgotPasswordRequest, ForgotPasswordVerifyOtpRequest, ResetPasswordRequest, LegalPageResponse, EmailVerificationRequest, EmailVerificationCodeRequest, GoogleAuthRequest
 from app.services.auth import hash_password, verify_password, create_access_token, create_refresh_token, get_current_user, revoke_jwt
 from app.services.sanitize import sanitize_for_log
+from app.services.cloudinary import upload_base64_image, delete_image
 from app.services.email import send_verification_email, send_password_reset_email, send_password_reset_otp_email
 from app.services.welcome_bonus import grant_welcome_bonus
 from app.services.sms import send_password_reset_sms
@@ -206,6 +208,7 @@ async def me(current_user: User = Depends(get_current_user)):
         is_worker=current_user.is_worker,
         is_sponsor=current_user.is_sponsor,
         email_verified=current_user.email_verified,
+        avatar_url=current_user.avatar_url,
     )
 
 
@@ -227,6 +230,9 @@ async def update_profile(
             if existing.scalar_one_or_none():
                 raise HTTPException(status_code=400, detail="Username already taken")
             current_user.username = payload.username.lower()
+
+    if payload.avatar_url is not None:
+        current_user.avatar_url = payload.avatar_url
 
     await db.commit()
     await db.refresh(current_user)
@@ -251,7 +257,71 @@ async def update_profile(
         is_worker=current_user.is_worker,
         is_sponsor=current_user.is_sponsor,
         email_verified=current_user.email_verified,
+        avatar_url=current_user.avatar_url,
     )
+
+
+class AvatarUploadRequest(BaseModel):
+    base64: str = Field(..., description="Base64 encoded image with data URI prefix")
+
+
+@router.post("/me/avatar", response_model=UserMe)
+async def upload_avatar(
+    payload: AvatarUploadRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a new profile avatar image.
+    
+    Accepts a base64-encoded image in the request body, stores it in
+    Cloudinary, and updates the user's avatar_url. If the user already
+    has an avatar, the old Cloudinary image is deleted first.
+    """
+    if not payload.base64 or not payload.base64.startswith("data:image/"):
+        raise HTTPException(status_code=400, detail="Invalid image data")
+    
+    try:
+        # Delete old avatar if it exists
+        if current_user.avatar_url:
+            try:
+                old_public_id = current_user.avatar_url.split("/")[-1].split(".")[0]
+                if old_public_id:
+                    await delete_image(f"pagepay/avatars/{old_public_id}")
+            except Exception:
+                pass
+        
+        # Upload new avatar
+        result = await upload_base64_image(payload.base64, public_id=f"pagepay/avatars/user_{current_user.id}")
+        current_user.avatar_url = result.get("secure_url") or result.get("url")
+        
+        await db.commit()
+        await db.refresh(current_user)
+        
+        await log_user_action(
+            db,
+            current_user.id,
+            "avatar_upload",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            device_fingerprint=request.headers.get("x-device-fingerprint"),
+        )
+        
+        return UserMe(
+            id=current_user.id,
+            email=current_user.email,
+            phone=current_user.phone,
+            username=current_user.username,
+            points_balance=current_user.points_balance,
+            tier=current_user.tier.value,
+            created_at=current_user.created_at,
+            is_worker=current_user.is_worker,
+            is_sponsor=current_user.is_sponsor,
+            email_verified=current_user.email_verified,
+            avatar_url=current_user.avatar_url,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Avatar upload failed: {str(e)}")
 
 
 @router.post("/login", response_model=TokenResponse)

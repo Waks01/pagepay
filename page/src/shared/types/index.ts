@@ -9,6 +9,7 @@ export type UserMe = {
   is_sponsor: boolean;
   email_verified: boolean;
   created_at: string;
+  avatar_url: string | null;
 };
 
 /** One row from GET /api/v1/wallet/history. Mirrors backend/app/routers/wallet.py. */

@@ -1,4 +1,4 @@
-"""Cloudinary integration for task proof image uploads."""
+"""Cloudinary integration for task proof and avatar image uploads."""
 
 import cloudinary
 import cloudinary.uploader

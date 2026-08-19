@@ -10,6 +10,7 @@ export default function AppLayout() {
     <Tabs
       tabBar={renderTabBar}
       screenOptions={{ headerShown: false, animationEnabled: false }}
+      lazy={false}
     >
       {TAB_ORDER.map((tab) => (
         <Tabs.Screen key={tab.name} name={tab.name} />
