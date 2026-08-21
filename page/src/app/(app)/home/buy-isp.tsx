@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet,
+  Alert, ActivityIndicator, StyleSheet, RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ import {
   ConfirmModal,
   EarnBadge,
   ErrorBanner,
+  BuyScreenSkeleton,
 } from '@/src/components/bills';
 
 type IspPlan = {
@@ -124,9 +125,35 @@ export default function BuyIspScreen() {
     { value: 'spectranet', label: t('bills.isp.spectranet_label'), icon: 'wifi-outline' },
   ];
 
+  // Initial-load gate: the form needs at least one ISP plan catalog before
+  // the picker/plan-grid is usable. Show the skeleton while either is still
+  // in flight; whichever resolves first will unblock the form.
+  if (smilePlansQ.isLoading || spectranetPlansQ.isLoading) {
+    return (
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        <BuyScreenSkeleton sections={3} />
+      </View>
+    );
+  }
+
+  // Pull-to-refresh: refetch both Smile and Spectranet plan catalogs.
+  const onRefresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['smile-plans'] });
+    qc.invalidateQueries({ queryKey: ['spectranet-plans'] });
+  }, [qc]);
+
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, gap: 16 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={smilePlansQ.isFetching || spectranetPlansQ.isFetching}
+            onRefresh={onRefresh}
+            tintColor={tokens.mint}
+          />
+        }
+      >
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity onPress={() => router.back()}>

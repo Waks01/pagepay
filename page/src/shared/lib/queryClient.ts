@@ -1,8 +1,8 @@
-import { QueryClient } from '@tanstack/react-query';
-import { warmTokenCache } from '@/src/shared/lib/storage';
+import { QueryClient } from "@tanstack/react-query";
+import { warmTokenCache } from "@/src/shared/lib/storage";
 
 /**
- * One week. PagePay user state (balance, payout account, username,
+ * One week GC time. PagePay user state (balance, payout account, username,
  * PIN status) changes infrequently; the server is the source of
  * truth, and a stale balance for 60s is fine. This stops every tab
  * switch from re-fetching the same `/me`, `/payouts/account`, and
@@ -33,9 +33,14 @@ export const queryClient = new QueryClient({
       // were the main source of the "feels slow on every tap" issue.
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,
+      // Reuse in-flight requests — if two screens request the same
+      // data at the same time (e.g., payout account in Wallet + Profile),
+      // only one network request fires.
+      networkMode: "online",
     },
     mutations: {
       retry: 0,
+      networkMode: "online",
     },
   },
 });

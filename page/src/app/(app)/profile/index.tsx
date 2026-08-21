@@ -1,8 +1,9 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from "react";
 import {
   Alert,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -11,64 +12,80 @@ import {
   TouchableOpacity,
   View,
   Image,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter, useFocusEffect } from 'expo-router';
-import Constants from 'expo-constants';
-import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
-import { useTranslation } from 'react-i18next';
-import { launchImageLibraryAsync, MediaType } from 'expo-image-picker';
+  Modal,
+  Dimensions,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter, useFocusEffect } from "expo-router";
+import Constants from "expo-constants";
+import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
+import * as ImagePicker from "expo-image-picker";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
 
-import { apiFetch } from '@/src/shared/api/client';
-import {
-  displayName,
-  initials,
-} from '@/src/shared/lib/display-name';
+import { apiFetch } from "@/src/shared/api/client";
+import { displayName, initials } from "@/src/shared/lib/display-name";
 import {
   persistLanguage,
   persistTheme,
   usePreferences,
   type LanguagePref,
   type ThemePref,
-} from '@/src/shared/lib/preferences';
-import { clearToken } from '@/src/shared/lib/storage';
-import { useAdsConfig } from '@/src/shared/hooks/use-ads-config';
-import { useBiometricAuth } from '@/src/shared/hooks/use-biometric-auth';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { useCurrentUser, useCurrentUserStore } from '@/src/shared/lib/current-user';
-import { PagePay } from '@/constants/theme';
-import NotificationBell from '@/components/NotificationBell';
-import { Skeleton } from '@/components/Skeleton';
-import { AnimatedInput } from '@/components/AnimatedInput';
-import { ChangePasswordModal } from '@/components/ChangePasswordModal';
+} from "@/src/shared/lib/preferences";
+import { clearToken } from "@/src/shared/lib/storage";
+import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
+import { useBiometricAuth } from "@/src/shared/hooks/use-biometric-auth";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import {
+  useCurrentUser,
+  useCurrentUserStore,
+} from "@/src/shared/lib/current-user";
+import { PagePay } from "@/constants/theme";
+import NotificationBell from "@/components/NotificationBell";
+import { Skeleton } from "@/components/Skeleton";
+import { AnimatedInput } from "@/components/AnimatedInput";
+import { ChangePasswordModal } from "@/components/ChangePasswordModal";
 import {
   LinkPayoutAccountModal,
   PayoutAccount,
-} from '@/components/LinkPayoutAccountModal';
-import { HelpModal } from '@/components/HelpModal';
-import { AboutModal } from '@/components/AboutModal';
-import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
-import { useReferralStats, useGenerateReferral } from '@/src/features/community/hooks/use-community';
-import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { PageHeader } from '@/components/PageHeader';
+} from "@/components/LinkPayoutAccountModal";
+import { HelpModal } from "@/components/HelpModal";
+import { AboutModal } from "@/components/AboutModal";
+import { NotificationSettingsModal } from "@/components/NotificationSettingsModal";
+import {
+  useReferralStats,
+  useGenerateReferral,
+} from "@/src/features/community/hooks/use-community";
+import { NativeAdBanner } from "@/components/ads/NativeAdBanner";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { PageHeader } from "@/components/PageHeader";
+import { UserAvatar } from "@/components/UserAvatar";
 
-const languageOptions: { value: LanguagePref; label: string; available: boolean }[] = [
-  { value: 'en', label: 'English', available: true },
-  { value: 'pcm', label: 'Pidgin', available: true },
-  { value: 'yo', label: 'Yoruba', available: true },
-  { value: 'ha', label: 'Hausa', available: true },
-  { value: 'ig', label: 'Igbo', available: true },
+const languageOptions: {
+  value: LanguagePref;
+  label: string;
+  available: boolean;
+}[] = [
+  { value: "en", label: "English", available: true },
+  { value: "pcm", label: "Pidgin", available: true },
+  { value: "yo", label: "Yoruba", available: true },
+  { value: "ha", label: "Hausa", available: true },
+  { value: "ig", label: "Igbo", available: true },
 ];
 
 const themeOptions: { value: ThemePref; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'sepia', label: 'Sepia' },
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "sepia", label: "Sepia" },
 ];
 
 export default function ProfileScreen() {
@@ -92,22 +109,25 @@ export default function ProfileScreen() {
   const [showAbout, setShowAbout] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [editingUsername, setEditingUsername] = useState(false);
-  const [usernameValue, setUsernameValue] = useState('');
+  const [usernameValue, setUsernameValue] = useState("");
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [savingUsername, setSavingUsername] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [showAvatarLightbox, setShowAvatarLightbox] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Fetch ad config for native unit. useAdsConfig has its own
   // 1-hour staleTime and is shared with the AdSlotProvider, home
   // and catalog — fetched once and reused.
-  const [nativeAdUnit, setNativeAdUnit] = useState('');
+  const [nativeAdUnit, setNativeAdUnit] = useState("");
   const { data: adConfig } = useAdsConfig();
 
   useEffect(() => {
     if (adConfig) {
       const platform = Platform.OS;
-      const unitKey = platform === 'android' ? 'in_feed_android' : 'in_feed_ios';
-      setNativeAdUnit(adConfig[unitKey] || '');
+      const unitKey =
+        platform === "android" ? "in_feed_android" : "in_feed_ios";
+      setNativeAdUnit(adConfig[unitKey] || "");
     }
   }, [adConfig]);
 
@@ -116,27 +136,27 @@ export default function ProfileScreen() {
   const meQuery = useCurrentUser();
 
   const payoutQuery = useQuery({
-    queryKey: ['payout', 'account'],
+    queryKey: ["payout", "account"],
     queryFn: async () => {
-      const res = await apiFetch('/api/v1/payouts/account');
+      const res = await apiFetch("/api/v1/payouts/account");
       if (res.status === 404) return null;
-      if (!res.ok) throw new Error('Failed to load payout account');
+      if (!res.ok) throw new Error("Failed to load payout account");
       return (await res.json()) as PayoutAccount;
     },
     staleTime: 30_000,
   });
 
   const pinStatusQuery = useQuery({
-    queryKey: ['pin', 'status'],
+    queryKey: ["pin", "status"],
     queryFn: async () => {
-      const res = await apiFetch('/api/v1/pin/status');
-      if (!res.ok) throw new Error('Failed to load PIN status');
+      const res = await apiFetch("/api/v1/pin/status");
+      if (!res.ok) throw new Error("Failed to load PIN status");
       return (await res.json()) as { has_pin: boolean };
     },
   });
 
   const getTierLabel = (tier: string) => {
-    const key = tier as 'free' | 'premium_monthly' | 'premium_yearly';
+    const key = tier as "free" | "premium_monthly" | "premium_yearly";
     return t(`profile.tier.${key}`, { defaultValue: tier });
   };
 
@@ -144,29 +164,45 @@ export default function ProfileScreen() {
     setUsernameError(null);
     const trimmed = usernameValue.trim().toLowerCase();
     if (!trimmed) {
-      setUsernameError(t('profile.username.empty', { defaultValue: 'Username cannot be empty' }));
+      setUsernameError(
+        t("profile.username.empty", {
+          defaultValue: "Username cannot be empty",
+        }),
+      );
       return;
     }
     if (trimmed.length > 12) {
-      setUsernameError(t('profile.username.too_long', { defaultValue: 'Username must be 12 characters or less' }));
+      setUsernameError(
+        t("profile.username.too_long", {
+          defaultValue: "Username must be 12 characters or less",
+        }),
+      );
       return;
     }
     const allowed = /^[a-z0-9_]+$/;
     if (!allowed.test(trimmed)) {
-      setUsernameError(t('profile.username.invalid_chars', { defaultValue: 'Only letters, numbers, and underscores allowed' }));
+      setUsernameError(
+        t("profile.username.invalid_chars", {
+          defaultValue: "Only letters, numbers, and underscores allowed",
+        }),
+      );
       return;
     }
 
     setSavingUsername(true);
     try {
-      const res = await apiFetch('/api/v1/auth/me', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await apiFetch("/api/v1/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: trimmed }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(typeof data?.detail === 'string' ? data.detail : 'Failed to update username');
+        throw new Error(
+          typeof data?.detail === "string"
+            ? data.detail
+            : "Failed to update username",
+        );
       }
       // Username changed — refresh the global user store so every
       // screen sees the new value without each one making its own
@@ -175,7 +211,9 @@ export default function ProfileScreen() {
       setEditingUsername(false);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
-      setUsernameError(e instanceof Error ? e.message : 'Failed to update username');
+      setUsernameError(
+        e instanceof Error ? e.message : "Failed to update username",
+      );
     } finally {
       setSavingUsername(false);
     }
@@ -194,19 +232,24 @@ export default function ProfileScreen() {
     async (next: LanguagePref) => {
       const opt = languageOptions.find((o) => o.value === next);
       if (!opt?.available) {
-        Alert.alert(t('profile.coming_soon'), t('profile.coming_soon_message', { language: opt?.label ?? '' }));
+        Alert.alert(
+          t("profile.coming_soon"),
+          t("profile.coming_soon_message", { language: opt?.label ?? "" }),
+        );
         return;
       }
-      
+
       // Change language using i18n
       try {
-        const i18n = await import('@/src/lib/i18n');
+        const i18n = await import("@/src/lib/i18n");
         await i18n.default.changeLanguage(next);
         setLanguage(next);
         void persistLanguage(next);
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
       } catch (error) {
-        Alert.alert(t('common.error'), t('profile.language_error'));
+        Alert.alert(t("common.error"), t("profile.language_error"));
       }
     },
     [setLanguage, t],
@@ -220,21 +263,34 @@ export default function ProfileScreen() {
     async (next: boolean) => {
       if (next && (!isSupported || !isEnrolled)) {
         Alert.alert(
-          t('profile.biometric.unavailable_title', { defaultValue: 'Biometric Unavailable' }),
-          t('profile.biometric.unavailable_message', { defaultValue: 'Biometric authentication is not set up on this device. Please add a fingerprint or face recognition in your device settings first.' }),
+          t("profile.biometric.unavailable_title", {
+            defaultValue: "Biometric Unavailable",
+          }),
+          t("profile.biometric.unavailable_message", {
+            defaultValue:
+              "Biometric authentication is not set up on this device. Please add a fingerprint or face recognition in your device settings first.",
+          }),
         );
         return;
       }
 
       if (next && !pinStatusQuery.data?.has_pin) {
         Alert.alert(
-          t('profile.pin.required_title', { defaultValue: 'Set Transaction PIN First' }),
-          t('profile.pin.required_message', { defaultValue: 'You must set a transaction PIN before enabling biometric login. This PIN will also be used as fallback if biometric fails.' }),
+          t("profile.pin.required_title", {
+            defaultValue: "Set Transaction PIN First",
+          }),
+          t("profile.pin.required_message", {
+            defaultValue:
+              "You must set a transaction PIN before enabling biometric login. This PIN will also be used as fallback if biometric fails.",
+          }),
           [
-            { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
             {
-              text: t('profile.pin.setup_button', { defaultValue: 'Set PIN' }),
-              onPress: () => router.push('/pin/setup'),
+              text: t("common.cancel", { defaultValue: "Cancel" }),
+              style: "cancel",
+            },
+            {
+              text: t("profile.pin.setup_button", { defaultValue: "Set PIN" }),
+              onPress: () => router.push("/pin/setup"),
             },
           ],
         );
@@ -245,28 +301,44 @@ export default function ProfileScreen() {
         const result = await authenticate();
         if (!result.success) {
           Alert.alert(
-            t('profile.biometric.failed_title', { defaultValue: 'Authentication Failed' }),
-            result.error || t('profile.biometric.failed_message', { defaultValue: 'Biometric authentication failed. Please try again.' }),
+            t("profile.biometric.failed_title", {
+              defaultValue: "Authentication Failed",
+            }),
+            result.error ||
+              t("profile.biometric.failed_message", {
+                defaultValue:
+                  "Biometric authentication failed. Please try again.",
+              }),
           );
           return;
         }
       }
 
       setBiometricEnabled(next);
-      await import('@/src/shared/lib/preferences').then((m) =>
+      await import("@/src/shared/lib/preferences").then((m) =>
         m.persistBiometricEnabled(next),
       );
-      await Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Success,
-      );
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (next) {
         Alert.alert(
-          t('profile.biometric.success_title', { defaultValue: 'Biometric Enabled' }),
-          t('profile.biometric.success_message', { defaultValue: 'You can now use biometric to sign in.' }),
+          t("profile.biometric.success_title", {
+            defaultValue: "Biometric Enabled",
+          }),
+          t("profile.biometric.success_message", {
+            defaultValue: "You can now use biometric to sign in.",
+          }),
         );
       }
     },
-    [isSupported, isEnrolled, authenticate, setBiometricEnabled, pinStatusQuery.data, router, t],
+    [
+      isSupported,
+      isEnrolled,
+      authenticate,
+      setBiometricEnabled,
+      pinStatusQuery.data,
+      router,
+      t,
+    ],
   );
 
   const handleSignOut = useCallback(async () => {
@@ -274,7 +346,7 @@ export default function ProfileScreen() {
     // real "logout" is clearing local auth state. If the call fails we
     // still want to drop the token and route the user to login.
     try {
-      await apiFetch('/api/v1/auth/logout', { method: 'POST' });
+      await apiFetch("/api/v1/auth/logout", { method: "POST" });
     } catch {
       // Network error is fine here — the local token clear is what
       // actually protects the user.
@@ -282,13 +354,13 @@ export default function ProfileScreen() {
 
     // Deregister FCM token on logout
     try {
-      const { deregisterFCMToken } = await import('@/src/lib/notifications');
+      const { deregisterFCMToken } = await import("@/src/lib/notifications");
       await deregisterFCMToken();
     } catch (error) {
-      console.error('Failed to deregister FCM token on logout:', error);
+      console.error("Failed to deregister FCM token on logout:", error);
     }
 
-    const { clearToken } = await import('@/src/shared/lib/storage');
+    const { clearToken } = await import("@/src/shared/lib/storage");
     const biometric = usePreferences.getState().biometricEnabled;
     await clearToken(!biometric);
 
@@ -298,98 +370,221 @@ export default function ProfileScreen() {
     useCurrentUserStore.getState().clear();
 
     qc.clear();
-    router.replace('/(auth)/' as any);
+    router.replace("/(auth)/" as any);
   }, [qc, router]);
 
   const handleAvatarPress = useCallback(async () => {
+    // Single tap: show lightbox if avatar exists
+    if (meQuery?.avatar_url) {
+      setShowAvatarLightbox(true);
+    } else {
+      // No avatar yet, open picker
+      await handleAvatarUpload();
+    }
+  }, [meQuery]);
+
+  const handleAvatarUpload = useCallback(async () => {
     try {
-      const result = await launchImageLibraryAsync({
-        mediaTypes: MediaType.Images,
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
         allowsEditing: true,
         quality: 0.8,
         base64: true,
       });
-      if (result.canceled || !result.assets[0]) return;
-      const asset = result.assets[0];
-      if (!asset.base64) {
-        Alert.alert(t('common.error', { defaultValue: 'Error' }), 'Image data not available');
+
+      // Check if result is valid and has assets
+      if (
+        !result ||
+        result.canceled ||
+        !result.assets ||
+        result.assets.length === 0
+      ) {
         return;
       }
+
+      const asset = result.assets[0];
+      if (!asset.base64) {
+        Alert.alert(
+          t("common.error", { defaultValue: "Error" }),
+          "Image data not available",
+        );
+        return;
+      }
+
       setUploadingAvatar(true);
-      const mimeType = asset.type || 'image/jpeg';
+
+      // Determine mime type from URI or default to jpeg
+      let mimeType = "image/jpeg";
+      if (asset.uri) {
+        const ext = asset.uri.split(".").pop()?.toLowerCase();
+        if (ext === "png") mimeType = "image/png";
+        else if (ext === "jpg" || ext === "jpeg") mimeType = "image/jpeg";
+        else if (ext === "webp") mimeType = "image/webp";
+      }
+
       const base64Data = `data:${mimeType};base64,${asset.base64}`;
-      const res = await apiFetch('/api/v1/auth/me/avatar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+
+      // Validate the format before sending
+      if (!base64Data.startsWith("data:image/")) {
+        Alert.alert(
+          t("common.error", { defaultValue: "Error" }),
+          "Invalid image format",
+        );
+        setUploadingAvatar(false);
+        return;
+      }
+
+      const res = await apiFetch("/api/v1/auth/me/avatar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ base64: base64Data }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ detail: 'Failed to upload avatar' }));
-        throw new Error(typeof data?.detail === 'string' ? data.detail : 'Failed to upload avatar');
+        const data = await res
+          .json()
+          .catch(() => ({ detail: "Failed to upload avatar" }));
+        throw new Error(
+          typeof data?.detail === "string"
+            ? data.detail
+            : "Failed to upload avatar",
+        );
       }
-      const updated = await res.json() as { avatar_url: string | null };
-      useCurrentUserStore.getState().setUser({ ...useCurrentUserStore.getState().user, avatar_url: updated.avatar_url } as any);
+      const updated = (await res.json()) as { avatar_url: string | null };
+      useCurrentUserStore.getState().setUser({
+        ...useCurrentUserStore.getState().user,
+        avatar_url: updated.avatar_url,
+      } as any);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
-      Alert.alert(t('common.error', { defaultValue: 'Error' }), e instanceof Error ? e.message : 'Failed to upload avatar');
+      Alert.alert(
+        t("common.error", { defaultValue: "Error" }),
+        e instanceof Error ? e.message : "Failed to upload avatar",
+      );
     } finally {
       setUploadingAvatar(false);
     }
   }, [t, qc, router]);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        useCurrentUserStore.getState().refresh(),
+        payoutQuery.refetch(),
+        pinStatusQuery.refetch(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [payoutQuery, pinStatusQuery]);
+
   const version =
     (Constants.expoConfig?.version as string | undefined) ||
-    ((Constants.manifest as { version?: string } | undefined)?.version as string | undefined) ||
-    '1.0.0';
-  const platformLabel = scheme === 'dark' ? t('profile.appearance.theme_dark') : t('profile.appearance.theme_light');
+    ((Constants.manifest as { version?: string } | undefined)?.version as
+      | string
+      | undefined) ||
+    "1.0.0";
+  const platformLabel =
+    scheme === "dark"
+      ? t("profile.appearance.theme_dark")
+      : t("profile.appearance.theme_light");
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: tokens.paper }]}>
       <PageHeader
-        title={t('profile.title')}
-        left={<Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />}
+        title={t("profile.title")}
+        left={<UserAvatar size={28} />}
         right={<NotificationBell />}
         backgroundColor={tokens.card}
         borderBottomColor={tokens.border}
         tokens={tokens}
       />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={tokens.mint}
+          />
+        }
+      >
         {/* ── Header ───────────────────────────────────────────── */}
         <View style={styles.profileHeader}>
           <TouchableOpacity
             onPress={handleAvatarPress}
+            onLongPress={handleAvatarUpload}
             disabled={uploadingAvatar}
             activeOpacity={0.7}
             style={styles.avatarTouch}
           >
-            <View style={[styles.avatar, { backgroundColor: tokens.mintSoft, borderColor: tokens.border }]}>
+            <View
+              style={[
+                styles.avatar,
+                {
+                  backgroundColor: tokens.mintSoft,
+                  borderColor: tokens.border,
+                },
+              ]}
+            >
               {meQuery?.avatar_url ? (
-                <Image source={{ uri: meQuery.avatar_url }} style={styles.avatarImage} />
+                <Image
+                  source={{ uri: meQuery.avatar_url }}
+                  style={styles.avatarImage}
+                />
               ) : (
-                <Text style={[styles.avatarText, { color: tokens.mint, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+                <Text
+                  style={[
+                    styles.avatarText,
+                    { color: tokens.mint, fontFamily: "SpaceGrotesk_700Bold" },
+                  ]}
+                >
                   {initials(meQuery)}
                 </Text>
               )}
-              <View style={[styles.avatarCameraBadge, { backgroundColor: tokens.mint }]}>
-                <Ionicons name={uploadingAvatar ? "ellipsis-horizontal" : "camera"} size={14} color={tokens.mintText} />
+              <View
+                style={[
+                  styles.avatarCameraBadge,
+                  { backgroundColor: tokens.mint },
+                ]}
+              >
+                <Ionicons
+                  name={uploadingAvatar ? "ellipsis-horizontal" : "camera"}
+                  size={14}
+                  color={tokens.mintText}
+                />
               </View>
             </View>
           </TouchableOpacity>
           <View style={styles.headerInfo}>
-            <Text style={[styles.displayName, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+            <Text
+              style={[
+                styles.displayName,
+                { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+              ]}
+            >
               {displayName(meQuery)}
             </Text>
             <Text style={[styles.identifier, { color: tokens.inkMuted }]}>
-              {meQuery?.email || meQuery?.phone || t('profile.no_contact')}
+              {meQuery?.email || meQuery?.phone || t("profile.no_contact")}
             </Text>
             <View style={styles.tierRow}>
               <Text style={[styles.tier, { color: tokens.mint }]}>
-                {getTierLabel(meQuery?.tier ?? 'free')}
+                {getTierLabel(meQuery?.tier ?? "free")}
               </Text>
-              {meQuery?.tier && meQuery.tier !== 'free' && (
-                <View style={[styles.premiumBadge, { backgroundColor: tokens.mint }]}>
+              {meQuery?.tier && meQuery.tier !== "free" && (
+                <View
+                  style={[
+                    styles.premiumBadge,
+                    { backgroundColor: tokens.mint },
+                  ]}
+                >
                   <Ionicons name="diamond" size={10} color={tokens.mintText} />
-                  <Text style={[styles.premiumLabel, { color: tokens.mintText }]}>{t('profile.premium_badge')}</Text>
+                  <Text
+                    style={[styles.premiumLabel, { color: tokens.mintText }]}
+                  >
+                    {t("profile.premium_badge")}
+                  </Text>
                 </View>
               )}
             </View>
@@ -398,42 +593,63 @@ export default function ProfileScreen() {
 
         {/* ── Username ─────────────────────────────────────────── */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: tokens.inkMuted }]}>{t('profile.username.section', { defaultValue: 'Username' })}</Text>
+          <Text style={[styles.sectionTitle, { color: tokens.inkMuted }]}>
+            {t("profile.username.section", { defaultValue: "Username" })}
+          </Text>
           {editingUsername ? (
             <View style={{ gap: 10 }}>
               <AnimatedInput
-                label={t('profile.username.label', { defaultValue: 'Choose a username' })}
+                label={t("profile.username.label", {
+                  defaultValue: "Choose a username",
+                })}
                 value={usernameValue}
                 onChangeText={(v) => {
-                  setUsernameValue(v.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 12).toLowerCase());
+                  setUsernameValue(
+                    v
+                      .replace(/[^a-zA-Z0-9_]/g, "")
+                      .slice(0, 12)
+                      .toLowerCase(),
+                  );
                   setUsernameError(null);
                 }}
-                placeholder={t('profile.username.placeholder', { defaultValue: 'johndoe' })}
+                placeholder={t("profile.username.placeholder", {
+                  defaultValue: "johndoe",
+                })}
                 autoCapitalize="none"
                 autoCorrect={false}
                 textContentType="username"
                 error={usernameError || undefined}
               />
               <Text style={[styles.helper, { color: tokens.inkMuted }]}>
-                {t('profile.username.helper', { defaultValue: 'Max 12 characters. Letters, numbers, underscores only.' })}
+                {t("profile.username.helper", {
+                  defaultValue:
+                    "Max 12 characters. Letters, numbers, underscores only.",
+                })}
               </Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flexDirection: "row", gap: 10 }}>
                 <Pressable
                   onPress={handleSaveUsername}
                   disabled={savingUsername}
                   style={({ pressed }) => [
                     styles.primaryBtn,
-                    { backgroundColor: tokens.mint, opacity: pressed || savingUsername ? 0.7 : 1 },
+                    {
+                      backgroundColor: tokens.mint,
+                      opacity: pressed || savingUsername ? 0.7 : 1,
+                    },
                   ]}
                 >
-                  <Text style={[styles.primaryBtnText, { color: tokens.mintText }]}>
-                    {savingUsername ? t('common.saving', { defaultValue: 'Saving...' }) : t('common.save', { defaultValue: 'Save' })}
+                  <Text
+                    style={[styles.primaryBtnText, { color: tokens.mintText }]}
+                  >
+                    {savingUsername
+                      ? t("common.saving", { defaultValue: "Saving..." })
+                      : t("common.save", { defaultValue: "Save" })}
                   </Text>
                 </Pressable>
                 <Pressable
                   onPress={() => {
                     setEditingUsername(false);
-                    setUsernameValue(meQuery?.username || '');
+                    setUsernameValue(meQuery?.username || "");
                     setUsernameError(null);
                   }}
                   style={({ pressed }) => [
@@ -441,8 +657,13 @@ export default function ProfileScreen() {
                     { borderColor: tokens.border, opacity: pressed ? 0.7 : 1 },
                   ]}
                 >
-                  <Text style={[styles.secondaryBtnText, { color: tokens.inkMuted }]}>
-                    {t('common.cancel', { defaultValue: 'Cancel' })}
+                  <Text
+                    style={[
+                      styles.secondaryBtnText,
+                      { color: tokens.inkMuted },
+                    ]}
+                  >
+                    {t("common.cancel", { defaultValue: "Cancel" })}
                   </Text>
                 </Pressable>
               </View>
@@ -450,68 +671,115 @@ export default function ProfileScreen() {
           ) : (
             <Pressable
               onPress={() => {
-                setUsernameValue(meQuery?.username || '');
+                setUsernameValue(meQuery?.username || "");
                 setEditingUsername(true);
               }}
               style={({ pressed }) => [
                 styles.rowCard,
-                { backgroundColor: tokens.card, borderColor: tokens.border, opacity: pressed ? 0.85 : 1 },
+                {
+                  backgroundColor: tokens.card,
+                  borderColor: tokens.border,
+                  opacity: pressed ? 0.85 : 1,
+                },
               ]}
             >
               <View style={{ flex: 1 }}>
                 <Text style={[styles.rowLabel, { color: tokens.ink }]}>
-                  {meQuery?.username || t('profile.username.not_set', { defaultValue: 'Not set' })}
+                  {meQuery?.username ||
+                    t("profile.username.not_set", { defaultValue: "Not set" })}
                 </Text>
                 <Text style={[styles.rowHint, { color: tokens.inkMuted }]}>
-                  {t('profile.username.edit_hint', { defaultValue: 'Tap to set your username' })}
+                  {t("profile.username.edit_hint", {
+                    defaultValue: "Tap to set your username",
+                  })}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={tokens.inkMuted} />
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={tokens.inkMuted}
+              />
             </Pressable>
           )}
         </View>
 
         {/* ── Phase 7 Roles ───────────────────────────────────── */}
-        <Text style={[styles.section, { color: tokens.inkMuted }]}>{t('profile.sections.roles')}</Text>
+        <Text style={[styles.section, { color: tokens.inkMuted }]}>
+          {t("profile.sections.roles")}
+        </Text>
         <View style={{ gap: 10 }}>
           <Pressable
-            onPress={() => router.push('/(tabs)/tasks')}
+            onPress={() => router.push("/(tabs)/tasks")}
             style={({ pressed }) => [
               styles.roleCard,
-              { backgroundColor: tokens.card, borderColor: tokens.border, opacity: pressed ? 0.85 : 1 },
+              {
+                backgroundColor: tokens.card,
+                borderColor: tokens.border,
+                opacity: pressed ? 0.85 : 1,
+              },
             ]}
           >
-            <View style={[styles.roleIcon, { backgroundColor: tokens.mintSoft }]}>
-              <Ionicons name="briefcase-outline" size={20} color={tokens.mint} />
+            <View
+              style={[styles.roleIcon, { backgroundColor: tokens.mintSoft }]}
+            >
+              <Ionicons
+                name="briefcase-outline"
+                size={20}
+                color={tokens.mint}
+              />
             </View>
             <View style={styles.roleInfo}>
-              <Text style={[styles.roleTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-                {t('profile.roles.tasks_title')}
+              <Text
+                style={[
+                  styles.roleTitle,
+                  { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+                ]}
+              >
+                {t("profile.roles.tasks_title")}
               </Text>
               <Text style={[styles.roleSubtitle, { color: tokens.inkMuted }]}>
-                {t('profile.roles.tasks_subtitle')}
+                {t("profile.roles.tasks_subtitle")}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={tokens.inkMuted} />
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={tokens.inkMuted}
+            />
           </Pressable>
 
           {!meQuery?.is_sponsor && (
             <Pressable
-              onPress={() => router.push('/sponsor/register')}
+              onPress={() => router.push("/sponsor/register")}
               style={({ pressed }) => [
                 styles.roleCard,
-                { backgroundColor: tokens.card, borderColor: tokens.mint, opacity: pressed ? 0.85 : 1 },
+                {
+                  backgroundColor: tokens.card,
+                  borderColor: tokens.mint,
+                  opacity: pressed ? 0.85 : 1,
+                },
               ]}
             >
-              <View style={[styles.roleIcon, { backgroundColor: tokens.mintSoft }]}>
-                <Ionicons name="add-circle-outline" size={20} color={tokens.mint} />
+              <View
+                style={[styles.roleIcon, { backgroundColor: tokens.mintSoft }]}
+              >
+                <Ionicons
+                  name="add-circle-outline"
+                  size={20}
+                  color={tokens.mint}
+                />
               </View>
               <View style={styles.roleInfo}>
-                <Text style={[styles.roleTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-                  {t('profile.roles.become_sponsor')}
+                <Text
+                  style={[
+                    styles.roleTitle,
+                    { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+                  ]}
+                >
+                  {t("profile.roles.become_sponsor")}
                 </Text>
                 <Text style={[styles.roleSubtitle, { color: tokens.inkMuted }]}>
-                  {t('profile.roles.become_sponsor_subtitle')}
+                  {t("profile.roles.become_sponsor_subtitle")}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={tokens.mint} />
@@ -520,24 +788,39 @@ export default function ProfileScreen() {
 
           {meQuery?.is_sponsor && (
             <Pressable
-              onPress={() => router.push('/sponsor/dashboard')}
+              onPress={() => router.push("/sponsor/dashboard")}
               style={({ pressed }) => [
                 styles.roleCard,
-                { backgroundColor: tokens.card, borderColor: tokens.border, opacity: pressed ? 0.85 : 1 },
+                {
+                  backgroundColor: tokens.card,
+                  borderColor: tokens.border,
+                  opacity: pressed ? 0.85 : 1,
+                },
               ]}
             >
-              <View style={[styles.roleIcon, { backgroundColor: tokens.mintSoft }]}>
+              <View
+                style={[styles.roleIcon, { backgroundColor: tokens.mintSoft }]}
+              >
                 <Ionicons name="planet-outline" size={20} color={tokens.mint} />
               </View>
               <View style={styles.roleInfo}>
-                <Text style={[styles.roleTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-                  {t('profile.roles.sponsor_dashboard')}
+                <Text
+                  style={[
+                    styles.roleTitle,
+                    { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+                  ]}
+                >
+                  {t("profile.roles.sponsor_dashboard")}
                 </Text>
                 <Text style={[styles.roleSubtitle, { color: tokens.inkMuted }]}>
-                  {t('profile.roles.sponsor_dashboard_subtitle')}
+                  {t("profile.roles.sponsor_dashboard_subtitle")}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={tokens.inkMuted} />
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={tokens.inkMuted}
+              />
             </Pressable>
           )}
         </View>
@@ -545,25 +828,51 @@ export default function ProfileScreen() {
         {/* ── Payout account ───────────────────────────────────── */}
         <ErrorBoundary
           fallback={
-            <View style={[styles.payoutCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <View
+              style={[
+                styles.payoutCard,
+                { backgroundColor: tokens.card, borderColor: tokens.border },
+              ]}
+            >
               <View style={styles.payoutInner}>
-                <View style={[styles.payoutIcon, { backgroundColor: tokens.signalSoft }]}>
-                  <Ionicons name="alert-circle-outline" size={18} color={tokens.signal} />
+                <View
+                  style={[
+                    styles.payoutIcon,
+                    { backgroundColor: tokens.signalSoft },
+                  ]}
+                >
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={18}
+                    color={tokens.signal}
+                  />
                 </View>
                 <View style={styles.payoutInfo}>
-                  <Text style={[styles.payoutBank, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-                    {t('profile.payout.error')}
+                  <Text
+                    style={[
+                      styles.payoutBank,
+                      { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+                    ]}
+                  >
+                    {t("profile.payout.error")}
                   </Text>
                   <Text style={[styles.payoutHint, { color: tokens.inkMuted }]}>
-                    {t('profile.payout.error_hint')}
+                    {t("profile.payout.error_hint")}
                   </Text>
                 </View>
               </View>
             </View>
           }
         >
-          <Text style={[styles.section, { color: tokens.inkMuted }]}>{t('profile.sections.payout_account')}</Text>
-          <View style={[styles.payoutCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <Text style={[styles.section, { color: tokens.inkMuted }]}>
+            {t("profile.sections.payout_account")}
+          </Text>
+          <View
+            style={[
+              styles.payoutCard,
+              { backgroundColor: tokens.card, borderColor: tokens.border },
+            ]}
+          >
             {payoutQuery.isLoading ? (
               <View style={{ gap: 8, padding: 4 }}>
                 <Skeleton height={16} width="70%" borderRadius={6} />
@@ -571,33 +880,64 @@ export default function ProfileScreen() {
               </View>
             ) : payoutQuery.data ? (
               <View style={styles.payoutInner}>
-                <View style={[styles.payoutIcon, { backgroundColor: tokens.mintSoft }]}>
+                <View
+                  style={[
+                    styles.payoutIcon,
+                    { backgroundColor: tokens.mintSoft },
+                  ]}
+                >
                   <Ionicons name="business" size={18} color={tokens.mint} />
                 </View>
                 <View style={styles.payoutInfo}>
-                  <Text style={[styles.payoutBank, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-                    {payoutQuery.data.bank_name} ···{payoutQuery.data.account_number_last4}
+                  <Text
+                    style={[
+                      styles.payoutBank,
+                      { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+                    ]}
+                  >
+                    {payoutQuery.data.bank_name} ···
+                    {payoutQuery.data.account_number_last4}
                   </Text>
                   <View style={styles.verifyRow}>
                     {payoutQuery.data.verified ? (
                       <>
-                        <Ionicons name="checkmark-circle" size={14} color={tokens.mint} />
-                        <Text style={[styles.verifyText, { color: tokens.mint }]}>{t('profile.payout.verified')}</Text>
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={14}
+                          color={tokens.mint}
+                        />
+                        <Text
+                          style={[styles.verifyText, { color: tokens.mint }]}
+                        >
+                          {t("profile.payout.verified")}
+                        </Text>
                       </>
                     ) : (
                       <>
-                        <Ionicons name="hourglass-outline" size={14} color={tokens.signal} />
-                        <Text style={[styles.verifyText, { color: tokens.signal }]}>{t('profile.payout.pending')}</Text>
+                        <Ionicons
+                          name="hourglass-outline"
+                          size={14}
+                          color={tokens.signal}
+                        />
+                        <Text
+                          style={[styles.verifyText, { color: tokens.signal }]}
+                        >
+                          {t("profile.payout.pending")}
+                        </Text>
                       </>
                     )}
                   </View>
                   {payoutQuery.data.account_name ? (
-                    <Text style={[styles.accountName, { color: tokens.inkMuted }]}>
+                    <Text
+                      style={[styles.accountName, { color: tokens.inkMuted }]}
+                    >
                       {payoutQuery.data.account_name}
                     </Text>
                   ) : null}
-                  <Text style={[styles.accountName, { color: tokens.inkMuted }]}>
-                    {t('profile.payout.min_withdrawal')}
+                  <Text
+                    style={[styles.accountName, { color: tokens.inkMuted }]}
+                  >
+                    {t("profile.payout.min_withdrawal")}
                   </Text>
                 </View>
                 <Pressable
@@ -605,20 +945,36 @@ export default function ProfileScreen() {
                   hitSlop={8}
                   accessibilityRole="button"
                 >
-                  <Text style={[styles.change, { color: tokens.mint }]}>{t('profile.payout.change')}</Text>
+                  <Text style={[styles.change, { color: tokens.mint }]}>
+                    {t("profile.payout.change")}
+                  </Text>
                 </Pressable>
               </View>
             ) : (
               <View style={styles.payoutInner}>
-                <View style={[styles.payoutIcon, { backgroundColor: tokens.signalSoft }]}>
-                  <Ionicons name="business-outline" size={18} color={tokens.signal} />
+                <View
+                  style={[
+                    styles.payoutIcon,
+                    { backgroundColor: tokens.signalSoft },
+                  ]}
+                >
+                  <Ionicons
+                    name="business-outline"
+                    size={18}
+                    color={tokens.signal}
+                  />
                 </View>
                 <View style={styles.payoutInfo}>
-                  <Text style={[styles.payoutBank, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-                    {t('profile.payout.no_account')}
+                  <Text
+                    style={[
+                      styles.payoutBank,
+                      { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+                    ]}
+                  >
+                    {t("profile.payout.no_account")}
                   </Text>
                   <Text style={[styles.payoutHint, { color: tokens.inkMuted }]}>
-                    {t('profile.payout.no_account_hint')}
+                    {t("profile.payout.no_account_hint")}
                   </Text>
                 </View>
                 <Pressable
@@ -626,7 +982,9 @@ export default function ProfileScreen() {
                   hitSlop={8}
                   accessibilityRole="button"
                 >
-                  <Text style={[styles.change, { color: tokens.mint }]}>{t('profile.payout.link')}</Text>
+                  <Text style={[styles.change, { color: tokens.mint }]}>
+                    {t("profile.payout.link")}
+                  </Text>
                 </Pressable>
               </View>
             )}
@@ -636,15 +994,31 @@ export default function ProfileScreen() {
         {/* ── Referral ──────────────────────────────────────────── */}
         <ErrorBoundary
           fallback={
-            <View style={[styles.referralCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <View
+              style={[
+                styles.referralCard,
+                { backgroundColor: tokens.card, borderColor: tokens.border },
+              ]}
+            >
               <View style={styles.referralHeader}>
-                <Ionicons name="alert-circle-outline" size={20} color={tokens.signal} />
-                <Text style={[styles.referralTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-                  {t('profile.referral.unavailable')}
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={20}
+                  color={tokens.signal}
+                />
+                <Text
+                  style={[
+                    styles.referralTitle,
+                    { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+                  ]}
+                >
+                  {t("profile.referral.unavailable")}
                 </Text>
               </View>
-              <Text style={[styles.referralSubtitle, { color: tokens.inkMuted }]}>
-                {t('profile.referral.unavailable_hint')}
+              <Text
+                style={[styles.referralSubtitle, { color: tokens.inkMuted }]}
+              >
+                {t("profile.referral.unavailable_hint")}
               </Text>
             </View>
           }
@@ -655,37 +1029,41 @@ export default function ProfileScreen() {
         {/* ── Native ad after stats ─────────────────────────────── */}
         <ErrorBoundary fallback={null}>
           {nativeAdUnit && (
-            <NativeAdBanner
-              adUnit={nativeAdUnit}
-              sessionId={null}
-            />
+            <NativeAdBanner adUnit={nativeAdUnit} sessionId={null} />
           )}
         </ErrorBoundary>
 
         {/* ── Settings rows ────────────────────────────────────── */}
-        <Text style={[styles.section, { color: tokens.inkMuted }]}>{t('profile.sections.account')}</Text>
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+        <Text style={[styles.section, { color: tokens.inkMuted }]}>
+          {t("profile.sections.account")}
+        </Text>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: tokens.card, borderColor: tokens.border },
+          ]}
+        >
           <Row
             tokens={tokens}
             icon="lock-closed-outline"
-            label={t('profile.account.change_password')}
+            label={t("profile.account.change_password")}
             onPress={() => setShowChangePassword(true)}
           />
           <Divider tokens={tokens} />
           <Row
             tokens={tokens}
             icon="receipt-outline"
-            label={t('profile.account.billing_history')}
-            onPress={() => router.push('/billing/history')}
+            label={t("profile.account.billing_history")}
+            onPress={() => router.push("/billing/history")}
           />
-          {meQuery?.tier && meQuery.tier !== 'free' && (
+          {meQuery?.tier && meQuery.tier !== "free" && (
             <>
               <Divider tokens={tokens} />
               <Row
                 tokens={tokens}
                 icon="card-outline"
-                label={t('profile.account.manage_subscription')}
-                onPress={() => router.push('/billing/subscription')}
+                label={t("profile.account.manage_subscription")}
+                onPress={() => router.push("/billing/subscription")}
               />
             </>
           )}
@@ -693,20 +1071,24 @@ export default function ProfileScreen() {
           <Row
             tokens={tokens}
             icon="notifications-outline"
-            label={t('profile.account.notifications')}
+            label={t("profile.account.notifications")}
             onPress={handleNotifications}
           />
           <Divider tokens={tokens} />
           <Row
             tokens={tokens}
             icon="finger-print-outline"
-            label={t('profile.biometric.title', { defaultValue: 'Biometric Login' })}
+            label={t("profile.biometric.title", {
+              defaultValue: "Biometric Login",
+            })}
             trailing={
               <Switch
                 value={biometricEnabled}
                 onValueChange={handleBiometricToggle}
                 trackColor={{ false: tokens.border, true: tokens.mint }}
-                thumbColor={biometricEnabled ? tokens.mintText : tokens.inkMuted}
+                thumbColor={
+                  biometricEnabled ? tokens.mintText : tokens.inkMuted
+                }
               />
             }
           />
@@ -714,27 +1096,49 @@ export default function ProfileScreen() {
           <Row
             tokens={tokens}
             icon="key-outline"
-            label={t('profile.pin.title', { defaultValue: 'Transaction PIN' })}
+            label={t("profile.pin.title", { defaultValue: "Transaction PIN" })}
             trailing={
               <Text style={[styles.rowTrailing, { color: tokens.inkMuted }]}>
                 {pinStatusQuery.data?.has_pin
-                  ? t('profile.pin.set', { defaultValue: 'Set' })
-                  : t('profile.pin.not_set', { defaultValue: 'Not set' })}
+                  ? t("profile.pin.set", { defaultValue: "Set" })
+                  : t("profile.pin.not_set", { defaultValue: "Not set" })}
               </Text>
             }
-            onPress={() => router.push(pinStatusQuery.data?.has_pin ? '/pin/change' : '/pin/setup')}
+            onPress={() =>
+              router.push(
+                pinStatusQuery.data?.has_pin ? "/pin/change" : "/pin/setup",
+              )
+            }
           />
         </View>
 
-        <Text style={[styles.section, { color: tokens.inkMuted }]}>{t('profile.sections.appearance')}</Text>
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+        <Text style={[styles.section, { color: tokens.inkMuted }]}>
+          {t("profile.sections.appearance")}
+        </Text>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: tokens.card, borderColor: tokens.border },
+          ]}
+        >
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Ionicons name="sunny-outline" size={18} color={tokens.inkMuted} />
-              <Text style={[styles.rowLabel, { color: tokens.ink }]}>{t('profile.appearance.theme')}</Text>
+              <Ionicons
+                name="sunny-outline"
+                size={18}
+                color={tokens.inkMuted}
+              />
+              <Text style={[styles.rowLabel, { color: tokens.ink }]}>
+                {t("profile.appearance.theme")}
+              </Text>
             </View>
           </View>
-          <View style={[styles.segmented, { backgroundColor: tokens.paper, borderColor: tokens.border }]}>
+          <View
+            style={[
+              styles.segmented,
+              { backgroundColor: tokens.paper, borderColor: tokens.border },
+            ]}
+          >
             {themeOptions.map((opt) => {
               const active = theme === opt.value;
               return (
@@ -746,7 +1150,7 @@ export default function ProfileScreen() {
                   style={({ pressed }) => [
                     styles.segment,
                     {
-                      backgroundColor: active ? tokens.mint : 'transparent',
+                      backgroundColor: active ? tokens.mint : "transparent",
                       opacity: pressed ? 0.85 : 1,
                     },
                   ]}
@@ -756,7 +1160,9 @@ export default function ProfileScreen() {
                       styles.segmentLabel,
                       {
                         color: active ? tokens.mintText : tokens.ink,
-                        fontFamily: active ? 'SpaceGrotesk_700Bold' : 'SpaceGrotesk_500Medium',
+                        fontFamily: active
+                          ? "SpaceGrotesk_700Bold"
+                          : "SpaceGrotesk_500Medium",
                       },
                     ]}
                   >
@@ -771,8 +1177,14 @@ export default function ProfileScreen() {
 
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <Ionicons name="language-outline" size={18} color={tokens.inkMuted} />
-              <Text style={[styles.rowLabel, { color: tokens.ink }]}>{t('profile.appearance.language')}</Text>
+              <Ionicons
+                name="language-outline"
+                size={18}
+                color={tokens.inkMuted}
+              />
+              <Text style={[styles.rowLabel, { color: tokens.ink }]}>
+                {t("profile.appearance.language")}
+              </Text>
             </View>
           </View>
           <View style={[styles.langGrid, { borderColor: tokens.border }]}>
@@ -798,11 +1210,15 @@ export default function ProfileScreen() {
                       styles.langLabel,
                       {
                         color: active ? tokens.mintText : tokens.ink,
-                        fontFamily: active ? 'SpaceGrotesk_700Bold' : 'SpaceGrotesk_500Medium',
+                        fontFamily: active
+                          ? "SpaceGrotesk_700Bold"
+                          : "SpaceGrotesk_500Medium",
                       },
                     ]}
                   >
-                    {t(`profile.appearance.language_${opt.label.toLowerCase()}`)}
+                    {t(
+                      `profile.appearance.language_${opt.label.toLowerCase()}`,
+                    )}
                   </Text>
                 </Pressable>
               );
@@ -810,20 +1226,31 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <Text style={[styles.section, { color: tokens.inkMuted }]}>{t('profile.sections.support')}</Text>
-        <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+        <Text style={[styles.section, { color: tokens.inkMuted }]}>
+          {t("profile.sections.support")}
+        </Text>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: tokens.card, borderColor: tokens.border },
+          ]}
+        >
           <Row
             tokens={tokens}
             icon="help-circle-outline"
-            label={t('profile.support.help')}
+            label={t("profile.support.help")}
             onPress={() => setShowHelp(true)}
           />
           <Divider tokens={tokens} />
           <Row
             tokens={tokens}
             icon="information-circle-outline"
-            label={t('profile.support.about')}
-            trailing={<Text style={[styles.trailingHint, { color: tokens.inkMuted }]}>v{version}</Text>}
+            label={t("profile.support.about")}
+            trailing={
+              <Text style={[styles.trailingHint, { color: tokens.inkMuted }]}>
+                v{version}
+              </Text>
+            }
             onPress={() => setShowAbout(true)}
           />
         </View>
@@ -841,16 +1268,24 @@ export default function ProfileScreen() {
           ]}
         >
           <Ionicons name="log-out-outline" size={18} color={tokens.signal} />
-          <Text style={[styles.signOutText, { color: tokens.signal, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-            {t('profile.sign_out')}
+          <Text
+            style={[
+              styles.signOutText,
+              { color: tokens.signal, fontFamily: "SpaceGrotesk_700Bold" },
+            ]}
+          >
+            {t("profile.sign_out")}
           </Text>
         </Pressable>
 
         {/* ── Footer ───────────────────────────────────────────── */}
         <View style={styles.footer}>
-          <Image source={require('@/assets/images/icon.png')} style={styles.footerIcon} />
+          <Image
+            source={require("@/assets/images/icon.png")}
+            style={styles.footerIcon}
+          />
           <Text style={[styles.footerText, { color: tokens.inkMuted }]}>
-            {t('profile.footer', { version, theme: platformLabel })}
+            {t("profile.footer", { version, theme: platformLabel })}
           </Text>
         </View>
       </ScrollView>
@@ -864,13 +1299,28 @@ export default function ProfileScreen() {
         current={payoutQuery.data ?? null}
         onClose={() => setShowPayout(false)}
         onSaved={() => {
-          void qc.invalidateQueries({ queryKey: ['payout', 'account'] });
+          void qc.invalidateQueries({ queryKey: ["payout", "account"] });
           void useCurrentUserStore.getState().refresh();
         }}
       />
       <HelpModal visible={showHelp} onClose={() => setShowHelp(false)} />
       <AboutModal visible={showAbout} onClose={() => setShowAbout(false)} />
-      <NotificationSettingsModal visible={showNotifications} onClose={() => setShowNotifications(false)} />
+      <NotificationSettingsModal
+        visible={showNotifications}
+        onClose={() => setShowNotifications(false)}
+      />
+
+      {/* Avatar Lightbox */}
+      {meQuery?.avatar_url && (
+        <AvatarLightbox
+          visible={showAvatarLightbox}
+          imageUri={meQuery.avatar_url}
+          onClose={() => setShowAvatarLightbox(false)}
+          onUploadNew={handleAvatarUpload}
+          tokens={tokens}
+          t={t}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -884,7 +1334,7 @@ function Row({
   trailing,
   onPress,
 }: {
-  tokens: (typeof PagePay)['light'] | (typeof PagePay)['dark'];
+  tokens: (typeof PagePay)["light"] | (typeof PagePay)["dark"];
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   trailing?: React.ReactNode;
@@ -911,43 +1361,61 @@ function Row({
 function Divider({
   tokens,
 }: {
-  tokens: (typeof PagePay)['light'] | (typeof PagePay)['dark'];
+  tokens: (typeof PagePay)["light"] | (typeof PagePay)["dark"];
 }) {
   return <View style={[styles.divider, { backgroundColor: tokens.border }]} />;
 }
 
-function ReferralSection({ tokens }: { tokens: (typeof PagePay)['light'] | (typeof PagePay)['dark'] }) {
+function ReferralSection({
+  tokens,
+}: {
+  tokens: (typeof PagePay)["light"] | (typeof PagePay)["dark"];
+}) {
   const statsQ = useReferralStats();
   const generateMutation = useGenerateReferral();
   const [copied, setCopied] = useState(false);
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
-  const handleReferralUpdate = useCallback((stats: any) => {
-    queryClient.setQueryData(['referral', 'stats'], stats);
-  }, [queryClient]);
+  const handleReferralUpdate = useCallback(
+    (stats: any) => {
+      queryClient.setQueryData(["referral", "stats"], stats);
+    },
+    [queryClient],
+  );
 
   // Socket.IO real-time updates
   useEffect(() => {
-    const queryData = queryClient.getQueryData(['me']) as { data: { id: number } } | undefined;
+    const queryData = queryClient.getQueryData(["me"]) as
+      | { data: { id: number } }
+      | undefined;
     const user = queryData?.data;
     if (!user?.id) return;
 
     let cleanup: (() => void) | undefined;
-    import('@/src/lib/socket').then(({ connectSocket, onReferralUpdate, offReferralUpdate }) => {
-      connectSocket(user.id);
-      onReferralUpdate(handleReferralUpdate);
-      cleanup = () => offReferralUpdate(handleReferralUpdate);
-    });
+    import("@/src/lib/socket").then(
+      ({ connectSocket, onReferralUpdate, offReferralUpdate }) => {
+        connectSocket(user.id);
+        onReferralUpdate(handleReferralUpdate);
+        cleanup = () => offReferralUpdate(handleReferralUpdate);
+      },
+    );
 
     return () => {
       if (cleanup) cleanup();
     };
   }, [queryClient, handleReferralUpdate]);
 
-  const stats = statsQ.data as { code: string; signups: number; pending_rewards: number; claimed_rewards: number } | undefined;
-  const code = stats?.code ?? '';
-  const link = code ? `https://pagepay.app/ref/${code}` : '';
+  const stats = statsQ.data as
+    | {
+        code: string;
+        signups: number;
+        pending_rewards: number;
+        claimed_rewards: number;
+      }
+    | undefined;
+  const code = stats?.code ?? "";
+  const link = code ? `https://pagepay.app/ref/${code}` : "";
 
   const handleGenerate = async () => {
     try {
@@ -959,31 +1427,33 @@ function ReferralSection({ tokens }: { tokens: (typeof PagePay)['light'] | (type
 
   const handleShare = async () => {
     if (!link) return;
-    
+
     try {
-      const message = t('profile.referral.share_message', { code, link });
-      
+      const message = t("profile.referral.share_message", { code, link });
+
       const result = await Share.share({
         message,
         url: link, // iOS uses this
-        title: t('profile.referral.share_title'),
+        title: t("profile.referral.share_title"),
       });
 
       if (result.action === Share.sharedAction) {
         // User shared successfully
-        if (Platform.OS === 'ios') {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (Platform.OS === "ios") {
+          await Haptics.notificationAsync(
+            Haptics.NotificationFeedbackType.Success,
+          );
         }
       }
     } catch (error) {
       // Fallback to Alert if share fails
-      Alert.alert(t('profile.referral.share_title'), link);
+      Alert.alert(t("profile.referral.share_title"), link);
     }
   };
 
   const handleCopy = async () => {
     if (!link) return;
-    
+
     try {
       await Clipboard.setStringAsync(link);
       setCopied(true);
@@ -996,20 +1466,40 @@ function ReferralSection({ tokens }: { tokens: (typeof PagePay)['light'] | (type
   };
 
   return (
-    <View style={[styles.referralCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+    <View
+      style={[
+        styles.referralCard,
+        { backgroundColor: tokens.card, borderColor: tokens.border },
+      ]}
+    >
       <View style={styles.referralHeader}>
         <Ionicons name="gift-outline" size={20} color={tokens.mint} />
-        <Text style={[styles.referralTitle, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-          {t('profile.referral.title')}
+        <Text
+          style={[
+            styles.referralTitle,
+            { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+          ]}
+        >
+          {t("profile.referral.title")}
         </Text>
       </View>
       <Text style={[styles.referralSubtitle, { color: tokens.inkMuted }]}>
-        {t('profile.referral.subtitle')}
+        {t("profile.referral.subtitle")}
       </Text>
 
       {code ? (
-        <View style={[styles.codeBox, { backgroundColor: tokens.paper, borderColor: tokens.border }]}>
-          <Text style={[styles.codeText, { color: tokens.mint, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+        <View
+          style={[
+            styles.codeBox,
+            { backgroundColor: tokens.paper, borderColor: tokens.border },
+          ]}
+        >
+          <Text
+            style={[
+              styles.codeText,
+              { color: tokens.mint, fontFamily: "SpaceGrotesk_700Bold" },
+            ]}
+          >
             {code}
           </Text>
         </View>
@@ -1021,21 +1511,29 @@ function ReferralSection({ tokens }: { tokens: (typeof PagePay)['light'] | (type
           activeOpacity={0.7}
         >
           <Text style={[styles.generateText, { color: tokens.mintText }]}>
-            {generateMutation.isPending ? t('profile.referral.generating') : t('profile.referral.generate')}
+            {generateMutation.isPending
+              ? t("profile.referral.generating")
+              : t("profile.referral.generate")}
           </Text>
         </TouchableOpacity>
       )}
 
       {code && (
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
           <TouchableOpacity
             onPress={handleCopy}
             style={[styles.actionBtn, { borderColor: tokens.border }]}
             activeOpacity={0.7}
           >
-            <Ionicons name={copied ? 'checkmark-outline' : 'copy-outline'} size={16} color={tokens.mint} />
+            <Ionicons
+              name={copied ? "checkmark-outline" : "copy-outline"}
+              size={16}
+              color={tokens.mint}
+            />
             <Text style={[styles.actionText, { color: tokens.mint }]}>
-              {copied ? t('profile.referral.copied') : t('profile.referral.copy')}
+              {copied
+                ? t("profile.referral.copied")
+                : t("profile.referral.copy")}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -1043,8 +1541,14 @@ function ReferralSection({ tokens }: { tokens: (typeof PagePay)['light'] | (type
             style={[styles.actionBtn, { borderColor: tokens.border }]}
             activeOpacity={0.7}
           >
-            <Ionicons name="share-social-outline" size={16} color={tokens.mint} />
-            <Text style={[styles.actionText, { color: tokens.mint }]}>{t('profile.referral.share')}</Text>
+            <Ionicons
+              name="share-social-outline"
+              size={16}
+              color={tokens.mint}
+            />
+            <Text style={[styles.actionText, { color: tokens.mint }]}>
+              {t("profile.referral.share")}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1052,16 +1556,28 @@ function ReferralSection({ tokens }: { tokens: (typeof PagePay)['light'] | (type
       {stats && (
         <View style={[styles.statsRow, { borderTopColor: tokens.border }]}>
           <View style={styles.stat}>
-            <Text style={[styles.statValue, { color: tokens.ink }]}>{stats.signups}</Text>
-            <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>{t('profile.referral.stats_signups')}</Text>
+            <Text style={[styles.statValue, { color: tokens.ink }]}>
+              {stats.signups}
+            </Text>
+            <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>
+              {t("profile.referral.stats_signups")}
+            </Text>
           </View>
           <View style={styles.stat}>
-            <Text style={[styles.statValue, { color: tokens.ink }]}>{stats.pending_rewards}</Text>
-            <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>{t('profile.referral.stats_pending')}</Text>
+            <Text style={[styles.statValue, { color: tokens.ink }]}>
+              {stats.pending_rewards}
+            </Text>
+            <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>
+              {t("profile.referral.stats_pending")}
+            </Text>
           </View>
           <View style={styles.stat}>
-            <Text style={[styles.statValue, { color: tokens.mint }]}>{stats.claimed_rewards}</Text>
-            <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>{t('profile.referral.stats_claimed')}</Text>
+            <Text style={[styles.statValue, { color: tokens.mint }]}>
+              {stats.claimed_rewards}
+            </Text>
+            <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>
+              {t("profile.referral.stats_claimed")}
+            </Text>
           </View>
         </View>
       )}
@@ -1084,9 +1600,9 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   headerIcon: {
     width: 28,
@@ -1098,11 +1614,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     letterSpacing: -0.2,
     flex: 1,
-    textAlign: 'center',
+    textAlign: "center",
   },
   profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 12,
     marginBottom: 12,
     gap: 16,
@@ -1112,16 +1628,16 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   avatarTouch: {
-    position: 'relative',
+    position: "relative",
   },
   avatarImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     borderRadius: 36,
   },
   avatarText: {
@@ -1129,16 +1645,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   avatarCameraBadge: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     right: 0,
     width: 24,
     height: 24,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: "transparent",
   },
   headerInfo: {
     flex: 1,
@@ -1152,19 +1668,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   tierRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginTop: 2,
   },
   tier: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: 0.4,
   },
   premiumBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 3,
     paddingVertical: 3,
     paddingHorizontal: 7,
@@ -1172,21 +1688,21 @@ const styles = StyleSheet.create({
   },
   premiumLabel: {
     fontSize: 9,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0.5,
   },
   // Section header
   section: {
     fontSize: 11,
     letterSpacing: 1.0,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 6,
     marginLeft: 4,
   },
   // Role cards
   roleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1196,8 +1712,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   roleInfo: {
     flex: 1,
@@ -1217,16 +1733,16 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   payoutInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   payoutIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   payoutInfo: {
     flex: 1,
@@ -1236,13 +1752,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   verifyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   verifyText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   accountName: {
     fontSize: 12,
@@ -1253,40 +1769,40 @@ const styles = StyleSheet.create({
   },
   change: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   // Generic card + row
   card: {
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 14,
     paddingHorizontal: 16,
     minHeight: 52,
   },
   rowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     flex: 1,
   },
   rowLabel: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   rowTrailing: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   trailingHint: {
     fontSize: 13,
@@ -1297,7 +1813,7 @@ const styles = StyleSheet.create({
   },
   // Theme segmented
   segmented: {
-    flexDirection: 'row',
+    flexDirection: "row",
     margin: 12,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1309,16 +1825,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 6,
     borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   segmentLabel: {
     fontSize: 12,
   },
   // Language grid
   langGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     padding: 12,
   },
@@ -1333,9 +1849,9 @@ const styles = StyleSheet.create({
   },
   // Sign out
   signOut: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     paddingVertical: 14,
     borderRadius: 14,
@@ -1346,7 +1862,7 @@ const styles = StyleSheet.create({
   },
   // Footer
   footer: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingTop: 18,
     gap: 6,
   },
@@ -1367,8 +1883,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   referralHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   referralTitle: {
@@ -1382,7 +1898,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 12,
-    alignItems: 'center',
+    alignItems: "center",
   },
   codeText: {
     fontSize: 20,
@@ -1391,17 +1907,17 @@ const styles = StyleSheet.create({
   generateBtn: {
     paddingVertical: 12,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
   },
   generateText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   actionBtn: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     paddingVertical: 10,
     borderRadius: 12,
@@ -1409,22 +1925,22 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
     paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     marginTop: 4,
   },
   stat: {
-    alignItems: 'center',
+    alignItems: "center",
     gap: 2,
   },
   statValue: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   statLabel: {
     fontSize: 11,
@@ -1432,13 +1948,13 @@ const styles = StyleSheet.create({
   // Username
   sectionTitle: {
     fontSize: 13,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.4,
     marginBottom: 6,
   },
   rowCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     padding: 14,
     borderRadius: 14,
@@ -1452,27 +1968,247 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   primaryBtnText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   secondaryBtn: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,
   },
   secondaryBtnText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   helper: {
     fontSize: 12,
     lineHeight: 16,
+  },
+});
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+type AvatarLightboxProps = {
+  visible: boolean;
+  imageUri: string;
+  onClose: () => void;
+  onUploadNew: () => void;
+  tokens: (typeof PagePay)["light"];
+  t: ReturnType<typeof useTranslation>["t"];
+};
+
+function AvatarLightbox({
+  visible,
+  imageUri,
+  onClose,
+  onUploadNew,
+  tokens,
+  t,
+}: AvatarLightboxProps) {
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = savedScale.value * e.scale;
+    })
+    .onEnd(() => {
+      if (scale.value < 1) {
+        scale.value = withSpring(1);
+        savedScale.value = 1;
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else if (scale.value > 4) {
+        scale.value = withSpring(4);
+        savedScale.value = 4;
+      } else {
+        savedScale.value = scale.value;
+      }
+    });
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      translateX.value = savedTranslateX.value + e.translationX;
+      translateY.value = savedTranslateY.value + e.translationY;
+    })
+    .onEnd(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    });
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      if (scale.value > 1) {
+        scale.value = withSpring(1);
+        savedScale.value = 1;
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else {
+        scale.value = withSpring(2);
+        savedScale.value = 2;
+      }
+    });
+
+  const composed = Gesture.Simultaneous(
+    doubleTapGesture,
+    Gesture.Simultaneous(pinchGesture, panGesture),
+  );
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  const handleClose = () => {
+    scale.value = 1;
+    savedScale.value = 1;
+    translateX.value = 0;
+    translateY.value = 0;
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+    onClose();
+  };
+
+  const handleUploadNew = () => {
+    handleClose();
+    onUploadNew();
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={handleClose}
+      statusBarTranslucent
+    >
+      <View style={avatarLightboxStyles.container}>
+        {/* Header with buttons */}
+        <View style={avatarLightboxStyles.header}>
+          <TouchableOpacity
+            style={[
+              avatarLightboxStyles.headerButton,
+              { backgroundColor: "rgba(0, 0, 0, 0.6)" },
+            ]}
+            onPress={handleClose}
+          >
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              avatarLightboxStyles.headerButton,
+              { backgroundColor: tokens.mint },
+            ]}
+            onPress={handleUploadNew}
+          >
+            <Ionicons name="camera" size={20} color={tokens.mintText} />
+            <Text
+              style={[
+                avatarLightboxStyles.uploadText,
+                { color: tokens.mintText },
+              ]}
+            >
+              {t("profile.change_photo", { defaultValue: "Change Photo" })}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <GestureDetector gesture={composed}>
+          <Animated.View
+            style={[avatarLightboxStyles.imageContainer, animatedStyle]}
+          >
+            <Image
+              source={{ uri: imageUri }}
+              style={avatarLightboxStyles.image}
+              resizeMode="contain"
+            />
+          </Animated.View>
+        </GestureDetector>
+
+        <View style={avatarLightboxStyles.instructions}>
+          <Text style={avatarLightboxStyles.instructionsText}>
+            {t("profile.lightbox_instructions", {
+              defaultValue: "Pinch to zoom • Double tap to reset",
+            })}
+          </Text>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const avatarLightboxStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.95)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  header: {
+    position: "absolute",
+    top: 50,
+    left: 20,
+    right: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  headerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 22,
+  },
+  uploadText: {
+    fontSize: 14,
+    fontWeight: "600",
+    fontFamily: "SpaceGrotesk_600SemiBold",
+  },
+  imageContainer: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  image: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.8,
+  },
+  instructions: {
+    position: "absolute",
+    bottom: 50,
+    alignSelf: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  instructionsText: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: "SpaceGrotesk_400Regular",
   },
 });

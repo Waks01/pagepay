@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet,
+  Alert, ActivityIndicator, StyleSheet, RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,7 @@ import {
   SegmentedControl,
   ConfirmModal,
   ErrorBanner,
+  BuyScreenSkeleton,
 } from '@/src/components/bills';
 
 type ExamProduct = {
@@ -103,14 +104,38 @@ export default function BuyEducationScreen() {
     setShowConfirmModal(true);
   };
 
+  // Pull-to-refresh: refetch the exams catalog.
+  const onRefresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['education-prices'] });
+  }, [qc]);
+
   const quantityOptions = QUANTITY_OPTIONS.map(q => ({
     value: q,
     label: String(q),
   }));
 
+  // Initial-load gate: the form needs the exams catalog before the
+  // exam-type picker is usable.
+  if (examsQ.isLoading) {
+    return (
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        <BuyScreenSkeleton sections={3} />
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, gap: 16 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={examsQ.isFetching}
+            onRefresh={onRefresh}
+            tintColor={tokens.mint}
+          />
+        }
+      >
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity onPress={() => router.back()}>

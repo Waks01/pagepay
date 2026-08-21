@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet,
+  Alert, ActivityIndicator, StyleSheet, RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,7 @@ import {
   ConfirmModal,
   EarnBadge,
   ErrorBanner,
+  BuyScreenSkeleton,
 } from '@/src/components/bills';
 
 type Biller = {
@@ -158,9 +159,34 @@ export default function BuyBettingScreen() {
     setShowConfirmModal(true);
   };
 
+  // Initial-load gate: the form needs the billers catalog before the
+  // platform/account sections are usable. productsQ only fetches once a
+  // biller is selected, so it isn't part of the first-paint gate.
+  if (billersQ.isLoading) {
+    return (
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        <BuyScreenSkeleton sections={3} />
+      </View>
+    );
+  }
+
+  // Pull-to-refresh: refetch the billers catalog.
+  const onRefresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['betting-billers'] });
+  }, [qc]);
+
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, gap: 16 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={billersQ.isFetching}
+            onRefresh={onRefresh}
+            tintColor={tokens.mint}
+          />
+        }
+      >
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity onPress={() => router.back()}>

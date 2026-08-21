@@ -1,7 +1,15 @@
-import { Pressable, StyleSheet, Text, View, StyleProp, ViewStyle } from 'react-native';
+import React from "react";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  StyleProp,
+  ViewStyle,
+} from "react-native";
 
-import { PagePay } from '@/constants/theme';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
 type CategoryChipProps = {
   label: string;
@@ -23,7 +31,7 @@ type CategoryChipProps = {
  * Tapping fires `onPress`. The press scale lives on the outer Pressable so the
  * label and pill both compress together.
  */
-export function CategoryChip({
+export const CategoryChip = React.memo(function CategoryChip({
   label,
   selected = false,
   onPress,
@@ -57,7 +65,7 @@ export function CategoryChip({
           compact ? styles.labelCompact : null,
           {
             color: selected ? tokens.mintText : tokens.ink,
-            fontFamily: 'SpaceGrotesk_500Medium',
+            fontFamily: "SpaceGrotesk_500Medium",
           },
         ]}
       >
@@ -65,7 +73,7 @@ export function CategoryChip({
       </Text>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   base: {
@@ -73,8 +81,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   compact: {
     paddingHorizontal: 12,
@@ -92,6 +100,8 @@ const styles = StyleSheet.create({
 });
 
 // re-exported for screens that compose the chip into a horizontal scroller
-export const CategoryChipRow = ({ children }: { children: React.ReactNode }) => (
-  <View style={{ flexDirection: 'row', gap: 8 }}>{children}</View>
-);
+export const CategoryChipRow = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => <View style={{ flexDirection: "row", gap: 8 }}>{children}</View>;

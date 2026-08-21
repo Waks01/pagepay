@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet,
+  Alert, ActivityIndicator, StyleSheet, RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ import {
   ConfirmModal,
   EarnBadge,
   ErrorBanner,
+  BuyScreenSkeleton,
 } from '@/src/components/bills';
 
 type Bouquet = {
@@ -184,9 +185,34 @@ export default function BuyTvScreen() {
     label: p.cable_name.toUpperCase(),
   }));
 
+  // Initial-load gate: the form needs the TV provider catalog before the
+  // provider picker is usable. bouquetsQ only fetches once a provider is
+  // selected, so it isn't part of the first-paint gate.
+  if (providersQ.isLoading) {
+    return (
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        <BuyScreenSkeleton sections={3} />
+      </View>
+    );
+  }
+
+  // Pull-to-refresh: refetch the TV providers catalog.
+  const onRefresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['tv-providers'] });
+  }, [qc]);
+
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, gap: 16 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={providersQ.isFetching}
+            onRefresh={onRefresh}
+            tintColor={tokens.mint}
+          />
+        }
+      >
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity onPress={() => router.back()}>

@@ -17,7 +17,7 @@ export default function NotificationBell({ onPress }: Props) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const isNotificationsScreen = pathname.includes("/(tabs)/notifications");
+  const isNotificationsScreen = pathname.includes("/notification");
 
   const { data: notifData, refetch } = useQuery({
     queryKey: ["notifications-unread-count"],
@@ -38,7 +38,7 @@ export default function NotificationBell({ onPress }: Props) {
     } else if (isNotificationsScreen) {
       router.back();
     } else {
-      router.push("/notifications");
+      router.push("/notification");
     }
   }, [onPress, isNotificationsScreen, router]);
 

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet,
+  StyleSheet, RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,7 @@ import {
   NetworkPicker,
   ConfirmModal,
   EarnBadge,
+  BuyScreenSkeleton,
 } from '@/src/components/bills';
 import { PagePaySpinner } from '@/components/PagePaySpinner';
 import { Skeleton } from '@/components/Skeleton';
@@ -271,6 +272,27 @@ export default function BuyAirtimeScreen() {
     setSaveAsBeneficiary(false);
   };
 
+  // Pull-to-refresh: invalidate the catalog queries so TanStack Query
+  // refetches networks and beneficiaries. The RefreshControl's
+  // `refreshing` flag is bound to networksQ.isFetching so the spinner
+  // stays in sync without local state.
+  const onRefresh = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['airtime-networks'] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiaries'] });
+  }, []);
+
+  // Initial-load gate: the form needs both the network catalog and the
+  // saved beneficiaries before the recipient/network sections are usable.
+  // Show a skeleton placeholder so the user gets immediate visual feedback
+  // instead of an empty form while the queries are in flight.
+  if (networksQ.isLoading || beneficiariesQ.isLoading) {
+    return (
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        <BuyScreenSkeleton sections={3} />
+      </View>
+    );
+  }
+
   if (purchaseState === 'success' && successData) {
     return (
       <View style={[styles.fullscreen, { paddingTop: insets.top, backgroundColor: tokens.paper }]}>
@@ -379,7 +401,16 @@ export default function BuyAirtimeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, gap: 16 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={networksQ.isFetching || beneficiariesQ.isFetching}
+            onRefresh={onRefresh}
+            tintColor={tokens.mint}
+          />
+        }
+      >
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity onPress={() => router.back()}>

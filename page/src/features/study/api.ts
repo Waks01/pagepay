@@ -1,5 +1,4 @@
-import { apiFetch } from '@/src/shared/api/client';
-import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
+import { apiFetch } from "@/src/shared/api/client";
 
 export type MaterialSummary = {
   id: number;
@@ -34,19 +33,19 @@ export type SowUploadResponse = {
 
 export type GenerateAssetRequest = {
   material_id: number;
-  asset_type: 'mcq' | 'flashcard' | 'essay' | 'diagram' | 'video' | 'example';
+  asset_type: "mcq" | "flashcard" | "essay" | "diagram" | "video" | "example";
   count?: number;
   topic?: string | null;
-  mode?: 'topic' | 'all';
-  difficulty?: 'easy' | 'medium' | 'hard';
-  education_level?: 'primary' | 'secondary' | 'tertiary' | 'research';
+  mode?: "topic" | "all";
+  difficulty?: "easy" | "medium" | "hard";
+  education_level?: "primary" | "secondary" | "tertiary" | "research";
 };
 
 export type ExampleGenerateRequest = {
   material_id: number;
   topic?: string | null;
-  mode?: 'topic' | 'all';
-  education_level?: 'primary' | 'secondary' | 'tertiary' | 'research';
+  mode?: "topic" | "all";
+  education_level?: "primary" | "secondary" | "tertiary" | "research";
   subject_hints?: string;
 };
 
@@ -77,7 +76,7 @@ export type ChatRequest = {
 
 export type UnlockRequest = {
   asset_id: number;
-  method: 'points' | 'ad';
+  method: "points" | "ad";
 };
 
 export type UnlockResponse = {
@@ -88,123 +87,150 @@ export type UnlockResponse = {
   points_spent: number;
 };
 
-export async function uploadSowText(text: string, exam_type?: string | null): Promise<SowUploadResponse> {
-  const res = await apiFetch('/api/v1/study/sow/upload', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+export async function uploadSowText(
+  text: string,
+  exam_type?: string | null,
+): Promise<SowUploadResponse> {
+  const res = await apiFetch("/api/v1/study/sow/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, exam_type }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || 'Upload failed');
+    throw new Error(err.detail || "Upload failed");
   }
   return res.json();
 }
 
-export async function uploadSowImage(file: { uri: string; name: string; type: string }, exam_type?: string | null): Promise<SowUploadResponse> {
-  const form = new FormData();
-  form.append('file', await toFormDataFile(file, 'image'));
-  if (exam_type) {
-    form.append('exam_type', exam_type);
-  }
+export async function uploadSowImage(
+  file: { uri: string; name: string; type: string },
+  exam_type?: string | null,
+): Promise<SowUploadResponse> {
+  try {
+    const form = new FormData();
+    form.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type || "image/jpeg",
+    } as any);
+    if (exam_type) {
+      form.append("exam_type", exam_type);
+    }
 
-  const res = await apiFetch('/api/v1/study/sow/upload-image', {
-    method: 'POST',
-    body: form,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || 'Image upload failed');
+    const res = await apiFetch("/api/v1/study/sow/upload-image", {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Image upload failed");
+    }
+    return res.json();
+  } catch (err) {
+    if (err instanceof Error) throw err;
+    throw new Error("Image upload failed");
   }
-  return res.json();
 }
 
-export async function uploadSowDocument(file: { uri: string; name: string; type: string }, exam_type?: string | null): Promise<SowUploadResponse> {
-  const form = new FormData();
-  form.append('file', await toFormDataFile(file, 'application/pdf'));
-  if (exam_type) {
-    form.append('exam_type', exam_type);
-  }
+export async function uploadSowDocument(
+  file: { uri: string; name: string; type: string },
+  exam_type?: string | null,
+): Promise<SowUploadResponse> {
+  try {
+    const form = new FormData();
+    form.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type || "application/pdf",
+    } as any);
+    if (exam_type) {
+      form.append("exam_type", exam_type);
+    }
 
-  const res = await apiFetch('/api/v1/study/sow/upload-document', {
-    method: 'POST',
-    body: form,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || 'Document upload failed');
+    const res = await apiFetch("/api/v1/study/sow/upload-document", {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Document upload failed");
+    }
+    return res.json();
+  } catch (err) {
+    if (err instanceof Error) throw err;
+    throw new Error("Document upload failed");
   }
-  return res.json();
-}
-
-async function toFormDataFile(file: { uri: string; name: string; type: string }, fallbackType: string): Promise<string> {
-  const base64 = await readAsStringAsync(file.uri, {
-    encoding: EncodingType.Base64,
-  });
-  const mimeType = file.type || fallbackType;
-  return `data:${mimeType};base64,${base64}`;
 }
 
 export async function fetchMaterials(): Promise<MaterialSummary[]> {
-  const res = await apiFetch('/api/v1/study/materials');
-  if (!res.ok) throw new Error('Failed to load materials');
+  const res = await apiFetch("/api/v1/study/materials");
+  if (!res.ok) throw new Error("Failed to load materials");
   return res.json();
 }
 
 export async function fetchMaterial(id: number): Promise<MaterialDetail> {
   const res = await apiFetch(`/api/v1/study/materials/${id}`);
-  if (!res.ok) throw new Error('Failed to load material');
+  if (!res.ok) throw new Error("Failed to load material");
   return res.json();
 }
 
-export async function generateAsset(payload: GenerateAssetRequest): Promise<GenerateAssetResponse> {
-  const res = await apiFetch('/api/v1/study/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+export async function generateAsset(
+  payload: GenerateAssetRequest,
+): Promise<GenerateAssetResponse> {
+  const res = await apiFetch("/api/v1/study/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || 'Generation failed');
+    throw new Error(err.detail || "Generation failed");
   }
   return res.json();
 }
 
-export async function unlockAsset(payload: UnlockRequest): Promise<UnlockResponse> {
-  const res = await apiFetch('/api/v1/study/unlock', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+export async function unlockAsset(
+  payload: UnlockRequest,
+): Promise<UnlockResponse> {
+  const res = await apiFetch("/api/v1/study/unlock", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || 'Unlock failed');
+    throw new Error(err.detail || "Unlock failed");
   }
   return res.json();
 }
 
-export async function generateExample(payload: ExampleGenerateRequest): Promise<GenerateAssetResponse> {
-  const res = await apiFetch('/api/v1/study/examples/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+export async function generateExample(
+  payload: ExampleGenerateRequest,
+): Promise<GenerateAssetResponse> {
+  const res = await apiFetch("/api/v1/study/examples/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || 'Example generation failed');
+    throw new Error(err.detail || "Example generation failed");
   }
   return res.json();
 }
 
-export async function checkExampleAnswer(payload: ExampleCheckRequest): Promise<ExampleCheckResponse> {
-  const res = await apiFetch('/api/v1/study/examples/check', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+export async function checkExampleAnswer(
+  payload: ExampleCheckRequest,
+): Promise<ExampleCheckResponse> {
+  const res = await apiFetch("/api/v1/study/examples/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || 'Answer check failed');
+    throw new Error(err.detail || "Answer check failed");
   }
   return res.json();
 }
@@ -223,7 +249,7 @@ export type QuizCompleteResponse = {
 
 export type AiRouteRequest = {
   prompt: string;
-  task_type?: 'heavy' | 'fast' | 'chat';
+  task_type?: "heavy" | "fast" | "chat";
   max_tokens?: number;
 };
 
@@ -233,41 +259,45 @@ export type AiRouteResponse = {
   model: string;
 };
 
-export async function claimQuizBonus(payload: QuizCompleteRequest): Promise<QuizCompleteResponse> {
-  const res = await apiFetch('/api/v1/study/quiz/complete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+export async function claimQuizBonus(
+  payload: QuizCompleteRequest,
+): Promise<QuizCompleteResponse> {
+  const res = await apiFetch("/api/v1/study/quiz/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || 'Bonus claim failed');
+    throw new Error(err.detail || "Bonus claim failed");
   }
   return res.json();
 }
 
-export async function routeAi(payload: AiRouteRequest): Promise<AiRouteResponse> {
-  const res = await apiFetch('/api/v1/ai/route', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+export async function routeAi(
+  payload: AiRouteRequest,
+): Promise<AiRouteResponse> {
+  const res = await apiFetch("/api/v1/ai/route", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || 'AI route failed');
+    throw new Error(err.detail || "AI route failed");
   }
   return res.json();
 }
 
 export async function sendChatMessage(payload: ChatRequest): Promise<string> {
-  const res = await apiFetch('/api/v1/study/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const res = await apiFetch("/api/v1/study/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || 'Chat failed');
+    throw new Error(err.detail || "Chat failed");
   }
   return res.text();
 }

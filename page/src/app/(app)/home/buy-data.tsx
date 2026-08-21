@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet,
+  StyleSheet, RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,7 @@ import {
   ConfirmModal,
   EarnBadge,
   PlanGrid,
+  BuyScreenSkeleton,
 } from '@/src/components/bills';
 import { PagePaySpinner } from '@/components/PagePaySpinner';
 import { Skeleton } from '@/components/Skeleton';
@@ -60,6 +61,7 @@ export default function BuyDataScreen() {
   const [purchaseState, setPurchaseState] = useState<PurchaseState>('idle');
   const [successData, setSuccessData] = useState<PurchaseResult | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [authError, setAuthError] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const networksQ = useQuery({
@@ -85,15 +87,18 @@ export default function BuyDataScreen() {
       if (!selectedNetworkId) return [];
       const res = await apiFetch(`/api/v1/bills/data/plans?network=${encodeURIComponent(selectedNetworkId)}`);
       if (!res.ok) throw new Error(t('bills.data.load_error'));
-      const data = (await res.json()) as DataPlan[];
-      const types = Array.from(new Set(data.map(p => p.plantype).filter(Boolean)));
-      if (types.length > 0 && !activePlantype) {
-        setActivePlantype(types[0]);
-      }
-      return data;
+      return (await res.json()) as DataPlan[];
     },
     enabled: !!selectedNetworkId,
   });
+
+  useEffect(() => {
+    if (!plansQ.data || plansQ.data.length === 0 || activePlantype) return;
+    const types = Array.from(new Set(plansQ.data.map(p => p.plantype).filter(Boolean)));
+    if (types.length > 0) {
+      setActivePlantype(types[0]);
+    }
+  }, [plansQ.data, activePlantype]);
 
   const selectedPkg = useMemo(
     () => plansQ.data?.find(p => p.plan_code === selectedPlan),
@@ -132,6 +137,7 @@ export default function BuyDataScreen() {
     },
     onError: (error: Error) => {
       setErrorMessage(error.message);
+      setAuthError(error.message.includes('Unauthorized'));
       setPurchaseState('failed');
     },
   });
@@ -148,6 +154,10 @@ export default function BuyDataScreen() {
   };
 
   const handleRetry = () => {
+    if (authError) {
+      router.replace('/(auth)/');
+      return;
+    }
     setPurchaseState('idle');
     setErrorMessage('');
   };
@@ -164,6 +174,17 @@ export default function BuyDataScreen() {
   const estPoints = selectedPkg
     ? Math.floor((selectedPkg.amount || 0) * 0.018 * 0.67 * 10)
     : 0;
+
+  // Initial-load gate: the form needs the network catalog before the
+  // network picker is usable. plansQ only fetches once a network is selected,
+  // so it isn't part of the first-paint gate.
+  if (networksQ.isLoading) {
+    return (
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        <BuyScreenSkeleton sections={3} />
+      </View>
+    );
+  }
 
   const renderContent = () => {
     switch (purchaseState) {
@@ -256,7 +277,16 @@ export default function BuyDataScreen() {
     const networkOptions = networkList.map(n => ({ id: n.identifier, name: n.name }));
 
     return (
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, gap: 16 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={networksQ.isFetching}
+            onRefresh={() => qc.invalidateQueries({ queryKey: ['data-networks'] })}
+            tintColor={tokens.mint}
+          />
+        }
+      >
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity onPress={() => router.back()}>

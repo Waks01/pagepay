@@ -5,6 +5,7 @@ export const TAB_ORDER = [
   { name: 'wallet', label: 'Wallet', icon: 'wallet', iconOutline: 'wallet-outline' },
   { name: 'profile', label: 'Profile', icon: 'person', iconOutline: 'person-outline' },
   { name: 'premium', label: 'Premium', icon: 'diamond', iconOutline: 'diamond-outline' },
+  { name: 'notification', label: 'Alerts', icon: 'notifications', iconOutline: 'notifications-outline' },
 ] as const;
 
 export const VISIBLE_TABS = 4;

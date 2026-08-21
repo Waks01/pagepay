@@ -132,7 +132,7 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
       await bootstrapCurrentUser();
 
       await registerFCMToken();
-      router.replace('/');
+      router.replace('/home');
     } catch {
       setFormError(t('auth.login.errors.connection_error'));
       setErrorTrigger(true);

@@ -24,6 +24,7 @@ import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { SkeletonPage } from "@/components/skeletons";
 import NotificationBell from "@/components/NotificationBell";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { UserAvatar } from "@/components/UserAvatar";
 
 type Tier = {
   tier: string;
@@ -79,10 +80,7 @@ export default function PremiumScreen() {
           ]}
         >
           <View style={styles.headerRow}>
-            <Image
-              source={require("@/assets/images/icon.png")}
-              style={styles.headerIcon}
-            />
+            <UserAvatar size={28} />
             <Text
               style={[
                 styles.headerTitle,
@@ -120,10 +118,7 @@ export default function PremiumScreen() {
           ]}
         >
           <View style={styles.headerRow}>
-            <Image
-              source={require("@/assets/images/icon.png")}
-              style={styles.headerIcon}
-            />
+            <UserAvatar size={28} />
             <Text
               style={[
                 styles.headerTitle,
@@ -214,7 +209,9 @@ function PremiumBody({
 }) {
   const qc = useQueryClient();
   const { initializePayment, isLoading: paystackLoading } = usePaystack();
-  const [paymentResult, setPaymentResult] = useState<'success' | 'cancelled' | 'error' | null>(null);
+  const [paymentResult, setPaymentResult] = useState<
+    "success" | "cancelled" | "error" | null
+  >(null);
 
   const pollSubscriptionStatus = async (reference: string) => {
     console.log(
@@ -325,37 +322,45 @@ function PremiumBody({
           reference: data.provider_tx_ref,
           onSuccess: (tx) => {
             console.log("✅ [PREMIUM] Payment successful in-app:", tx);
-            setPaymentResult('success');
+            setPaymentResult("success");
           },
           onCancel: () => {
             console.log("❌ [PREMIUM] Payment cancelled by user");
-            setPaymentResult('cancelled');
+            setPaymentResult("cancelled");
           },
           onError: (err) => {
             console.error("❌ [PREMIUM] Payment error:", err);
-            setPaymentResult('error');
+            setPaymentResult("error");
           },
         });
 
         console.log("👤 [PREMIUM] In-app payment closed");
 
-        if (paymentResult === 'success') {
+        if (paymentResult === "success") {
           console.log("🔍 [PREMIUM] Payment succeeded - checking status...");
           await pollSubscriptionStatus(data.provider_tx_ref);
-        } else if (paymentResult === 'cancelled') {
+        } else if (paymentResult === "cancelled") {
           console.log("⚠️ [PREMIUM] Payment cancelled, skipping verification");
           Alert.alert(
             t("premium.payment_cancelled_title", "Payment Cancelled"),
-            t("premium.payment_cancelled_body", "You cancelled the payment. Your subscription will not be activated until payment is completed."),
+            t(
+              "premium.payment_cancelled_body",
+              "You cancelled the payment. Your subscription will not be activated until payment is completed.",
+            ),
           );
-        } else if (paymentResult === 'error') {
+        } else if (paymentResult === "error") {
           console.log("⚠️ [PREMIUM] Payment error, skipping verification");
           Alert.alert(
             t("premium.payment_error_title", "Payment Failed"),
-            t("premium.payment_error_body", "Something went wrong during payment. Please try again."),
+            t(
+              "premium.payment_error_body",
+              "Something went wrong during payment. Please try again.",
+            ),
           );
         } else {
-          console.log("⚠️ [PREMIUM] Unknown payment state, skipping verification");
+          console.log(
+            "⚠️ [PREMIUM] Unknown payment state, skipping verification",
+          );
         }
       }
     } catch (e) {
@@ -378,10 +383,7 @@ function PremiumBody({
         ]}
       >
         <View style={styles.headerRow}>
-          <Image
-            source={require("@/assets/images/icon.png")}
-            style={styles.headerIcon}
-          />
+          <UserAvatar size={28} />
           <Text
             style={[
               styles.headerTitle,

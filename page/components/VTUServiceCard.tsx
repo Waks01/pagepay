@@ -1,7 +1,8 @@
-import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { PagePay } from '@/constants/theme';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import React from "react";
+import { TouchableOpacity, Text, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
 type VTUServiceCardProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -11,17 +12,22 @@ type VTUServiceCardProps = {
 };
 
 const ICON_BG: Record<string, string> = {
-  'phone-portrait-outline': '#dbeafe',
-  'wifi-outline': '#dcfce7',
-  'flash-outline': '#fef3c7',
-  'tv-outline': '#fce7f3',
-  'card-outline': '#e0e7ff',
-  'logo-bitcoin': '#f3e8ff',
-  'school-outline': '#ffedd5',
-  'send-outline': '#ffe4e6',
+  "phone-portrait-outline": "#dbeafe",
+  "wifi-outline": "#dcfce7",
+  "flash-outline": "#fef3c7",
+  "tv-outline": "#fce7f3",
+  "card-outline": "#e0e7ff",
+  "logo-bitcoin": "#f3e8ff",
+  "school-outline": "#ffedd5",
+  "send-outline": "#ffe4e6",
 };
 
-export function VTUServiceCard({ icon, label, earn, onPress }: VTUServiceCardProps) {
+export const VTUServiceCard = React.memo(function VTUServiceCard({
+  icon,
+  label,
+  earn,
+  onPress,
+}: VTUServiceCardProps) {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
 
@@ -37,7 +43,7 @@ export function VTUServiceCard({ icon, label, earn, onPress }: VTUServiceCardPro
       <View
         style={[
           styles.iconWrap,
-          { backgroundColor: ICON_BG[icon] || '#f3f4f6' },
+          { backgroundColor: ICON_BG[icon] || "#f3f4f6" },
         ]}
       >
         <Ionicons name={icon} size={24} color={tokens.mint} />
@@ -46,11 +52,13 @@ export function VTUServiceCard({ icon, label, earn, onPress }: VTUServiceCardPro
         {label}
       </Text>
       <View style={[styles.earnBadge, { backgroundColor: tokens.mintSoft }]}>
-        <Text style={[styles.earnText, { color: tokens.mint }]}>Earn {earn}</Text>
+        <Text style={[styles.earnText, { color: tokens.mint }]}>
+          Earn {earn}
+        </Text>
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {
@@ -58,20 +66,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 16,
-    alignItems: 'center',
+    alignItems: "center",
     gap: 10,
   },
   iconWrap: {
     width: 48,
     height: 48,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   name: {
     fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
   earnBadge: {
     paddingHorizontal: 8,
@@ -80,6 +88,6 @@ const styles = StyleSheet.create({
   },
   earnText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

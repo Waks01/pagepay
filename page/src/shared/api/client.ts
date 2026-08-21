@@ -1,11 +1,17 @@
-import Constants from 'expo-constants';
-import { getToken, saveToken, getRefreshToken, saveRefreshToken, clearToken } from '@/src/shared/lib/storage';
+import Constants from "expo-constants";
+import {
+  getToken,
+  saveToken,
+  getRefreshToken,
+  saveRefreshToken,
+  clearToken,
+} from "@/src/shared/lib/storage";
 
 // Read API URL from expo-constants (loaded from app.config.js -> .env).
 const API_URL =
   Constants.expoConfig?.extra?.apiUrl ||
   process.env.EXPO_PUBLIC_API_URL ||
-  'https://pagepay-fff6.onrender.com';
+  "https://pagepay-fff6.onrender.com";
 export { API_URL };
 
 /** Global callback the layout registers so apiFetch can redirect
@@ -29,8 +35,8 @@ async function refreshAccessToken(): Promise<boolean> {
   _refreshPromise = (async () => {
     try {
       const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),
       });
 
@@ -57,12 +63,15 @@ async function refreshAccessToken(): Promise<boolean> {
   return _refreshPromise.then(() => true).catch(() => false);
 }
 
-export async function publicApiFetch(path: string, options: RequestInit = {}): Promise<Response> {
+export async function publicApiFetch(
+  path: string,
+  options: RequestInit = {},
+): Promise<Response> {
   const isFormData = options.body instanceof FormData;
   const timezoneOffset = -new Date().getTimezoneOffset();
   const headers: HeadersInit = {
-    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-    'X-Timezone-Offset': String(timezoneOffset),
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
+    "X-Timezone-Offset": String(timezoneOffset),
     ...options.headers,
   };
 
@@ -81,14 +90,17 @@ export async function publicApiFetch(path: string, options: RequestInit = {}): P
   }
 }
 
-export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
+export async function apiFetch(
+  path: string,
+  options: RequestInit = {},
+): Promise<Response> {
   const token = await getToken();
   const isFormData = options.body instanceof FormData;
   const timezoneOffset = -new Date().getTimezoneOffset(); // minutes ahead of UTC; negative if behind
   const headers: HeadersInit = {
-    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    'X-Timezone-Offset': String(timezoneOffset),
+    "X-Timezone-Offset": String(timezoneOffset),
     ...options.headers,
   };
 
@@ -107,12 +119,12 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     );
   }
 
-  if (res.status === 401 && path !== '/api/v1/auth/refresh') {
+  if (res.status === 401 && path !== "/api/v1/auth/refresh") {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
       const newToken = await getToken();
       const newHeaders: HeadersInit = {
-        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...(newToken ? { Authorization: `Bearer ${newToken}` } : {}),
         ...options.headers,
       };
@@ -122,16 +134,16 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
           headers: newHeaders,
         });
       } catch {
-        await clearToken();
+        // Network error after refresh — don't clear tokens, could be temporary
         _onUnauthenticated?.();
-        throw new Error('Network error during token refresh');
+        throw new Error("Network error during token refresh");
       }
     } else {
-      await clearToken();
+      // Refresh failed — tokens are already cleared by refreshAccessToken if they were invalid
       _onUnauthenticated?.();
+      throw new Error("Unauthorized");
     }
   }
 
   return res;
 }
-

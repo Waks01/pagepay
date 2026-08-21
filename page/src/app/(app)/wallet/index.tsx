@@ -1,32 +1,54 @@
-﻿import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { View, Text, FlatList, RefreshControl, ActivityIndicator, StyleSheet, Platform, TouchableOpacity, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import { useTranslation } from 'react-i18next';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+﻿import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
+import { useCallback, useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  View,
+  Text,
+  FlatList,
+  RefreshControl,
+  ActivityIndicator,
+  StyleSheet,
+  Platform,
+  TouchableOpacity,
+  Image,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { apiFetch } from '@/src/shared/api/client';
-import { consumePendingWithdrawAfterPin } from '@/src/shared/lib/pin-verify-flag';
-import { formatKobo, formatPoints, pointsToNairaString, koboToPoints } from '@/src/shared/lib/money';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { useAdsConfig } from '@/src/shared/hooks/use-ads-config';
-import { useCurrentUser, useCurrentUserStore } from '@/src/shared/lib/current-user';
-import { PagePay, Fonts } from '@/constants/theme';
-import { PrimaryButton } from '@/components/PrimaryButton';
-import NotificationBell from '@/components/NotificationBell';
-import { WithdrawModal } from '@/components/WithdrawModal';
+import { apiFetch } from "@/src/shared/api/client";
+import { consumePendingWithdrawAfterPin } from "@/src/shared/lib/pin-verify-flag";
+import {
+  formatKobo,
+  formatPoints,
+  pointsToNairaString,
+  koboToPoints,
+} from "@/src/shared/lib/money";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
+import {
+  useCurrentUser,
+  useCurrentUserStore,
+} from "@/src/shared/lib/current-user";
+import { PagePay, Fonts } from "@/constants/theme";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { UserAvatar } from "@/components/UserAvatar";
+import NotificationBell from "@/components/NotificationBell";
+import { WithdrawModal } from "@/components/WithdrawModal";
 import {
   LinkPayoutAccountModal,
   type PayoutAccount,
-} from '@/components/LinkPayoutAccountModal';
-import { SkeletonBalanceCard, SkeletonTransactionRow } from '@/components/skeletons';
-import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
+} from "@/components/LinkPayoutAccountModal";
+import {
+  SkeletonBalanceCard,
+  SkeletonTransactionRow,
+} from "@/components/skeletons";
+import { NativeAdBanner } from "@/components/ads/NativeAdBanner";
 
 type Transaction = {
   id: number;
-  type: 'earn' | 'pending' | 'bonus';
+  type: "earn" | "pending" | "bonus";
   points: number;
   description: string;
   date: string;
@@ -36,7 +58,7 @@ type WithdrawalRecord = {
   reference: string;
   amount_kobo: number;
   fee_kobo: number;
-  status: 'pending' | 'success' | 'failed';
+  status: "pending" | "success" | "failed";
   reason: string | null;
   paystack_transfer_code: string | null;
   balance_after_debit: number;
@@ -58,7 +80,7 @@ type PaymentRecord = {
 
 type WithdrawalResponse = {
   transfer_reference: string;
-  status: 'pending' | 'success' | 'failed';
+  status: "pending" | "success" | "failed";
   new_balance_points: number;
   fee_kobo: number;
   amount_kobo: number;
@@ -67,14 +89,14 @@ type WithdrawalResponse = {
 const MIN_WITHDRAWAL_POINTS = koboToPoints(100_000); // ₦1,000 minimum → 10,000 points at 10 pts/₦
 
 const formatDate = (iso: string | null) => {
-  if (!iso) return '—';
+  if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 };
 
@@ -91,23 +113,24 @@ export default function WalletScreen() {
   // Fetch ad config for native unit. useAdsConfig has its own
   // 1-hour staleTime and is shared with the AdSlotProvider, home,
   // and catalog — fetched once and reused.
-  const [nativeAdUnit, setNativeAdUnit] = useState('');
+  const [nativeAdUnit, setNativeAdUnit] = useState("");
   const { data: adConfig } = useAdsConfig();
 
   useEffect(() => {
     if (adConfig) {
       const platform = Platform.OS;
-      const unitKey = platform === 'android' ? 'in_feed_android' : 'in_feed_ios';
-      setNativeAdUnit(adConfig[unitKey] || '');
+      const unitKey =
+        platform === "android" ? "in_feed_android" : "in_feed_ios";
+      setNativeAdUnit(adConfig[unitKey] || "");
     }
   }, [adConfig]);
 
   const payoutQ = useQuery({
-    queryKey: ['payout', 'account'],
+    queryKey: ["payout", "account"],
     queryFn: async () => {
-      const res = await apiFetch('/api/v1/payouts/account');
+      const res = await apiFetch("/api/v1/payouts/account");
       if (res.status === 404) return null;
-      if (!res.ok) throw new Error('Failed to load payout account');
+      if (!res.ok) throw new Error("Failed to load payout account");
       return (await res.json()) as PayoutAccount;
     },
     staleTime: 30_000,
@@ -133,38 +156,41 @@ export default function WalletScreen() {
   const userLoading = useCurrentUser((s) => !s.loaded);
 
   const txQ = useQuery({
-    queryKey: ['wallet', 'transactions'],
+    queryKey: ["wallet", "transactions"],
     queryFn: async () => {
-      const res = await apiFetch('/api/v1/wallet/transactions');
-      if (!res.ok) throw new Error('Failed to load transactions');
+      const res = await apiFetch("/api/v1/wallet/transactions");
+      if (!res.ok) throw new Error("Failed to load transactions");
       return (await res.json()) as Transaction[];
     },
   });
 
   const pinStatusQ = useQuery({
-    queryKey: ['pin', 'status'],
+    queryKey: ["pin", "status"],
     queryFn: async () => {
-      const res = await apiFetch('/api/v1/pin/status');
-      if (!res.ok) throw new Error('Failed to load PIN status');
+      const res = await apiFetch("/api/v1/pin/status");
+      if (!res.ok) throw new Error("Failed to load PIN status");
       return (await res.json()) as { has_pin: boolean };
     },
   });
 
   const withdrawalsQ = useQuery({
-    queryKey: ['payouts', 'transactions'],
+    queryKey: ["payouts", "transactions"],
     queryFn: async () => {
-      const res = await apiFetch('/api/v1/payouts/transactions');
-      if (!res.ok) throw new Error('Failed to load withdrawals');
-      const body = (await res.json()) as { data: WithdrawalRecord[]; meta: { total: number } };
+      const res = await apiFetch("/api/v1/payouts/transactions");
+      if (!res.ok) throw new Error("Failed to load withdrawals");
+      const body = (await res.json()) as {
+        data: WithdrawalRecord[];
+        meta: { total: number };
+      };
       return body.data;
     },
   });
 
   const paymentsQ = useQuery({
-    queryKey: ['payments', 'history'],
+    queryKey: ["payments", "history"],
     queryFn: async () => {
-      const res = await apiFetch('/api/v1/payments/history');
-      if (!res.ok) throw new Error('Failed to load payments');
+      const res = await apiFetch("/api/v1/payments/history");
+      if (!res.ok) throw new Error("Failed to load payments");
       return (await res.json()) as PaymentRecord[];
     },
   });
@@ -180,17 +206,17 @@ export default function WalletScreen() {
   // every tab switch — that was adding ~500ms–1.5s per visit.
   const handleWithdrawn = useCallback(
     (_resp: WithdrawalResponse) => {
-      void qc.invalidateQueries({ queryKey: ['me'] });
-      void qc.invalidateQueries({ queryKey: ['payouts', 'transactions'] });
-      void qc.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
+      void qc.invalidateQueries({ queryKey: ["me"] });
+      void qc.invalidateQueries({ queryKey: ["payouts", "transactions"] });
+      void qc.invalidateQueries({ queryKey: ["wallet", "transactions"] });
     },
     [qc],
   );
 
   const balance = meQ?.points_balance ?? 0;
-  const tier = meQ?.tier ?? 'free';
+  const tier = meQ?.tier ?? "free";
   const getTierLabel = (tier: string) => {
-    const key = tier as 'free' | 'premium_monthly' | 'premium_yearly';
+    const key = tier as "free" | "premium_monthly" | "premium_yearly";
     return t(`wallet.tier.${key}`, { defaultValue: tier });
   };
   const transactions = txQ.data ?? [];
@@ -203,10 +229,10 @@ export default function WalletScreen() {
     // doesn't know about the store). The other wallet queries below
     // are still TanStack-Query-managed and use invalidation.
     void useCurrentUserStore.getState().refresh();
-    qc.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
-    qc.invalidateQueries({ queryKey: ['payout', 'account'] });
-    qc.invalidateQueries({ queryKey: ['payouts', 'transactions'] });
-    qc.invalidateQueries({ queryKey: ['payments', 'history'] });
+    qc.invalidateQueries({ queryKey: ["wallet", "transactions"] });
+    qc.invalidateQueries({ queryKey: ["payout", "account"] });
+    qc.invalidateQueries({ queryKey: ["payouts", "transactions"] });
+    qc.invalidateQueries({ queryKey: ["payments", "history"] });
   };
 
   const handleWithdrawPress = useCallback(() => {
@@ -217,14 +243,14 @@ export default function WalletScreen() {
       return;
     }
     if (pinStatusQ.data?.has_pin) {
-      router.push('/pin/verify?mode=verify&redirect=/(app)/wallet');
+      router.push("/pin/verify?mode=verify&redirect=/(app)/wallet");
       return;
     }
     setShowWithdraw(true);
   }, [payoutAccount, pinStatusQ.data, router]);
 
   const handleLinkSaved = useCallback(() => {
-    void qc.invalidateQueries({ queryKey: ['payout', 'account'] });
+    void qc.invalidateQueries({ queryKey: ["payout", "account"] });
     if (pendingWithdraw) {
       setPendingWithdraw(false);
       setShowLink(false);
@@ -242,22 +268,39 @@ export default function WalletScreen() {
   }, []);
 
   const combinedItems: ListItem[] = [];
-  for (const t of transactions) combinedItems.push({ kind: 'session', data: t });
-  for (const p of paymentsQ.data ?? []) combinedItems.push({ kind: 'payment', data: p });
-  for (const w of withdrawals) combinedItems.push({ kind: 'withdrawal', data: w });
+  for (const t of transactions)
+    combinedItems.push({ kind: "session", data: t });
+  for (const p of paymentsQ.data ?? [])
+    combinedItems.push({ kind: "payment", data: p });
+  for (const w of withdrawals)
+    combinedItems.push({ kind: "withdrawal", data: w });
   combinedItems.sort((a, b) => {
-    const da = a.kind === 'session' ? a.data.date : a.data.created_at ?? '';
-    const db = b.kind === 'session' ? b.data.date : b.data.created_at ?? '';
+    const da = a.kind === "session" ? a.data.date : (a.data.created_at ?? "");
+    const db = b.kind === "session" ? b.data.date : (b.data.created_at ?? "");
     return db.localeCompare(da);
   });
 
   return (
     <View style={{ flex: 1, backgroundColor: c.paper }}>
-      <View style={[styles.header, { backgroundColor: c.card, borderBottomColor: c.border, marginTop: insets.top }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: c.card,
+            borderBottomColor: c.border,
+            marginTop: insets.top,
+          },
+        ]}
+      >
         <View style={styles.headerRow}>
-          <Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />
-          <Text style={[styles.headerTitle, { color: c.ink, fontFamily: Fonts.display }]}>
-            {t('wallet.title')}
+          <UserAvatar size={28} />
+          <Text
+            style={[
+              styles.headerTitle,
+              { color: c.ink, fontFamily: Fonts.display },
+            ]}
+          >
+            {t("wallet.title")}
           </Text>
           <NotificationBell />
         </View>
@@ -265,8 +308,8 @@ export default function WalletScreen() {
       <FlatList
         data={combinedItems}
         keyExtractor={(item, index) => {
-          if (item.kind === 'session') return `s-${item.data.id}`;
-          if (item.kind === 'payment') return `p-${item.data.id}-${index}`;
+          if (item.kind === "session") return `s-${item.data.id}`;
+          if (item.kind === "payment") return `p-${item.data.id}-${index}`;
           return `w-${item.data.reference}-${index}`;
         }}
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}
@@ -297,16 +340,27 @@ export default function WalletScreen() {
                   gap: 8,
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
                   <Ionicons name="gift" size={22} color={c.mint} />
-                  <Text style={{ fontFamily: Fonts.display, fontSize: 16, color: c.ink, flex: 1 }}>
-                    {t('verify_email.welcome_title')}
+                  <Text
+                    style={{
+                      fontFamily: Fonts.display,
+                      fontSize: 16,
+                      color: c.ink,
+                      flex: 1,
+                    }}
+                  >
+                    {t("verify_email.welcome_title")}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 14, color: c.inkMuted, lineHeight: 20 }}>
-                  {t('verify_email.welcome_bonus', {
+                <Text
+                  style={{ fontSize: 14, color: c.inkMuted, lineHeight: 20 }}
+                >
+                  {t("verify_email.welcome_bonus", {
                     points: welcomeBonus.toLocaleString(),
-                    naira: pointsToNairaString(welcomeBonus).replace(/^₦/, ''),
+                    naira: pointsToNairaString(welcomeBonus).replace(/^₦/, ""),
                   })}
                 </Text>
               </View>
@@ -328,17 +382,19 @@ export default function WalletScreen() {
                   fontSize: 11,
                   color: c.inkMuted,
                   letterSpacing: 1.4,
-                  textTransform: 'uppercase',
+                  textTransform: "uppercase",
                   marginBottom: 8,
                 }}
               >
-                {t('wallet.balance_label')}
+                {t("wallet.balance_label")}
               </Text>
               {userLoading ? (
                 <SkeletonBalanceCard />
               ) : (
                 <>
-                  <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                  <View
+                    style={{ flexDirection: "row", alignItems: "baseline" }}
+                  >
                     <Text
                       style={{
                         fontFamily: Fonts.display,
@@ -350,35 +406,55 @@ export default function WalletScreen() {
                     >
                       {formatPoints(balance)}
                     </Text>
-                    <Text style={{ fontSize: 18, color: c.inkMuted, fontFamily: undefined, marginLeft: 4 }}>
-                      {t('wallet.points_suffix')}
+                    <Text
+                      style={{
+                        fontSize: 18,
+                        color: c.inkMuted,
+                        fontFamily: undefined,
+                        marginLeft: 4,
+                      }}
+                    >
+                      {t("wallet.points_suffix")}
                     </Text>
                   </View>
-                  <Text style={{ fontSize: 13, color: c.inkMuted, marginTop: 4 }}>
-                    {t('wallet.approx')} {pointsToNairaString(balance)}
+                  <Text
+                    style={{ fontSize: 13, color: c.inkMuted, marginTop: 4 }}
+                  >
+                    {t("wallet.approx")} {pointsToNairaString(balance)}
                   </Text>
                 </>
               )}
-              <View style={{ height: 1, backgroundColor: c.border, marginVertical: 16 }} />
-              <Text style={{ fontSize: 13, color: c.inkMuted, marginBottom: 14 }}>
+              <View
+                style={{
+                  height: 1,
+                  backgroundColor: c.border,
+                  marginVertical: 16,
+                }}
+              />
+              <Text
+                style={{ fontSize: 13, color: c.inkMuted, marginBottom: 14 }}
+              >
                 {getTierLabel(tier)}
               </Text>
 
               {userLoading || payoutQ.isLoading ? (
-                <ActivityIndicator color={c.mint} style={{ alignSelf: 'flex-start' }} />
+                <ActivityIndicator
+                  color={c.mint}
+                  style={{ alignSelf: "flex-start" }}
+                />
               ) : (
                 <View style={{ gap: 10 }}>
                   {/* Fund Wallet Button */}
                   <PrimaryButton
-                    title={t('wallet.fund_wallet')}
-                    onPress={() => router.push('/fund-wallet')}
+                    title={t("wallet.fund_wallet")}
+                    onPress={() => router.push("/fund-wallet")}
                   />
 
                   {/* Withdraw Button */}
                   {belowMin ? (
                     <View style={{ gap: 4 }}>
                       <PrimaryButton
-                        title={t('wallet.withdraw')}
+                        title={t("wallet.withdraw")}
                         onPress={handleWithdrawPress}
                         disabled
                       />
@@ -386,21 +462,30 @@ export default function WalletScreen() {
                         style={{
                           fontSize: 12,
                           color: c.inkMuted,
-                          textAlign: 'center',
+                          textAlign: "center",
                         }}
                       >
-                        {t('wallet.min_withdraw')}
+                        {t("wallet.min_withdraw")}
                       </Text>
                     </View>
                   ) : (
-                    <PrimaryButton title={t('wallet.withdraw')} onPress={handleWithdrawPress} />
+                    <PrimaryButton
+                      title={t("wallet.withdraw")}
+                      onPress={handleWithdrawPress}
+                    />
                   )}
                 </View>
               )}
             </View>
 
             {/* Section title */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
               <Text
                 style={{
                   fontFamily: Fonts.display,
@@ -411,10 +496,19 @@ export default function WalletScreen() {
                   letterSpacing: -0.3,
                 }}
               >
-                {t('wallet.history_title')}
+                {t("wallet.history_title")}
               </Text>
-              <TouchableOpacity onPress={() => router.push('/wallet/history')} hitSlop={8}>
-                <Text style={{ color: c.mint, fontFamily: 'SpaceGrotesk_700Bold', fontSize: 13 }}>
+              <TouchableOpacity
+                onPress={() => router.push("/wallet/history")}
+                hitSlop={8}
+              >
+                <Text
+                  style={{
+                    color: c.mint,
+                    fontFamily: "SpaceGrotesk_700Bold",
+                    fontSize: 13,
+                  }}
+                >
                   View All
                 </Text>
               </TouchableOpacity>
@@ -426,10 +520,18 @@ export default function WalletScreen() {
           const shouldShowAd = (index + 1) % 4 === 0 && nativeAdUnit;
 
           const handlePress = () => {
-            const txType = item.kind === 'withdrawal' ? 'withdrawal' : item.kind === 'payment' ? 'payment' : 'session';
-            const txId = item.kind === 'withdrawal' ? item.data.reference : String(item.data.id);
+            const txType =
+              item.kind === "withdrawal"
+                ? "withdrawal"
+                : item.kind === "payment"
+                  ? "payment"
+                  : "session";
+            const txId =
+              item.kind === "withdrawal"
+                ? item.data.reference
+                : String(item.data.id);
             router.push({
-              pathname: '/(app)/wallet/[id]',
+              pathname: "/(app)/wallet/[id]",
               params: {
                 id: txId,
                 kind: txType,
@@ -439,18 +541,19 @@ export default function WalletScreen() {
 
           return (
             <View>
-              {item.kind === 'withdrawal' ? (
-                <WithdrawalRow row={item.data} tokens={c} onPress={handlePress} />
-              ) : item.kind === 'payment' ? (
+              {item.kind === "withdrawal" ? (
+                <WithdrawalRow
+                  row={item.data}
+                  tokens={c}
+                  onPress={handlePress}
+                />
+              ) : item.kind === "payment" ? (
                 <PaymentRow item={item.data} tokens={c} onPress={handlePress} />
               ) : (
                 <SessionRow item={item.data} tokens={c} onPress={handlePress} />
               )}
               {shouldShowAd && (
-                <NativeAdBanner
-                  adUnit={nativeAdUnit}
-                  sessionId={null}
-                />
+                <NativeAdBanner adUnit={nativeAdUnit} sessionId={null} />
               )}
             </View>
           );
@@ -470,7 +573,7 @@ export default function WalletScreen() {
                 padding: 28,
                 borderWidth: 1,
                 borderColor: c.border,
-                alignItems: 'center',
+                alignItems: "center",
               }}
             >
               <Text
@@ -481,10 +584,12 @@ export default function WalletScreen() {
                   marginBottom: 4,
                 }}
               >
-                {t('wallet.no_transactions')}
+                {t("wallet.no_transactions")}
               </Text>
-              <Text style={{ fontSize: 13, color: c.inkMuted, textAlign: 'center' }}>
-                {t('wallet.no_transactions_hint')}
+              <Text
+                style={{ fontSize: 13, color: c.inkMuted, textAlign: "center" }}
+              >
+                {t("wallet.no_transactions_hint")}
               </Text>
             </View>
           )
@@ -519,9 +624,9 @@ export default function WalletScreen() {
 // ── Row components ──────────────────────────────────────────────────
 
 type ListItem =
-  | { kind: 'session'; data: Transaction }
-  | { kind: 'payment'; data: PaymentRecord }
-  | { kind: 'withdrawal'; data: WithdrawalRecord };
+  | { kind: "session"; data: Transaction }
+  | { kind: "payment"; data: PaymentRecord }
+  | { kind: "withdrawal"; data: WithdrawalRecord };
 
 function PaymentRow({
   item,
@@ -529,16 +634,24 @@ function PaymentRow({
   onPress,
 }: {
   item: PaymentRecord;
-  tokens: (typeof PagePay)['light'];
+  tokens: (typeof PagePay)["light"];
   onPress?: () => void;
 }) {
   const { t } = useTranslation();
-  const isSuccess = item.status === 'success';
-  const isPending = item.status === 'pending';
-  const isFailed = item.status === 'failed';
+  const isSuccess = item.status === "success";
+  const isPending = item.status === "pending";
+  const isFailed = item.status === "failed";
 
-  const iconName = isSuccess ? 'checkmark-circle' : isPending ? 'time' : 'close-circle';
-  const iconColor = isSuccess ? tokens.mint : isPending ? tokens.inkMuted : tokens.signal;
+  const iconName = isSuccess
+    ? "checkmark-circle"
+    : isPending
+      ? "time"
+      : "close-circle";
+  const iconColor = isSuccess
+    ? tokens.mint
+    : isPending
+      ? tokens.inkMuted
+      : tokens.signal;
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
@@ -548,52 +661,61 @@ function PaymentRow({
           { backgroundColor: tokens.card, borderColor: tokens.border },
         ]}
       >
-      <View
-        style={[
-          rowStyles.icon,
-          {
-            backgroundColor: isSuccess ? tokens.mintSoft : tokens.mintSoft,
-          },
-        ]}
-      >
-        <Ionicons name={iconName as any} size={16} color={iconColor} />
-      </View>
-      <View style={{ flex: 1, marginRight: 12 }}>
-        <Text
-          style={{ fontSize: 14, fontWeight: '500', color: tokens.ink, marginBottom: 2 }}
-          numberOfLines={1}
+        <View
+          style={[
+            rowStyles.icon,
+            {
+              backgroundColor: isSuccess ? tokens.mintSoft : tokens.mintSoft,
+            },
+          ]}
         >
-          {item.tier_name}
-        </Text>
-        <Text style={{ fontSize: 12, color: tokens.inkMuted }}>
-          {formatDate(item.created_at)}
-        </Text>
-      </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text
-          style={{
-            fontSize: 15,
-            fontWeight: '600',
-            color: isSuccess ? tokens.mint : isPending ? tokens.inkMuted : tokens.signal,
-          }}
-        >
-          {isSuccess ? '+' : ''}₦{item.amount_naira.toLocaleString()}
-        </Text>
-        {isPending ? (
+          <Ionicons name={iconName as any} size={16} color={iconColor} />
+        </View>
+        <View style={{ flex: 1, marginRight: 12 }}>
           <Text
             style={{
-              fontSize: 10,
-              color: tokens.inkMuted,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              marginTop: 2,
+              fontSize: 14,
+              fontWeight: "500",
+              color: tokens.ink,
+              marginBottom: 2,
+            }}
+            numberOfLines={1}
+          >
+            {item.tier_name}
+          </Text>
+          <Text style={{ fontSize: 12, color: tokens.inkMuted }}>
+            {formatDate(item.created_at)}
+          </Text>
+        </View>
+        <View style={{ alignItems: "flex-end" }}>
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: "600",
+              color: isSuccess
+                ? tokens.mint
+                : isPending
+                  ? tokens.inkMuted
+                  : tokens.signal,
             }}
           >
-            Pending
+            {isSuccess ? "+" : ""}₦{item.amount_naira.toLocaleString()}
           </Text>
-        ) : null}
+          {isPending ? (
+            <Text
+              style={{
+                fontSize: 10,
+                color: tokens.inkMuted,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                marginTop: 2,
+              }}
+            >
+              Pending
+            </Text>
+          ) : null}
+        </View>
       </View>
-    </View>
     </TouchableOpacity>
   );
 }
@@ -604,13 +726,13 @@ function SessionRow({
   onPress,
 }: {
   item: Transaction;
-  tokens: (typeof PagePay)['light'];
+  tokens: (typeof PagePay)["light"];
   onPress?: () => void;
 }) {
   const { t } = useTranslation();
 
-  const showPending = item.type === 'pending' && item.points > 0;
-  const isEarn = item.type === 'earn';
+  const showPending = item.type === "pending" && item.points > 0;
+  const isEarn = item.type === "earn";
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
@@ -628,51 +750,54 @@ function SessionRow({
             },
           ]}
         >
-        <Ionicons
-          name="book-outline"
-          size={16}
-          color={tokens.mint}
-        />
-      </View>
-      <View style={{ flex: 1, marginRight: 12 }}>
-        <Text
-          style={{ fontSize: 14, fontWeight: '500', color: tokens.ink, marginBottom: 2 }}
-          numberOfLines={1}
-        >
-          {item.description}
-        </Text>
-        <Text style={{ fontSize: 12, color: tokens.inkMuted }}>{formatDate(item.date)}</Text>
-      </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text
-          style={{
-            fontSize: 15,
-            fontWeight: '600',
-            color: showPending
-              ? tokens.signal
-              : isEarn
-                ? tokens.mint
-                : tokens.inkMuted,
-          }}
-        >
-          {item.points > 0 ? '+' : ''}
-          {item.points} {t('wallet.points_suffix')}
-        </Text>
-        {showPending ? (
+          <Ionicons name="book-outline" size={16} color={tokens.mint} />
+        </View>
+        <View style={{ flex: 1, marginRight: 12 }}>
           <Text
             style={{
-              fontSize: 10,
-              color: tokens.inkMuted,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              marginTop: 2,
+              fontSize: 14,
+              fontWeight: "500",
+              color: tokens.ink,
+              marginBottom: 2,
+            }}
+            numberOfLines={1}
+          >
+            {item.description}
+          </Text>
+          <Text style={{ fontSize: 12, color: tokens.inkMuted }}>
+            {formatDate(item.date)}
+          </Text>
+        </View>
+        <View style={{ alignItems: "flex-end" }}>
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: "600",
+              color: showPending
+                ? tokens.signal
+                : isEarn
+                  ? tokens.mint
+                  : tokens.inkMuted,
             }}
           >
-            {t('wallet.session_pending')}
+            {item.points > 0 ? "+" : ""}
+            {item.points} {t("wallet.points_suffix")}
           </Text>
-        ) : null}
+          {showPending ? (
+            <Text
+              style={{
+                fontSize: 10,
+                color: tokens.inkMuted,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                marginTop: 2,
+              }}
+            >
+              {t("wallet.session_pending")}
+            </Text>
+          ) : null}
+        </View>
       </View>
-    </View>
     </TouchableOpacity>
   );
 }
@@ -683,14 +808,14 @@ function WithdrawalRow({
   onPress,
 }: {
   row: WithdrawalRecord;
-  tokens: (typeof PagePay)['light'];
+  tokens: (typeof PagePay)["light"];
   onPress?: () => void;
 }) {
   const { t } = useTranslation();
-  
-  const isPending = row.status === 'pending';
-  const isSuccess = row.status === 'success';
-  const isFailed = row.status === 'failed';
+
+  const isPending = row.status === "pending";
+  const isSuccess = row.status === "success";
+  const isFailed = row.status === "failed";
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
@@ -708,70 +833,75 @@ function WithdrawalRow({
             },
           ]}
         >
-        <Ionicons
-          name={
-            isFailed
-              ? 'alert-circle'
-              : isSuccess
-                ? 'checkmark-circle'
-                : 'paper-plane'
-          }
-          size={16}
-          color={isFailed ? tokens.signal : tokens.mint}
-        />
-      </View>
-      <View style={{ flex: 1, marginRight: 12 }}>
-        <Text
-          style={{ fontSize: 14, fontWeight: '500', color: tokens.ink, marginBottom: 2 }}
-          numberOfLines={1}
-        >
-          {isFailed
-            ? t('wallet.withdrawal_failed')
-            : isPending
-              ? t('wallet.withdrawal_pending')
-              : t('wallet.withdrawal_success')}
-        </Text>
-        <Text style={{ fontSize: 12, color: tokens.inkMuted }}>
-          {formatDate(row.settled_at ?? row.created_at)}
-        </Text>
-      </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <Text
-          style={{
-            fontSize: 15,
-            fontWeight: '600',
-            color: isFailed ? tokens.signal : tokens.mint,
-          }}
-        >
-          −{formatPoints(row.amount_kobo)} {t('wallet.points_suffix')}
-        </Text>
-        {row.fee_kobo > 0 ? (
+          <Ionicons
+            name={
+              isFailed
+                ? "alert-circle"
+                : isSuccess
+                  ? "checkmark-circle"
+                  : "paper-plane"
+            }
+            size={16}
+            color={isFailed ? tokens.signal : tokens.mint}
+          />
+        </View>
+        <View style={{ flex: 1, marginRight: 12 }}>
           <Text
             style={{
-              fontSize: 10,
-              color: tokens.inkMuted,
-              letterSpacing: 0.4,
-              marginTop: 2,
+              fontSize: 14,
+              fontWeight: "500",
+              color: tokens.ink,
+              marginBottom: 2,
             }}
+            numberOfLines={1}
           >
-            {t('wallet.fee_label', { amount: formatKobo(row.fee_kobo) })}
+            {isFailed
+              ? t("wallet.withdrawal_failed")
+              : isPending
+                ? t("wallet.withdrawal_pending")
+                : t("wallet.withdrawal_success")}
           </Text>
-        ) : null}
-        {isPending ? (
+          <Text style={{ fontSize: 12, color: tokens.inkMuted }}>
+            {formatDate(row.settled_at ?? row.created_at)}
+          </Text>
+        </View>
+        <View style={{ alignItems: "flex-end" }}>
           <Text
             style={{
-              fontSize: 10,
-              color: tokens.inkMuted,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              marginTop: 2,
+              fontSize: 15,
+              fontWeight: "600",
+              color: isFailed ? tokens.signal : tokens.mint,
             }}
           >
-            {t('wallet.session_pending')}
+            −{formatPoints(row.amount_kobo)} {t("wallet.points_suffix")}
           </Text>
-        ) : null}
+          {row.fee_kobo > 0 ? (
+            <Text
+              style={{
+                fontSize: 10,
+                color: tokens.inkMuted,
+                letterSpacing: 0.4,
+                marginTop: 2,
+              }}
+            >
+              {t("wallet.fee_label", { amount: formatKobo(row.fee_kobo) })}
+            </Text>
+          ) : null}
+          {isPending ? (
+            <Text
+              style={{
+                fontSize: 10,
+                color: tokens.inkMuted,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                marginTop: 2,
+              }}
+            >
+              {t("wallet.session_pending")}
+            </Text>
+          ) : null}
+        </View>
       </View>
-    </View>
     </TouchableOpacity>
   );
 }
@@ -783,9 +913,9 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   headerIcon: {
     width: 28,
@@ -797,14 +927,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     letterSpacing: -0.2,
     flex: 1,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });
 
 const rowStyles = StyleSheet.create({
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 14,
     padding: 16,
     marginBottom: 8,
@@ -814,8 +944,8 @@ const rowStyles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
 });

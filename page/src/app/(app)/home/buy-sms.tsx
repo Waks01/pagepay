@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  Alert, ActivityIndicator, StyleSheet,
+  Alert, ActivityIndicator, StyleSheet, RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,7 @@ import {
   SectionCard,
   ConfirmModal,
   ErrorBanner,
+  BuyScreenSkeleton,
 } from '@/src/components/bills';
 
 type SmsPricing = {
@@ -118,9 +119,33 @@ export default function BuySmsScreen() {
     setShowConfirmModal(true);
   };
 
+  // Initial-load gate: the form needs the SMS pricing catalog before the
+  // units/amount sections are usable.
+  if (pricingQ.isLoading) {
+    return (
+      <View style={{ flex: 1, paddingTop: insets.top }}>
+        <BuyScreenSkeleton sections={3} />
+      </View>
+    );
+  }
+
+  // Pull-to-refresh: refetch the SMS pricing catalog.
+  const onRefresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['sms-pricing'] });
+  }, [qc]);
+
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper, paddingTop: insets.top }}>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, gap: 16 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={pricingQ.isFetching}
+            onRefresh={onRefresh}
+            tintColor={tokens.mint}
+          />
+        }
+      >
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity onPress={() => router.back()}>

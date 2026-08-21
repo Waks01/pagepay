@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-import { PagePay } from '@/constants/theme';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
 type ResumeCardProps = {
   title: string;
@@ -23,7 +24,13 @@ type ResumeCardProps = {
  * During Phase 1 there is no in-progress endpoint yet, so Home simply hides
  * the entire "Keep reading" section when nothing is in flight.
  */
-export function ResumeCard({ title, author, progress, minutesLeft, onPress }: ResumeCardProps) {
+export const ResumeCard = React.memo(function ResumeCard({
+  title,
+  author,
+  progress,
+  minutesLeft,
+  onPress,
+}: ResumeCardProps) {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
 
@@ -49,7 +56,7 @@ export function ResumeCard({ title, author, progress, minutesLeft, onPress }: Re
           <Text
             style={[
               styles.eyebrow,
-              { color: tokens.mintText, fontFamily: 'SpaceGrotesk_500Medium' },
+              { color: tokens.mintText, fontFamily: "SpaceGrotesk_500Medium" },
             ]}
           >
             KEEP READING
@@ -58,7 +65,7 @@ export function ResumeCard({ title, author, progress, minutesLeft, onPress }: Re
             numberOfLines={2}
             style={[
               styles.title,
-              { color: tokens.mintText, fontFamily: 'SpaceGrotesk_700Bold' },
+              { color: tokens.mintText, fontFamily: "SpaceGrotesk_700Bold" },
             ]}
           >
             {title}
@@ -80,7 +87,12 @@ export function ResumeCard({ title, author, progress, minutesLeft, onPress }: Re
         </View>
       </View>
 
-      <View style={[styles.barTrack, { backgroundColor: tokens.mintText, opacity: 0.22 }]}>
+      <View
+        style={[
+          styles.barTrack,
+          { backgroundColor: tokens.mintText, opacity: 0.22 },
+        ]}
+      >
         <View
           style={[
             styles.barFill,
@@ -101,7 +113,7 @@ export function ResumeCard({ title, author, progress, minutesLeft, onPress }: Re
           <Text
             style={[
               styles.resumeCtaText,
-              { color: tokens.mint, fontFamily: 'SpaceGrotesk_700Bold' },
+              { color: tokens.mint, fontFamily: "SpaceGrotesk_700Bold" },
             ]}
           >
             Resume
@@ -111,7 +123,7 @@ export function ResumeCard({ title, author, progress, minutesLeft, onPress }: Re
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {
@@ -124,15 +136,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 10,
   },
   eyebrow: {
     fontSize: 10,
     lineHeight: 14,
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     opacity: 0.8,
   },
   title: {
@@ -150,22 +162,22 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   barTrack: {
     height: 4,
     borderRadius: 2,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   barFill: {
     height: 4,
     borderRadius: 2,
   },
   footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   progress: {
     fontSize: 12,
@@ -173,8 +185,8 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   resumeCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,

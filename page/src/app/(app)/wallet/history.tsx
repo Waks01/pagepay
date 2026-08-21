@@ -226,7 +226,7 @@ export default function TransactionHistoryScreen() {
   });
 
   const sections = useMemo(
-    () => sortedKeys.map((label) => ({ title: label, data: grouped[label] })),
+    () => (Array.isArray(sortedKeys) ? sortedKeys.map((label) => ({ title: label, data: grouped[label] || [] })) : []),
     [sortedKeys, grouped],
   );
 
@@ -305,6 +305,24 @@ export default function TransactionHistoryScreen() {
     );
   }, [tokens, openDetail]);
 
+  const renderSectionHeader = useCallback(({ section }: { section: { title: string } }) => {
+    const isActive = dateFilter === section.title;
+    return (
+      <TouchableOpacity
+        onPress={() => { setDateFilter(isActive ? 'all' : section.title); resetPage(); }}
+        activeOpacity={0.7}
+        style={styles.dateHeaderRow}
+      >
+        <Text style={[styles.dateHeader, { color: isActive ? tokens.mint : tokens.inkMuted }]}>
+          {section.title}
+        </Text>
+        {isActive && (
+          <Ionicons name="close-circle" size={14} color={tokens.mint} />
+        )}
+      </TouchableOpacity>
+    );
+  }, [tokens, dateFilter, resetPage]);
+
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper }}>
       <PageHeader
@@ -342,28 +360,20 @@ export default function TransactionHistoryScreen() {
             <Text style={[styles.retryText, { color: tokens.mintText }]}>Tap to retry</Text>
           </TouchableOpacity>
         </View>
+      ) : !sections || sections.length === 0 ? (
+        <View style={{ alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
+          <Text style={{ fontSize: 40, marginBottom: 12 }}>📭</Text>
+          <Text style={[styles.emptyTitle, { color: tokens.ink }]}>No transactions found</Text>
+          <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>
+            Try adjusting your filters or search query
+          </Text>
+        </View>
       ) : (
         <SectionList
           sections={sections}
           keyExtractor={(item) => `${item.id}-${item.date}`}
           renderItem={renderItem}
-          renderSectionHeader={({ section }) => {
-            const isActive = dateFilter === section.title;
-            return (
-              <TouchableOpacity
-                onPress={() => { setDateFilter(isActive ? 'all' : section.title); resetPage(); }}
-                activeOpacity={0.7}
-                style={styles.dateHeaderRow}
-              >
-                <Text style={[styles.dateHeader, { color: isActive ? tokens.mint : tokens.inkMuted }]}>
-                  {section.title}
-                </Text>
-                {isActive && (
-                  <Ionicons name="close-circle" size={14} color={tokens.mint} />
-                )}
-              </TouchableOpacity>
-            );
-          }}
+          renderSectionHeader={renderSectionHeader}
           ListHeaderComponent={
             <View>
               {/* Balance Card */}
@@ -470,6 +480,8 @@ export default function TransactionHistoryScreen() {
             />
           }
           stickySectionHeadersEnabled={false}
+          initialNumToRender={12}
+          windowSize={8}
           ListFooterComponent={
             hasMore ? (
               <TouchableOpacity

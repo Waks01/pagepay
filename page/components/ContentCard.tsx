@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-import { PagePay } from '@/constants/theme';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
 export type ContentItem = {
   id: number;
@@ -26,17 +27,21 @@ type ContentCardProps = {
  * Fiction as mint, News as paper, Study as warm signal. Honest placeholder that
  * still teaches the user how the categories relate.
  */
-function coverBand(category: string, isSponsored: boolean, tokens: ReturnType<typeof getTokens>) {
+function coverBand(
+  category: string,
+  isSponsored: boolean,
+  tokens: ReturnType<typeof getTokens>,
+) {
   if (isSponsored) return tokens.signalSoft;
   const c = category.toLowerCase();
-  if (c.includes('classic')) return tokens.mintSoft;
-  if (c.includes('fiction') || c.includes('novel')) return tokens.mintSoft;
-  if (c.includes('news') || c.includes('article')) return tokens.paper;
-  if (c.includes('study') || c.includes('exam')) return tokens.signalSoft;
+  if (c.includes("classic")) return tokens.mintSoft;
+  if (c.includes("fiction") || c.includes("novel")) return tokens.mintSoft;
+  if (c.includes("news") || c.includes("article")) return tokens.paper;
+  if (c.includes("study") || c.includes("exam")) return tokens.signalSoft;
   return tokens.border;
 }
 
-function getTokens(scheme: 'light' | 'dark' | 'sepia') {
+function getTokens(scheme: "light" | "dark" | "sepia") {
   return PagePay[scheme];
 }
 
@@ -53,7 +58,10 @@ function getTokens(scheme: 'light' | 'dark' | 'sepia') {
  * The points estimate is calculated server-side (`estimated_earn_points`)
  * so the frontend never guesses or exposes reward math to the client.
  */
-export function ContentCard({ item, onPress }: ContentCardProps) {
+export const ContentCard = React.memo(function ContentCard({
+  item,
+  onPress,
+}: ContentCardProps) {
   const scheme = useEffectiveScheme();
   const tokens = getTokens(scheme);
 
@@ -74,7 +82,12 @@ export function ContentCard({ item, onPress }: ContentCardProps) {
         },
       ]}
     >
-      <View style={[styles.band, { backgroundColor: bandColor, height: item.is_sponsored ? 16 : 6 }]}>
+      <View
+        style={[
+          styles.band,
+          { backgroundColor: bandColor, height: item.is_sponsored ? 16 : 6 },
+        ]}
+      >
         {item.is_sponsored ? (
           <Text style={[styles.sponsoredLabel, { color: tokens.signal }]}>
             • Sponsored
@@ -85,14 +98,20 @@ export function ContentCard({ item, onPress }: ContentCardProps) {
       <View style={styles.body}>
         <Text
           numberOfLines={2}
-          style={[styles.title, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}
+          style={[
+            styles.title,
+            { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+          ]}
         >
           {item.title}
         </Text>
 
         <View style={styles.metaRow}>
-          <Text numberOfLines={1} style={[styles.meta, { color: tokens.inkMuted }]}>
-            {item.author || 'Unknown'}
+          <Text
+            numberOfLines={1}
+            style={[styles.meta, { color: tokens.inkMuted }]}
+          >
+            {item.author || "Unknown"}
           </Text>
           <View style={[styles.dot, { backgroundColor: tokens.border }]} />
           <Text style={[styles.meta, { color: tokens.inkMuted }]}>
@@ -101,15 +120,27 @@ export function ContentCard({ item, onPress }: ContentCardProps) {
         </View>
 
         <View style={styles.footer}>
-          <View style={[styles.pointsPill, { backgroundColor: tokens.mintSoft }]}>
+          <View
+            style={[styles.pointsPill, { backgroundColor: tokens.mintSoft }]}
+          >
             <Ionicons name="wallet-outline" size={12} color={tokens.mint} />
-            <Text style={[styles.pointsText, { color: tokens.mint, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-              {points != null ? `Earn ~${points} pts` : 'Earn pts'}
+            <Text
+              style={[
+                styles.pointsText,
+                { color: tokens.mint, fontFamily: "SpaceGrotesk_700Bold" },
+              ]}
+            >
+              {points != null ? `Earn ~${points} pts` : "Earn pts"}
             </Text>
           </View>
 
           <View style={styles.cta}>
-            <Text style={[styles.ctaText, { color: tokens.mint, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+            <Text
+              style={[
+                styles.ctaText,
+                { color: tokens.mint, fontFamily: "SpaceGrotesk_700Bold" },
+              ]}
+            >
               Read
             </Text>
             <Ionicons name="arrow-forward" size={14} color={tokens.mint} />
@@ -118,27 +149,27 @@ export function ContentCard({ item, onPress }: ContentCardProps) {
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {
     borderRadius: 14,
     borderWidth: 1,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   band: {
     height: 6,
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'flex-end',
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "flex-end",
     paddingHorizontal: 12,
   },
   sponsoredLabel: {
     fontSize: 10,
     lineHeight: 12,
     letterSpacing: 0.8,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    textTransform: "uppercase",
     right: 12,
   },
   body: {
@@ -151,8 +182,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   meta: {
@@ -165,14 +196,14 @@ const styles = StyleSheet.create({
     borderRadius: 1.5,
   },
   footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginTop: 4,
   },
   pointsPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -184,8 +215,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   cta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
   },
   ctaText: {

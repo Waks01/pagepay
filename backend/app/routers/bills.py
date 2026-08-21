@@ -737,7 +737,7 @@ async def validate_meter(payload: dict, current_user: User = Depends(get_current
             return {
                 "meter_number": meter_number,
                 "customer_name": customer_name,
-                "address": result.get("address"),
+                "address": result.get("customer_address"),
                 "validated": True,
                 "message": "Meter verified successfully",
             }

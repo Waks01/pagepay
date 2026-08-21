@@ -1,5 +1,5 @@
-import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useState, useEffect, useMemo, useRef } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Platform,
@@ -11,53 +11,63 @@ import {
   TouchableOpacity,
   View,
   Image,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTranslation } from 'react-i18next';
+} from "react-native";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 
-import { apiFetch } from '@/src/shared/api/client';
-import { useCatalogFilter } from '@/src/shared/lib/catalog-filter';
-import { ContentCard, ContentItem } from '@/components/ContentCard';
-import { ResumeCard } from '@/components/ResumeCard';
-import NotificationBell from '@/components/NotificationBell';
-import { SkeletonContentCard } from '@/components/skeletons';
-import { CategoryChip } from '@/components/CategoryChip';
-import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
-import { StateBlock } from '@/components/StateBlock';
-import { PageHeader } from '@/components/PageHeader';
-import { PagePay } from '@/constants/theme';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { useAdsConfig } from '@/src/shared/hooks/use-ads-config';
-import { useCurrentUser } from '@/src/shared/lib/current-user';
+import { apiFetch } from "@/src/shared/api/client";
+import { useCatalogFilter } from "@/src/shared/lib/catalog-filter";
+import { ContentCard, ContentItem } from "@/components/ContentCard";
+import { ResumeCard } from "@/components/ResumeCard";
+import { UserAvatar } from "@/components/UserAvatar";
+import NotificationBell from "@/components/NotificationBell";
+import { SkeletonContentCard } from "@/components/skeletons";
+import { CategoryChip } from "@/components/CategoryChip";
+import { NativeAdBanner } from "@/components/ads/NativeAdBanner";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { StateBlock } from "@/components/StateBlock";
+import { PageHeader } from "@/components/PageHeader";
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
+import { useCurrentUser } from "@/src/shared/lib/current-user";
 
 // Education level options for the catalog level grid. Each entry has
 // a label (English, the i18n key is for future localization) and a
 // short label for the expanded grid card. The order is from primary
 // education up to research — a 6-cell row that fits the spec.
-const LEVEL_OPTIONS: ReadonlyArray<{ value: string; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
-  { value: 'creche', label: 'Creche', icon: 'happy-outline' },
-  { value: 'primary', label: 'Primary', icon: 'pencil-outline' },
-  { value: 'secondary', label: 'Secondary', icon: 'flask-outline' },
-  { value: 'tertiary', label: 'University', icon: 'school-outline' },
-  { value: 'research', label: 'Research', icon: 'document-text-outline' },
+const LEVEL_OPTIONS: ReadonlyArray<{
+  value: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}> = [
+  { value: "creche", label: "Creche", icon: "happy-outline" },
+  { value: "primary", label: "Primary", icon: "pencil-outline" },
+  { value: "secondary", label: "Secondary", icon: "flask-outline" },
+  { value: "tertiary", label: "University", icon: "school-outline" },
+  { value: "research", label: "Research", icon: "document-text-outline" },
 ];
 
 // Class-level vocabulary per v3 §1.2. International Grade 1-12 + Year 1-4.
 // `creche` and `research` are bucket-only (no grade system), so the picker
 // is empty for those levels. Returning [] from the lookup makes the
 // class grid render an empty-state message instead of an empty grid.
-const CLASS_LEVELS_BY_EDUCATION: Readonly<Record<string, ReadonlyArray<string>>> = {
+const CLASS_LEVELS_BY_EDUCATION: Readonly<
+  Record<string, ReadonlyArray<string>>
+> = {
   creche: [],
-  primary: [
-    'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6',
-  ],
+  primary: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
   secondary: [
-    'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12',
+    "Grade 7",
+    "Grade 8",
+    "Grade 9",
+    "Grade 10",
+    "Grade 11",
+    "Grade 12",
   ],
-  tertiary: ['Year 1', 'Year 2', 'Year 3', 'Year 4'],
+  tertiary: ["Year 1", "Year 2", "Year 3", "Year 4"],
   research: [],
 };
 
@@ -94,8 +104,8 @@ export default function CatalogScreen() {
   // and feed `searchDebounced` to the query, so each keystroke doesn't
   // refire the network. 300ms is the sweet spot — fast enough to feel
   // instant, slow enough to coalesce bursts.
-  const [searchInput, setSearchInput] = useState('');
-  const [searchDebounced, setSearchDebounced] = useState('');
+  const [searchInput, setSearchInput] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -121,14 +131,15 @@ export default function CatalogScreen() {
   // Fetch ad config for native unit. useAdsConfig has its own
   // 1-hour staleTime and is shared with the AdSlotProvider and
   // the home tab — the data is fetched once and reused.
-  const [nativeAdUnit, setNativeAdUnit] = useState('');
+  const [nativeAdUnit, setNativeAdUnit] = useState("");
   const { data: adConfig } = useAdsConfig();
 
   useEffect(() => {
     if (adConfig) {
       const platform = Platform.OS;
-      const unitKey = platform === 'android' ? 'in_feed_android' : 'in_feed_ios';
-      setNativeAdUnit(adConfig[unitKey] || '');
+      const unitKey =
+        platform === "android" ? "in_feed_android" : "in_feed_ios";
+      setNativeAdUnit(adConfig[unitKey] || "");
     }
   }, [adConfig]);
 
@@ -156,10 +167,10 @@ export default function CatalogScreen() {
   // unconditionally with the anonymous id as a fallback so the
   // catalog list is never blocked.
   const inProgressQuery = useQuery({
-    queryKey: ['progress', 'in-progress'],
+    queryKey: ["progress", "in-progress"],
     queryFn: async () => {
-      const res = await apiFetch('/api/v1/progress');
-      if (!res.ok) throw new Error('Failed to load in-progress works');
+      const res = await apiFetch("/api/v1/progress");
+      if (!res.ok) throw new Error("Failed to load in-progress works");
       const data = (await res.json()) as Array<{
         work_id: number;
         work_title: string;
@@ -193,36 +204,43 @@ export default function CatalogScreen() {
   // A catalog is "unfiltered" when no chip / level / class / search
   // is active. That's when the resume carousel earns its place.
   const catalogUnfiltered =
-    !storeCategory &&
-    !educationLevel &&
-    !classLevel &&
-    !searchDebounced;
+    !storeCategory && !educationLevel && !classLevel && !searchDebounced;
 
   // Fetch distinct categories from the backend for filter chips
   const { data: categories = [] } = useQuery<string[]>({
-    queryKey: ['content', 'categories'],
+    queryKey: ["content", "categories"],
     queryFn: async () => {
-      const res = await apiFetch('/api/v1/content/categories');
+      const res = await apiFetch("/api/v1/content/categories");
       if (!res.ok) return [];
       return (await res.json()) as string[];
     },
     staleTime: 10 * 60 * 1000,
   });
 
-  const filters = useMemo(() => [t('catalog.filter_all'), ...categories] as const, [categories, t]);
+  const filters = useMemo(
+    () => [t("catalog.filter_all"), ...categories] as const,
+    [categories, t],
+  );
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['feed', userId, storeCategory, educationLevel, classLevel, searchDebounced],
+    queryKey: [
+      "feed",
+      userId,
+      storeCategory,
+      educationLevel,
+      classLevel,
+      searchDebounced,
+    ],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (storeCategory) params.set('category', storeCategory);
-      if (educationLevel) params.set('education_level', educationLevel);
-      if (classLevel) params.set('class_level', classLevel);
-      if (searchDebounced) params.set('search', searchDebounced);
-      params.set('limit', '50');
+      if (storeCategory) params.set("category", storeCategory);
+      if (educationLevel) params.set("education_level", educationLevel);
+      if (classLevel) params.set("class_level", classLevel);
+      if (searchDebounced) params.set("search", searchDebounced);
+      params.set("limit", "50");
       const url = `/api/v1/content/feed/${userId}?${params.toString()}`;
       const res = await apiFetch(url);
-      if (!res.ok) throw new Error('Failed to load catalog');
+      if (!res.ok) throw new Error("Failed to load catalog");
       return (await res.json()) as ContentItem[];
     },
   });
@@ -232,15 +250,18 @@ export default function CatalogScreen() {
   // finished everything we have, this is the way to get more.
   const refreshMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiFetch('/api/v1/content/refresh', { method: 'POST' });
-      if (!res.ok) throw new Error('Refresh failed');
-      return (await res.json()) as { imported: number; resliced: { children_added: number; parents_resliced: number } };
+      const res = await apiFetch("/api/v1/content/refresh", { method: "POST" });
+      if (!res.ok) throw new Error("Refresh failed");
+      return (await res.json()) as {
+        imported: number;
+        resliced: { children_added: number; parents_resliced: number };
+      };
     },
     onSuccess: () => {
       // Invalidate every catalog-shaped query so the new books show up.
-      queryClient.invalidateQueries({ queryKey: ['catalog'] });
-      queryClient.invalidateQueries({ queryKey: ['book'] });
-      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ["catalog"] });
+      queryClient.invalidateQueries({ queryKey: ["book"] });
+      queryClient.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 
@@ -260,11 +281,18 @@ export default function CatalogScreen() {
   const isInitialLoad = isLoading && !refreshing && items.length === 0;
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: tokens.paper }]}>
+    <SafeAreaView
+      edges={["top"]}
+      style={[styles.root, { backgroundColor: tokens.paper }]}
+    >
       <PageHeader
-        title={t('catalog.title')}
-        subtitle={storeCategory ? t('catalog.subtitle_filtered', { category: storeCategory }) : undefined}
-        left={<Image source={require('@/assets/images/icon.png')} style={styles.headerIcon} />}
+        title={t("catalog.title")}
+        subtitle={
+          storeCategory
+            ? t("catalog.subtitle_filtered", { category: storeCategory })
+            : undefined
+        }
+        left={<UserAvatar size={28} />}
         right={<NotificationBell />}
         backgroundColor={tokens.card}
         borderBottomColor={tokens.border}
@@ -287,20 +315,20 @@ export default function CatalogScreen() {
           style={[styles.searchInput, { color: tokens.ink }]}
           value={searchInput}
           onChangeText={setSearchInput}
-          placeholder={t('catalog.search_placeholder')}
+          placeholder={t("catalog.search_placeholder")}
           placeholderTextColor={tokens.inkMuted}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
           clearButtonMode="while-editing"
-          accessibilityLabel={t('catalog.search_placeholder')}
+          accessibilityLabel={t("catalog.search_placeholder")}
         />
         {searchInput.length > 0 ? (
           <TouchableOpacity
-            onPress={() => setSearchInput('')}
+            onPress={() => setSearchInput("")}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={t('catalog.search_clear')}
+            accessibilityLabel={t("catalog.search_clear")}
           >
             <Ionicons name="close-circle" size={16} color={tokens.inkMuted} />
           </TouchableOpacity>
@@ -319,7 +347,7 @@ export default function CatalogScreen() {
           contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}
         >
           {filters.map((f) => {
-            const value = f === t('catalog.filter_all') ? null : f;
+            const value = f === t("catalog.filter_all") ? null : f;
             return (
               <CategoryChip
                 key={f}
@@ -344,19 +372,30 @@ export default function CatalogScreen() {
           ]}
           onPress={() => setLevelGridExpanded((v) => !v)}
           accessibilityRole="button"
-          accessibilityLabel={educationLevel ? `Level: ${educationLevel}. Tap to change.` : 'Browse by education level'}
+          accessibilityLabel={
+            educationLevel
+              ? `Level: ${educationLevel}. Tap to change.`
+              : "Browse by education level"
+          }
         >
-          <Ionicons name="school-outline" size={14} color={educationLevel ? tokens.mintText : tokens.inkMuted} />
-          <Text style={[
-            styles.levelPillText,
-            { color: educationLevel ? tokens.mintText : tokens.inkMuted },
-          ]}>
+          <Ionicons
+            name="school-outline"
+            size={14}
+            color={educationLevel ? tokens.mintText : tokens.inkMuted}
+          />
+          <Text
+            style={[
+              styles.levelPillText,
+              { color: educationLevel ? tokens.mintText : tokens.inkMuted },
+            ]}
+          >
             {educationLevel
-              ? LEVEL_OPTIONS.find((l) => l.value === educationLevel)?.label ?? 'Education'
-              : 'Education'}
+              ? (LEVEL_OPTIONS.find((l) => l.value === educationLevel)?.label ??
+                "Education")
+              : "Education"}
           </Text>
           <Ionicons
-            name={levelGridExpanded ? 'chevron-up' : 'chevron-down'}
+            name={levelGridExpanded ? "chevron-up" : "chevron-down"}
             size={12}
             color={educationLevel ? tokens.mintText : tokens.inkMuted}
           />
@@ -388,16 +427,18 @@ export default function CatalogScreen() {
                 accessibilityState={{ selected }}
                 accessibilityLabel={`Filter by ${opt.label}`}
               >
-                <Ionicons 
-                  name={opt.icon} 
-                  size={24} 
-                  color={selected ? tokens.mint : tokens.inkMuted} 
+                <Ionicons
+                  name={opt.icon}
+                  size={24}
+                  color={selected ? tokens.mint : tokens.inkMuted}
                   style={styles.levelIcon}
                 />
-                <Text style={[
-                  styles.levelLabel,
-                  { color: selected ? tokens.mint : tokens.ink },
-                ]}>
+                <Text
+                  style={[
+                    styles.levelLabel,
+                    { color: selected ? tokens.mint : tokens.ink },
+                  ]}
+                >
                   {opt.label}
                 </Text>
               </TouchableOpacity>
@@ -412,10 +453,11 @@ export default function CatalogScreen() {
           class list is long enough that a horizontal scroll would
           make a single tap uncertain — segments are equal-width and
           always fit. The "All" pseudo-segment clears the filter. */}
-      {educationLevel && (CLASS_LEVELS_BY_EDUCATION[educationLevel]?.length ?? 0) > 0 ? (
+      {educationLevel &&
+      (CLASS_LEVELS_BY_EDUCATION[educationLevel]?.length ?? 0) > 0 ? (
         <View style={styles.classPickerWrap}>
           <Text style={[styles.classPickerLabel, { color: tokens.inkMuted }]}>
-            {t('catalog.class_picker_label')}
+            {t("catalog.class_picker_label")}
           </Text>
           <ScrollView
             horizontal
@@ -424,20 +466,24 @@ export default function CatalogScreen() {
           >
             <SegmentedControl
               options={[
-                { value: '__all__' as never, label: t('catalog.class_all') },
-                ...(CLASS_LEVELS_BY_EDUCATION[educationLevel] ?? []).map((c) => ({
-                  value: c as never,
-                  label: c,
-                })),
+                { value: "__all__" as never, label: t("catalog.class_all") },
+                ...(CLASS_LEVELS_BY_EDUCATION[educationLevel] ?? []).map(
+                  (c) => ({
+                    value: c as never,
+                    label: c,
+                  }),
+                ),
               ]}
               value={classLevel as never}
-              onChange={(v) => setClassLevel(v === ('__all__' as never) ? null : (v as string))}
+              onChange={(v) =>
+                setClassLevel(v === ("__all__" as never) ? null : (v as string))
+              }
               activeBackground={tokens.mint}
               activeText={tokens.mintText}
               inactiveBackground={tokens.card}
               inactiveText={tokens.inkMuted}
               borderColor={tokens.border}
-              accessibilityLabel={t('catalog.class_picker_label')}
+              accessibilityLabel={t("catalog.class_picker_label")}
             />
           </ScrollView>
         </View>
@@ -447,13 +493,13 @@ export default function CatalogScreen() {
         <TouchableOpacity
           onPress={onClearFilter}
           accessibilityRole="button"
-          accessibilityLabel={t('catalog.clear_filter')}
+          accessibilityLabel={t("catalog.clear_filter")}
           style={styles.clearRow}
           hitSlop={6}
         >
           <Ionicons name="close-circle" size={14} color={tokens.inkMuted} />
           <Text style={[styles.clearText, { color: tokens.inkMuted }]}>
-            {t('catalog.clear_filter')}
+            {t("catalog.clear_filter")}
           </Text>
         </TouchableOpacity>
       ) : null}
@@ -480,10 +526,10 @@ export default function CatalogScreen() {
             <Text
               style={[
                 styles.resumeTitle,
-                { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' },
+                { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
               ]}
             >
-              {t('catalog.keep_reading')}
+              {t("catalog.keep_reading")}
             </Text>
             <ScrollView
               horizontal
@@ -521,67 +567,72 @@ export default function CatalogScreen() {
           </View>
         ) : isError ? (
           <StateBlock
-            message={t('catalog.error_load')}
+            message={t("catalog.error_load")}
             onRetry={() => refetch()}
             tokens={tokens}
           />
         ) : items.length === 0 ? (
           <StateBlock
-            message={storeCategory
-              ? t('catalog.empty_filtered', { category: storeCategory })
-              : t('catalog.empty_finished')}
+            message={
+              storeCategory
+                ? t("catalog.empty_filtered", { category: storeCategory })
+                : t("catalog.empty_finished")
+            }
             tokens={tokens}
             variant="empty"
             icon="library-outline"
             iconColor={tokens.mint}
-          action={
-            <View>
-              <TouchableOpacity
-                onPress={() => refreshMutation.mutate()}
-                disabled={refreshMutation.isPending}
-                accessibilityRole="button"
-                accessibilityLabel={t('catalog.refresh_catalog')}
-                activeOpacity={0.9}
-                style={[
-                  styles.refreshBtn,
-                  {
-                    backgroundColor: refreshMutation.isPending ? tokens.border : tokens.mint,
-                  },
-                ]}
-              >
-                {refreshMutation.isPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.refreshBtnText}>
-                    {storeCategory ? t('catalog.pull_more') : t('catalog.refresh_catalog')}
+            action={
+              <View>
+                <TouchableOpacity
+                  onPress={() => refreshMutation.mutate()}
+                  disabled={refreshMutation.isPending}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("catalog.refresh_catalog")}
+                  activeOpacity={0.9}
+                  style={[
+                    styles.refreshBtn,
+                    {
+                      backgroundColor: refreshMutation.isPending
+                        ? tokens.border
+                        : tokens.mint,
+                    },
+                  ]}
+                >
+                  {refreshMutation.isPending ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.refreshBtnText}>
+                      {storeCategory
+                        ? t("catalog.pull_more")
+                        : t("catalog.refresh_catalog")}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                {refreshMutation.isError ? (
+                  <Text style={[styles.refreshError, { color: tokens.signal }]}>
+                    {t("catalog.refresh_error")}
                   </Text>
-                )}
-              </TouchableOpacity>
-              {refreshMutation.isError ? (
-                <Text style={[styles.refreshError, { color: tokens.signal }]}>
-                  {t('catalog.refresh_error')}
-                </Text>
-              ) : null}
-            </View>
-          }
+                ) : null}
+              </View>
+            }
           />
         ) : (
           <View style={styles.list}>
             {items.map((item, index) => {
               // Inject native ad every 4th position
               const shouldShowAd = (index + 1) % 4 === 0 && nativeAdUnit;
-              
+
               return (
                 <View key={`catalog-${item.id}-${index}`}>
                   <ContentCard
                     item={item}
-                    onPress={() => router.push(`/catalog/book/${item.id}` as never)}
+                    onPress={() =>
+                      router.push(`/catalog/book/${item.id}` as never)
+                    }
                   />
                   {shouldShowAd && (
-                    <NativeAdBanner
-                      adUnit={nativeAdUnit}
-                      sessionId={null}
-                    />
+                    <NativeAdBanner adUnit={nativeAdUnit} sessionId={null} />
                   )}
                 </View>
               );
@@ -602,9 +653,9 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   headerIcon: {
     width: 28,
@@ -613,7 +664,7 @@ const styles = StyleSheet.create({
   },
   headerTitleArea: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
   },
   headerTitle: {
     fontSize: 17,
@@ -635,14 +686,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
     gap: 8,
   },
   levelPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -651,11 +702,11 @@ const styles = StyleSheet.create({
   },
   levelPillText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   levelGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 4,
@@ -668,18 +719,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   levelIcon: {
     marginBottom: 4,
   },
   levelLabel: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginHorizontal: 16,
     marginTop: 4,
     marginBottom: 4,
@@ -711,19 +762,19 @@ const styles = StyleSheet.create({
   },
   classPickerLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     paddingHorizontal: 16,
   },
   clearRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 4,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   clearText: {
     fontSize: 12,
@@ -743,18 +794,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 999,
     minWidth: 180,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   refreshBtnText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 0.2,
   },
   refreshError: {
     fontSize: 12,
     marginTop: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });
