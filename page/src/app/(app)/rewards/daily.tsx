@@ -161,7 +161,7 @@ export default function DailyRewardsScreen() {
 
         {(isClaimed || isPast) && (
           <View style={styles.completedBadge}>
-            <Ionicons name="checkmark-circle" size={24} color={tokens.mint} />
+            <Ionicons name="checkmark-circle" size={16} color={tokens.mint} />
           </View>
         )}
       </View>
@@ -433,11 +433,19 @@ export default function DailyRewardsScreen() {
           <Text style={[styles.sectionTitle, { color: tokens.ink }]}>
             Daily Progress
           </Text>
-          <View style={styles.dayGrid}>
-            {[...Array(Math.max(7, Math.min(currentStreak + 3, 21)))]
-              .map((_, index) => {
-                const dayNumber = index + 1;
-                // Get reward for this day, or fall back to day 7 reward for days beyond 7
+
+          {/* Calculate which weeks to show */}
+          {(() => {
+            const currentWeek = Math.floor((currentStreak - 1) / 7) + 1; // Week 1, 2, 3, etc.
+            const weeksToShow = Math.max(2, currentWeek + 1); // Show current week + next week, minimum 2 weeks
+            const weeks = [];
+
+            for (let week = 1; week <= weeksToShow; week++) {
+              const startDay = (week - 1) * 7 + 1;
+              const endDay = week * 7;
+              const weekDays = [];
+
+              for (let dayNumber = startDay; dayNumber <= endDay; dayNumber++) {
                 const reward =
                   defaultRewards.find((r) => r.day_number === dayNumber) ||
                   (dayNumber <= 7
@@ -448,13 +456,23 @@ export default function DailyRewardsScreen() {
                 const isClaimed = dayNumber <= currentStreak;
                 const isFuture = dayNumber > currentStreak + 1;
 
-                // Don't show too many future days
-                if (isFuture && dayNumber > currentStreak + 3) return null;
+                weekDays.push(
+                  renderDayCard(dayNumber, reward, isToday, isClaimed),
+                );
+              }
 
-                return renderDayCard(dayNumber, reward, isToday, isClaimed);
-              })
-              .filter(Boolean)}
-          </View>
+              weeks.push(
+                <View key={week} style={styles.weekSection}>
+                  <Text style={[styles.weekTitle, { color: tokens.inkMuted }]}>
+                    Week {week} (Days {startDay}-{endDay})
+                  </Text>
+                  <View style={styles.dayGrid}>{weekDays}</View>
+                </View>,
+              );
+            }
+
+            return weeks;
+          })()}
         </View>
 
         {/* Milestones */}
@@ -632,6 +650,15 @@ const styles = {
   progressSection: {
     gap: 16,
   },
+  weekSection: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  weekTitle: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    marginBottom: 8,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600" as const,
@@ -643,43 +670,43 @@ const styles = {
     justifyContent: "space-between" as const,
   },
   dayCard: {
-    width: (width - 32 - 32) / 3, // Account for padding and gaps (32 = 16*2 padding, 32 = 16*2 gaps)
+    width: (width - 32 - 96) / 7, // Account for padding (32) and gaps (16*6=96 gaps between 7 cards)
     aspectRatio: 1,
-    padding: 16, // Increased padding inside cards
-    borderRadius: 16, // Increased border radius for more modern look
+    padding: 12, // Reduced padding since cards are smaller
+    borderRadius: 12,
     borderWidth: 2,
     alignItems: "center" as const,
-    justifyContent: "space-between" as const, // Changed to space-between for better layout
+    justifyContent: "space-between" as const,
     position: "relative" as const,
-    minHeight: 120, // Minimum height for cards
+    minHeight: 80, // Reduced minimum height for smaller cards
   },
   dayNumber: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "600" as const,
-    marginBottom: 4, // Added margin for spacing
+    marginBottom: 2,
   },
   rewardEmoji: {
-    fontSize: 28, // Increased emoji size
-    marginBottom: 6, // Added margin
+    fontSize: 20, // Reduced emoji size for smaller cards
+    marginBottom: 4,
   },
   rewardTitle: {
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: "500" as const,
     textAlign: "center" as const,
-    marginBottom: 4,
-    lineHeight: 12, // Better line height for readability
+    marginBottom: 2,
+    lineHeight: 10,
   },
   rewardValue: {
-    fontSize: 13, // Slightly increased font size
+    fontSize: 10, // Reduced font size for smaller cards
     fontWeight: "bold" as const,
   },
   completedBadge: {
     position: "absolute" as const,
-    top: 8,
-    right: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.9)", // Semi-transparent background
-    borderRadius: 12,
-    padding: 2,
+    top: 4,
+    right: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 8,
+    padding: 1,
   },
   milestonesSection: {
     gap: 16,
