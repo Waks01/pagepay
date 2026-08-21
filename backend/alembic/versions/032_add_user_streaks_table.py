@@ -17,20 +17,21 @@ depends_on = None
 
 
 def upgrade():
-    # Create user_streaks table
-    op.create_table('user_streaks',
-        sa.Column('user_id', sa.BigInteger(), nullable=False),
-        sa.Column('current_streak', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('longest_streak', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('last_activity_date', sa.String(10), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('user_id'),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    )
-    
-    # Create index on user_id for faster lookups
-    op.create_index(op.f('ix_user_streaks_user_id'), 'user_streaks', ['user_id'], unique=False)
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing = inspector.get_table_names()
+    if 'user_streaks' not in existing:
+        op.create_table('user_streaks',
+            sa.Column('user_id', sa.BigInteger(), nullable=False),
+            sa.Column('current_streak', sa.Integer(), nullable=False, server_default='0'),
+            sa.Column('longest_streak', sa.Integer(), nullable=False, server_default='0'),
+            sa.Column('last_activity_date', sa.String(10), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+            sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+            sa.PrimaryKeyConstraint('user_id'),
+            sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+        )
+        op.create_index(op.f('ix_user_streaks_user_id'), 'user_streaks', ['user_id'], unique=False)
 
 
 def downgrade():

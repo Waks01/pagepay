@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
 import { apiFetch } from "@/src/shared/api/client";
+import { fetchDailyRewardStatus } from "@/src/features/rewards/api";
 import { useCatalogFilter } from "@/src/shared/lib/catalog-filter";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
@@ -85,6 +86,13 @@ export default function HomeScreen() {
   });
 
   const streakQuery = useStreak();
+
+  const dailyRewardsQuery = useQuery({
+    queryKey: ["daily-reward-status"],
+    queryFn: fetchDailyRewardStatus,
+    refetchOnMount: true,
+    staleTime: 60 * 1000, // 1 minute
+  });
 
   const onCategoryPress = useCallback(
     (category: string) => {
@@ -199,7 +207,8 @@ export default function HomeScreen() {
         <View style={styles.iconsRow}>
           <UserAvatar size={32} />
           {streakData && streakData.current_streak > 0 && (
-            <View
+            <TouchableOpacity
+              onPress={() => router.push("/rewards/daily")}
               style={[
                 styles.streakBadge,
                 { backgroundColor: tokens.mintSoft, borderColor: tokens.mint },
@@ -209,8 +218,27 @@ export default function HomeScreen() {
               <Text style={[styles.streakText, { color: tokens.mint }]}>
                 {streakData.current_streak}d
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
+
+          {/* Daily Rewards Button */}
+          <TouchableOpacity
+            onPress={() => router.push("/rewards/daily")}
+            style={[
+              styles.rewardsButton,
+              { backgroundColor: tokens.card, borderColor: tokens.border },
+            ]}
+          >
+            <Text style={styles.rewardsEmoji}>🎁</Text>
+            {dailyRewardsQuery.data?.can_claim_today && (
+              <View
+                style={[
+                  styles.rewardsBadge,
+                  { backgroundColor: tokens.accent },
+                ]}
+              />
+            )}
+          </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => router.push("/wallet")}
@@ -633,6 +661,26 @@ const styles = StyleSheet.create({
   streakText: {
     fontSize: 13,
     fontWeight: "700",
+  },
+  rewardsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  rewardsEmoji: {
+    fontSize: 16,
+  },
+  rewardsBadge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   vtuCard: {
     width: 140,

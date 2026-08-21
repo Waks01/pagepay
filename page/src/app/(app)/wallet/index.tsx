@@ -520,6 +520,7 @@ export default function WalletScreen() {
           const shouldShowAd = (index + 1) % 4 === 0 && nativeAdUnit;
 
           const handlePress = () => {
+            const serialized = JSON.stringify(item);
             const txType =
               item.kind === "withdrawal"
                 ? "withdrawal"
@@ -535,6 +536,7 @@ export default function WalletScreen() {
               params: {
                 id: txId,
                 kind: txType,
+                item: serialized,
               },
             });
           };
