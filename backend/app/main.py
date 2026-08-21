@@ -22,6 +22,7 @@ from app.routers.ai import router as ai_router
 from app.routers.referral import router as referral_router
 from app.routers.community import router as community_router
 from app.routers.streak import router as streak_router
+from app.routers.daily_rewards import router as daily_rewards_router
 from app.routers.analytics import router as analytics_router
 from app.routers.payouts import router as payouts_router
 from app.routers.payments import router as payments_router
@@ -383,6 +384,7 @@ app.include_router(ai_router, prefix=API_PREFIX)
 app.include_router(referral_router, prefix=API_PREFIX)
 app.include_router(community_router, prefix=API_PREFIX)
 app.include_router(streak_router, prefix=API_PREFIX)
+app.include_router(daily_rewards_router, prefix=API_PREFIX)
 app.include_router(analytics_router, prefix=API_PREFIX)
 app.include_router(legal.router, prefix=API_PREFIX)
 

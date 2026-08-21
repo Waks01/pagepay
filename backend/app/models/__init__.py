@@ -1,7 +1,7 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import (
     String, Integer, BigInteger, Boolean, Text, DateTime, Time, Enum, Float,
-    SmallInteger, JSON, UniqueConstraint,
+    SmallInteger, JSON, UniqueConstraint, ForeignKey, Index,
 )
 from datetime import datetime, time
 import enum
@@ -794,13 +794,14 @@ class CommunityLike(Base):
 
 
 class UserStreak(Base):
-    """Consecutive-day reading streak for a user.
+    """Consecutive-day login streak for a user.
 
     `current_streak` is the active consecutive-day count. `longest_streak`
     is the all-time best. `last_activity_date` is the ISO date string
-    (YYYY-MM-DD) of the most recent verified reading session. The streak
-    logic compares `last_activity_date` to today's date to determine if
-    the streak continues, resets, or is lost.
+    (YYYY-MM-DD) of the most recent login/activity. `last_claim_date` tracks
+    when user last claimed daily reward to prevent double-claiming.
+    `last_login_date` tracks the last day the user opened the app.
+    `consecutive_login_days` is specifically for login-based streaks.
     """
 
     __tablename__ = "user_streaks"
@@ -809,8 +810,49 @@ class UserStreak(Base):
     current_streak: Mapped[int] = mapped_column(Integer, default=0)
     longest_streak: Mapped[int] = mapped_column(Integer, default=0)
     last_activity_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    last_claim_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    last_login_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    consecutive_login_days: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DailyReward(Base):
+    """Daily reward configuration and tracking.
+    
+    Defines rewards available for each streak day (1-7, weekly, monthly).
+    Users can claim one reward per day based on their current streak.
+    """
+
+    __tablename__ = "daily_rewards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    day_number: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-7 for daily, 7+ for weekly/monthly
+    reward_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "points", "multiplier", "bonus"
+    reward_value: Mapped[int] = mapped_column(Integer, nullable=False)  # Amount of points or multiplier %
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(String(255), nullable=True)
+    icon_emoji: Mapped[str] = mapped_column(String(10), nullable=False, default="🎁")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class UserRewardClaim(Base):
+    """Track user's daily reward claims to prevent double-claiming."""
+
+    __tablename__ = "user_reward_claims"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    reward_id: Mapped[int] = mapped_column(Integer, ForeignKey("daily_rewards.id"), nullable=False)
+    claim_date: Mapped[str] = mapped_column(String(10), nullable=False)  # YYYY-MM-DD
+    streak_day: Mapped[int] = mapped_column(Integer, nullable=False)
+    points_earned: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_user_reward_claims_user_date", "user_id", "claim_date", unique=True),
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════

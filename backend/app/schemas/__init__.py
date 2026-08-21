@@ -1010,6 +1010,43 @@ class StreakResponse(BaseModel):
     bonus_label: str
 
 
+class DailyRewardInfo(BaseModel):
+    id: int
+    day_number: int
+    reward_type: str
+    reward_value: int
+    title: str
+    description: str | None
+    icon_emoji: str
+
+
+class DailyRewardStatus(BaseModel):
+    current_streak: int
+    longest_streak: int
+    can_claim_today: bool
+    todays_reward: DailyRewardInfo | None
+    last_claim_date: str | None
+    next_milestone_day: int | None
+    recent_claims: list[dict]
+
+
+class DailyRewardClaim(BaseModel):
+    success: bool
+    points_earned: int
+    reward_title: str
+    reward_description: str | None
+    reward_emoji: str
+    new_total_points: int
+    streak_day: int
+    is_multiplier: bool
+    multiplier_value: int | None
+
+
+class DailyRewardHistory(BaseModel):
+    claims: list[dict]
+    total_points_earned: int
+
+
 class DailyActiveUsers(BaseModel):
     date: str
     count: int

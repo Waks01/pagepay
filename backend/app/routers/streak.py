@@ -46,17 +46,80 @@ def _bonus_for_streak(days: int) -> tuple[float, str]:
     return 1.0, "No bonus"
 
 
-async def _update_streak(user_id: int, db: AsyncSession, request: Request | None = None) -> UserStreak:
-    """Recalculate the user's streak from their verified reading sessions.
-
-    Uses the client's local calendar date when available so that streak
-    boundaries follow the user's clock instead of server UTC midnight.
+async def _update_login_streak(user_id: int, db: AsyncSession, request: Request | None = None) -> UserStreak:
+    """Update user's login streak based on app usage (not just reading sessions).
+    
+    This function should be called whenever a user opens the app or makes any API call.
+    It tracks consecutive days of app usage, with proper 24-hour reset logic.
     """
     streak_row = await db.execute(
         select(UserStreak).where(UserStreak.user_id == user_id)
     )
     streak = streak_row.scalar_one_or_none()
+    
+    utc_now = datetime.now(timezone.utc)
+    offset = _get_timezone_offset_minutes(request) if request is not None else 0
+    today = _user_local_date(utc_now, offset)
+    today_str = today.isoformat()
+    yesterday = today - timedelta(days=1)
+    yesterday_str = yesterday.isoformat()
 
+    if streak is None:
+        # First time user - create streak record
+        streak = UserStreak(
+            user_id=user_id,
+            current_streak=1,
+            longest_streak=1,
+            last_activity_date=today_str,
+            last_login_date=today_str,
+            consecutive_login_days=1
+        )
+        db.add(streak)
+        await db.commit()
+        await db.refresh(streak)
+        return streak
+
+    last_login = streak.last_login_date
+    
+    if last_login == today_str:
+        # User already logged in today - no change needed
+        return streak
+    elif last_login == yesterday_str:
+        # User logged in yesterday - continue streak
+        streak.current_streak += 1
+        streak.consecutive_login_days += 1
+        streak.longest_streak = max(streak.longest_streak, streak.current_streak)
+    elif last_login and date.fromisoformat(last_login) < yesterday:
+        # User missed a day - reset streak
+        streak.current_streak = 1
+        streak.consecutive_login_days = 1
+    else:
+        # Edge case or first login - start fresh
+        streak.current_streak = 1
+        streak.consecutive_login_days = 1
+        
+    streak.last_login_date = today_str
+    streak.last_activity_date = today_str
+    streak.longest_streak = max(streak.longest_streak, streak.current_streak)
+    
+    await db.commit()
+    await db.refresh(streak)
+    return streak
+
+
+async def _update_streak(user_id: int, db: AsyncSession, request: Request | None = None) -> UserStreak:
+    """Recalculate the user's streak from their verified reading sessions.
+
+    Uses the client's local calendar date when available so that streak
+    boundaries follow the user's clock instead of server UTC midnight.
+    
+    DEPRECATED: This function is kept for backward compatibility but login streaks
+    should use _update_login_streak instead.
+    """
+    # First update login streak (this handles the daily login tracking)
+    streak = await _update_login_streak(user_id, db, request)
+    
+    # Then calculate reading session streak for bonus purposes
     session_dates = await db.execute(
         select(func.date(ReadingSession.start_time))
         .where(ReadingSession.user_id == user_id)
@@ -72,40 +135,37 @@ async def _update_streak(user_id: int, db: AsyncSession, request: Request | None
     yesterday = today - timedelta(days=1)
 
     if not dates:
-        if streak is None:
-            streak = UserStreak(user_id=user_id, current_streak=0, longest_streak=0)
-            db.add(streak)
-        else:
-            streak.current_streak = 0
-        await db.commit()
-        await db.refresh(streak)
+        # No reading sessions, but login streak is already handled above
         return streak
 
-    streak_days = 1
-    longest = 1
-    prev = date.fromisoformat(dates[0])
+    # Calculate reading session streak (for bonus multipliers)
+    streak_days = 0
+    longest_reading = 0
+    
+    if dates:
+        streak_days = 1
+        longest_reading = 1
+        prev = date.fromisoformat(dates[0])
 
-    if prev != today and prev != yesterday:
-        streak_days = 0
+        # Reset reading streak if last reading session was before yesterday
+        if prev < yesterday:
+            streak_days = 0
 
-    for d in dates[1:]:
-        curr = date.fromisoformat(d)
-        if (prev - curr).days == 1:
-            streak_days += 1
-            longest = max(longest, streak_days)
-        elif (prev - curr).days > 1:
-            streak_days = 1
-        prev = curr
+        for d in dates[1:]:
+            curr = date.fromisoformat(d)
+            if (prev - curr).days == 1:
+                streak_days += 1
+                longest_reading = max(longest_reading, streak_days)
+            elif (prev - curr).days > 1:
+                streak_days = 1
+            prev = curr
 
-    if streak is None:
-        streak = UserStreak(user_id=user_id)
-        db.add(streak)
+        # Only count reading streak if last session was today or yesterday
+        if date.fromisoformat(dates[0]) not in (today, yesterday):
+            streak_days = 0
 
-    streak.current_streak = streak_days if (date.fromisoformat(dates[0]) in (today, yesterday)) else 0
-    streak.longest_streak = max(streak.longest_streak, longest)
-    streak.last_activity_date = dates[0]
-    await db.commit()
-    await db.refresh(streak)
+    # Use login streak for display, but reading streak can influence bonuses
+    # For now, we'll use login streak as the primary streak
     return streak
 
 

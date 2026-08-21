@@ -19,14 +19,14 @@ crashing mid-run and restarting is safe.
 
 import asyncio
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.models import User, UserTier, ContentCatalog
+from app.models import User, UserTier, ContentCatalog, UserStreak
 from app.services.content.gutendex import import_gutendex
 from app.services.content.gnews import import_gnews
 from app.services.content.slicing import slice_all_books
@@ -54,6 +54,37 @@ async def expire_subscriptions(db: AsyncSession) -> int:
     if count > 0:
         await db.commit()
         logger.info("Expired %d premium subscriptions", count)
+    
+    return count
+
+
+async def reset_inactive_streaks(db: AsyncSession) -> int:
+    """Reset streaks for users who haven't logged in for 2+ days.
+    
+    This ensures streaks are properly reset for inactive users even if they
+    don't open the app to trigger the normal streak update logic.
+    """
+    now = datetime.utcnow()
+    today = now.date()
+    cutoff_date = (today - timedelta(days=2)).isoformat()  # 2+ days ago
+    
+    # Find users with streaks who haven't logged in for 2+ days
+    result = await db.execute(
+        update(UserStreak)
+        .where(
+            (UserStreak.current_streak > 0) &
+            (
+                (UserStreak.last_login_date.is_(None)) |
+                (UserStreak.last_login_date < cutoff_date)
+            )
+        )
+        .values(current_streak=0, consecutive_login_days=0)
+    )
+    
+    count = result.rowcount
+    if count > 0:
+        await db.commit()
+        logger.info("Reset streaks for %d inactive users (last login before %s)", count, cutoff_date)
     
     return count
 
@@ -178,6 +209,7 @@ async def run_once(
         "skipped_existing": 0,
         "subscriptions_expired": 0,
         "referral_caps_reset": 0,
+        "inactive_streaks_reset": 0,
     }
 
     async with AsyncSessionLocal() as db:
@@ -218,6 +250,12 @@ async def run_once(
         except Exception as exc:
             logger.error("Referral cap reset failed: %s", exc)
 
+        # Reset inactive user streaks (users who haven't logged in for 2+ days)
+        try:
+            summary["inactive_streaks_reset"] = await reset_inactive_streaks(db)
+        except Exception as exc:
+            logger.error("Inactive streak reset failed: %s", exc)
+
         # Sync new posts from Hive blockchain.
         try:
             summary["hive_imported"] = await sync_hive_posts(db, limit=50)
@@ -225,7 +263,7 @@ async def run_once(
             logger.error("Hive sync failed: %s", exc)
 
     logger.info(
-        "Cron run done: gutenberg=%d gnews=%d hive=%d sliced=%d children_added=%d subscriptions_expired=%d referral_caps_reset=%d",
+        "Cron run done: gutenberg=%d gnews=%d hive=%d sliced=%d children_added=%d subscriptions_expired=%d referral_caps_reset=%d inactive_streaks_reset=%d",
         summary["gutendex_imported"],
         summary["gnews_imported"],
         summary["hive_imported"],
@@ -233,6 +271,7 @@ async def run_once(
         summary["children_added"],
         summary["subscriptions_expired"],
         summary["referral_caps_reset"],
+        summary["inactive_streaks_reset"],
     )
     return summary
 
