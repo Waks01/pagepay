@@ -102,24 +102,24 @@ export default function DailyRewardsScreen() {
           styles.dayCard,
           {
             backgroundColor: isClaimable
-              ? tokens.accent
+              ? tokens.mint
               : isClaimed || isPast
-                ? tokens.success
+                ? tokens.mint
                 : isFuture
-                  ? tokens.neutralSoft
+                  ? tokens.borderStrong
                   : tokens.paper,
             borderColor: isToday
-              ? tokens.accent
+              ? tokens.mint
               : isClaimed || isPast
-                ? tokens.success
-                : tokens.neutral,
+                ? tokens.mint
+                : tokens.border,
           },
         ]}
       >
         <Text
           style={[
             styles.dayNumber,
-            { color: isClaimable ? tokens.white : tokens.text },
+            { color: isClaimable ? '#FFFFFF' : tokens.ink },
           ]}
         >
           Day {dayNumber}
@@ -134,7 +134,7 @@ export default function DailyRewardsScreen() {
               style={[
                 styles.rewardTitle,
                 {
-                  color: isClaimable ? tokens.white : tokens.text,
+                  color: isClaimable ? '#FFFFFF' : tokens.ink,
                   opacity: isFuture ? 0.5 : 1,
                 },
               ]}
@@ -146,10 +146,10 @@ export default function DailyRewardsScreen() {
                 styles.rewardValue,
                 {
                   color: isClaimable
-                    ? tokens.white
+                    ? '#FFFFFF'
                     : reward.reward_type === "multiplier"
-                      ? tokens.accent
-                      : tokens.success,
+                      ? tokens.mint
+                      : tokens.mint,
                   opacity: isFuture ? 0.5 : 1,
                 },
               ]}
@@ -166,7 +166,7 @@ export default function DailyRewardsScreen() {
             <Ionicons
               name="checkmark-circle"
               size={24}
-              color={tokens.success}
+              color={tokens.mint}
             />
           </View>
         )}
@@ -177,14 +177,14 @@ export default function DailyRewardsScreen() {
   if (isLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: tokens.background }]}
+        style={[styles.container, { backgroundColor: tokens.paper }]}
       >
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: tokens.neutral }]}>
+        <View style={[styles.header, { borderBottomColor: tokens.border }]}>
           <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={tokens.text} />
+            <Ionicons name="arrow-back" size={24} color={tokens.ink} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: tokens.text }]}>
+          <Text style={[styles.headerTitle, { color: tokens.ink }]}>
             Daily Rewards
           </Text>
           <View style={{ width: 24 }} />
@@ -198,7 +198,7 @@ export default function DailyRewardsScreen() {
           <View
             style={[
               styles.streakCard,
-              { backgroundColor: tokens.paper, borderColor: tokens.neutral },
+              { backgroundColor: tokens.paper, borderColor: tokens.border },
             ]}
           >
             <View style={styles.streakHeader}>
@@ -215,7 +215,7 @@ export default function DailyRewardsScreen() {
           <View
             style={[
               styles.claimButton,
-              { backgroundColor: tokens.neutralSoft },
+              { backgroundColor: tokens.borderStrong },
             ]}
           >
             <Skeleton width={40} height={40} />
@@ -237,7 +237,7 @@ export default function DailyRewardsScreen() {
                     styles.dayCard,
                     {
                       backgroundColor: tokens.paper,
-                      borderColor: tokens.neutral,
+                      borderColor: tokens.border,
                       width: (width - 32 - 24) / 3,
                     },
                   ]}
@@ -262,14 +262,14 @@ export default function DailyRewardsScreen() {
   if (error) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: tokens.background }]}
+        style={[styles.container, { backgroundColor: tokens.paper }]}
       >
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: tokens.neutral }]}>
+        <View style={[styles.header, { borderBottomColor: tokens.border }]}>
           <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={tokens.text} />
+            <Ionicons name="arrow-back" size={24} color={tokens.ink} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: tokens.text }]}>
+          <Text style={[styles.headerTitle, { color: tokens.ink }]}>
             Daily Rewards
           </Text>
           <View style={{ width: 24 }} />
@@ -294,14 +294,14 @@ export default function DailyRewardsScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: tokens.background }]}
+      style={[styles.container, { backgroundColor: tokens.paper }]}
     >
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: tokens.neutral }]}>
+      <View style={[styles.header, { borderBottomColor: tokens.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={tokens.text} />
+          <Ionicons name="arrow-back" size={24} color={tokens.ink} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: tokens.text }]}>
+        <Text style={[styles.headerTitle, { color: tokens.ink }]}>
           Daily Rewards
         </Text>
         <View style={{ width: 24 }} />
@@ -315,21 +315,21 @@ export default function DailyRewardsScreen() {
         <View
           style={[
             styles.streakCard,
-            { backgroundColor: tokens.paper, borderColor: tokens.neutral },
+            { backgroundColor: tokens.paper, borderColor: tokens.border },
           ]}
         >
           <View style={styles.streakHeader}>
             <Text style={[styles.streakEmoji]}>🔥</Text>
             <View style={styles.streakInfo}>
-              <Text style={[styles.streakNumber, { color: tokens.accent }]}>
+              <Text style={[styles.streakNumber, { color: tokens.mint }]}>
                 {currentStreak}
               </Text>
-              <Text style={[styles.streakLabel, { color: tokens.text }]}>
+              <Text style={[styles.streakLabel, { color: tokens.ink }]}>
                 Day Streak
               </Text>
             </View>
           </View>
-          <Text style={[styles.streakSubtext, { color: tokens.textSoft }]}>
+          <Text style={[styles.streakSubtext, { color: tokens.inkMuted }]}>
             {currentStreak === 0
               ? "Start your daily streak by claiming today's reward!"
               : `You're on fire! ${7 - (currentStreak % 7)} more days to complete the week.`}
@@ -342,7 +342,7 @@ export default function DailyRewardsScreen() {
             style={[
               styles.claimButton,
               {
-                backgroundColor: tokens.accent,
+                backgroundColor: tokens.mint,
                 opacity: claimingReward ? 0.7 : 1,
               },
             ]}
@@ -353,27 +353,27 @@ export default function DailyRewardsScreen() {
               {todayReward.icon_emoji}
             </Text>
             <View style={styles.claimButtonContent}>
-              <Text style={[styles.claimButtonTitle, { color: tokens.white }]}>
+              <Text style={[styles.claimButtonTitle, { color: '#FFFFFF' }]}>
                 {claimingReward ? "Claiming..." : "Claim Today's Reward"}
               </Text>
               <Text
-                style={[styles.claimButtonSubtitle, { color: tokens.white }]}
+                style={[styles.claimButtonSubtitle, { color: '#FFFFFF' }]}
               >
                 {todayReward.title} • +{todayReward.reward_value}{" "}
                 {todayReward.reward_type === "points" ? "points" : "% bonus"}
               </Text>
             </View>
             {claimingReward ? (
-              <ActivityIndicator size="small" color={tokens.white} />
+              <ActivityIndicator size="small" color={'#FFFFFF'} />
             ) : (
-              <Ionicons name="chevron-forward" size={24} color={tokens.white} />
+              <Ionicons name="chevron-forward" size={24} color={'#FFFFFF'} />
             )}
           </TouchableOpacity>
         )}
 
         {/* 7-Day Progress */}
         <View style={styles.progressSection}>
-          <Text style={[styles.sectionTitle, { color: tokens.text }]}>
+          <Text style={[styles.sectionTitle, { color: tokens.ink }]}>
             Weekly Progress
           </Text>
           <View style={styles.dayGrid}>
