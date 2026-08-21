@@ -136,9 +136,13 @@ function BodyRendererImpl({
 }
 
 /**
- * Pre-v3 single-Text body with optional highlight tints. We treat
- * the whole body as one "segment" with bodyStart=0, so the same
+ * Pre-v3 single-Text body with optional highlight tints and ad slots.
+ * We treat the whole body as one "segment" with bodyStart=0, so the same
  * highlight-clipping logic in TextSegment handles it.
+ *
+ * The parent can pass `renderAfter` to inject native ads at natural
+ * paragraph breaks. This preserves the old ~every-400-chars cadence
+ * without splitting the body into artificial segments.
  */
 function PlainBodyWithHighlights({
   bodyText,
@@ -146,15 +150,17 @@ function PlainBodyWithHighlights({
   inkColor,
   onLongPress,
   onHighlightPress,
+  renderAfter,
 }: {
   bodyText: string;
   highlights: HighlightEntry[];
   inkColor: string;
   onLongPress?: BodyRendererProps['onLongPress'];
   onHighlightPress?: BodyRendererProps['onHighlightPress'];
+  renderAfter?: (segmentIndex: number, segment: { kind: 'text'; text: string; bodyStart: number }) => ReactNode;
 }) {
-  const paragraphs = bodyText.split(/\n{2,}/);
-  if (!highlights.length && !onLongPress) {
+  const paragraphs = bodyText.split(/\n{2,}/).filter((p) => p.trim().length > 0);
+  if (!highlights.length && !onLongPress && !renderAfter) {
     return (
       <View>
         {paragraphs.map((p, i) => (
@@ -165,21 +171,24 @@ function PlainBodyWithHighlights({
       </View>
     );
   }
+
   return (
     <View>
       {paragraphs.map((p, i) => (
-        <TextSegment
-          key={i}
-          text={p.trim()}
-          inkColor={inkColor}
-          highlights={highlights}
-          onLongPress={onLongPress ? (e) => {
-            const sel = e.nativeEvent.selection;
-            if (!sel) return;
-            onLongPress(0, sel);
-          } : undefined}
-          onHighlightPress={onHighlightPress}
-        />
+        <View key={i}>
+          <TextSegment
+            text={p.trim()}
+            inkColor={inkColor}
+            highlights={highlights}
+            onLongPress={onLongPress ? (e) => {
+              const sel = e.nativeEvent.selection;
+              if (!sel) return;
+              onLongPress(0, sel);
+            } : undefined}
+            onHighlightPress={onHighlightPress}
+          />
+          {renderAfter ? renderAfter(i, { kind: 'text', text: p.trim(), bodyStart: 0 }) : null}
+        </View>
       ))}
     </View>
   );

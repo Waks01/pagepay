@@ -541,6 +541,12 @@ export default function ReaderScreen() {
           />
         )}
 
+        {readerMode !== 'listen' && isReadMode && nativeAdUnit && sessionId && (
+          <View style={styles.adSlot}>
+            <NativeAdBanner adUnit={nativeAdUnit} sessionId={sessionId} />
+          </View>
+        )}
+
         {readerMode !== 'listen' && (
           <BodyRenderer
             bodyText={content.body_text || ''}
@@ -554,19 +560,33 @@ export default function ReaderScreen() {
             renderAfter={(idx, seg) => {
               if (!isReadMode) return null;
               if (!nativeAdUnit || !sessionId) return null;
-              if (
-                content.body_sentinels_version >= 1 &&
-                (seg.kind !== 'text' || (idx % 3) !== 0)
-              ) {
+              
+              // v3+ content: inject ad after every 3rd text segment
+              if (content.body_sentinels_version >= 1) {
+                if (seg.kind !== 'text' || (idx % 3) !== 0) {
+                  return null;
+                }
+              }
+              
+              // Pre-v3 content: inject ad after every 4th paragraph
+              // (the renderAfter index maps to paragraph index in PlainBodyWithHighlights)
+              if (content.body_sentinels_version < 1 && (idx % 4) !== 0) {
                 return null;
               }
-            return (
-              <View style={styles.adSlot}>
-                <NativeAdBanner adUnit={nativeAdUnit} sessionId={sessionId} />
-              </View>
-            );
-          }}
-        />
+              
+              return (
+                <View style={styles.adSlot}>
+                  <NativeAdBanner adUnit={nativeAdUnit} sessionId={sessionId} />
+                </View>
+              );
+            }}
+          />
+        )}
+
+        {readerMode !== 'listen' && isReadMode && nativeAdUnit && sessionId && (
+          <View style={styles.adSlot}>
+            <NativeAdBanner adUnit={nativeAdUnit} sessionId={sessionId} />
+          </View>
         )}
 
         {readerMode !== 'listen' && (

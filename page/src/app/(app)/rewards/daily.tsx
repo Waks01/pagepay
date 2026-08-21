@@ -48,9 +48,7 @@ export default function DailyRewardsScreen() {
     queryFn: fetchDailyRewardStatus,
   });
 
-  const {
-    data: rewardConfig = [],
-  } = useQuery({
+  const { data: rewardConfig = [] } = useQuery({
     queryKey: ["daily-reward-config"],
     queryFn: fetchDailyRewardConfig,
   });
@@ -119,7 +117,7 @@ export default function DailyRewardsScreen() {
         <Text
           style={[
             styles.dayNumber,
-            { color: isClaimable ? '#FFFFFF' : tokens.ink },
+            { color: isClaimable ? "#FFFFFF" : tokens.ink },
           ]}
         >
           Day {dayNumber}
@@ -134,7 +132,7 @@ export default function DailyRewardsScreen() {
               style={[
                 styles.rewardTitle,
                 {
-                  color: isClaimable ? '#FFFFFF' : tokens.ink,
+                  color: isClaimable ? "#FFFFFF" : tokens.ink,
                   opacity: isFuture ? 0.5 : 1,
                 },
               ]}
@@ -146,7 +144,7 @@ export default function DailyRewardsScreen() {
                 styles.rewardValue,
                 {
                   color: isClaimable
-                    ? '#FFFFFF'
+                    ? "#FFFFFF"
                     : reward.reward_type === "multiplier"
                       ? tokens.mint
                       : tokens.mint,
@@ -163,11 +161,7 @@ export default function DailyRewardsScreen() {
 
         {(isClaimed || isPast) && (
           <View style={styles.completedBadge}>
-            <Ionicons
-              name="checkmark-circle"
-              size={24}
-              color={tokens.mint}
-            />
+            <Ionicons name="checkmark-circle" size={24} color={tokens.mint} />
           </View>
         )}
       </View>
@@ -286,6 +280,73 @@ export default function DailyRewardsScreen() {
     );
   }
 
+  // Default reward structure for display
+  const defaultRewards: DailyRewardInfo[] = [
+    {
+      id: 1,
+      day_number: 1,
+      reward_type: "points",
+      reward_value: 100,
+      title: "Welcome Back!",
+      description: "",
+      icon_emoji: "🎯",
+    },
+    {
+      id: 2,
+      day_number: 2,
+      reward_type: "points",
+      reward_value: 150,
+      title: "Getting Started",
+      description: "",
+      icon_emoji: "⚡",
+    },
+    {
+      id: 3,
+      day_number: 3,
+      reward_type: "points",
+      reward_value: 200,
+      title: "On a Roll",
+      description: "",
+      icon_emoji: "🚀",
+    },
+    {
+      id: 4,
+      day_number: 4,
+      reward_type: "points",
+      reward_value: 300,
+      title: "Consistency Pays",
+      description: "",
+      icon_emoji: "💪",
+    },
+    {
+      id: 5,
+      day_number: 5,
+      reward_type: "points",
+      reward_value: 400,
+      title: "Dedication",
+      description: "",
+      icon_emoji: "🔥",
+    },
+    {
+      id: 6,
+      day_number: 6,
+      reward_type: "points",
+      reward_value: 500,
+      title: "Almost There",
+      description: "",
+      icon_emoji: "⭐",
+    },
+    {
+      id: 7,
+      day_number: 7,
+      reward_type: "points",
+      reward_value: 750,
+      title: "Week Complete!",
+      description: "",
+      icon_emoji: "🏆",
+    },
+  ];
+
   const currentStreak = rewardStatus?.current_streak || 0;
   const todayReward = rewardStatus?.todays_reward;
   const canClaim = rewardStatus?.can_claim_today;
@@ -293,9 +354,7 @@ export default function DailyRewardsScreen() {
   const rewards = rewardConfig.length > 0 ? rewardConfig : [];
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: tokens.paper }]}
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: tokens.paper }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: tokens.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
@@ -353,41 +412,141 @@ export default function DailyRewardsScreen() {
               {todayReward.icon_emoji}
             </Text>
             <View style={styles.claimButtonContent}>
-              <Text style={[styles.claimButtonTitle, { color: '#FFFFFF' }]}>
+              <Text style={[styles.claimButtonTitle, { color: "#FFFFFF" }]}>
                 {claimingReward ? "Claiming..." : "Claim Today's Reward"}
               </Text>
-              <Text
-                style={[styles.claimButtonSubtitle, { color: '#FFFFFF' }]}
-              >
+              <Text style={[styles.claimButtonSubtitle, { color: "#FFFFFF" }]}>
                 {todayReward.title} • +{todayReward.reward_value}{" "}
                 {todayReward.reward_type === "points" ? "points" : "% bonus"}
               </Text>
             </View>
             {claimingReward ? (
-              <ActivityIndicator size="small" color={'#FFFFFF'} />
+              <ActivityIndicator size="small" color={"#FFFFFF"} />
             ) : (
-              <Ionicons name="chevron-forward" size={24} color={'#FFFFFF'} />
+              <Ionicons name="chevron-forward" size={24} color={"#FFFFFF"} />
             )}
           </TouchableOpacity>
         )}
 
-        {/* 7-Day Progress */}
+        {/* Daily Progress */}
         <View style={styles.progressSection}>
           <Text style={[styles.sectionTitle, { color: tokens.ink }]}>
-            Weekly Progress
+            Daily Progress
           </Text>
           <View style={styles.dayGrid}>
-            {rewards.map((reward) => {
-              const dayNumber = reward.day_number;
-              const isToday = dayNumber === currentStreak + 1;
-              const isClaimed = recentClaims.some(
-                (claim) =>
-                  claim.streak_day === dayNumber &&
-                  claim.date === new Date().toISOString().split("T")[0],
-              );
+            {[...Array(Math.max(7, Math.min(currentStreak + 3, 21)))]
+              .map((_, index) => {
+                const dayNumber = index + 1;
+                // Get reward for this day, or fall back to day 7 reward for days beyond 7
+                const reward =
+                  defaultRewards.find((r) => r.day_number === dayNumber) ||
+                  (dayNumber <= 7
+                    ? null
+                    : defaultRewards.find((r) => r.day_number === 7));
 
-              return renderDayCard(dayNumber, reward, isToday, isClaimed);
-            })}
+                const isToday = dayNumber === currentStreak + 1;
+                const isClaimed = dayNumber <= currentStreak;
+                const isFuture = dayNumber > currentStreak + 1;
+
+                // Don't show too many future days
+                if (isFuture && dayNumber > currentStreak + 3) return null;
+
+                return renderDayCard(dayNumber, reward, isToday, isClaimed);
+              })
+              .filter(Boolean)}
+          </View>
+        </View>
+
+        {/* Milestones */}
+        <View style={styles.milestonesSection}>
+          <Text style={[styles.sectionTitle, { color: tokens.ink }]}>
+            Upcoming Milestones
+          </Text>
+          <View style={styles.milestonesList}>
+            {currentStreak < 14 && (
+              <View
+                style={[
+                  styles.milestoneCard,
+                  { backgroundColor: tokens.paper, borderColor: tokens.border },
+                ]}
+              >
+                <Text style={styles.milestoneEmoji}>🛡️</Text>
+                <View style={styles.milestoneInfo}>
+                  <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
+                    Two Week Warrior
+                  </Text>
+                  <Text
+                    style={[
+                      styles.milestoneSubtitle,
+                      { color: tokens.inkMuted },
+                    ]}
+                  >
+                    Day 14 • 20% bonus multiplier
+                  </Text>
+                  <Text
+                    style={[styles.milestoneProgress, { color: tokens.mint }]}
+                  >
+                    {14 - currentStreak} days to go
+                  </Text>
+                </View>
+              </View>
+            )}
+            {currentStreak < 21 && (
+              <View
+                style={[
+                  styles.milestoneCard,
+                  { backgroundColor: tokens.paper, borderColor: tokens.border },
+                ]}
+              >
+                <Text style={styles.milestoneEmoji}>👑</Text>
+                <View style={styles.milestoneInfo}>
+                  <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
+                    Three Week Legend
+                  </Text>
+                  <Text
+                    style={[
+                      styles.milestoneSubtitle,
+                      { color: tokens.inkMuted },
+                    ]}
+                  >
+                    Day 21 • 1500 bonus points
+                  </Text>
+                  <Text
+                    style={[styles.milestoneProgress, { color: tokens.mint }]}
+                  >
+                    {21 - currentStreak} days to go
+                  </Text>
+                </View>
+              </View>
+            )}
+            {currentStreak < 30 && (
+              <View
+                style={[
+                  styles.milestoneCard,
+                  { backgroundColor: tokens.paper, borderColor: tokens.border },
+                ]}
+              >
+                <Text style={styles.milestoneEmoji}>💎</Text>
+                <View style={styles.milestoneInfo}>
+                  <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
+                    Monthly Master
+                  </Text>
+                  <Text
+                    style={[
+                      styles.milestoneSubtitle,
+                      { color: tokens.inkMuted },
+                    ]}
+                  >
+                    Day 30 • 50% bonus multiplier
+                  </Text>
+                  <Text
+                    style={[styles.milestoneProgress, { color: tokens.mint }]}
+                  >
+                    {30 - currentStreak} days to go
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -416,6 +575,7 @@ const styles = {
   },
   contentContainer: {
     padding: 16,
+    paddingBottom: 80, // Extra padding at bottom to prevent scroll blocking
     gap: 24,
   },
   streakCard: {
@@ -479,40 +639,79 @@ const styles = {
   dayGrid: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
-    gap: 12,
+    gap: 16, // Increased gap between cards
+    justifyContent: "space-between" as const,
   },
   dayCard: {
-    width: (width - 32 - 24) / 3, // Account for padding and gaps
+    width: (width - 32 - 32) / 3, // Account for padding and gaps (32 = 16*2 padding, 32 = 16*2 gaps)
     aspectRatio: 1,
-    padding: 12,
-    borderRadius: 12,
+    padding: 16, // Increased padding inside cards
+    borderRadius: 16, // Increased border radius for more modern look
     borderWidth: 2,
     alignItems: "center" as const,
-    justifyContent: "center" as const,
+    justifyContent: "space-between" as const, // Changed to space-between for better layout
     position: "relative" as const,
+    minHeight: 120, // Minimum height for cards
   },
   dayNumber: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600" as const,
-    marginBottom: 8,
+    marginBottom: 4, // Added margin for spacing
   },
   rewardEmoji: {
-    fontSize: 24,
-    marginBottom: 8,
+    fontSize: 28, // Increased emoji size
+    marginBottom: 6, // Added margin
   },
   rewardTitle: {
     fontSize: 10,
     fontWeight: "500" as const,
     textAlign: "center" as const,
     marginBottom: 4,
+    lineHeight: 12, // Better line height for readability
   },
   rewardValue: {
-    fontSize: 12,
+    fontSize: 13, // Slightly increased font size
     fontWeight: "bold" as const,
   },
   completedBadge: {
     position: "absolute" as const,
     top: 8,
     right: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.9)", // Semi-transparent background
+    borderRadius: 12,
+    padding: 2,
+  },
+  milestonesSection: {
+    gap: 16,
+  },
+  milestonesList: {
+    gap: 12,
+  },
+  milestoneCard: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 16,
+  },
+  milestoneEmoji: {
+    fontSize: 24,
+  },
+  milestoneInfo: {
+    flex: 1,
+  },
+  milestoneTitle: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    marginBottom: 4,
+  },
+  milestoneSubtitle: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  milestoneProgress: {
+    fontSize: 12,
+    fontWeight: "600" as const,
   },
 };
