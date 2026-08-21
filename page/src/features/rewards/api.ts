@@ -53,6 +53,15 @@ export type DailyRewardHistory = {
   total_points_earned: number;
 };
 
+export async function fetchDailyRewardConfig(): Promise<DailyRewardInfo[]> {
+  const res = await apiFetch("/api/v1/rewards/daily/config");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Failed to load daily reward config");
+  }
+  return res.json();
+}
+
 export async function fetchDailyRewardStatus(): Promise<DailyRewardStatus> {
   const res = await apiFetch("/api/v1/rewards/daily/status");
   if (!res.ok) {

@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/Skeleton";
 import {
   fetchDailyRewardStatus,
   claimDailyReward,
+  fetchDailyRewardConfig,
   DailyRewardStatus,
   DailyRewardInfo,
 } from "@/src/features/rewards/api";
@@ -45,6 +46,13 @@ export default function DailyRewardsScreen() {
   } = useQuery({
     queryKey: ["daily-reward-status"],
     queryFn: fetchDailyRewardStatus,
+  });
+
+  const {
+    data: rewardConfig = [],
+  } = useQuery({
+    queryKey: ["daily-reward-config"],
+    queryFn: fetchDailyRewardConfig,
   });
 
   const claimMutation = useMutation({
@@ -278,77 +286,11 @@ export default function DailyRewardsScreen() {
     );
   }
 
-  // Default reward structure for display
-  const defaultRewards: DailyRewardInfo[] = [
-    {
-      id: 1,
-      day_number: 1,
-      reward_type: "points",
-      reward_value: 100,
-      title: "Welcome Back!",
-      description: "",
-      icon_emoji: "🎯",
-    },
-    {
-      id: 2,
-      day_number: 2,
-      reward_type: "points",
-      reward_value: 150,
-      title: "Getting Started",
-      description: "",
-      icon_emoji: "⚡",
-    },
-    {
-      id: 3,
-      day_number: 3,
-      reward_type: "points",
-      reward_value: 200,
-      title: "On a Roll",
-      description: "",
-      icon_emoji: "🚀",
-    },
-    {
-      id: 4,
-      day_number: 4,
-      reward_type: "points",
-      reward_value: 300,
-      title: "Consistency Pays",
-      description: "",
-      icon_emoji: "💪",
-    },
-    {
-      id: 5,
-      day_number: 5,
-      reward_type: "points",
-      reward_value: 400,
-      title: "Dedication",
-      description: "",
-      icon_emoji: "🔥",
-    },
-    {
-      id: 6,
-      day_number: 6,
-      reward_type: "points",
-      reward_value: 500,
-      title: "Almost There",
-      description: "",
-      icon_emoji: "⭐",
-    },
-    {
-      id: 7,
-      day_number: 7,
-      reward_type: "points",
-      reward_value: 750,
-      title: "Week Complete!",
-      description: "",
-      icon_emoji: "🏆",
-    },
-  ];
-
   const currentStreak = rewardStatus?.current_streak || 0;
   const todayReward = rewardStatus?.todays_reward;
   const canClaim = rewardStatus?.can_claim_today;
   const recentClaims = rewardStatus?.recent_claims || [];
+  const rewards = rewardConfig.length > 0 ? rewardConfig : [];
 
   return (
     <SafeAreaView
@@ -435,7 +377,7 @@ export default function DailyRewardsScreen() {
             Weekly Progress
           </Text>
           <View style={styles.dayGrid}>
-            {defaultRewards.map((reward, index) => {
+            {rewards.map((reward) => {
               const dayNumber = reward.day_number;
               const isToday = dayNumber === currentStreak + 1;
               const isClaimed = recentClaims.some(
@@ -446,69 +388,6 @@ export default function DailyRewardsScreen() {
 
               return renderDayCard(dayNumber, reward, isToday, isClaimed);
             })}
-          </View>
-        </View>
-
-        {/* Milestones */}
-        <View style={styles.milestonesSection}>
-          <Text style={[styles.sectionTitle, { color: tokens.text }]}>
-            Upcoming Milestones
-          </Text>
-          <View style={styles.milestonesList}>
-            <View
-              style={[
-                styles.milestoneCard,
-                { backgroundColor: tokens.paper, borderColor: tokens.neutral },
-              ]}
-            >
-              <Text style={styles.milestoneEmoji}>🛡️</Text>
-              <View style={styles.milestoneInfo}>
-                <Text style={[styles.milestoneTitle, { color: tokens.text }]}>
-                  Two Week Warrior
-                </Text>
-                <Text
-                  style={[styles.milestoneSubtitle, { color: tokens.textSoft }]}
-                >
-                  Day 14 • 20% bonus multiplier
-                </Text>
-              </View>
-            </View>
-            <View
-              style={[
-                styles.milestoneCard,
-                { backgroundColor: tokens.paper, borderColor: tokens.neutral },
-              ]}
-            >
-              <Text style={styles.milestoneEmoji}>👑</Text>
-              <View style={styles.milestoneInfo}>
-                <Text style={[styles.milestoneTitle, { color: tokens.text }]}>
-                  Three Week Legend
-                </Text>
-                <Text
-                  style={[styles.milestoneSubtitle, { color: tokens.textSoft }]}
-                >
-                  Day 21 • 1500 bonus points
-                </Text>
-              </View>
-            </View>
-            <View
-              style={[
-                styles.milestoneCard,
-                { backgroundColor: tokens.paper, borderColor: tokens.neutral },
-              ]}
-            >
-              <Text style={styles.milestoneEmoji}>💎</Text>
-              <View style={styles.milestoneInfo}>
-                <Text style={[styles.milestoneTitle, { color: tokens.text }]}>
-                  Monthly Master
-                </Text>
-                <Text
-                  style={[styles.milestoneSubtitle, { color: tokens.textSoft }]}
-                >
-                  Day 30 • 50% bonus multiplier
-                </Text>
-              </View>
-            </View>
           </View>
         </View>
       </ScrollView>
@@ -635,33 +514,5 @@ const styles = {
     position: "absolute" as const,
     top: 8,
     right: 8,
-  },
-  milestonesSection: {
-    gap: 16,
-  },
-  milestonesList: {
-    gap: 12,
-  },
-  milestoneCard: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 16,
-  },
-  milestoneEmoji: {
-    fontSize: 24,
-  },
-  milestoneInfo: {
-    flex: 1,
-  },
-  milestoneTitle: {
-    fontSize: 16,
-    fontWeight: "600" as const,
-    marginBottom: 4,
-  },
-  milestoneSubtitle: {
-    fontSize: 14,
   },
 };

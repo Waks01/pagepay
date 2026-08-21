@@ -241,3 +241,27 @@ async def get_daily_reward_history(
         ],
         total_points_earned=sum(claim[0].points_earned for claim in claims)
     )
+
+
+@router.get("/daily/config")
+async def get_daily_reward_config(
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the active daily reward configuration (all rewards)."""
+    result = await db.execute(
+        select(DailyReward).where(DailyReward.is_active == True).order_by(DailyReward.day_number)
+    )
+    rewards = result.scalars().all()
+    
+    return [
+        {
+            "id": r.id,
+            "day_number": r.day_number,
+            "reward_type": r.reward_type,
+            "reward_value": r.reward_value,
+            "title": r.title,
+            "description": r.description,
+            "icon_emoji": r.icon_emoji,
+        }
+        for r in rewards
+    ]
