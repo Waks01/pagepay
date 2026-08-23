@@ -6,6 +6,7 @@ Users upgrade from FREE → PREMIUM_MONTHLY or PREMIUM_YEARLY.
 
 import asyncio
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
@@ -326,6 +327,110 @@ async def get_payment_status(
         "confirmed_at": payment.confirmed_at.isoformat() if payment.confirmed_at else None,
         "webhook_confirmed": payment.webhook_confirmed,
     }
+
+
+@router.post("/status/{reference}/cancel")
+async def cancel_payment_status(
+    reference: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually update payment status to cancelled when user cancels in frontend.
+    
+    This handles cases where Paystack doesn't send a webhook for cancelled payments.
+    """
+    logger.info("🔄 [CANCEL] Received cancel request for reference: %s", reference)
+    logger.info("🔄 [CANCEL] User ID: %s", current_user.id)
+    
+    payment = (
+        await db.execute(
+            select(Payment).where(
+                Payment.provider_tx_ref == reference,
+                Payment.user_id == current_user.id  # Ensure user owns this payment
+            )
+        )
+    ).scalar_one_or_none()
+    
+    if not payment:
+        logger.warning("❌ [CANCEL] Payment not found for reference: %s, user: %s", reference, current_user.id)
+        raise HTTPException(status_code=404, detail="Payment not found")
+    
+    logger.info("✅ [CANCEL] Payment found: id=%s, status=%s", payment.id, payment.status)
+    
+    # Only update if still pending (don't override webhook updates)
+    if payment.status == "pending":
+        logger.info("🔄 [CANCEL] Updating payment status to cancelled for reference: %s", reference)
+        payment.status = "cancelled"
+        payment.confirmed_at = datetime.utcnow()
+        await db.commit()
+        logger.info("✅ [CANCEL] Payment status updated successfully")
+        
+        return {
+            "success": True,
+            "message": "Payment status updated to cancelled",
+            "reference": reference,
+            "status": "cancelled"
+        }
+    else:
+        logger.info("⚠️ [CANCEL] Payment already has final status: %s, not updating", payment.status)
+        return {
+            "success": False,
+            "message": f"Payment already has status: {payment.status}",
+            "reference": reference,
+            "status": payment.status
+        }
+
+
+@router.post("/status/{reference}/fail")
+async def fail_payment_status(
+    reference: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually update payment status to failed when payment fails in frontend.
+    
+    This handles cases where Paystack doesn't send a webhook for failed payments.
+    """
+    logger.info("🔄 [FAIL] Received fail request for reference: %s", reference)
+    logger.info("🔄 [FAIL] User ID: %s", current_user.id)
+    
+    payment = (
+        await db.execute(
+            select(Payment).where(
+                Payment.provider_tx_ref == reference,
+                Payment.user_id == current_user.id  # Ensure user owns this payment
+            )
+        )
+    ).scalar_one_or_none()
+    
+    if not payment:
+        logger.warning("❌ [FAIL] Payment not found for reference: %s, user: %s", reference, current_user.id)
+        raise HTTPException(status_code=404, detail="Payment not found")
+    
+    logger.info("✅ [FAIL] Payment found: id=%s, status=%s", payment.id, payment.status)
+    
+    # Only update if still pending (don't override webhook updates)
+    if payment.status == "pending":
+        logger.info("🔄 [FAIL] Updating payment status to failed for reference: %s", reference)
+        payment.status = "failed"
+        payment.confirmed_at = datetime.utcnow()
+        await db.commit()
+        logger.info("✅ [FAIL] Payment status updated successfully")
+        
+        return {
+            "success": True,
+            "message": "Payment status updated to failed",
+            "reference": reference,
+            "status": "failed"
+        }
+    else:
+        logger.info("⚠️ [FAIL] Payment already has final status: %s, not updating", payment.status)
+        return {
+            "success": False,
+            "message": f"Payment already has status: {payment.status}",
+            "reference": reference,
+            "status": payment.status
+        }
 
 
 @router.post("/refund")

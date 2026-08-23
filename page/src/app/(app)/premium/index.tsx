@@ -205,7 +205,7 @@ function PremiumBody({
   checkingPayment: boolean;
   setCheckingPayment: (v: boolean) => void;
   handleSelectTier: (tierId: string) => void;
-}}}) {
+}) {
   const qc = useQueryClient();
   const { initializePayment, isLoading: paystackLoading } = usePaystack();
 
@@ -224,18 +224,18 @@ function PremiumBody({
   const handleUpgrade = async (tier: string) => {
     console.log("💳 [PREMIUM] Starting subscription upgrade, tier:", tier);
     setCheckingPayment(false);
-    
-    /* 
+
+    /*
      * WEBHOOK-DRIVEN PAYMENT FLOW:
      * 1. Frontend initiates payment via /api/v1/payments/initiate
      * 2. Frontend opens Paystack modal for user interaction
      * 3. Paystack processes payment and sends webhook to backend
      * 4. Backend webhook handles all payment status updates (success/cancel/error)
      * 5. Frontend simply refreshes data to reflect webhook processing
-     * 
+     *
      * This approach eliminates race conditions and ensures reliable payment handling.
      */
-    
+
     try {
       console.log("🌐 [PREMIUM] Calling backend /api/v1/payments/initiate...");
       const res = await apiFetch("/api/v1/payments/initiate", {
@@ -276,16 +276,50 @@ function PremiumBody({
             // Show immediate success feedback
             Alert.alert(
               t("premium.payment_success_title", "Payment Successful!"),
-              t("premium.payment_success_body", "Your payment was successful. Your premium subscription will be activated shortly."),
+              t(
+                "premium.payment_success_body",
+                "Your payment was successful. Your premium subscription will be activated shortly.",
+              ),
               [{ text: t("premium.ok") }],
             );
             // Webhook will handle the subscription activation
             // Refresh subscription data after a short delay to allow webhook processing
             refreshSubscriptionData(3000);
           },
-          onCancel: () => {
+          onCancel: async () => {
             console.log("❌ [PREMIUM] Payment cancelled by user");
-            // Webhook will handle the cancellation status
+            // Call backend to update payment status since Paystack may not send webhook
+            try {
+              const cancelUrl = `/api/v1/payments/status/${data.provider_tx_ref}/cancel`;
+              console.log(
+                "🔄 [PREMIUM] Updating payment status to cancelled...",
+              );
+              console.log("🔗 [PREMIUM] Cancel URL:", cancelUrl);
+              console.log("📝 [PREMIUM] Reference:", data.provider_tx_ref);
+              const cancelRes = await apiFetch(cancelUrl, {
+                method: "POST",
+              });
+              console.log(
+                "📥 [PREMIUM] Cancel response status:",
+                cancelRes.status,
+              );
+              if (cancelRes.ok) {
+                const responseData = await cancelRes.json();
+                console.log("✅ [PREMIUM] Payment status updated to cancelled");
+                console.log("📄 [PREMIUM] Response data:", responseData);
+              } else {
+                const errorText = await cancelRes.text();
+                console.error(
+                  "❌ [PREMIUM] Failed to update cancel status:",
+                  cancelRes.status,
+                  cancelRes.statusText,
+                );
+                console.error("📄 [PREMIUM] Error response:", errorText);
+              }
+            } catch (err) {
+              console.error("❌ [PREMIUM] Error updating cancel status:", err);
+            }
+
             Alert.alert(
               t("premium.payment_cancelled_title", "Payment Cancelled"),
               t(
@@ -296,9 +330,30 @@ function PremiumBody({
             // Refresh data to reflect cancellation status
             refreshSubscriptionData(1000);
           },
-          onError: (err) => {
+          onError: async (err) => {
             console.error("❌ [PREMIUM] Payment error:", err);
-            // Webhook will handle the error status
+            // Call backend to update payment status since Paystack may not send webhook
+            try {
+              console.log("🔄 [PREMIUM] Updating payment status to failed...");
+              const failRes = await apiFetch(
+                `/api/v1/payments/status/${data.provider_tx_ref}/fail`,
+                {
+                  method: "POST",
+                },
+              );
+              if (failRes.ok) {
+                console.log("✅ [PREMIUM] Payment status updated to failed");
+              } else {
+                console.error(
+                  "❌ [PREMIUM] Failed to update error status:",
+                  failRes.status,
+                  failRes.statusText,
+                );
+              }
+            } catch (err) {
+              console.error("❌ [PREMIUM] Error updating error status:", err);
+            }
+
             Alert.alert(
               t("premium.payment_error_title", "Payment Failed"),
               t(
@@ -454,9 +509,7 @@ function PremiumBody({
                         : t("premium.choose")
                     }
                     onPress={() => handleUpgrade(tier.tier)}
-                    disabled={
-                      isPremium && userTier?.tier === tier.tier
-                    }
+                    disabled={isPremium && userTier?.tier === tier.tier}
                     loading={paystackLoading}
                   />
                 </View>
