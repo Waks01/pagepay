@@ -214,7 +214,7 @@ export default function CatalogScreen() {
       if (!res.ok) return [];
       return (await res.json()) as string[];
     },
-    staleTime: 10 * 60 * 1000,
+    staleTime: 60 * 60 * 1000,
   });
 
   const filters = useMemo(

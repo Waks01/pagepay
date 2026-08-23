@@ -53,6 +53,7 @@ import NotificationBell from "@/components/NotificationBell";
 import { Skeleton } from "@/components/Skeleton";
 import { AnimatedInput } from "@/components/AnimatedInput";
 import { ChangePasswordModal } from "@/components/ChangePasswordModal";
+import { DeleteAccountModal } from "@/components/DeleteAccountModal";
 import {
   LinkPayoutAccountModal,
   PayoutAccount,
@@ -104,6 +105,7 @@ export default function ProfileScreen() {
   const { isSupported, isEnrolled, authenticate } = useBiometricAuth();
 
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showPayout, setShowPayout] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
@@ -143,7 +145,7 @@ export default function ProfileScreen() {
       if (!res.ok) throw new Error("Failed to load payout account");
       return (await res.json()) as PayoutAccount;
     },
-    staleTime: 30_000,
+    staleTime: 60 * 60 * 1000,
   });
 
   const pinStatusQuery = useQuery({
@@ -372,6 +374,43 @@ export default function ProfileScreen() {
     qc.clear();
     router.replace("/(auth)/" as any);
   }, [qc, router]);
+
+  const handleAccountDeleted = useCallback(async () => {
+    // Account has been permanently deleted on the server
+    // Clear all local data and redirect to auth
+
+    try {
+      const { deregisterFCMToken } = await import("@/src/lib/notifications");
+      await deregisterFCMToken();
+    } catch (error) {
+      console.error("Failed to deregister FCM token after deletion:", error);
+    }
+
+    const { clearToken } = await import("@/src/shared/lib/storage");
+    await clearToken(true); // Force clear all tokens
+
+    // Clear all cached data
+    useCurrentUserStore.getState().clear();
+    qc.clear();
+
+    // Close modal and redirect
+    setShowDeleteAccount(false);
+
+    // Show success alert before redirect
+    Alert.alert(
+      t("delete_account.success.title", { defaultValue: "Account Deleted" }),
+      t("delete_account.success.message", {
+        defaultValue:
+          "Your account has been permanently deleted. Thank you for using PagePay.",
+      }),
+      [
+        {
+          text: t("common.ok", { defaultValue: "OK" }),
+          onPress: () => router.replace("/(auth)/" as any),
+        },
+      ],
+    );
+  }, [qc, router, t]);
 
   const handleAvatarPress = useCallback(async () => {
     // Single tap: show lightbox if avatar exists
@@ -1255,6 +1294,27 @@ export default function ProfileScreen() {
           />
         </View>
 
+        {/* ── Danger Zone ─────────────────────────────────────────── */}
+        <Text style={[styles.section, { color: tokens.signal }]}>
+          {t("profile.sections.danger_zone", { defaultValue: "DANGER ZONE" })}
+        </Text>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: tokens.signalSoft, borderColor: tokens.signal },
+          ]}
+        >
+          <Row
+            tokens={tokens}
+            icon="trash-outline"
+            label={t("profile.danger.delete_account", {
+              defaultValue: "Delete Account",
+            })}
+            onPress={() => setShowDeleteAccount(true)}
+            iconColor={tokens.signal}
+          />
+        </View>
+
         {/* ── Sign out ─────────────────────────────────────────── */}
         <Pressable
           onPress={handleSignOut}
@@ -1293,6 +1353,11 @@ export default function ProfileScreen() {
       <ChangePasswordModal
         visible={showChangePassword}
         onClose={() => setShowChangePassword(false)}
+      />
+      <DeleteAccountModal
+        visible={showDeleteAccount}
+        onClose={() => setShowDeleteAccount(false)}
+        onDeleted={handleAccountDeleted}
       />
       <LinkPayoutAccountModal
         visible={showPayout}
@@ -1333,12 +1398,14 @@ function Row({
   label,
   trailing,
   onPress,
+  iconColor,
 }: {
   tokens: (typeof PagePay)["light"] | (typeof PagePay)["dark"];
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   trailing?: React.ReactNode;
   onPress?: () => void;
+  iconColor?: string;
 }) {
   return (
     <Pressable
@@ -1347,7 +1414,7 @@ function Row({
       style={({ pressed }) => [styles.row, { opacity: pressed ? 0.7 : 1 }]}
     >
       <View style={styles.rowLeft}>
-        <Ionicons name={icon} size={18} color={tokens.inkMuted} />
+        <Ionicons name={icon} size={18} color={iconColor || tokens.inkMuted} />
         <Text style={[styles.rowLabel, { color: tokens.ink }]}>{label}</Text>
       </View>
       <View style={styles.rowRight}>

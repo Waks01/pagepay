@@ -604,6 +604,23 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=8)
 
 
+class DeleteAccountRequest(BaseModel):
+    """DELETE /auth/me body.
+    
+    Requires password confirmation to permanently delete the user account
+    and all associated data. This action cannot be undone.
+    """
+    password: str = Field(min_length=6, description="Current account password for confirmation")
+    confirmation: str = Field(pattern="^DELETE$", description="Must be exactly 'DELETE' to confirm")
+    
+    @field_validator("confirmation")
+    @classmethod
+    def validate_confirmation(cls, v: str) -> str:
+        if v != "DELETE":
+            raise ValueError("Must type 'DELETE' exactly to confirm deletion")
+        return v
+
+
 class PayoutAccountLink(BaseModel):
     """PUT /payouts/account body.
 

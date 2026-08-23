@@ -26,7 +26,7 @@ export default function NotificationBell({ onPress }: Props) {
       if (!res.ok) return { unread_count: 0 };
       return res.json();
     },
-    staleTime: 1000 * 30,
+    staleTime: 60 * 60 * 1000,
     refetchInterval: isNotificationsScreen ? 5000 : false, // Auto-refetch when viewing notifications
   });
 

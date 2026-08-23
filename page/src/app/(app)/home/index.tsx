@@ -90,8 +90,7 @@ export default function HomeScreen() {
   const dailyRewardsQuery = useQuery({
     queryKey: ["daily-reward-status"],
     queryFn: fetchDailyRewardStatus,
-    refetchOnMount: true,
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: 60 * 60 * 1000, // 1 hour
   });
 
   const onCategoryPress = useCallback(

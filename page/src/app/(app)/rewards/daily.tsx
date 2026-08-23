@@ -1,26 +1,34 @@
 /**
- * Daily Rewards Screen - Shows 7-day progression with claimable rewards
+ * Daily Rewards Screen - 30 Day implementation
+ * Matches daily-rewards-design3.html with PagePay theme tokens
  */
 
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
-  Alert,
-  ActivityIndicator,
   Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Svg, Circle, Defs, LinearGradient, Stop } from "react-native-svg";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { StateBlock } from "@/components/StateBlock";
 import { Skeleton } from "@/components/Skeleton";
+import { PagePaySpinner } from "@/components/PagePaySpinner";
 import {
   fetchDailyRewardStatus,
   claimDailyReward,
@@ -30,6 +38,34 @@ import {
 } from "@/src/features/rewards/api";
 
 const { width } = Dimensions.get("window");
+const RING_SIZE = 160;
+const RING_RADIUS = 70;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+function AnimatedFireEmoji() {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withRepeat(
+      withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [progress]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const translateY = -progress.value * 6;
+    return {
+      transform: [{ translateY }],
+    };
+  });
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Text style={{ fontSize: 40, marginBottom: 4 }}>🔥</Text>
+    </Animated.View>
+  );
+}
 
 export default function DailyRewardsScreen() {
   const router = useRouter();
@@ -46,41 +82,230 @@ export default function DailyRewardsScreen() {
   } = useQuery({
     queryKey: ["daily-reward-status"],
     queryFn: fetchDailyRewardStatus,
+    staleTime: 60 * 60 * 1000,
   });
 
   const { data: rewardConfig = [] } = useQuery({
     queryKey: ["daily-reward-config"],
     queryFn: fetchDailyRewardConfig,
+    staleTime: 60 * 60 * 1000,
   });
 
   const claimMutation = useMutation({
     mutationFn: claimDailyReward,
-    onSuccess: (result) => {
-      Alert.alert(
-        "🎉 Reward Claimed!",
-        `${result.reward_emoji} ${result.reward_title}\n+${result.points_earned} points`,
-        [{ text: "Awesome!", onPress: () => {} }],
-      );
-
-      // Refresh reward status
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["daily-reward-status"] });
     },
     onError: (error: Error) => {
-      Alert.alert("Claim Failed", error.message);
+      console.error("Daily reward claim error:", error.message);
+      // Error will be shown by UI state automatically
     },
   });
 
   const handleClaimReward = async () => {
     if (!rewardStatus?.can_claim_today) return;
-
     setClaimingReward(true);
     try {
       await claimMutation.mutateAsync();
-    } catch (error) {
-      // Error handled by mutation
     } finally {
       setClaimingReward(false);
     }
+  };
+
+  const currentStreak = rewardStatus?.current_streak || 0;
+  const todayReward = rewardStatus?.todays_reward;
+  const canClaim = rewardStatus?.can_claim_today;
+  const rewards = rewardConfig.length > 0 ? rewardConfig : [];
+
+  const weekProgress = useMemo(() => {
+    const currentDayInWeek = currentStreak % 7 || 7;
+    return currentDayInWeek / 7;
+  }, [currentStreak]);
+
+  const strokeDashOffset = RING_CIRCUMFERENCE * (1 - weekProgress);
+
+  const fallbackRewards: Record<
+    number,
+    {
+      icon_emoji: string;
+      reward_type: string;
+      reward_value: number;
+      title: string;
+    }
+  > = {
+    8: {
+      icon_emoji: "💎",
+      reward_type: "points",
+      reward_value: 1000,
+      title: "Day 8",
+    },
+    9: {
+      icon_emoji: "🌟",
+      reward_type: "points",
+      reward_value: 1200,
+      title: "Day 9",
+    },
+    10: {
+      icon_emoji: "🎁",
+      reward_type: "points",
+      reward_value: 1500,
+      title: "Day 10",
+    },
+    11: {
+      icon_emoji: "💫",
+      reward_type: "points",
+      reward_value: 2000,
+      title: "Day 11",
+    },
+    12: {
+      icon_emoji: "🏅",
+      reward_type: "points",
+      reward_value: 2500,
+      title: "Day 12",
+    },
+    13: {
+      icon_emoji: "👑",
+      reward_type: "points",
+      reward_value: 3000,
+      title: "Day 13",
+    },
+    14: {
+      icon_emoji: "🛡️",
+      reward_type: "multiplier",
+      reward_value: 20,
+      title: "Two Week Warrior",
+    },
+    15: {
+      icon_emoji: "🎪",
+      reward_type: "points",
+      reward_value: 3500,
+      title: "Day 15",
+    },
+    16: {
+      icon_emoji: "🎨",
+      reward_type: "points",
+      reward_value: 4000,
+      title: "Day 16",
+    },
+    17: {
+      icon_emoji: "🎭",
+      reward_type: "points",
+      reward_value: 4500,
+      title: "Day 17",
+    },
+    18: {
+      icon_emoji: "🎪",
+      reward_type: "points",
+      reward_value: 5000,
+      title: "Day 18",
+    },
+    19: {
+      icon_emoji: "🎨",
+      reward_type: "points",
+      reward_value: 5500,
+      title: "Day 19",
+    },
+    20: {
+      icon_emoji: "🎭",
+      reward_type: "points",
+      reward_value: 6000,
+      title: "Day 20",
+    },
+    21: {
+      icon_emoji: "👑",
+      reward_type: "points",
+      reward_value: 1500,
+      title: "Three Week Legend",
+    },
+    22: {
+      icon_emoji: "💎",
+      reward_type: "points",
+      reward_value: 7000,
+      title: "Day 22",
+    },
+    23: {
+      icon_emoji: "🌟",
+      reward_type: "points",
+      reward_value: 7500,
+      title: "Day 23",
+    },
+    24: {
+      icon_emoji: "🎁",
+      reward_type: "points",
+      reward_value: 8000,
+      title: "Day 24",
+    },
+    25: {
+      icon_emoji: "💫",
+      reward_type: "points",
+      reward_value: 8500,
+      title: "Day 25",
+    },
+    26: {
+      icon_emoji: "🏅",
+      reward_type: "points",
+      reward_value: 9000,
+      title: "Day 26",
+    },
+    27: {
+      icon_emoji: "🎯",
+      reward_type: "points",
+      reward_value: 9500,
+      title: "Day 27",
+    },
+    28: {
+      icon_emoji: "⚡",
+      reward_type: "points",
+      reward_value: 10000,
+      title: "Day 28",
+    },
+    29: {
+      icon_emoji: "🚀",
+      reward_type: "points",
+      reward_value: 15000,
+      title: "Day 29",
+    },
+    30: {
+      icon_emoji: "🏆",
+      reward_type: "multiplier",
+      reward_value: 50,
+      title: "Monthly Master",
+    },
+  };
+
+  const getRewardForDay = (dayNumber: number): DailyRewardInfo | null => {
+    const dbReward = rewards.find((r) => r.day_number === dayNumber) || null;
+    if (dbReward) return dbReward;
+    const fallback = fallbackRewards[dayNumber];
+    if (fallback) {
+      return {
+        id: dayNumber,
+        day_number: dayNumber,
+        reward_type: fallback.reward_type as "points" | "multiplier",
+        reward_value: fallback.reward_value,
+        title: fallback.title,
+        description: "",
+        icon_emoji: fallback.icon_emoji,
+      };
+    }
+    return null;
+  };
+
+  const allDays = useMemo(() => {
+    const days = [];
+    for (let day = 1; day <= 30; day++) {
+      const reward = getRewardForDay(day);
+      const isToday = day === currentStreak + 1;
+      const isClaimed = day <= currentStreak;
+      days.push({ dayNumber: day, reward, isToday, isClaimed });
+    }
+    return days;
+  }, [rewards, currentStreak]);
+
+  const getWeekNumber = (day: number) => Math.ceil(day / 7);
+  const getWeekLabel = (weekNum: number) => {
+    if (weekNum <= 4) return `Week ${weekNum}`;
+    return "Month Completion";
   };
 
   const renderDayCard = (
@@ -89,9 +314,36 @@ export default function DailyRewardsScreen() {
     isToday: boolean,
     isClaimed: boolean,
   ) => {
-    const isClaimable = isToday && rewardStatus?.can_claim_today && !isClaimed;
-    const isPast = dayNumber < (rewardStatus?.current_streak || 0);
-    const isFuture = dayNumber > (rewardStatus?.current_streak || 0) + 1;
+    const isFuture = dayNumber > currentStreak + 1;
+
+    let cardBg = tokens.paper;
+    let cardBorder = tokens.border;
+    let dayNumberColor = tokens.inkMuted;
+    let valueColor = tokens.mint;
+    let emojiOpacity = 1;
+
+    if (isClaimed) {
+      cardBg = tokens.mint;
+      cardBorder = tokens.mint;
+      dayNumberColor = tokens.mintText;
+      valueColor = tokens.mintText;
+    } else if (isToday) {
+      cardBg = tokens.gold;
+      cardBorder = tokens.gold;
+      dayNumberColor = tokens.mintText;
+      valueColor = tokens.mintText;
+    } else if (isFuture) {
+      cardBg = tokens.paper;
+      cardBorder = tokens.border;
+      dayNumberColor = tokens.inkMuted;
+      valueColor = tokens.borderStrong;
+      emojiOpacity = 0.3;
+    } else {
+      cardBg = tokens.paper;
+      cardBorder = tokens.mint;
+      dayNumberColor = tokens.ink;
+      valueColor = tokens.mint;
+    }
 
     return (
       <View
@@ -99,59 +351,25 @@ export default function DailyRewardsScreen() {
         style={[
           styles.dayCard,
           {
-            backgroundColor: isClaimable
-              ? tokens.mint
-              : isClaimed || isPast
-                ? tokens.mint
-                : isFuture
-                  ? tokens.borderStrong
-                  : tokens.paper,
-            borderColor: isToday
-              ? tokens.mint
-              : isClaimed || isPast
-                ? tokens.mint
-                : tokens.border,
+            backgroundColor: cardBg,
+            borderColor: cardBorder,
+            shadowColor: isToday ? tokens.gold : tokens.mint,
+            shadowOpacity: isToday ? 0.3 : 0.1,
+            shadowRadius: isToday ? 12 : 4,
+            elevation: isToday ? 8 : 2,
           },
         ]}
       >
-        <Text
-          style={[
-            styles.dayNumber,
-            { color: isClaimable ? "#FFFFFF" : tokens.ink },
-          ]}
-        >
+        <Text style={[styles.dayNumber, { color: dayNumberColor }]}>
           Day {dayNumber}
         </Text>
 
         {reward && (
           <>
-            <Text style={[styles.rewardEmoji, { opacity: isFuture ? 0.5 : 1 }]}>
+            <Text style={[styles.dayEmoji, { opacity: emojiOpacity }]}>
               {reward.icon_emoji}
             </Text>
-            <Text
-              style={[
-                styles.rewardTitle,
-                {
-                  color: isClaimable ? "#FFFFFF" : tokens.ink,
-                  opacity: isFuture ? 0.5 : 1,
-                },
-              ]}
-            >
-              {reward.title}
-            </Text>
-            <Text
-              style={[
-                styles.rewardValue,
-                {
-                  color: isClaimable
-                    ? "#FFFFFF"
-                    : reward.reward_type === "multiplier"
-                      ? tokens.mint
-                      : tokens.mint,
-                  opacity: isFuture ? 0.5 : 1,
-                },
-              ]}
-            >
+            <Text style={[styles.dayValue, { color: valueColor }]}>
               {reward.reward_type === "points"
                 ? `+${reward.reward_value}`
                 : `${reward.reward_value}%`}
@@ -159,21 +377,39 @@ export default function DailyRewardsScreen() {
           </>
         )}
 
-        {(isClaimed || isPast) && (
-          <View style={styles.completedBadge}>
-            <Ionicons name="checkmark-circle" size={16} color={tokens.mint} />
+        {isClaimed && (
+          <View style={styles.checkBadge}>
+            <Ionicons name="checkmark" size={12} color={tokens.mint} />
           </View>
         )}
       </View>
     );
   };
 
+  const weeks = useMemo(() => {
+    const grouped = [];
+    for (let week = 1; week <= 5; week++) {
+      const startDay = (week - 1) * 7 + 1;
+      const endDay = week === 5 ? 30 : week * 7;
+      const weekDays = allDays.filter(
+        (d) => d.dayNumber >= startDay && d.dayNumber <= endDay,
+      );
+      grouped.push({
+        weekNum: week,
+        label: getWeekLabel(week),
+        days: weekDays,
+        startDay,
+        endDay,
+      });
+    }
+    return grouped;
+  }, [allDays]);
+
   if (isLoading) {
     return (
       <SafeAreaView
         style={[styles.container, { backgroundColor: tokens.paper }]}
       >
-        {/* Header */}
         <View style={[styles.header, { borderBottomColor: tokens.border }]}>
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color={tokens.ink} />
@@ -188,66 +424,58 @@ export default function DailyRewardsScreen() {
           style={styles.content}
           contentContainerStyle={styles.contentContainer}
         >
-          {/* Streak Card Skeleton */}
-          <View
-            style={[
-              styles.streakCard,
-              { backgroundColor: tokens.paper, borderColor: tokens.border },
-            ]}
-          >
-            <View style={styles.streakHeader}>
-              <Skeleton width={40} height={40} />
-              <View style={styles.streakInfo}>
-                <Skeleton width={60} height={32} />
-                <Skeleton width={80} height={16} />
-              </View>
-            </View>
-            <Skeleton width="100%" height={16} />
+          <View style={[styles.streakHero, { backgroundColor: tokens.paper }]}>
+            <Skeleton
+              width={RING_SIZE}
+              height={RING_SIZE}
+              borderRadius={RING_SIZE / 2}
+            />
+            <Skeleton width={120} height={20} style={{ marginTop: 16 }} />
           </View>
 
-          {/* Claim Button Skeleton */}
-          <View
-            style={[
-              styles.claimButton,
-              { backgroundColor: tokens.borderStrong },
-            ]}
-          >
-            <Skeleton width={40} height={40} />
-            <View style={styles.claimButtonContent}>
-              <Skeleton width={150} height={16} />
-              <Skeleton width={200} height={14} />
-            </View>
-            <Skeleton width={24} height={24} />
-          </View>
+          <Skeleton
+            width="100%"
+            height={56}
+            style={{ borderRadius: 999, marginBottom: 24 }}
+          />
 
-          {/* Progress Section Skeleton */}
-          <View style={styles.progressSection}>
-            <Skeleton width={140} height={20} />
-            <View style={styles.dayGrid}>
-              {[...Array(7)].map((_, index) => (
+          {[...Array(5)].map((_, weekIdx) => (
+            <View key={weekIdx} style={{ marginBottom: 24 }}>
+              <Skeleton width={120} height={20} style={{ marginBottom: 12 }} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View
-                  key={index}
-                  style={[
-                    styles.dayCard,
-                    {
-                      backgroundColor: tokens.paper,
-                      borderColor: tokens.border,
-                      width: (width - 32 - 24) / 3,
-                    },
-                  ]}
+                  style={{
+                    flexDirection: "row",
+                    gap: 12,
+                    paddingHorizontal: 16,
+                  }}
                 >
-                  <Skeleton width={40} height={12} />
-                  <Skeleton
-                    width={32}
-                    height={32}
-                    style={{ marginVertical: 8 }}
-                  />
-                  <Skeleton width={60} height={10} />
-                  <Skeleton width={40} height={12} />
+                  {[...Array(7)].map((_, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.dayCard,
+                        {
+                          width: 72,
+                          height: 90,
+                          backgroundColor: tokens.paper,
+                          borderColor: tokens.border,
+                        },
+                      ]}
+                    >
+                      <Skeleton width={40} height={10} />
+                      <Skeleton
+                        width={32}
+                        height={32}
+                        style={{ marginVertical: 6 }}
+                      />
+                      <Skeleton width={40} height={12} />
+                    </View>
+                  ))}
                 </View>
-              ))}
+              </ScrollView>
             </View>
-          </View>
+          ))}
         </ScrollView>
       </SafeAreaView>
     );
@@ -258,7 +486,6 @@ export default function DailyRewardsScreen() {
       <SafeAreaView
         style={[styles.container, { backgroundColor: tokens.paper }]}
       >
-        {/* Header */}
         <View style={[styles.header, { borderBottomColor: tokens.border }]}>
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color={tokens.ink} />
@@ -280,82 +507,8 @@ export default function DailyRewardsScreen() {
     );
   }
 
-  // Default reward structure for display
-  const defaultRewards: DailyRewardInfo[] = [
-    {
-      id: 1,
-      day_number: 1,
-      reward_type: "points",
-      reward_value: 100,
-      title: "Welcome Back!",
-      description: "",
-      icon_emoji: "🎯",
-    },
-    {
-      id: 2,
-      day_number: 2,
-      reward_type: "points",
-      reward_value: 150,
-      title: "Getting Started",
-      description: "",
-      icon_emoji: "⚡",
-    },
-    {
-      id: 3,
-      day_number: 3,
-      reward_type: "points",
-      reward_value: 200,
-      title: "On a Roll",
-      description: "",
-      icon_emoji: "🚀",
-    },
-    {
-      id: 4,
-      day_number: 4,
-      reward_type: "points",
-      reward_value: 300,
-      title: "Consistency Pays",
-      description: "",
-      icon_emoji: "💪",
-    },
-    {
-      id: 5,
-      day_number: 5,
-      reward_type: "points",
-      reward_value: 400,
-      title: "Dedication",
-      description: "",
-      icon_emoji: "🔥",
-    },
-    {
-      id: 6,
-      day_number: 6,
-      reward_type: "points",
-      reward_value: 500,
-      title: "Almost There",
-      description: "",
-      icon_emoji: "⭐",
-    },
-    {
-      id: 7,
-      day_number: 7,
-      reward_type: "points",
-      reward_value: 750,
-      title: "Week Complete!",
-      description: "",
-      icon_emoji: "🏆",
-    },
-  ];
-
-  const currentStreak = rewardStatus?.current_streak || 0;
-  const todayReward = rewardStatus?.todays_reward;
-  const canClaim = rewardStatus?.can_claim_today;
-  const recentClaims = rewardStatus?.recent_claims || [];
-  const rewards = rewardConfig.length > 0 ? rewardConfig : [];
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: tokens.paper }]}>
-      {/* Header */}
       <View style={[styles.header, { borderBottomColor: tokens.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={tokens.ink} />
@@ -369,33 +522,64 @@ export default function DailyRewardsScreen() {
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Streak Status */}
-        <View
-          style={[
-            styles.streakCard,
-            { backgroundColor: tokens.paper, borderColor: tokens.border },
-          ]}
-        >
-          <View style={styles.streakHeader}>
-            <Text style={[styles.streakEmoji]}>🔥</Text>
-            <View style={styles.streakInfo}>
-              <Text style={[styles.streakNumber, { color: tokens.mint }]}>
+        {/* Streak Hero with Circular Progress */}
+        <View style={styles.streakHero}>
+          <View style={styles.progressRingContainer}>
+            <Svg width={RING_SIZE} height={RING_SIZE}>
+              <Defs>
+                <LinearGradient
+                  id="ringGradient"
+                  x1="0%"
+                  y1="0%"
+                  x2="100%"
+                  y2="100%"
+                >
+                  <Stop offset="0%" stopColor={tokens.mint} stopOpacity="1" />
+                  <Stop offset="100%" stopColor={tokens.mint} stopOpacity="1" />
+                </LinearGradient>
+              </Defs>
+              <Circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                stroke={tokens.border}
+                strokeWidth={8}
+                fill="none"
+              />
+              <Circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                stroke="url(#ringGradient)"
+                strokeWidth={8}
+                fill="none"
+                strokeDasharray={RING_CIRCUMFERENCE}
+                strokeDashoffset={strokeDashOffset}
+                strokeLinecap="round"
+                rotation="-90"
+                origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
+              />
+            </Svg>
+            <View style={styles.progressCenter}>
+              <AnimatedFireEmoji />
+              <Text style={[styles.streakNumber, { color: tokens.ink }]}>
                 {currentStreak}
               </Text>
-              <Text style={[styles.streakLabel, { color: tokens.ink }]}>
+              <Text style={[styles.streakLabel, { color: tokens.inkMuted }]}>
                 Day Streak
               </Text>
             </View>
           </View>
-          <Text style={[styles.streakSubtext, { color: tokens.inkMuted }]}>
+          <Text style={[styles.streakSubtitle, { color: tokens.inkMuted }]}>
             {currentStreak === 0
               ? "Start your daily streak by claiming today's reward!"
               : `You're on fire! ${7 - (currentStreak % 7)} more days to complete the week.`}
           </Text>
         </View>
 
-        {/* Claim Button */}
+        {/* Claim Button - Pill Shape */}
         {canClaim && todayReward && (
           <TouchableOpacity
             style={[
@@ -407,165 +591,205 @@ export default function DailyRewardsScreen() {
             ]}
             onPress={handleClaimReward}
             disabled={claimingReward}
+            activeOpacity={0.9}
           >
-            <Text style={[styles.claimButtonEmoji]}>
-              {todayReward.icon_emoji}
-            </Text>
-            <View style={styles.claimButtonContent}>
-              <Text style={[styles.claimButtonTitle, { color: "#FFFFFF" }]}>
+            <Text style={styles.claimEmoji}>{todayReward.icon_emoji}</Text>
+            <View style={styles.claimContent}>
+              <Text style={[styles.claimTitle, { color: tokens.mintText }]}>
                 {claimingReward ? "Claiming..." : "Claim Today's Reward"}
               </Text>
-              <Text style={[styles.claimButtonSubtitle, { color: "#FFFFFF" }]}>
-                {todayReward.title} • +{todayReward.reward_value}{" "}
+              <Text style={[styles.claimSubtitle, { color: tokens.mintText }]}>
+                Day {currentStreak + 1} • +{todayReward.reward_value}{" "}
                 {todayReward.reward_type === "points" ? "points" : "% bonus"}
               </Text>
             </View>
             {claimingReward ? (
-              <ActivityIndicator size="small" color={"#FFFFFF"} />
+              <PagePaySpinner size={20} />
             ) : (
-              <Ionicons name="chevron-forward" size={24} color={"#FFFFFF"} />
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={tokens.mintText}
+              />
             )}
           </TouchableOpacity>
         )}
 
-        {/* Daily Progress */}
-        <View style={styles.progressSection}>
-          <Text style={[styles.sectionTitle, { color: tokens.ink }]}>
-            Daily Progress
-          </Text>
+        {/* Error Display */}
+        {claimMutation.isError && (
+          <View
+            style={[
+              styles.errorCard,
+              {
+                backgroundColor: tokens.signalSoft,
+                borderColor: tokens.signal,
+              },
+            ]}
+          >
+            <Ionicons name="alert-circle" size={20} color={tokens.signal} />
+            <Text style={[styles.errorText, { color: tokens.signal }]}>
+              {claimMutation.error?.message || "Failed to claim reward"}
+            </Text>
+            <TouchableOpacity
+              onPress={() => claimMutation.reset()}
+              style={[styles.errorDismiss, { borderColor: tokens.signal }]}
+            >
+              <Ionicons name="close" size={16} color={tokens.signal} />
+            </TouchableOpacity>
+          </View>
+        )}
 
-          {/* Calculate which weeks to show */}
-          {(() => {
-            const currentWeek = Math.floor((currentStreak - 1) / 7) + 1; // Week 1, 2, 3, etc.
-            const weeksToShow = Math.max(2, currentWeek + 1); // Show current week + next week, minimum 2 weeks
-            const weeks = [];
+        {/* Week Sections */}
+        {weeks.map((week) => (
+          <View key={week.weekNum} style={styles.weekSection}>
+            <View style={styles.weekHeader}>
+              <Text style={[styles.weekTitle, { color: tokens.ink }]}>
+                {week.label}
+              </Text>
+              <View
+                style={[
+                  styles.weekBadge,
+                  {
+                    backgroundColor: tokens.border,
+                    borderColor: tokens.borderStrong,
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.weekBadgeText, { color: tokens.inkMuted }]}
+                >
+                  {week.weekNum === 1
+                    ? currentStreak >= 7
+                      ? "Completed"
+                      : "In Progress"
+                    : "Locked"}
+                </Text>
+              </View>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dayScrollContent}
+            >
+              {week.days.map(({ dayNumber, reward, isToday, isClaimed }) =>
+                renderDayCard(dayNumber, reward, isToday, isClaimed),
+              )}
+            </ScrollView>
+          </View>
+        ))}
 
-            for (let week = 1; week <= weeksToShow; week++) {
-              const startDay = (week - 1) * 7 + 1;
-              const endDay = week * 7;
-              const weekDays = [];
+        {/* Section Divider */}
+        <View
+          style={[
+            styles.sectionDivider,
+            { backgroundColor: tokens.borderStrong },
+          ]}
+        />
 
-              for (let dayNumber = startDay; dayNumber <= endDay; dayNumber++) {
-                const reward =
-                  defaultRewards.find((r) => r.day_number === dayNumber) ||
-                  (dayNumber <= 7
-                    ? null
-                    : defaultRewards.find((r) => r.day_number === 7));
-
-                const isToday = dayNumber === currentStreak + 1;
-                const isClaimed = dayNumber <= currentStreak;
-                const isFuture = dayNumber > currentStreak + 1;
-
-                weekDays.push(
-                  renderDayCard(dayNumber, reward, isToday, isClaimed),
-                );
-              }
-
-              weeks.push(
-                <View key={week} style={styles.weekSection}>
-                  <Text style={[styles.weekTitle, { color: tokens.inkMuted }]}>
-                    Week {week} (Days {startDay}-{endDay})
-                  </Text>
-                  <View style={styles.dayGrid}>{weekDays}</View>
-                </View>,
-              );
-            }
-
-            return weeks;
-          })()}
-        </View>
-
-        {/* Milestones */}
+        {/* Milestones Timeline */}
         <View style={styles.milestonesSection}>
           <Text style={[styles.sectionTitle, { color: tokens.ink }]}>
-            Upcoming Milestones
+            Milestones
           </Text>
-          <View style={styles.milestonesList}>
-            {currentStreak < 14 && (
+
+          {currentStreak < 14 && (
+            <View
+              style={[
+                styles.milestoneItem,
+                { backgroundColor: tokens.paper, borderLeftColor: tokens.mint },
+              ]}
+            >
+              <View style={styles.milestoneContent}>
+                <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
+                  Two Week Warrior
+                </Text>
+                <Text
+                  style={[styles.milestoneSubtitle, { color: tokens.inkMuted }]}
+                >
+                  Day 14 • 20% bonus multiplier
+                </Text>
+                <Text
+                  style={[styles.milestoneProgress, { color: tokens.mint }]}
+                >
+                  {14 - currentStreak} days to go
+                </Text>
+              </View>
               <View
                 style={[
-                  styles.milestoneCard,
-                  { backgroundColor: tokens.paper, borderColor: tokens.border },
+                  styles.milestoneIcon,
+                  { backgroundColor: tokens.border },
                 ]}
               >
-                <Text style={styles.milestoneEmoji}>🛡️</Text>
-                <View style={styles.milestoneInfo}>
-                  <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
-                    Two Week Warrior
-                  </Text>
-                  <Text
-                    style={[
-                      styles.milestoneSubtitle,
-                      { color: tokens.inkMuted },
-                    ]}
-                  >
-                    Day 14 • 20% bonus multiplier
-                  </Text>
-                  <Text
-                    style={[styles.milestoneProgress, { color: tokens.mint }]}
-                  >
-                    {14 - currentStreak} days to go
-                  </Text>
-                </View>
+                <Text style={styles.milestoneIconEmoji}>🛡️</Text>
               </View>
-            )}
-            {currentStreak < 21 && (
+            </View>
+          )}
+
+          {currentStreak < 21 && (
+            <View
+              style={[
+                styles.milestoneItem,
+                { backgroundColor: tokens.paper, borderLeftColor: tokens.mint },
+              ]}
+            >
+              <View style={styles.milestoneContent}>
+                <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
+                  Three Week Legend
+                </Text>
+                <Text
+                  style={[styles.milestoneSubtitle, { color: tokens.inkMuted }]}
+                >
+                  Day 21 • 1500 bonus points
+                </Text>
+                <Text
+                  style={[styles.milestoneProgress, { color: tokens.mint }]}
+                >
+                  {21 - currentStreak} days to go
+                </Text>
+              </View>
               <View
                 style={[
-                  styles.milestoneCard,
-                  { backgroundColor: tokens.paper, borderColor: tokens.border },
+                  styles.milestoneIcon,
+                  { backgroundColor: tokens.border },
                 ]}
               >
-                <Text style={styles.milestoneEmoji}>👑</Text>
-                <View style={styles.milestoneInfo}>
-                  <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
-                    Three Week Legend
-                  </Text>
-                  <Text
-                    style={[
-                      styles.milestoneSubtitle,
-                      { color: tokens.inkMuted },
-                    ]}
-                  >
-                    Day 21 • 1500 bonus points
-                  </Text>
-                  <Text
-                    style={[styles.milestoneProgress, { color: tokens.mint }]}
-                  >
-                    {21 - currentStreak} days to go
-                  </Text>
-                </View>
+                <Text style={styles.milestoneIconEmoji}>👑</Text>
               </View>
-            )}
-            {currentStreak < 30 && (
+            </View>
+          )}
+
+          {currentStreak < 30 && (
+            <View
+              style={[
+                styles.milestoneItem,
+                { backgroundColor: tokens.paper, borderLeftColor: tokens.mint },
+              ]}
+            >
+              <View style={styles.milestoneContent}>
+                <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
+                  Monthly Master
+                </Text>
+                <Text
+                  style={[styles.milestoneSubtitle, { color: tokens.inkMuted }]}
+                >
+                  Day 30 • 50% bonus multiplier
+                </Text>
+                <Text
+                  style={[styles.milestoneProgress, { color: tokens.mint }]}
+                >
+                  {30 - currentStreak} days to go
+                </Text>
+              </View>
               <View
                 style={[
-                  styles.milestoneCard,
-                  { backgroundColor: tokens.paper, borderColor: tokens.border },
+                  styles.milestoneIcon,
+                  { backgroundColor: tokens.border },
                 ]}
               >
-                <Text style={styles.milestoneEmoji}>💎</Text>
-                <View style={styles.milestoneInfo}>
-                  <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
-                    Monthly Master
-                  </Text>
-                  <Text
-                    style={[
-                      styles.milestoneSubtitle,
-                      { color: tokens.inkMuted },
-                    ]}
-                  >
-                    Day 30 • 50% bonus multiplier
-                  </Text>
-                  <Text
-                    style={[styles.milestoneProgress, { color: tokens.mint }]}
-                  >
-                    {30 - currentStreak} days to go
-                  </Text>
-                </View>
+                <Text style={styles.milestoneIconEmoji}>💎</Text>
               </View>
-            )}
-          </View>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -593,152 +817,206 @@ const styles = {
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 80, // Extra padding at bottom to prevent scroll blocking
+    paddingBottom: 80,
     gap: 24,
   },
-  streakCard: {
-    padding: 20,
-    borderRadius: 12,
-    borderWidth: 1,
+  streakHero: {
+    alignItems: "center",
+    paddingVertical: 24,
   },
-  streakHeader: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 16,
-    marginBottom: 8,
+  progressRingContainer: {
+    position: "relative",
+    width: RING_SIZE,
+    height: RING_SIZE,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
   },
-  streakEmoji: {
-    fontSize: 32,
-  },
-  streakInfo: {
-    alignItems: "center" as const,
+  progressCenter: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
   },
   streakNumber: {
-    fontSize: 28,
-    fontWeight: "bold" as const,
+    fontSize: 32,
+    fontWeight: "800" as const,
+    lineHeight: 36,
   },
   streakLabel: {
-    fontSize: 14,
-    fontWeight: "500" as const,
+    fontSize: 13,
+    fontWeight: "600" as const,
+    marginTop: 2,
   },
-  streakSubtext: {
+  streakSubtitle: {
     fontSize: 14,
     lineHeight: 20,
+    textAlign: "center" as const,
+    paddingHorizontal: 24,
   },
   claimButton: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    padding: 16,
-    borderRadius: 12,
-    gap: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 999,
+    gap: 14,
+    marginBottom: 24,
   },
-  claimButtonEmoji: {
-    fontSize: 32,
+  claimEmoji: {
+    fontSize: 28,
   },
-  claimButtonContent: {
+  claimContent: {
     flex: 1,
   },
-  claimButtonTitle: {
+  claimTitle: {
     fontSize: 16,
-    fontWeight: "600" as const,
-    marginBottom: 4,
+    fontWeight: "700" as const,
+    marginBottom: 2,
   },
-  claimButtonSubtitle: {
-    fontSize: 14,
-    opacity: 0.9,
-  },
-  progressSection: {
-    gap: 16,
+  claimSubtitle: {
+    fontSize: 13,
+    fontWeight: "500" as const,
   },
   weekSection: {
     gap: 12,
-    marginBottom: 20,
+    marginBottom: 24,
   },
-  weekTitle: {
-    fontSize: 14,
-    fontWeight: "600" as const,
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600" as const,
-  },
-  dayGrid: {
+  weekHeader: {
     flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    gap: 16, // Increased gap between cards
-    justifyContent: "space-between" as const,
-  },
-  dayCard: {
-    width: (width - 32 - 96) / 7, // Account for padding (32) and gaps (16*6=96 gaps between 7 cards)
-    aspectRatio: 1,
-    padding: 12, // Reduced padding since cards are smaller
-    borderRadius: 12,
-    borderWidth: 2,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  weekTitle: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+  },
+  weekBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  weekBadgeText: {
+    fontSize: 12,
+    fontWeight: "600" as const,
+  },
+  dayScrollContent: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  dayScroll: {
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+  },
+  dayCard: {
+    width: 72,
+    height: 90,
+    borderRadius: 20,
+    borderWidth: 2,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
     position: "relative" as const,
-    minHeight: 80, // Reduced minimum height for smaller cards
+    gap: 4,
   },
   dayNumber: {
     fontSize: 10,
-    fontWeight: "600" as const,
-    marginBottom: 2,
+    fontWeight: "700" as const,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
   },
-  rewardEmoji: {
-    fontSize: 20, // Reduced emoji size for smaller cards
-    marginBottom: 4,
+  dayEmoji: {
+    fontSize: 24,
+    lineHeight: 24,
   },
-  rewardTitle: {
-    fontSize: 8,
-    fontWeight: "500" as const,
+  dayValue: {
+    fontSize: 10,
+    fontWeight: "700" as const,
     textAlign: "center" as const,
-    marginBottom: 2,
-    lineHeight: 10,
   },
-  rewardValue: {
-    fontSize: 10, // Reduced font size for smaller cards
-    fontWeight: "bold" as const,
-  },
-  completedBadge: {
+  checkBadge: {
     position: "absolute" as const,
-    top: 4,
-    right: 4,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    borderRadius: 8,
-    padding: 1,
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  sectionDivider: {
+    height: 1,
+    marginVertical: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700" as const,
+    marginBottom: 16,
   },
   milestonesSection: {
-    gap: 16,
-  },
-  milestonesList: {
     gap: 12,
   },
-  milestoneCard: {
+  milestoneItem: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 16,
+    borderRadius: 16,
+    borderLeftWidth: 4,
+    gap: 14,
   },
-  milestoneEmoji: {
-    fontSize: 24,
-  },
-  milestoneInfo: {
+  milestoneContent: {
     flex: 1,
   },
   milestoneTitle: {
-    fontSize: 16,
-    fontWeight: "600" as const,
+    fontSize: 15,
+    fontWeight: "700" as const,
     marginBottom: 4,
   },
   milestoneSubtitle: {
-    fontSize: 14,
-    marginBottom: 4,
+    fontSize: 13,
+    marginBottom: 6,
   },
   milestoneProgress: {
     fontSize: 12,
     fontWeight: "600" as const,
+  },
+  milestoneIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  milestoneIconEmoji: {
+    fontSize: 22,
+  },
+  errorCard: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "500" as const,
+    lineHeight: 20,
+  },
+  errorDismiss: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
 };

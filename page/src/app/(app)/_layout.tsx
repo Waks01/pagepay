@@ -16,7 +16,7 @@ export default function AppLayout() {
         headerShown: false,
         animationEnabled: true, // Enable animations for smoother transitions
       }}
-      lazy={true} // Only mount tabs when first visited
+      lazy={false} // Keep all tab screens mounted to preserve query cache across tab switches
     >
       {TAB_ORDER.map((tab) => (
         <Tabs.Screen key={tab.name} name={tab.name} />

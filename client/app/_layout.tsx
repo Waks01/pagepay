@@ -1,38 +1,70 @@
-﻿import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter, useSegments } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from '@/src/shared/lib/queryClient';
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { useFonts, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
-import { Fraunces_500Medium, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
-import { View } from 'react-native';
-import Constants from 'expo-constants';
-import 'react-native-reanimated';
+﻿import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/src/shared/lib/queryClient";
+import { useEffect, useState, useCallback, useRef } from "react";
+import {
+  useFonts,
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_700Bold,
+} from "@expo-google-fonts/space-grotesk";
+import {
+  Fraunces_500Medium,
+  Fraunces_600SemiBold,
+} from "@expo-google-fonts/fraunces";
+import { View } from "react-native";
+import Constants from "expo-constants";
+import "react-native-reanimated";
 
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { useAdsConfig } from '@/src/shared/hooks/use-ads-config';
-import { bootstrapPreferences, usePreferences } from '@/src/shared/lib/preferences';
-import { getToken } from '@/src/shared/lib/storage';
-import { initializeAdMob } from '@/src/shared/lib/ads-native';
-import { setOnUnauthenticated, apiFetch } from '@/src/shared/api/client';
-import { setupNotificationListeners, registerFCMToken, handleNotificationTap } from '@/src/lib/notifications';
-import { connectSocket, disconnectSocket, onNotification } from '@/src/lib/socket';
-import { SplashOverlay } from '@/components/SplashOverlay';
-import { AdSlotProvider } from '@/src/shared/contexts/AdSlot';
-import BannerNotification, { type BannerNotificationItem } from '@/src/components/BannerNotification';
-import { PaystackProvider } from 'expo-paystack';
-import '@/src/lib/i18n';
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
+import {
+  bootstrapPreferences,
+  usePreferences,
+} from "@/src/shared/lib/preferences";
+import { getToken } from "@/src/shared/lib/storage";
+import { initializeAdMob } from "@/src/shared/lib/ads-native";
+import { setOnUnauthenticated, apiFetch } from "@/src/shared/api/client";
+import {
+  setupNotificationListeners,
+  registerFCMToken,
+  handleNotificationTap,
+} from "@/src/lib/notifications";
+import {
+  connectSocket,
+  disconnectSocket,
+  onNotification,
+} from "@/src/lib/socket";
+import { SplashOverlay } from "@/components/SplashOverlay";
+import { AdSlotProvider } from "@/src/shared/contexts/AdSlot";
+import BannerNotification, {
+  type BannerNotificationItem,
+} from "@/src/components/BannerNotification";
+import { PaystackProvider } from "expo-paystack";
+import "@/src/lib/i18n";
 
 const PAYSTACK_PUBLIC_KEY = __DEV__
-  ? process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY_TEST || process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY
-  : Constants.expoConfig?.extra?.paystackPublicKey || process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY;
+  ? process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY_TEST ||
+    process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY
+  : Constants.expoConfig?.extra?.paystackPublicKey ||
+    process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY;
 
 export const unstable_settings = {
-  anchor: '/(auth)/',
+  anchor: "/(auth)/",
 };
 
-const VALID_TABS = ['index', 'catalog', 'study', 'wallet', 'notifications', 'tasks', 'community', 'profile', 'premium'] as const;
+const VALID_TABS = [
+  "index",
+  "catalog",
+  "study",
+  "wallet",
+  "notifications",
+  "tasks",
+  "community",
+  "profile",
+  "premium",
+] as const;
 type ValidTab = (typeof VALID_TABS)[number];
 
 function useAuthGate() {
@@ -51,34 +83,34 @@ function useAuthGate() {
   // and the auth gate must NOT bounce them back to login when they
   // do. v3 §auth.legal — Terms/Privacy must be reachable pre-login.
   const isPublicRoute = (seg: string | undefined) =>
-    seg === '(onboarding)' ||
-    seg === '(auth)' ||
-    seg === 'forgot-password' ||
-    seg === 'forgot-password-otp' ||
-    seg === 'reset-password' ||
-    seg === 'legal';
+    seg === "(onboarding)" ||
+    seg === "(auth)" ||
+    seg === "forgot-password" ||
+    seg === "forgot-password-otp" ||
+    seg === "reset-password" ||
+    seg === "legal";
 
   useEffect(() => {
     if (!hydrated) return;
     (async () => {
       const token = await getToken();
-      const inAuthGroup = segments[0] === '(auth)';
-      const inOnboardingGroup = segments[0] === '(onboarding)';
+      const inAuthGroup = segments[0] === "(auth)";
+      const inOnboardingGroup = segments[0] === "(onboarding)";
       const inPublic = isPublicRoute(segments[0]);
 
       if (!token) {
         if (!onboardingCompleted && !inOnboardingGroup) {
-          (router as any).replace('/(onboarding)');
+          (router as any).replace("/(onboarding)");
         } else if (onboardingCompleted && !inAuthGroup && !inPublic) {
-          (router as any).replace('/(auth)/');
+          (router as any).replace("/(auth)/");
         }
-      } else if (token && inAuthGroup && segments[1] !== 'verify-email-code') {
-        (router as any).replace('/(tabs)');
-      } else if (token && segments[0] === '(tabs)' && !hasRestoredTab.current) {
+      } else if (token && inAuthGroup && segments[1] !== "verify-email-code") {
+        (router as any).replace("/(tabs)");
+      } else if (token && segments[0] === "(tabs)" && !hasRestoredTab.current) {
         hasRestoredTab.current = true;
-        const currentTab = (segments[1] as ValidTab) || 'index';
-        if (currentTab === 'index') {
-          (router as any).replace('/(tabs)/index');
+        const currentTab = (segments[1] as ValidTab) || "index";
+        if (currentTab === "index") {
+          (router as any).replace("/(tabs)/index");
         }
       }
       setIsReady(true);
@@ -95,7 +127,7 @@ function useAuthGate() {
   useEffect(() => {
     setOnUnauthenticated(() => {
       if (!isPublicRoute(segments[0])) {
-        (router as any).replace('/(auth)/');
+        (router as any).replace("/(auth)/");
       }
     });
   }, [router, segments]);
@@ -145,11 +177,11 @@ export default function RootLayout() {
   useEffect(() => {
     const initApp = async () => {
       await bootstrapPreferences();
-      
+
       // Initialize i18n with user's saved language preference
-      const i18n = await import('@/src/lib/i18n');
+      const i18n = await import("@/src/lib/i18n");
       const prefs = usePreferences.getState();
-      if (prefs.language && prefs.language !== 'en') {
+      if (prefs.language && prefs.language !== "en") {
         await i18n.default.changeLanguage(prefs.language);
       }
     };
@@ -174,14 +206,16 @@ export default function RootLayout() {
       const token = await getToken();
       if (!token) return;
       try {
-        const res = await apiFetch('/api/v1/auth/me');
+        const res = await apiFetch("/api/v1/auth/me");
         if (!res.ok) return;
         const me = await res.json();
         if (me?.id) {
           connectSocket(me.id);
           onNotification((notification) => {
-            console.log('In-app notification:', notification);
-            queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
+            console.log("In-app notification:", notification);
+            queryClient.invalidateQueries({
+              queryKey: ["notifications-unread-count"],
+            });
             setBannerNotifications((prev) => {
               const exists = prev.some((n) => n.id === notification.id);
               if (exists) return prev;
@@ -197,7 +231,7 @@ export default function RootLayout() {
           });
         }
       } catch (error) {
-        console.error('Failed to init socket:', error);
+        console.error("Failed to init socket:", error);
       }
     };
 
@@ -209,17 +243,18 @@ export default function RootLayout() {
         // Lazy-require Firebase so dev-client / Expo Go builds without
         // the native modules don't blow up at module-evaluation time.
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const appMod = require('@react-native-firebase/app');
+        const appMod = require("@react-native-firebase/app");
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const crashlyticsMod = require('@react-native-firebase/crashlytics');
+        const crashlyticsMod = require("@react-native-firebase/crashlytics");
         if (!crashlyticsMod?.getCrashlytics) return;
-        const { getCrashlytics, setCrashlyticsCollectionEnabled } = crashlyticsMod;
+        const { getCrashlytics, setCrashlyticsCollectionEnabled } =
+          crashlyticsMod;
         const crashlytics = getCrashlytics();
         if (!crashlytics) return;
         await setCrashlyticsCollectionEnabled(crashlytics, true);
-        console.log('Crashlytics initialized');
+        console.log("Crashlytics initialized");
       } catch (error) {
-        console.error('Failed to init Crashlytics:', error);
+        console.error("Failed to init Crashlytics:", error);
       }
     };
 
@@ -239,23 +274,30 @@ export default function RootLayout() {
   const [splashDismissed, setSplashDismissed] = useState(false);
 
   // In-app banner notifications
-  const [bannerNotifications, setBannerNotifications] = useState<BannerNotificationItem[]>([]);
+  const [bannerNotifications, setBannerNotifications] = useState<
+    BannerNotificationItem[]
+  >([]);
 
   const handleBannerDismiss = useCallback((id: number) => {
     setBannerNotifications((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
-  const handleBannerPress = useCallback((notification: BannerNotificationItem) => {
-    setBannerNotifications((prev) => prev.filter((n) => n.id !== notification.id));
-    handleNotificationTap({
-      data: notification.data ?? undefined,
-      category: notification.category,
-    });
-  }, []);
+  const handleBannerPress = useCallback(
+    (notification: BannerNotificationItem) => {
+      setBannerNotifications((prev) =>
+        prev.filter((n) => n.id !== notification.id),
+      );
+      handleNotificationTap({
+        data: notification.data ?? undefined,
+        category: notification.category,
+      });
+    },
+    [],
+  );
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <AdsBootstrapComponent />
         <AdSlotProvider>
           <BannerNotification
@@ -272,50 +314,170 @@ export default function RootLayout() {
               </View>
             ) : (
               <Stack>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="reader/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="book/[id]" options={{ headerShown: false, title: 'Book' }} />
-        <Stack.Screen name="study/chat/[id]" options={{ headerShown: false, title: 'Study Chat' }} />
-        <Stack.Screen name="study/exam-mode" options={{ headerShown: false, title: 'Exam Mode' }} />
-        <Stack.Screen name="study/srs-dashboard" options={{ headerShown: false, title: 'Review Dashboard' }} />
-        <Stack.Screen name="tasks/[id]" options={{ headerShown: false, title: 'Task Detail' }} />
-        <Stack.Screen name="tasks/[id]/complete" options={{ headerShown: false, title: 'Submit Proof' }} />
-        <Stack.Screen name="tasks/profile" options={{ headerShown: false, title: 'Worker Profile' }} />
-        <Stack.Screen name="tasks/history" options={{ headerShown: false, title: 'Submission History' }} />
-        <Stack.Screen name="sponsor/register" options={{ headerShown: false, title: 'Become a Sponsor' }} />
-        <Stack.Screen name="sponsor/kyc" options={{ headerShown: false, title: 'KYC Verification' }} />
-        <Stack.Screen name="sponsor/dashboard" options={{ headerShown: false, title: 'Sponsor Dashboard' }} />
-        <Stack.Screen name="sponsor/tasks/create" options={{ headerShown: false, title: 'Create Task' }} />
-        <Stack.Screen name="sponsor/tasks/[id]" options={{ headerShown: false, title: 'Task Submissions' }} />
-         <Stack.Screen name="fund-wallet" options={{ headerShown: false, title: 'Fund Wallet' }} />
-         <Stack.Screen name="fund-wallet/success" options={{ headerShown: false, title: 'Deposit Success' }} />
-        <Stack.Screen name="billing/history" options={{ headerShown: false, title: 'Billing History' }} />
-        <Stack.Screen name="billing/subscription" options={{ headerShown: false, title: 'Manage Subscription' }} />
-        <Stack.Screen name="subscription/success" options={{ headerShown: false, title: 'Payment Success' }} />
-        <Stack.Screen name="forgot-password" options={{ headerShown: false, title: 'Reset Password' }} />
-        <Stack.Screen name="forgot-password-otp" options={{ headerShown: false, title: 'Enter OTP' }} />
-        <Stack.Screen name="reset-password" options={{ headerShown: false, title: 'New Password' }} />
-        <Stack.Screen name="legal" options={{ headerShown: false, title: 'Legal' }} />
-        <Stack.Screen name="notification/[id]" options={{ headerShown: false, title: 'Notification' }} />
-         <Stack.Screen name="buy-airtime" options={{ headerShown: false, title: 'Buy Airtime' }} />
-         <Stack.Screen name="beneficiaries" options={{ headerShown: false, title: 'Beneficiaries' }} />
-        <Stack.Screen name="buy-data" options={{ headerShown: false, title: 'Buy Data' }} />
-        <Stack.Screen name="buy-electricity" options={{ headerShown: false, title: 'Buy Electricity' }} />
-        <Stack.Screen name="buy-tv" options={{ headerShown: false, title: 'Buy TV Subscription' }} />
-        <Stack.Screen name="buy-recharge-pin" options={{ headerShown: false, title: 'Buy Recharge Pin' }} />
-        <Stack.Screen name="buy-betting" options={{ headerShown: false, title: 'Betting' }} />
-        <Stack.Screen name="buy-isp" options={{ headerShown: false, title: 'ISP Data' }} />
-        <Stack.Screen name="buy-education" options={{ headerShown: false, title: 'Result Checker' }} />
-        <Stack.Screen name="buy-sms" options={{ headerShown: false, title: 'Bulk SMS' }} />
-        <Stack.Screen name="bills-history" options={{ headerShown: false, title: 'Bills History' }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        <Stack.Screen name="pin/verify" options={{ headerShown: false, title: 'Enter PIN' }} />
-        <Stack.Screen name="pin/setup" options={{ headerShown: false, title: 'Set PIN' }} />
-        <Stack.Screen name="pin/change" options={{ headerShown: false, title: 'Change PIN' }} />
-        </Stack>
-      )}
+                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="(onboarding)"
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="reader/[id]"
+                  options={{ headerShown: false }}
+                />
+                <Stack.Screen
+                  name="book/[id]"
+                  options={{ headerShown: false, title: "Book" }}
+                />
+                <Stack.Screen
+                  name="study/chat/[id]"
+                  options={{ headerShown: false, title: "Study Chat" }}
+                />
+                <Stack.Screen
+                  name="study/exam-mode"
+                  options={{ headerShown: false, title: "Exam Mode" }}
+                />
+                <Stack.Screen
+                  name="study/srs-dashboard"
+                  options={{ headerShown: false, title: "Review Dashboard" }}
+                />
+                <Stack.Screen
+                  name="tasks/[id]"
+                  options={{ headerShown: false, title: "Task Detail" }}
+                />
+                <Stack.Screen
+                  name="tasks/[id]/complete"
+                  options={{ headerShown: false, title: "Submit Proof" }}
+                />
+                <Stack.Screen
+                  name="tasks/profile"
+                  options={{ headerShown: false, title: "Worker Profile" }}
+                />
+                <Stack.Screen
+                  name="tasks/history"
+                  options={{ headerShown: false, title: "Submission History" }}
+                />
+                <Stack.Screen
+                  name="sponsor/register"
+                  options={{ headerShown: false, title: "Become a Sponsor" }}
+                />
+                <Stack.Screen
+                  name="sponsor/kyc"
+                  options={{ headerShown: false, title: "KYC Verification" }}
+                />
+                <Stack.Screen
+                  name="sponsor/dashboard"
+                  options={{ headerShown: false, title: "Sponsor Dashboard" }}
+                />
+                <Stack.Screen
+                  name="sponsor/tasks/create"
+                  options={{ headerShown: false, title: "Create Task" }}
+                />
+                <Stack.Screen
+                  name="sponsor/tasks/[id]"
+                  options={{ headerShown: false, title: "Task Submissions" }}
+                />
+                <Stack.Screen
+                  name="fund-wallet"
+                  options={{ headerShown: false, title: "Fund Wallet" }}
+                />
+                <Stack.Screen
+                  name="fund-wallet/success"
+                  options={{ headerShown: false, title: "Deposit Success" }}
+                />
+                <Stack.Screen
+                  name="billing/history"
+                  options={{ headerShown: false, title: "Billing History" }}
+                />
+                <Stack.Screen
+                  name="billing/subscription"
+                  options={{ headerShown: false, title: "Manage Subscription" }}
+                />
+                <Stack.Screen
+                  name="subscription/success"
+                  options={{ headerShown: false, title: "Payment Success" }}
+                />
+                <Stack.Screen
+                  name="forgot-password"
+                  options={{ headerShown: false, title: "Reset Password" }}
+                />
+                <Stack.Screen
+                  name="forgot-password-otp"
+                  options={{ headerShown: false, title: "Enter OTP" }}
+                />
+                <Stack.Screen
+                  name="reset-password"
+                  options={{ headerShown: false, title: "New Password" }}
+                />
+                <Stack.Screen
+                  name="legal"
+                  options={{ headerShown: false, title: "Legal" }}
+                />
+                <Stack.Screen
+                  name="notification/[id]"
+                  options={{ headerShown: false, title: "Notification" }}
+                />
+                <Stack.Screen
+                  name="buy-airtime"
+                  options={{ headerShown: false, title: "Buy Airtime" }}
+                />
+                <Stack.Screen
+                  name="beneficiaries"
+                  options={{ headerShown: false, title: "Beneficiaries" }}
+                />
+                <Stack.Screen
+                  name="buy-data"
+                  options={{ headerShown: false, title: "Buy Data" }}
+                />
+                <Stack.Screen
+                  name="buy-electricity"
+                  options={{ headerShown: false, title: "Buy Electricity" }}
+                />
+                <Stack.Screen
+                  name="buy-tv"
+                  options={{ headerShown: false, title: "Buy TV Subscription" }}
+                />
+                <Stack.Screen
+                  name="buy-recharge-pin"
+                  options={{ headerShown: false, title: "Buy Recharge Pin" }}
+                />
+                <Stack.Screen
+                  name="buy-betting"
+                  options={{ headerShown: false, title: "Betting" }}
+                />
+                <Stack.Screen
+                  name="buy-isp"
+                  options={{ headerShown: false, title: "ISP Data" }}
+                />
+                <Stack.Screen
+                  name="buy-education"
+                  options={{ headerShown: false, title: "Result Checker" }}
+                />
+                <Stack.Screen
+                  name="buy-sms"
+                  options={{ headerShown: false, title: "Bulk SMS" }}
+                />
+                <Stack.Screen
+                  name="bills-history"
+                  options={{ headerShown: false, title: "Bills History" }}
+                />
+                <Stack.Screen
+                  name="modal"
+                  options={{ presentation: "modal", title: "Modal" }}
+                />
+                <Stack.Screen
+                  name="pin/verify"
+                  options={{ headerShown: false, title: "Enter PIN" }}
+                />
+                <Stack.Screen
+                  name="pin/setup"
+                  options={{ headerShown: false, title: "Set PIN" }}
+                />
+                <Stack.Screen
+                  name="pin/change"
+                  options={{ headerShown: false, title: "Change PIN" }}
+                />
+              </Stack>
+            )}
           </PaystackProvider>
         </AdSlotProvider>
         <StatusBar style="auto" />
@@ -323,4 +485,3 @@ export default function RootLayout() {
     </QueryClientProvider>
   );
 }
-

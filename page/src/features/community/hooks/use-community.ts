@@ -37,7 +37,7 @@ export function useStreak() {
   return useQuery({
     queryKey: ['streak'],
     queryFn: fetchStreak,
-    staleTime: 60_000,
+    staleTime: 60 * 60 * 1000,
   });
 }
 

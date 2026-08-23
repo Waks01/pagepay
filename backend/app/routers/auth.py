@@ -12,7 +12,7 @@ from sqlalchemy import select, insert
 from jose import JWTError, jwt
 from app.database import get_db
 from app.models import User, PasswordResetToken, RefreshToken
-from app.schemas import UserRegister, TokenResponse, UserMe, UserUpdate, ChangePasswordRequest, ForgotPasswordRequest, ForgotPasswordVerifyOtpRequest, ResetPasswordRequest, LegalPageResponse, EmailVerificationRequest, EmailVerificationCodeRequest, GoogleAuthRequest
+from app.schemas import UserRegister, TokenResponse, UserMe, UserUpdate, ChangePasswordRequest, DeleteAccountRequest, ForgotPasswordRequest, ForgotPasswordVerifyOtpRequest, ResetPasswordRequest, LegalPageResponse, EmailVerificationRequest, EmailVerificationCodeRequest, GoogleAuthRequest
 from app.services.auth import hash_password, verify_password, create_access_token, create_refresh_token, get_current_user, revoke_jwt
 from app.services.sanitize import sanitize_for_log
 from app.services.cloudinary import upload_base64_image, delete_image
@@ -460,6 +460,86 @@ async def logout(request: Request, current_user: User = Depends(get_current_user
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
         device_fingerprint=request.headers.get("x-device-fingerprint"),
+    )
+    
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    request: Request,
+    payload: DeleteAccountRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently delete user account and all associated data.
+    
+    This action cannot be undone. Requires password confirmation and typing 'DELETE'.
+    Deletes:
+    - User profile and authentication data
+    - Points balance and transaction history  
+    - Reading progress and bookmarks
+    - Avatar from Cloudinary
+    - Referral codes and relationships
+    - All JWT/refresh tokens
+    - Payout account information
+    - Study materials and progress
+    - Community posts and comments
+    - Task submissions and earnings
+    - Ad viewing history
+    """
+    # Verify password if user has one (OAuth users might not)
+    if current_user.password_hash:
+        if not verify_password(payload.password, current_user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect password"
+            )
+    
+    # Log account deletion request before starting deletion
+    await log_user_action(
+        db,
+        current_user.id,
+        "account_deletion_started",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        device_fingerprint=request.headers.get("x-device-fingerprint"),
+    )
+    
+    # Delete avatar from Cloudinary if exists
+    if current_user.avatar_url:
+        try:
+            old_public_id = current_user.avatar_url.split("/")[-1].split(".")[0]
+            if old_public_id:
+                await delete_image(f"pagepay/avatars/{old_public_id}")
+        except Exception as exc:
+            logger.warning("Failed to delete avatar from Cloudinary for user %s: %s", current_user.id, exc)
+    
+    # Revoke all JWT tokens for this user
+    jti = _get_jti_from_request(request)
+    if jti:
+        await revoke_jwt(db, jti, current_user.id, reason="account_deletion")
+    
+    # Delete all refresh tokens for this user  
+    from sqlalchemy import delete
+    await db.execute(
+        delete(RefreshToken).where(RefreshToken.user_id == current_user.id)
+    )
+    
+    # The actual user deletion will cascade to related tables due to foreign key constraints
+    # This includes: reading_sessions, point_credits, reading_progress, bookmarks, 
+    # password_reset_tokens, user_audit_logs, etc.
+    user_id = current_user.id
+    user_email = current_user.email
+    
+    await db.delete(current_user)
+    await db.commit()
+    
+    logger.info(
+        "Account permanently deleted: user_id=%s email=%s ip=%s", 
+        user_id, 
+        sanitize_for_log(user_email),
+        request.client.host if request.client else None
     )
     
     return Response(status_code=status.HTTP_204_NO_CONTENT)

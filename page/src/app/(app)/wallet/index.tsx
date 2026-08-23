@@ -133,7 +133,7 @@ export default function WalletScreen() {
       if (!res.ok) throw new Error("Failed to load payout account");
       return (await res.json()) as PayoutAccount;
     },
-    staleTime: 30_000,
+    staleTime: 60 * 60 * 1000,
   });
 
   const payoutAccount = payoutQ.data ?? null;
