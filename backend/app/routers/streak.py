@@ -46,20 +46,42 @@ def _bonus_for_streak(days: int) -> tuple[float, str]:
     return 1.0, "No bonus"
 
 
+def _get_client_local_date(request: Request) -> date:
+    """Read the client's local date from the request header.
+
+    The Expo client sends ``X-Client-Date`` on every request via
+    ``apiFetch``. The value is an ISO date string ``YYYY-MM-DD`` in
+    the user's local calendar date. Defaults to today's date from the
+    client's reported local date if the header is missing.
+    """
+    client_date = request.headers.get("X-Client-Date")
+    if client_date:
+        try:
+            return date.fromisoformat(client_date)
+        except (TypeError, ValueError):
+            pass
+    utc_now = datetime.now(timezone.utc)
+    offset = _get_timezone_offset_minutes(request)
+    return _user_local_date(utc_now, offset)
+
+
 async def _update_login_streak(user_id: int, db: AsyncSession, request: Request | None = None) -> UserStreak:
-    """Update user's login streak based on app usage (not just reading sessions).
-    
-    This function should be called whenever a user opens the app or makes any API call.
-    It tracks consecutive days of app usage, with proper 24-hour reset logic.
+    """Update user's LOGIN streak based on app usage.
+
+    This function tracks user engagement (how often they open the app) and is
+    independent of daily reward claiming. Called whenever a user makes any API call.
+
+    LOGIN STREAK LOGIC:
+    - If user opens app on consecutive days → increment login streak
+    - If user misses a day → reset login streak to 1
+    - Multiple opens on same day → no change
     """
     streak_row = await db.execute(
         select(UserStreak).where(UserStreak.user_id == user_id)
     )
     streak = streak_row.scalar_one_or_none()
-    
-    utc_now = datetime.now(timezone.utc)
-    offset = _get_timezone_offset_minutes(request) if request is not None else 0
-    today = _user_local_date(utc_now, offset)
+
+    today = _get_client_local_date(request) if request is not None else date.today()
     today_str = today.isoformat()
     yesterday = today - timedelta(days=1)
     yesterday_str = yesterday.isoformat()
@@ -68,11 +90,21 @@ async def _update_login_streak(user_id: int, db: AsyncSession, request: Request 
         # First time user - create streak record
         streak = UserStreak(
             user_id=user_id,
+            # Login tracking
+            last_login_date=today_str,
+            consecutive_login_days=1,
+            longest_login_streak=1,
+            total_logins=1,
+            # Legacy fields (map to login tracking)
             current_streak=1,
             longest_streak=1,
             last_activity_date=today_str,
-            last_login_date=today_str,
-            consecutive_login_days=1
+            # Reward tracking starts at 0
+            reward_streak=0,
+            longest_reward_streak=0,
+            last_reward_claim_date=None,
+            last_claim_date=None,
+            reward_streak_expires_at=None
         )
         db.add(streak)
         await db.commit()
@@ -85,23 +117,105 @@ async def _update_login_streak(user_id: int, db: AsyncSession, request: Request 
         # User already logged in today - no change needed
         return streak
     elif last_login == yesterday_str:
-        # User logged in yesterday - continue streak
-        streak.current_streak += 1
+        # User logged in yesterday - continue login streak
         streak.consecutive_login_days += 1
-        streak.longest_streak = max(streak.longest_streak, streak.current_streak)
+        streak.longest_login_streak = max(streak.longest_login_streak, streak.consecutive_login_days)
+        streak.total_logins += 1
     elif last_login and date.fromisoformat(last_login) < yesterday:
-        # User missed a day - reset streak
-        streak.current_streak = 1
+        # User missed a day - reset login streak
         streak.consecutive_login_days = 1
+        streak.total_logins += 1
     else:
         # Edge case or first login - start fresh
-        streak.current_streak = 1
         streak.consecutive_login_days = 1
+        streak.total_logins += 1
         
+    # Update login tracking
     streak.last_login_date = today_str
-    streak.last_activity_date = today_str
-    streak.longest_streak = max(streak.longest_streak, streak.current_streak)
     
+    # Update legacy fields to match login tracking
+    streak.current_streak = streak.consecutive_login_days
+    streak.longest_streak = streak.longest_login_streak
+    streak.last_activity_date = today_str
+    
+    await db.commit()
+    await db.refresh(streak)
+    return streak
+
+
+async def _update_reward_streak(user_id: int, db: AsyncSession, request: Request | None = None) -> UserStreak:
+    """Update user's REWARD streak based on daily reward claiming.
+
+    This function handles the reward streak logic independently of login activity.
+    Should be called when checking daily reward status or claiming rewards.
+
+    REWARD STREAK LOGIC:
+    - Streak only increments when user actually CLAIMS a reward
+    - If 24+ hours pass without claiming → streak resets to 0
+    - If user then claims → streak becomes 1
+    - Consecutive days of claiming → streak increments
+    """
+    # First ensure login tracking is up to date
+    streak = await _update_login_streak(user_id, db, request)
+
+    utc_now = datetime.now(timezone.utc)
+
+    # Check if reward streak has expired (24+ hours since last claim)
+    if streak.reward_streak_expires_at and utc_now > streak.reward_streak_expires_at:
+        # Streak expired - reset to 0
+        streak.reward_streak = 0
+        streak.reward_streak_expires_at = None
+        streak.last_reward_claim_date = None
+        streak.last_claim_date = None
+
+        await db.commit()
+        await db.refresh(streak)
+
+    return streak
+
+
+async def _claim_daily_reward_increment_streak(user_id: int, db: AsyncSession, request: Request | None = None) -> UserStreak:
+    """Increment reward streak when user successfully claims a daily reward.
+
+    This should ONLY be called when a reward is actually claimed, not just viewed.
+
+    CLAIMING LOGIC:
+    - If streak is 0 or expired → becomes 1
+    - If user claimed yesterday → increment streak
+    - If user already claimed today → no change
+    - Set expiration to 24 hours from now
+    """
+    streak = await _update_reward_streak(user_id, db, request)
+
+    utc_now = datetime.now(timezone.utc)
+    today = _get_client_local_date(request) if request is not None else date.today()
+    today_str = today.isoformat()
+    yesterday = today - timedelta(days=1)
+    yesterday_str = yesterday.isoformat()
+
+    # Set expiration to 24 hours from now
+    expiration_time = utc_now + timedelta(hours=24)
+
+    last_claim = streak.last_reward_claim_date
+
+    if last_claim == today_str:
+        # Already claimed today - no streak change, but refresh expiration
+        streak.reward_streak_expires_at = expiration_time
+    elif last_claim == yesterday_str and streak.reward_streak > 0:
+        # Claimed yesterday - continue streak
+        streak.reward_streak += 1
+        streak.longest_reward_streak = max(streak.longest_reward_streak, streak.reward_streak)
+        streak.reward_streak_expires_at = expiration_time
+        streak.last_reward_claim_date = today_str
+        streak.last_claim_date = today_str
+    else:
+        # First claim or broken streak - start/restart at 1
+        streak.reward_streak = 1
+        streak.longest_reward_streak = max(streak.longest_reward_streak, 1)
+        streak.reward_streak_expires_at = expiration_time
+        streak.last_reward_claim_date = today_str
+        streak.last_claim_date = today_str
+
     await db.commit()
     await db.refresh(streak)
     return streak
@@ -130,8 +244,7 @@ async def _update_streak(user_id: int, db: AsyncSession, request: Request | None
     dates = [str(r[0]) for r in session_dates.all()]
 
     utc_now = datetime.now(timezone.utc)
-    offset = _get_timezone_offset_minutes(request) if request is not None else 0
-    today = _user_local_date(utc_now, offset)
+    today = _get_client_local_date(request)
     yesterday = today - timedelta(days=1)
 
     if not dates:

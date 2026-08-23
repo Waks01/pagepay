@@ -68,10 +68,10 @@ export async function publicApiFetch(
   options: RequestInit = {},
 ): Promise<Response> {
   const isFormData = options.body instanceof FormData;
-  const timezoneOffset = -new Date().getTimezoneOffset();
+  const clientDate = new Date().toISOString().split("T")[0];
   const headers: HeadersInit = {
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
-    "X-Timezone-Offset": String(timezoneOffset),
+    "X-Client-Date": clientDate,
     ...options.headers,
   };
 
@@ -96,11 +96,11 @@ export async function apiFetch(
 ): Promise<Response> {
   const token = await getToken();
   const isFormData = options.body instanceof FormData;
-  const timezoneOffset = -new Date().getTimezoneOffset(); // minutes ahead of UTC; negative if behind
+  const clientDate = new Date().toISOString().split("T")[0];
   const headers: HeadersInit = {
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    "X-Timezone-Offset": String(timezoneOffset),
+    "X-Client-Date": clientDate,
     ...options.headers,
   };
 

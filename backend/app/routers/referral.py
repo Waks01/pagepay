@@ -136,14 +136,27 @@ async def validate_referral(
     if referral and referral.reward_granted:
         return ReferralValidateResponse(rewarded=False, referrer_points=0, referee_points=0, message="Already rewarded")
 
-    utc_now = datetime.now(timezone.utc)
-    offset = _get_timezone_offset_minutes(request)
-    user_local_today = _user_local_date_from_utc(utc_now, offset)
-    user_local_reset_date = (
-        _user_local_date_from_utc(referrer.referrals_today_reset_at, offset)
-        if referrer.referrals_today_reset_at
-        else None
-    )
+    # Get today's date from client header (user's local date)
+    client_date = request.headers.get("X-Client-Date")
+    if client_date:
+        try:
+            user_local_today = date.fromisoformat(client_date)
+        except (TypeError, ValueError):
+            utc_now = datetime.now(timezone.utc)
+            offset = _get_timezone_offset_minutes(request)
+            user_local_today = _user_local_date_from_utc(utc_now, offset)
+    else:
+        utc_now = datetime.now(timezone.utc)
+        offset = _get_timezone_offset_minutes(request)
+        user_local_today = _user_local_date_from_utc(utc_now, offset)
+
+    if referrer.referrals_today_reset_at:
+        user_local_reset_date = _user_local_date_from_utc(
+            referrer.referrals_today_reset_at,
+            _get_timezone_offset_minutes(request),
+        )
+    else:
+        user_local_reset_date = None
 
     if user_local_reset_date is None or user_local_reset_date < user_local_today:
         referrer.referrals_today_count = 0

@@ -794,25 +794,45 @@ class CommunityLike(Base):
 
 
 class UserStreak(Base):
-    """Consecutive-day login streak for a user.
+    """User engagement tracking: login activity AND daily reward streaks.
 
-    `current_streak` is the active consecutive-day count. `longest_streak`
-    is the all-time best. `last_activity_date` is the ISO date string
-    (YYYY-MM-DD) of the most recent login/activity. `last_claim_date` tracks
-    when user last claimed daily reward to prevent double-claiming.
-    `last_login_date` tracks the last day the user opened the app.
-    `consecutive_login_days` is specifically for login-based streaks.
+    LOGIN TRACKING (for analytics/engagement):
+    - `last_login_date`: when user last opened app
+    - `consecutive_login_days`: how many days in a row they've opened app  
+    - `total_logins`: lifetime count of app opens
+
+    REWARD STREAK TRACKING (for daily rewards):
+    - `reward_streak`: consecutive days of CLAIMING rewards (not logging in)
+    - `last_reward_claim_date`: when user last claimed a daily reward
+    - `reward_streak_expires_at`: UTC timestamp when current reward streak expires (24h rule)
+    
+    The two systems are independent: user can login without claiming rewards,
+    and reward streaks only care about actual claims within 24-hour windows.
     """
 
     __tablename__ = "user_streaks"
 
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
-    current_streak: Mapped[int] = mapped_column(Integer, default=0)
-    longest_streak: Mapped[int] = mapped_column(Integer, default=0)
-    last_activity_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    last_claim_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    
+    # ── LOGIN TRACKING (analytics/engagement) ──────────────────────────
     last_login_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
     consecutive_login_days: Mapped[int] = mapped_column(Integer, default=0)
+    longest_login_streak: Mapped[int] = mapped_column(Integer, default=0)
+    total_logins: Mapped[int] = mapped_column(Integer, default=0)
+    
+    # ── REWARD STREAK TRACKING (daily rewards) ────────────────────────
+    reward_streak: Mapped[int] = mapped_column(Integer, default=0)
+    longest_reward_streak: Mapped[int] = mapped_column(Integer, default=0)
+    last_reward_claim_date: Mapped[str | None] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD
+    reward_streak_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # UTC timestamp
+    
+    # ── LEGACY FIELDS (for backwards compatibility) ───────────────────
+    # These map to login tracking for existing code that expects them
+    current_streak: Mapped[int] = mapped_column(Integer, default=0)  # Maps to consecutive_login_days
+    longest_streak: Mapped[int] = mapped_column(Integer, default=0)  # Maps to longest_login_streak  
+    last_activity_date: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Maps to last_login_date
+    last_claim_date: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Maps to last_reward_claim_date
+    
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
