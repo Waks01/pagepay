@@ -75,11 +75,237 @@ from app.services.paystack import (
 from app.services.money import kobo_to_points
 from app.services.money_caps import record_amount_v2
 from app.services.notifications import create_notification
-from app.services.subscription import calculate_subscription_end_date
+from app.services.subscription import calculate_subscription_end_date, format_tier_name
 
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/payouts", tags=["payouts"])
+
+
+# ── Charge event handlers ─────────────────────────────────────────
+
+
+async def _handle_charge_success(payment: Payment, reference: str, db: AsyncSession, logger):
+    """Handle successful payment charge."""
+    logger.info("🔄 Updating payment status to success...")
+    payment.status = "success"
+    payment.webhook_confirmed = True
+    payment.confirmed_at = datetime.utcnow()
+
+    if payment.tier == "wallet_deposit" and payment.payment_metadata:
+        await _process_wallet_deposit(payment, reference, db, logger)
+    elif payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value):
+        await _process_premium_subscription(payment, db, logger)
+
+
+async def _handle_charge_failed(payment: Payment, reference: str, db: AsyncSession, logger):
+    """Handle failed payment charge."""
+    logger.info("❌ Processing payment failure for reference=%s", reference)
+    payment.status = "failed"
+    payment.webhook_confirmed = True
+    payment.confirmed_at = datetime.utcnow()
+
+
+async def _handle_charge_abandoned(payment: Payment, reference: str, db: AsyncSession, logger):
+    """Handle abandoned payment charge (user cancelled)."""
+    logger.info("⚠️ Processing payment cancellation for reference=%s", reference)
+    payment.status = "cancelled"
+    payment.webhook_confirmed = True
+    payment.confirmed_at = datetime.utcnow()
+
+
+async def _handle_charge_expired(payment: Payment, reference: str, db: AsyncSession, logger):
+    """Handle expired payment charge (payment session timeout)."""
+    logger.info("⏰ Processing payment expiration for reference=%s", reference)
+    payment.status = "expired"
+    payment.webhook_confirmed = True
+    payment.confirmed_at = datetime.utcnow()
+
+
+async def _handle_charge_refunded(payment: Payment, reference: str, data: dict, db: AsyncSession, logger):
+    """Handle refunded payment charge."""
+    logger.info("💰 Processing payment refund for reference=%s", reference)
+    refund_amount = data.get("amount", 0)
+    
+    # Update payment status from "refund_requested" or "success" to "refunded"
+    old_status = payment.status
+    payment.status = "refunded"
+    payment.webhook_confirmed = True
+    payment.confirmed_at = datetime.utcnow()
+    
+    logger.info("🔄 Payment status changed: %s → refunded", old_status)
+    
+    # If this was a successful wallet deposit, reverse the credit
+    if payment.tier == "wallet_deposit" and payment.payment_metadata and old_status == "success":
+        await _reverse_wallet_deposit(payment, reference, db, logger)
+    
+    # If this was a successful premium subscription, downgrade user
+    elif payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value) and old_status == "success":
+        await _reverse_premium_subscription(payment, db, logger)
+
+
+async def _process_wallet_deposit(payment: Payment, reference: str, db: AsyncSession, logger):
+    """Process successful wallet deposit."""
+    logger.info("💰 Processing WALLET DEPOSIT...")
+    metadata = payment.payment_metadata if isinstance(payment.payment_metadata, dict) else {}
+    logger.info("📋 Metadata: %s", metadata)
+    
+    deposit_amount_kobo = metadata.get("deposit_amount_kobo")
+    logger.info("💵 Deposit amount from metadata: %s kobo", deposit_amount_kobo)
+    
+    if deposit_amount_kobo and deposit_amount_kobo > 0:
+        deposit_points = kobo_to_points(deposit_amount_kobo)
+        logger.info("🎯 Converting %s kobo → %d points", deposit_amount_kobo, deposit_points)
+        
+        user_row = (
+            await db.execute(
+                select(User).where(User.id == payment.user_id)
+            )
+        ).scalar_one_or_none()
+        
+        if user_row is not None:
+            old_balance = user_row.points_balance or 0
+            user_row.points_balance = old_balance + deposit_points
+            logger.info(
+                "✅ WALLET CREDITED: user=%s ref=%s amount_kobo=%s points_added=%d old_balance=%d new_balance=%d",
+                payment.user_id, reference, deposit_amount_kobo, deposit_points, old_balance, user_row.points_balance,
+            )
+            deposit_naira = deposit_amount_kobo / 100
+            
+            # Send FCM notification: Wallet funded successfully
+            from app.services.fcm import send_wallet_update
+            asyncio.create_task(
+                send_wallet_update(
+                    user_id=payment.user_id,
+                    amount_naira=deposit_naira,
+                    transaction_type="credit",
+                    reason="wallet_deposit",
+                )
+            )
+            
+            # Send in-app notification
+            from app.services.notifications import create_notification
+            asyncio.create_task(
+                create_notification(
+                    db=db,
+                    user_id=payment.user_id,
+                    title="✅ Payment Successful",
+                    body=f"Your wallet has been credited with ₦{deposit_naira:.2f} ({deposit_points:,} points). Start reading to earn more!",
+                    category="wallet_updates",
+                    data={
+                        "type": "payment_success",
+                        "reference": reference,
+                        "points": str(deposit_points),
+                        "amount_naira": str(deposit_naira),
+                    },
+                )
+            )
+        else:
+            logger.error("❌ Wallet deposit webhook: USER %s NOT FOUND for ref=%s", payment.user_id, reference)
+    else:
+        logger.warning("⚠️  No deposit_amount_kobo in metadata or amount is 0")
+
+
+async def _process_premium_subscription(payment: Payment, db: AsyncSession, logger):
+    """Process successful premium subscription upgrade."""
+    logger.info("🎉 Processing PREMIUM SUBSCRIPTION upgrade...")
+    try:
+        tier = UserTier(payment.tier)
+        expires_at = calculate_subscription_end_date(tier)
+        tier_name = format_tier_name(tier)
+        
+        await db.execute(
+            update(User)
+            .where(User.id == payment.user_id)
+            .values(
+                tier=tier,
+                subscription_expires_at=expires_at,
+            )
+        )
+        logger.info(
+            "✅ Subscription upgraded: user=%s tier=%s expires=%s",
+            payment.user_id, payment.tier, expires_at.isoformat(),
+        )
+        
+        # Send push notification: Premium activated
+        try:
+            from app.services.fcm import send_push_notification_background
+            asyncio.create_task(
+                send_push_notification_background(
+                    user_id=payment.user_id,
+                    title="🎉 Premium Activated!",
+                    body=f"Welcome to {tier_name}! Enjoy ad-free reading and 2x points.",
+                    data={
+                        "type": "subscription_success",
+                        "tier": tier.value,
+                        "expires_at": expires_at.isoformat(),
+                    },
+                    category="subscriptions",
+                )
+            )
+        except ImportError:
+            logger.warning("FCM not available, skipping push notification")
+        
+        # Send in-app notification
+        from app.services.notifications import create_notification
+        asyncio.create_task(
+            create_notification(
+                db=db,
+                user_id=payment.user_id,
+                title="🎉 Premium Activated!",
+                body=f"Your {tier_name} subscription is now active until {expires_at.strftime('%B %d, %Y')}. Enjoy ad-free reading and 2x earning points!",
+                category="subscriptions",
+                data={
+                    "type": "subscription_success",
+                    "tier": tier.value,
+                    "expires_at": expires_at.isoformat(),
+                },
+            )
+        )
+        
+    except Exception as exc:
+        logger.error("❌ Failed to upgrade subscription for user=%s: %s", payment.user_id, exc)
+
+
+async def _reverse_wallet_deposit(payment: Payment, reference: str, db: AsyncSession, logger):
+    """Reverse a wallet deposit due to refund."""
+    logger.info("🔄 Reversing wallet deposit for refund...")
+    metadata = payment.payment_metadata if isinstance(payment.payment_metadata, dict) else {}
+    deposit_amount_kobo = metadata.get("deposit_amount_kobo")
+    
+    if deposit_amount_kobo and deposit_amount_kobo > 0:
+        deposit_points = kobo_to_points(deposit_amount_kobo)
+        
+        user_row = (
+            await db.execute(
+                select(User).where(User.id == payment.user_id)
+            )
+        ).scalar_one_or_none()
+        
+        if user_row is not None:
+            old_balance = user_row.points_balance or 0
+            new_balance = max(0, old_balance - deposit_points)  # Don't go negative
+            user_row.points_balance = new_balance
+            logger.info(
+                "✅ WALLET DEBITED (refund): user=%s ref=%s points_removed=%d old_balance=%d new_balance=%d",
+                payment.user_id, reference, deposit_points, old_balance, new_balance,
+            )
+
+
+async def _reverse_premium_subscription(payment: Payment, db: AsyncSession, logger):
+    """Reverse a premium subscription due to refund."""
+    logger.info("🔄 Reversing premium subscription for refund...")
+    
+    # Downgrade user back to FREE tier
+    await db.execute(
+        update(User)
+        .where(User.id == payment.user_id)
+        .values(
+            tier=UserTier.FREE,
+            subscription_expires_at=None,
+        )
+    )
+    logger.info("✅ Subscription downgraded to FREE: user=%s", payment.user_id)
 
 
 # ── Mapping helpers ───────────────────────────────────────────────────
@@ -691,10 +917,13 @@ async def paystack_webhook(
     logger.info("💰 Amount: %s", data.get("amount"))
     logger.info("📊 Status: %s", data.get("status"))
 
-    # We only care about transfer events for Phase 4. Charges
-    # (premium subscriptions) are Phase 3 — log and move on so
-    # Paystack doesn't retry.
-    if event_name not in ("transfer.success", "transfer.failed", "transfer.reversed", "charge.success"):
+    # Handle all charge events (payment lifecycle) and transfer events (withdrawal lifecycle)
+    # Charge events: charge.success, charge.failed, charge.abandoned, charge.expired, charge.refunded
+    # Transfer events: transfer.success, transfer.failed, transfer.reversed
+    charge_events = ("charge.success", "charge.failed", "charge.abandoned", "charge.expired", "charge.refunded")
+    transfer_events = ("transfer.success", "transfer.failed", "transfer.reversed")
+    
+    if event_name not in (*charge_events, *transfer_events):
         logger.info("ℹ️  Ignoring event=%s (not handled by this endpoint)", event_name)
         return {"received": True, "handled": False}
 
@@ -707,9 +936,9 @@ async def paystack_webhook(
         # Still return 200 — Paystack would retry forever otherwise.
         return {"received": True, "handled": False, "reason": "no_reference"}
 
-    # ── charge.success: wallet deposit credit ─────────────────────────
-    if event_name == "charge.success":
-        logger.info("💳 Processing charge.success for reference=%s", reference)
+    # ── All charge events: payment lifecycle ──────────────────────────
+    if event_name in ("charge.success", "charge.failed", "charge.abandoned", "charge.expired", "charge.refunded"):
+        logger.info("💳 Processing %s for reference=%s", event_name, reference)
         
         payment = (
             await db.execute(
@@ -718,141 +947,29 @@ async def paystack_webhook(
         ).scalar_one_or_none()
         
         if payment is None:
-            logger.warning("❌ Paystack charge.success for UNKNOWN reference=%s; ignoring", reference)
+            logger.warning("❌ Paystack %s for UNKNOWN reference=%s; ignoring", event_name, reference)
             logger.warning("   This means Payment record doesn't exist in database!")
-            logger.warning("   Check if /api/v1/wallet/deposit endpoint created the Payment record")
+            logger.warning("   Check if /api/v1/payments/initiate endpoint created the Payment record")
             return {"received": True, "handled": False, "reason": "unknown_reference"}
 
-        logger.info("✅ Payment record FOUND: id=%s, user_id=%s, tier=%s, amount=%s", 
-                   payment.id, payment.user_id, payment.tier, payment.amount_kobo)
+        logger.info("✅ Payment record FOUND: id=%s, user_id=%s, tier=%s, amount=%s, current_status=%s", 
+                   payment.id, payment.user_id, payment.tier, payment.amount_kobo, payment.status)
 
         if payment.webhook_confirmed:
             logger.info("⚠️  Payment already processed (duplicate webhook)")
             return {"received": True, "handled": True, "event": event_name, "reason": "duplicate_event"}
 
-        logger.info("🔄 Updating payment status to success...")
-        payment.status = "success"
-        payment.webhook_confirmed = True
-        payment.confirmed_at = datetime.utcnow()
-
-        if payment.tier == "wallet_deposit" and payment.payment_metadata:
-            logger.info("💰 Processing WALLET DEPOSIT...")
-            metadata = payment.payment_metadata if isinstance(payment.payment_metadata, dict) else {}
-            logger.info("📋 Metadata: %s", metadata)
-            
-            deposit_amount_kobo = metadata.get("deposit_amount_kobo")
-            logger.info("💵 Deposit amount from metadata: %s kobo", deposit_amount_kobo)
-            
-            if deposit_amount_kobo and deposit_amount_kobo > 0:
-                # points_balance is denominated in POINTS (per
-                # POINTS_PER_NAIRA — 10 points = ₦1). Convert the
-                # kobo deposit to points via the canonical helper
-                # so the wallet balance stays in the same unit as
-                # reading slice bonuses and ad credits.
-                deposit_points = kobo_to_points(deposit_amount_kobo)
-                logger.info("🎯 Converting %s kobo → %d points", deposit_amount_kobo, deposit_points)
-                
-                user_row = (
-                    await db.execute(
-                        select(User).where(User.id == payment.user_id)
-                    )
-                ).scalar_one_or_none()
-                
-                if user_row is not None:
-                    old_balance = user_row.points_balance or 0
-                    user_row.points_balance = old_balance + deposit_points
-                    logger.info(
-                        "✅ WALLET CREDITED: user=%s ref=%s amount_kobo=%s points_added=%d old_balance=%d new_balance=%d",
-                        payment.user_id, reference, deposit_amount_kobo, deposit_points, old_balance, user_row.points_balance,
-                    )
-                    deposit_naira = deposit_amount_kobo / 100
-                    
-                    # Send FCM notification: Wallet funded successfully
-                    from app.services.fcm import send_wallet_update_background
-                    asyncio.create_task(
-                        send_wallet_update_background(
-                            user_id=payment.user_id,
-                            amount_naira=deposit_naira,
-                            transaction_type="credit",
-                            reason="wallet_deposit",
-                        )
-                    )
-                    
-                    # Send in-app notification
-                    from app.services.notifications import create_notification_background
-                    asyncio.create_task(
-                        create_notification_background(
-                            user_id=payment.user_id,
-                            title="✅ Payment Successful",
-                            body=f"Your wallet has been credited with ₦{deposit_naira:.2f} ({deposit_points:,} points). Start reading to earn more!",
-                            category="wallet_updates",
-                            data={
-                                "type": "payment_success",
-                                "reference": reference,
-                                "points": str(deposit_points),
-                                "amount_naira": str(deposit_naira),
-                            },
-                        )
-                    )
-                else:
-                    logger.error("❌ Wallet deposit webhook: USER %s NOT FOUND for ref=%s", payment.user_id, reference)
-            else:
-                logger.warning("⚠️  No deposit_amount_kobo in metadata or amount is 0")
-
-        elif payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value):
-            logger.info("🎉 Processing PREMIUM SUBSCRIPTION upgrade...")
-            try:
-                tier = UserTier(payment.tier)
-                expires_at = calculate_subscription_end_date(tier)
-                tier_name = format_tier_name(tier)
-                
-                await db.execute(
-                    update(User)
-                    .where(User.id == payment.user_id)
-                    .values(
-                        tier=tier,
-                        subscription_expires_at=expires_at,
-                    )
-                )
-                logger.info(
-                    "✅ Subscription upgraded: user=%s tier=%s expires=%s",
-                    payment.user_id, payment.tier, expires_at.isoformat(),
-                )
-                
-                # Send push notification: Premium activated
-                from app.services.fcm import send_push_notification_background
-                asyncio.create_task(
-                    send_push_notification_background(
-                        user_id=payment.user_id,
-                        title="🎉 Premium Activated!",
-                        body=f"Welcome to {tier_name}! Enjoy ad-free reading and 2x points.",
-                        data={
-                            "type": "subscription_success",
-                            "tier": tier.value,
-                            "expires_at": expires_at.isoformat(),
-                        },
-                        category="subscriptions",
-                    )
-                )
-                
-                # Send in-app notification
-                from app.services.notifications import create_notification_background
-                asyncio.create_task(
-                    create_notification_background(
-                        user_id=payment.user_id,
-                        title="🎉 Premium Activated!",
-                        body=f"Your {tier_name} subscription is now active until {expires_at.strftime('%B %d, %Y')}. Enjoy ad-free reading and 2x earning points!",
-                        category="subscriptions",
-                        data={
-                            "type": "subscription_success",
-                            "tier": tier.value,
-                            "expires_at": expires_at.isoformat(),
-                        },
-                    )
-                )
-                
-            except Exception as exc:
-                logger.error("❌ Failed to upgrade subscription for user=%s ref=%s: %s", payment.user_id, reference, exc)
+        # Handle each charge event type
+        if event_name == "charge.success":
+            await _handle_charge_success(payment, reference, db, logger)
+        elif event_name == "charge.failed":
+            await _handle_charge_failed(payment, reference, db, logger)
+        elif event_name == "charge.abandoned":
+            await _handle_charge_abandoned(payment, reference, db, logger)
+        elif event_name == "charge.expired":
+            await _handle_charge_expired(payment, reference, db, logger)
+        elif event_name == "charge.refunded":
+            await _handle_charge_refunded(payment, reference, data, db, logger)
 
         await db.commit()
         logger.info("✅ DATABASE COMMITTED - Webhook processing complete!")

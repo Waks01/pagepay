@@ -290,3 +290,147 @@ def _format_payment_tier_name(tier: str) -> str:
         return format_tier_name(UserTier(tier))
     except ValueError:
         return tier.replace("_", " ").title()
+
+
+@router.get("/status/{reference}")
+async def get_payment_status(
+    reference: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the status of a payment by reference.
+    
+    This endpoint allows the frontend to check payment status if needed,
+    though the webhook-driven approach should handle most cases automatically.
+    """
+    payment = (
+        await db.execute(
+            select(Payment).where(
+                Payment.provider_tx_ref == reference,
+                Payment.user_id == current_user.id  # Ensure user owns this payment
+            )
+        )
+    ).scalar_one_or_none()
+    
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    
+    return {
+        "reference": payment.provider_tx_ref,
+        "status": payment.status,
+        "tier": payment.tier,
+        "tier_name": _format_payment_tier_name(payment.tier),
+        "amount_kobo": payment.amount_kobo,
+        "amount_naira": payment.amount_kobo / 100,
+        "created_at": payment.created_at.isoformat(),
+        "confirmed_at": payment.confirmed_at.isoformat() if payment.confirmed_at else None,
+        "webhook_confirmed": payment.webhook_confirmed,
+    }
+
+
+@router.post("/refund")
+async def initiate_refund(
+    reference: str,
+    reason: str = "Customer request",
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Initiate a refund for a payment.
+    
+    This calls Paystack's refund API and lets the webhook handle the actual
+    refund processing when Paystack confirms it.
+    """
+    if not settings.paystack_secret_key:
+        logger.error("❌ PAYSTACK_SECRET_KEY not configured!")
+        raise HTTPException(status_code=503, detail="Payments not configured")
+    
+    # Find the payment record
+    payment = (
+        await db.execute(
+            select(Payment).where(
+                Payment.provider_tx_ref == reference,
+                Payment.user_id == current_user.id  # Ensure user owns this payment
+            )
+        )
+    ).scalar_one_or_none()
+    
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    
+    if payment.status != "success":
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot refund payment with status: {payment.status}"
+        )
+    
+    logger.info("🔄 Initiating refund for payment: %s", payment.id)
+    logger.info("   Reference: %s", reference)
+    logger.info("   Amount: %s kobo", payment.amount_kobo)
+    logger.info("   Reason: %s", reason)
+    
+    try:
+        import httpx
+        
+        # Call Paystack refund API
+        url = "https://api.paystack.co/refund"
+        headers = {
+            "Authorization": f"Bearer {settings.paystack_secret_key}",
+            "Content-Type": "application/json",
+        }
+        body = {
+            "transaction": reference,
+            "amount": payment.amount_kobo,  # Full refund
+            "currency": "NGN",
+            "customer_note": reason,
+            "merchant_note": f"Refund initiated by user {current_user.id}",
+        }
+        
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(url, json=body, headers=headers)
+            
+            if response.status_code != 200:
+                logger.error("❌ Paystack refund failed: %s", response.text)
+                raise HTTPException(
+                    status_code=502,
+                    detail="Refund request failed with payment provider"
+                )
+            
+            data = response.json()
+            
+            if not data.get("status"):
+                logger.error("❌ Paystack returned error: %s", data.get("message"))
+                raise HTTPException(
+                    status_code=502,
+                    detail=data.get("message", "Refund initiation failed")
+                )
+            
+            refund_data = data["data"]
+            logger.info("✅ Paystack refund initiated successfully!")
+            logger.info("   Refund ID: %s", refund_data.get("id"))
+            logger.info("   Status: %s", refund_data.get("status"))
+            
+            # Mark payment as refund requested (webhook will complete the process)
+            payment.status = "refund_requested"
+            await db.commit()
+            
+            return {
+                "success": True,
+                "message": "Refund initiated successfully",
+                "refund_id": refund_data.get("id"),
+                "status": refund_data.get("status"),
+                "amount_kobo": payment.amount_kobo,
+                "reference": reference
+            }
+            
+    except httpx.RequestError as e:
+        logger.error("❌ Paystack request error: %s", e)
+        raise HTTPException(
+            status_code=502,
+            detail="Could not reach payment provider"
+        )
+    except Exception as e:
+        logger.error("❌ Unexpected refund error: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error during refund"
+        )
