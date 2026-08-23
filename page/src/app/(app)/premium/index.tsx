@@ -10,7 +10,6 @@ import {
   Alert,
   ActivityIndicator,
   Image,
-  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -206,79 +205,37 @@ function PremiumBody({
   checkingPayment: boolean;
   setCheckingPayment: (v: boolean) => void;
   handleSelectTier: (tierId: string) => void;
-}) {
+}}}) {
   const qc = useQueryClient();
   const { initializePayment, isLoading: paystackLoading } = usePaystack();
-  const [paymentResult, setPaymentResult] = useState<
-    "success" | "cancelled" | "error" | null
-  >(null);
 
-  const pollSubscriptionStatus = async (reference: string) => {
-    console.log(
-      "🔍 [PREMIUM] Starting subscription verification for reference:",
-      reference,
-    );
-    setCheckingPayment(true);
-    let attempts = 0;
-
-    const checkStatus = async (): Promise<boolean> => {
-      try {
-        attempts++;
-        console.log(`🔄 [PREMIUM] Polling attempt ${attempts}/10...`);
-
-        // Refresh subscription status
-        console.log("📊 [PREMIUM] Refetching subscription data...");
-        await qc.refetchQueries({ queryKey: ["payments", "subscription"] });
-        const status = qc.getQueryData(["payments", "subscription"]) as any;
-        console.log("📋 [PREMIUM] Subscription status:", status);
-
-        if (status?.is_premium) {
-          console.log(
-            "✅ [PREMIUM] Subscription CONFIRMED! User is now premium",
-          );
-          return true;
-        }
-
-        console.log("⏰ [PREMIUM] Not premium yet, continuing...");
-
-        if (attempts < 10) {
-          console.log(`⏳ [PREMIUM] Waiting 2s before next attempt...`);
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          return checkStatus();
-        }
-
-        console.log("⚠️ [PREMIUM] Max attempts reached");
-        return false;
-      } catch (e) {
-        console.error("❌ [PREMIUM] Error during check:", e);
-        return false;
-      }
-    };
-
-    const success = await checkStatus();
-    setCheckingPayment(false);
-
-    console.log("🏁 [PREMIUM] Polling complete. Success:", success);
-
-    Alert.alert(
-      success
-        ? t("premium.premium_activated_title")
-        : t("premium.processing_payment_title"),
-      success
-        ? t("premium.premium_activated_body")
-        : t("premium.processing_payment_body"),
-    );
-
-    console.log("🔄 [PREMIUM] Final query invalidation...");
-    await qc.invalidateQueries({ queryKey: ["payments", "subscription"] });
-    await qc.invalidateQueries({ queryKey: ["payments", "history"] });
-    await qc.invalidateQueries({ queryKey: ["me"] });
+  const refreshSubscriptionData = async (delay: number = 3000) => {
+    setTimeout(async () => {
+      console.log("🔄 [PREMIUM] Refreshing subscription data...");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["payments", "subscription"] }),
+        qc.invalidateQueries({ queryKey: ["payments", "history"] }),
+        qc.invalidateQueries({ queryKey: ["me"] }),
+      ]);
+      console.log("✅ [PREMIUM] Subscription data refreshed");
+    }, delay);
   };
 
   const handleUpgrade = async (tier: string) => {
     console.log("💳 [PREMIUM] Starting subscription upgrade, tier:", tier);
-    setPaymentResult(null);
     setCheckingPayment(false);
+    
+    /* 
+     * WEBHOOK-DRIVEN PAYMENT FLOW:
+     * 1. Frontend initiates payment via /api/v1/payments/initiate
+     * 2. Frontend opens Paystack modal for user interaction
+     * 3. Paystack processes payment and sends webhook to backend
+     * 4. Backend webhook handles all payment status updates (success/cancel/error)
+     * 5. Frontend simply refreshes data to reflect webhook processing
+     * 
+     * This approach eliminates race conditions and ensures reliable payment handling.
+     */
+    
     try {
       console.log("🌐 [PREMIUM] Calling backend /api/v1/payments/initiate...");
       const res = await apiFetch("/api/v1/payments/initiate", {
@@ -308,12 +265,6 @@ function PremiumBody({
         const meData = meRes.ok ? await meRes.json() : {};
         const userEmail = meData?.email || "";
 
-        Alert.alert(
-          t("premium.payment_initiated_title"),
-          t("premium.payment_initiated_body"),
-          [{ text: t("premium.ok") }],
-        );
-
         await initializePayment({
           email: userEmail,
           amount: data.amount_kobo,
@@ -322,46 +273,45 @@ function PremiumBody({
           reference: data.provider_tx_ref,
           onSuccess: (tx) => {
             console.log("✅ [PREMIUM] Payment successful in-app:", tx);
-            setPaymentResult("success");
+            // Show immediate success feedback
+            Alert.alert(
+              t("premium.payment_success_title", "Payment Successful!"),
+              t("premium.payment_success_body", "Your payment was successful. Your premium subscription will be activated shortly."),
+              [{ text: t("premium.ok") }],
+            );
+            // Webhook will handle the subscription activation
+            // Refresh subscription data after a short delay to allow webhook processing
+            refreshSubscriptionData(3000);
           },
           onCancel: () => {
             console.log("❌ [PREMIUM] Payment cancelled by user");
-            setPaymentResult("cancelled");
+            // Webhook will handle the cancellation status
+            Alert.alert(
+              t("premium.payment_cancelled_title", "Payment Cancelled"),
+              t(
+                "premium.payment_cancelled_body",
+                "You cancelled the payment. Complete your payment anytime to activate your subscription.",
+              ),
+            );
+            // Refresh data to reflect cancellation status
+            refreshSubscriptionData(1000);
           },
           onError: (err) => {
             console.error("❌ [PREMIUM] Payment error:", err);
-            setPaymentResult("error");
+            // Webhook will handle the error status
+            Alert.alert(
+              t("premium.payment_error_title", "Payment Failed"),
+              t(
+                "premium.payment_error_body",
+                "Something went wrong during payment. Please try again.",
+              ),
+            );
+            // Refresh data to reflect error status
+            refreshSubscriptionData(1000);
           },
         });
 
-        console.log("👤 [PREMIUM] In-app payment closed");
-
-        if (paymentResult === "success") {
-          console.log("🔍 [PREMIUM] Payment succeeded - checking status...");
-          await pollSubscriptionStatus(data.provider_tx_ref);
-        } else if (paymentResult === "cancelled") {
-          console.log("⚠️ [PREMIUM] Payment cancelled, skipping verification");
-          Alert.alert(
-            t("premium.payment_cancelled_title", "Payment Cancelled"),
-            t(
-              "premium.payment_cancelled_body",
-              "You cancelled the payment. Your subscription will not be activated until payment is completed.",
-            ),
-          );
-        } else if (paymentResult === "error") {
-          console.log("⚠️ [PREMIUM] Payment error, skipping verification");
-          Alert.alert(
-            t("premium.payment_error_title", "Payment Failed"),
-            t(
-              "premium.payment_error_body",
-              "Something went wrong during payment. Please try again.",
-            ),
-          );
-        } else {
-          console.log(
-            "⚠️ [PREMIUM] Unknown payment state, skipping verification",
-          );
-        }
+        console.log("👤 [PREMIUM] Payment modal closed");
       }
     } catch (e) {
       console.error("❌ [PREMIUM] Upgrade error:", e);
@@ -499,18 +449,15 @@ function PremiumBody({
                 <View style={styles.button}>
                   <PrimaryButton
                     title={
-                      checkingPayment
-                        ? t("premium.verifying")
-                        : isPremium && userTier?.tier === tier.tier
-                          ? t("premium.current_plan")
-                          : t("premium.choose")
+                      isPremium && userTier?.tier === tier.tier
+                        ? t("premium.current_plan")
+                        : t("premium.choose")
                     }
                     onPress={() => handleUpgrade(tier.tier)}
                     disabled={
-                      checkingPayment ||
-                      (isPremium && userTier?.tier === tier.tier)
+                      isPremium && userTier?.tier === tier.tier
                     }
-                    loading={checkingPayment || paystackLoading}
+                    loading={paystackLoading}
                   />
                 </View>
               </TouchableOpacity>
@@ -547,26 +494,6 @@ function PremiumBody({
           </Text>
         </View>
       </ScrollView>
-
-      {/* Verification Overlay */}
-      <Modal transparent visible={checkingPayment} animationType="fade">
-        <View style={styles.overlay}>
-          <View
-            style={[
-              styles.overlayCard,
-              { backgroundColor: tokens.card, borderColor: tokens.border },
-            ]}
-          >
-            <ActivityIndicator size="large" color={tokens.mint} />
-            <Text style={[styles.overlayTitle, { color: tokens.ink }]}>
-              {t("premium.verifying_payment")}
-            </Text>
-            <Text style={[styles.overlayText, { color: tokens.inkMuted }]}>
-              {t("premium.verifying_subtitle")}
-            </Text>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -726,31 +653,5 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: "600",
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  overlayCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 32,
-    gap: 16,
-    alignItems: "center",
-    minWidth: 280,
-    maxWidth: 320,
-  },
-  overlayTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  overlayText: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: "center",
   },
 });
