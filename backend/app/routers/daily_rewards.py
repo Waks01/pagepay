@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import User, UserStreak, DailyReward, UserRewardClaim
 from app.routers.auth import get_current_user
-from app.routers.streak import _update_reward_streak, _claim_daily_reward_increment_streak, _get_timezone_offset_minutes, _user_local_date
+from app.routers.streak import _update_login_streak, _get_timezone_offset_minutes, _user_local_date
 from app.schemas import DailyRewardInfo, DailyRewardStatus, DailyRewardClaim, DailyRewardHistory
 
 logger = logging.getLogger("uvicorn.error")
@@ -58,37 +58,30 @@ async def _get_or_create_default_rewards(db: AsyncSession) -> List[DailyReward]:
 
 
 async def _get_claimable_reward(user_streak: UserStreak, rewards: List[DailyReward], today_str: str) -> Optional[DailyReward]:
-    """Determine what reward the user can claim today based on their REWARD STREAK.
-    
-    Uses reward_streak (claim-based) instead of current_streak (login-based).
-    The reward day is based on consecutive days of claiming, not consecutive logins.
-    """
-    if user_streak.last_reward_claim_date == today_str:
+    """Determine what reward the user can claim today based on their streak."""
+    if user_streak.last_claim_date == today_str:
         return None  # Already claimed today
         
-    # Use reward streak instead of login streak
-    reward_day = user_streak.reward_streak + 1  # Next reward day to claim
+    current_streak = user_streak.current_streak
     
-    # Find the appropriate reward for the reward day
-    # For days beyond 7, we use special milestone rewards or cycle back
-    if reward_day <= 7:
+    # Find the appropriate reward for the current streak day
+    # For streaks beyond day 7, we use special milestone rewards or cycle back
+    if current_streak <= 7:
         # Days 1-7: direct mapping
         for reward in rewards:
-            if reward.day_number == reward_day:
+            if reward.day_number == current_streak:
                 return reward
     else:
-        # Beyond day 7: check for milestone rewards or cycle through days 1-7
-        # Check if we're at a milestone day (14, 21, 30)
-        if reward_day in [14, 21, 30]:
+        # Beyond day 7: check for milestone rewards or use day 7 reward
+        milestone_rewards = [r for r in rewards if r.day_number in [14, 21, 30] and current_streak >= r.day_number]
+        if milestone_rewards:
+            # Use the highest applicable milestone
+            return max(milestone_rewards, key=lambda r: r.day_number)
+        else:
+            # Fall back to day 7 reward for consistency
             for reward in rewards:
-                if reward.day_number == reward_day:
+                if reward.day_number == 7:
                     return reward
-        
-        # Otherwise, cycle through days 1-7
-        cycle_day = ((reward_day - 1) % 7) + 1  # Maps 8->1, 9->2, etc.
-        for reward in rewards:
-            if reward.day_number == cycle_day:
-                return reward
     
     return None
 
@@ -100,8 +93,8 @@ async def get_daily_reward_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Get the user's current daily reward status - what they can claim today."""
-    # Update user's reward streak (which also updates login streak)
-    streak = await _update_reward_streak(current_user.id, db, request)
+    # Update user's login streak first
+    streak = await _update_login_streak(current_user.id, db, request)
     
     # Get available rewards
     rewards = await _get_or_create_default_rewards(db)
@@ -134,9 +127,8 @@ async def get_daily_reward_status(
     recent_claims = history_query.fetchall()
     
     return DailyRewardStatus(
-        # Use reward_streak instead of current_streak for display
-        current_streak=streak.reward_streak,
-        longest_streak=streak.longest_reward_streak,
+        current_streak=streak.current_streak,
+        longest_streak=streak.longest_streak,
         can_claim_today=claimable_reward is not None,
         todays_reward=DailyRewardInfo(
             id=claimable_reward.id,
@@ -147,9 +139,9 @@ async def get_daily_reward_status(
             description=claimable_reward.description,
             icon_emoji=claimable_reward.icon_emoji
         ) if claimable_reward else None,
-        last_claim_date=streak.last_reward_claim_date,
+        last_claim_date=streak.last_claim_date,
         next_milestone_day=next((r.day_number for r in sorted(rewards, key=lambda x: x.day_number) 
-                               if r.day_number > streak.reward_streak), None),
+                               if r.day_number > streak.current_streak), None),
         recent_claims=[
             {
                 "date": claim[0].claim_date,
@@ -167,8 +159,8 @@ async def claim_daily_reward(
     db: AsyncSession = Depends(get_db),
 ):
     """Claim today's daily reward if available."""
-    # Get current reward streak status (also updates login streak)
-    streak = await _update_reward_streak(current_user.id, db, request)
+    # Get current login streak status
+    streak = await _update_login_streak(current_user.id, db, request)
     
     # Get available rewards
     rewards = await _get_or_create_default_rewards(db)
@@ -189,7 +181,7 @@ async def claim_daily_reward(
     today_str = today.isoformat()
 
     # Check if user already claimed today
-    if streak.last_reward_claim_date == today_str:
+    if streak.last_claim_date == today_str:
         raise HTTPException(status_code=400, detail="Already claimed reward for today")
     
     # Find claimable reward
@@ -209,7 +201,7 @@ async def claim_daily_reward(
         user_id=current_user.id,
         reward_id=claimable_reward.id,
         claim_date=today_str,
-        streak_day=streak.reward_streak + 1,  # The day they're claiming (next in sequence)
+        streak_day=streak.current_streak,
         points_earned=points_to_award
     )
     db.add(claim)
@@ -217,8 +209,8 @@ async def claim_daily_reward(
     # Update user's points
     current_user.points_balance += points_to_award
     
-    # IMPORTANT: Increment the reward streak AFTER successful claim
-    updated_streak = await _claim_daily_reward_increment_streak(current_user.id, db, request)
+    # Update streak's last claim date
+    streak.last_claim_date = today_str
     
     await db.commit()
     await db.refresh(claim)
@@ -230,7 +222,7 @@ async def claim_daily_reward(
         reward_description=claimable_reward.description,
         reward_emoji=claimable_reward.icon_emoji,
         new_total_points=current_user.points_balance,
-        streak_day=updated_streak.reward_streak,  # Current reward streak after increment
+        streak_day=streak.current_streak,
         is_multiplier=claimable_reward.reward_type == "multiplier",
         multiplier_value=claimable_reward.reward_value if claimable_reward.reward_type == "multiplier" else None
     )
