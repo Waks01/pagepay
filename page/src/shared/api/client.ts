@@ -147,3 +147,66 @@ export async function apiFetch(
 
   return res;
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Phase 4: Premium Tier Benefits API
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Fetch user's current tier and subscription status
+ */
+export async function getUserTier(): Promise<{
+  tier: "free" | "premium_monthly" | "premium_yearly";
+  is_premium: boolean;
+  expires_at: string | null;
+}> {
+  const res = await apiFetch("/api/v1/users/me");
+  if (!res.ok) {
+    throw new Error("Failed to fetch user tier");
+  }
+  const data = await res.json();
+  return {
+    tier: data.tier || "free",
+    is_premium: data.tier !== "free",
+    expires_at: data.premium_expires_at || null,
+  };
+}
+
+/**
+ * Fetch ad gating information for specific content
+ * Phase 3: Determines if ads should be shown based on content type and user tier
+ */
+export async function getContentAdGating(contentId: number): Promise<{
+  content_id: number;
+  content_source: string | null;
+  content_type: string;
+  user_tier: string;
+  is_ad_free_content: boolean;
+  can_skip_pre_read_ad: boolean;
+  can_skip_post_read_ad: boolean;
+  can_skip_feed_ads: boolean;
+  show_pre_read_ad: boolean;
+  show_post_read_ad: boolean;
+}> {
+  const res = await apiFetch(`/api/v1/content/${contentId}/ad-gating`);
+  if (!res.ok) {
+    throw new Error("Failed to fetch ad gating info");
+  }
+  return res.json();
+}
+
+/**
+ * Fetch tier benefits comparison (for premium upsell screens)
+ */
+export async function getTierBenefits(): Promise<{
+  free: any;
+  premium_monthly: any;
+  premium_yearly: any;
+  comparison: any;
+}> {
+  const res = await publicApiFetch("/api/v1/subscription/tier-benefits");
+  if (!res.ok) {
+    throw new Error("Failed to fetch tier benefits");
+  }
+  return res.json();
+}

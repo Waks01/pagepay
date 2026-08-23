@@ -17,7 +17,7 @@ const TEST_ADMOB_APP_ID_IOS = "ca-app-pub-3940256099942544~1712483245";
 const PROD_ADMOB_APP_ID_ANDROID = "ca-app-pub-3898064484524772~6521009021";
 const PROD_ADMOB_APP_ID_IOS = "ca-app-pub-3898064484524772~4871553842";
 
-const adsEnv = process.env.EXPO_PUBLIC_ADS_ENV || "dev";
+const adsEnv = process.env.EXPO_PUBLIC_ADS_ENV || "prod";
 const isProdAds = adsEnv === "prod";
 
 // Re-map the AdMob plugin entry so the App ID follows the same env switch

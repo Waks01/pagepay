@@ -39,6 +39,8 @@
         {
           "android": {
             "kotlinVersion": "2.1.20",
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
             "extraBackgroundColor": "#FBFAF6",
             "packagingOptions": {
               "pickFirst": [
@@ -84,8 +86,7 @@
     },
     "extra": {
       "apiUrl": "https://pagepay-fff6.onrender.com",
-      "adsEnv": "dev",
-      "paystackPublicKey": "pk_live_c2966d1498e3d6aec4bff764f03d3105847d6aa7",
+      "adsEnv": "prod",
       "router": {},
       "eas": {
         "projectId": "cd073eef-398e-4fd3-bba5-b5c4cb98df79"

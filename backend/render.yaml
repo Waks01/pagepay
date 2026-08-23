@@ -11,7 +11,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        value: http://localhost:3000,https://pagepay-fff6.onrender.com
+        value: https://pagepay-fff6.onrender.com
       - key: ADMIN_TOKEN
         value: dev-admin-token
       - key: PAYSTACK_SECRET_KEY
@@ -42,7 +42,7 @@ services:
     databases:
       - name: pagepay_db
         engine: postgres
-        version: '15'
+        version: '18'
         plan: free
 
 

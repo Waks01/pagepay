@@ -565,9 +565,60 @@ class Settings(BaseSettings):
     # Override via env PREMIUM_POINTS_MULTIPLIER.
     premium_points_multiplier: float = 2.0
 
+    # ── Premium activity-specific multipliers ────────────────────────
+    # Individual multipliers for each activity type. Loaded from .env
+    # and used as fallback if tier_benefits.json doesn't define them.
+    # Reading slice bonus multiplier (default 2.0x)
+    premium_reading_multiplier: float = 2.0
+    # Ad reward multiplier (default 1.5x, not 2.0x like other activities)
+    premium_ad_multiplier: float = 1.5
+    # Task reward multiplier (default 2.0x)
+    premium_task_multiplier: float = 2.0
+    # Daily reward multiplier (default 2.0x)
+    premium_daily_multiplier: float = 2.0
+    # Bills cashback multiplier (default 2.0x)
+    premium_bills_multiplier: float = 2.0
+
+    # ── Content type detection for ad gating ─────────────────────────
+    # Content sources that are always ad-free (study materials).
+    # Comma-separated list. Override via env AD_FREE_CONTENT_SOURCES.
+    ad_free_content_sources: str = "openstax,openstax_textbook"
+    # Content sources that are ad-supported (novels, news, etc.).
+    # Comma-separated list. Override via env AD_SUPPORTED_CONTENT_SOURCES.
+    ad_supported_content_sources: str = "gutenberg,gnews,user_upload"
+    # Default behavior for unknown sources (ad_supported or ad_free).
+    # Override via env DEFAULT_CONTENT_AD_BEHAVIOR.
+    default_content_ad_behavior: str = "ad_supported"
+
+    # ── Premium ad skip permissions ──────────────────────────────────
+    # Whether premium users can skip pre-read ads on novels.
+    # Override via env PREMIUM_CAN_SKIP_PRE_READ_ADS.
+    premium_can_skip_pre_read_ads: bool = True
+    # Whether premium users can skip post-read ads on novels.
+    # Override via env PREMIUM_CAN_SKIP_POST_READ_ADS.
+    premium_can_skip_post_read_ads: bool = True
+    # Whether premium users can skip feed ads in catalog.
+    # Override via env PREMIUM_CAN_SKIP_FEED_ADS.
+    premium_can_skip_feed_ads: bool = True
+
+    # ── Tier benefits JSON configuration ─────────────────────────────
+    # Path to tier_benefits.json file (relative to backend/app or absolute).
+    # Override via env TIER_BENEFITS_JSON_PATH.
+    tier_benefits_json_path: str = "tier_benefits.json"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def ad_free_sources_list(self) -> list[str]:
+        """Parse AD_FREE_CONTENT_SOURCES into a list of source identifiers."""
+        return [s.strip() for s in self.ad_free_content_sources.split(",") if s.strip()]
+
+    @property
+    def ad_supported_sources_list(self) -> list[str]:
+        """Parse AD_SUPPORTED_CONTENT_SOURCES into a list of source identifiers."""
+        return [s.strip() for s in self.ad_supported_content_sources.split(",") if s.strip()]
 
     @property
     def withdrawal_fee_tiers_parsed(self) -> list[tuple[int | None, int]]:

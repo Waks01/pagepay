@@ -189,6 +189,12 @@ async def claim_daily_reward(
     if claimable_reward.reward_type == "multiplier":
         points_to_award = 500
     
+    # Apply premium multiplier to daily rewards (Phase 2)
+    from app.services.subscription import get_points_multiplier
+    base_points = points_to_award
+    multiplier = get_points_multiplier(current_user, "daily")
+    points_to_award = int(base_points * multiplier)
+    
     claim = UserRewardClaim(
         user_id=current_user.id,
         reward_id=claimable_reward.id,
@@ -200,10 +206,43 @@ async def claim_daily_reward(
     
     current_user.points_balance += points_to_award
     
+    logger.info(
+        "Daily reward claimed: user=%d tier=%s base=%d multiplier=%.1fx final=%d streak=%d",
+        current_user.id, current_user.tier.value, base_points, multiplier,
+        points_to_award, streak.reward_streak + 1
+    )
+    
     updated_streak = await _claim_daily_reward_increment_streak(current_user.id, db, request)
     
     await db.commit()
     await db.refresh(claim)
+    
+    # Send in-app notification: Daily reward claimed (Phase 6)
+    from app.services.notifications import create_notification
+    await create_notification(
+        db=db,
+        user_id=current_user.id,
+        title=f"🎁 Daily Reward Claimed!",
+        body=f"You earned {points_to_award} points! Keep your streak going - {updated_streak.reward_streak} days! {f'(Premium 2x boost applied)' if multiplier > 1 else ''}",
+        category="daily_reward",
+        data={
+            "type": "daily_reward_claimed",
+            "points_earned": points_to_award,
+            "streak_day": updated_streak.reward_streak,
+            "multiplier": multiplier,
+        },
+    )
+    
+    # Check for streak milestones (Phase 6)
+    milestone_days = [7, 14, 30, 60, 90, 180, 365]
+    if updated_streak.reward_streak in milestone_days:
+        from app.services.premium_notifications import notify_streak_milestone
+        await notify_streak_milestone(
+            db=db,
+            user_id=current_user.id,
+            streak_days=updated_streak.reward_streak,
+            milestone_reward=0,  # Could add bonus points for milestones
+        )
     
     return DailyRewardClaim(
         success=True,

@@ -133,6 +133,16 @@ async def initiate_payment(
     await db.commit()
     logger.info("✅ Payment record created: ID=%s", payment.id)
     
+    # Send in-app notification: Payment initiated (Phase 6)
+    from app.services.premium_notifications import notify_payment_initiated
+    await notify_payment_initiated(
+        db=db,
+        user_id=current_user.id,
+        tier=tier,
+        amount_kobo=amount_kobo,
+        reference=tx_ref,
+    )
+    
     # Send push notification: Subscription payment initiated
     logger.info("📲 Scheduling subscription payment initiated notification...")
     from app.services.fcm import send_push_notification_background
@@ -365,6 +375,19 @@ async def cancel_payment_status(
         await db.commit()
         logger.info("✅ [CANCEL] Payment status updated successfully")
         
+        # Send in-app notification: Payment cancelled (Phase 6)
+        try:
+            tier = UserTier(payment.tier)
+            from app.services.premium_notifications import notify_payment_cancelled
+            await notify_payment_cancelled(
+                db=db,
+                user_id=current_user.id,
+                tier=tier,
+                reference=reference,
+            )
+        except Exception as e:
+            logger.error("Failed to send cancelled notification: %s", e)
+        
         return {
             "success": True,
             "message": "Payment status updated to cancelled",
@@ -416,6 +439,20 @@ async def fail_payment_status(
         payment.confirmed_at = datetime.utcnow()
         await db.commit()
         logger.info("✅ [FAIL] Payment status updated successfully")
+        
+        # Send in-app notification: Payment failed (Phase 6)
+        try:
+            tier = UserTier(payment.tier)
+            from app.services.premium_notifications import notify_payment_failed
+            await notify_payment_failed(
+                db=db,
+                user_id=current_user.id,
+                tier=tier,
+                reference=reference,
+                reason="Payment was declined or could not be processed",
+            )
+        except Exception as e:
+            logger.error("Failed to send failed payment notification: %s", e)
         
         return {
             "success": True,
@@ -539,3 +576,80 @@ async def initiate_refund(
             status_code=500,
             detail="Internal server error during refund"
         )
+
+
+
+@router.get("/tier-benefits")
+async def get_tier_benefits():
+    """Get tier benefits configuration from tier_benefits.json.
+    
+    Phase 4: Frontend Integration
+    Returns the full benefits configuration for all tiers, used by:
+    - Premium upsell screens
+    - Settings/profile screens showing current tier benefits
+    - Comparison tables
+    """
+    from app.services.tier_benefits import get_tier_config, _tier_config
+    from app.models import UserTier
+    
+    # Return the full config for all tiers
+    return {
+        "free": get_tier_config(UserTier.FREE),
+        "premium_monthly": get_tier_config(UserTier.PREMIUM_MONTHLY),
+        "premium_yearly": get_tier_config(UserTier.PREMIUM_YEARLY),
+        "comparison": _tier_config.config.get("comparison", {}),
+    }
+
+
+
+@router.post("/subscription/check-expiring")
+async def check_expiring_subscriptions(
+    db: AsyncSession = Depends(get_db),
+):
+    """Cron job endpoint: Check for expiring subscriptions and send reminders.
+    
+    Phase 6: Should be called daily by a scheduler (cron, Render cron job, etc.)
+    Sends notifications to users whose subscriptions expire in 7, 3, or 1 days.
+    
+    Requires authentication with CRON_SECRET in header for security.
+    """
+    # TODO: Add cron secret authentication
+    # if request.headers.get("X-Cron-Secret") != settings.cron_secret:
+    #     raise HTTPException(status_code=403, detail="Forbidden")
+    
+    from app.services.premium_notifications import check_and_notify_expiring_subscriptions
+    
+    notifications_sent = await check_and_notify_expiring_subscriptions(db)
+    
+    return {
+        "success": True,
+        "notifications_sent": notifications_sent,
+        "checked_at": datetime.utcnow().isoformat(),
+    }
+
+
+
+@router.post("/daily-reward/send-reminders")
+async def send_daily_reward_reminders(
+    db: AsyncSession = Depends(get_db),
+):
+    """Cron job endpoint: Send daily reward reminders to users.
+    
+    Phase 6: Should be called daily at 9 AM by a scheduler.
+    Reminds users who have an active streak but haven't claimed today.
+    
+    Requires authentication with CRON_SECRET in header for security.
+    """
+    # TODO: Add cron secret authentication
+    # if request.headers.get("X-Cron-Secret") != settings.cron_secret:
+    #     raise HTTPException(status_code=403, detail="Forbidden")
+    
+    from app.services.premium_notifications import check_and_send_daily_reward_reminders
+    
+    reminders_sent = await check_and_send_daily_reward_reminders(db)
+    
+    return {
+        "success": True,
+        "reminders_sent": reminders_sent,
+        "sent_at": datetime.utcnow().isoformat(),
+    }

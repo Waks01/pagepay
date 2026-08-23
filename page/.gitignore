@@ -36,6 +36,14 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# EAS / keystore credentials
+credentials.json
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
 app-example
 
 # generated native folders

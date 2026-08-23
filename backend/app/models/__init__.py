@@ -176,6 +176,20 @@ class ContentCatalog(Base):
     # education content (openstax). The reader uses this to skip the
     # ad-gate / 1-min timer / point-earning flow for education rows.
     source: Mapped[str] = mapped_column(String(50), default="gutendex", index=True)
+    
+    # ── Content source for ad gating (Premium Phase 1) ────────────────
+    # `content_source` is used to determine ad-free vs ad-supported content.
+    # Values: gutenberg, openstax, openstax_textbook, gnews, user_upload, etc.
+    # Used with AD_FREE_CONTENT_SOURCES/.env to decide if ads should show.
+    # NULL = unknown source, uses DEFAULT_CONTENT_AD_BEHAVIOR from .env.
+    # See backend/app/services/tier_benefits.py::is_content_ad_free()
+    content_source: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        index=True,
+        comment="Source of content for ad gating logic (gutenberg, openstax, etc.)"
+    )
+    
     # `education_level` is the creche/primary/secondary/tertiary/research
     # bucket used by the catalog's level filter. NULL on non-education rows.
     education_level: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)

@@ -274,16 +274,13 @@ async def global_exception_handler(request: Request, exc: Exception):
         content = {"detail": exc.detail}
     else:
         status_code = 500
-        # TEMP DEBUG (remove after fix): always include exception class +
-        # message so we can see what's failing without Render log access.
-        content = {
-            "detail": "Internal server error",
-            "debug": {
+        content = {"detail": "Internal server error"}
+        if settings.environment != "production":
+            content["debug"] = {
                 "type": type(exc).__name__,
                 "message": str(exc),
                 "path": request.url.path,
-            },
-        }
+            }
     
     # Ensure CORS headers are present on all error responses
     origin = request.headers.get("origin")

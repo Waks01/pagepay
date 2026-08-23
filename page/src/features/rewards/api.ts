@@ -67,12 +67,14 @@ export async function fetchDailyRewardConfig(): Promise<DailyRewardInfo[]> {
     } catch {
       errorMessage = res.statusText || errorMessage;
     }
-    console.error("[fetchDailyRewardConfig] Error:", {
-      status: res.status,
-      statusText: res.statusText,
-      url: res.url,
-      message: errorMessage,
-    });
+    if (__DEV__) {
+      console.error("[fetchDailyRewardConfig] Error:", {
+        status: res.status,
+        statusText: res.statusText,
+        url: res.url,
+        message: errorMessage,
+      });
+    }
     throw new Error(errorMessage);
   }
   return res.json();
@@ -92,12 +94,14 @@ export async function fetchDailyRewardStatus(): Promise<DailyRewardStatus> {
     } catch {
       errorMessage = res.statusText || errorMessage;
     }
-    console.error("[fetchDailyRewardStatus] Error:", {
-      status: res.status,
-      statusText: res.statusText,
-      url: res.url,
-      message: errorMessage,
-    });
+    if (__DEV__) {
+      console.error("[fetchDailyRewardStatus] Error:", {
+        status: res.status,
+        statusText: res.statusText,
+        url: res.url,
+        message: errorMessage,
+      });
+    }
     throw new Error(errorMessage);
   }
   return res.json();

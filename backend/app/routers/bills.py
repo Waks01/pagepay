@@ -78,7 +78,7 @@ def _vtu_error(exc: Exception) -> HTTPException:
     raise exc
 
 
-def _compute_points(commission_kobo: int) -> int:
+def _compute_points(commission_kobo: int, user: User | None = None) -> int:
     """Compute user's point share from a commission amount in kobo.
     
     The commission comes from the VTU provider's `discount` field in the API response,
@@ -88,9 +88,19 @@ def _compute_points(commission_kobo: int) -> int:
     
     Users receive 67% of the commission as points (10 pts = ₦1).
     Platform keeps 33% to cover infrastructure costs.
+    
+    Premium users get 2x multiplier on bills cashback (Phase 2).
     """
     user_share_kobo = int(commission_kobo * _USER_SHARE)
-    return user_share_kobo * _POINTS_PER_NAIRA // 100
+    base_points = user_share_kobo * _POINTS_PER_NAIRA // 100
+    
+    # Apply premium multiplier to bills cashback (Phase 2)
+    if user:
+        from app.services.subscription import get_points_multiplier
+        multiplier = get_points_multiplier(user, "bills")
+        return int(base_points * multiplier)
+    
+    return base_points
 
 
 def _effective_commission_kobo(
@@ -194,7 +204,15 @@ async def buy_airtime(
         discount=result.discount,
     )
 
-    points = _compute_points(commission_kobo)
+    # Get full user object for multiplier calculation (Phase 2)
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    full_user = user_result.scalar_one()
+    points = _compute_points(commission_kobo, full_user)
+    
+    logger.info(
+        "Bills cashback: user=%d tier=%s service=airtime commission=%d points=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points
+    )
 
     # 4. Record transaction and credit points
     tx = BillTransaction(
@@ -343,7 +361,15 @@ async def buy_data(
         discount=result.discount,
     )
 
-    points = _compute_points(commission_kobo)
+    # Get full user object for multiplier calculation (Phase 2)
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    full_user = user_result.scalar_one()
+    points = _compute_points(commission_kobo, full_user)
+    
+    logger.info(
+        "Bills cashback: user=%d tier=%s service=data commission=%d points=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points
+    )
 
     tx = BillTransaction(
         user_id=current_user.id,
@@ -460,7 +486,15 @@ async def buy_electricity(
         price_naira=payload.amount_naira,
     )
 
-    points = _compute_points(commission_kobo)
+    # Get full user object for multiplier calculation (Phase 2)
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    full_user = user_result.scalar_one()
+    points = _compute_points(commission_kobo, full_user)
+    
+    logger.info(
+        "Bills cashback: user=%d tier=%s service=electricity commission=%d points=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points
+    )
 
     tx = BillTransaction(
         user_id=current_user.id,
@@ -598,7 +632,15 @@ async def buy_tv(
         price_naira=price_naira,
     )
 
-    points = _compute_points(commission_kobo)
+    # Get full user object for multiplier calculation (Phase 2)
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    full_user = user_result.scalar_one()
+    points = _compute_points(commission_kobo, full_user)
+    
+    logger.info(
+        "Bills cashback: user=%d tier=%s service=tv commission=%d points=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points
+    )
 
     tx = BillTransaction(
         user_id=current_user.id,
@@ -875,7 +917,15 @@ async def buy_recharge_pin(
         discount=discount,
     )
 
-    points = _compute_points(commission_kobo)
+    # Get full user object for multiplier calculation (Phase 2)
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    full_user = user_result.scalar_one()
+    points = _compute_points(commission_kobo, full_user)
+    
+    logger.info(
+        "Bills cashback: user=%d tier=%s service=recharge_pin commission=%d points=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points
+    )
 
     tx = BillTransaction(
         user_id=current_user.id,
@@ -1001,7 +1051,16 @@ async def fund_betting(
         amount_kobo=amount_kobo,
         service="betting",
     )
-    points = _compute_points(commission_kobo)
+    
+    # Get full user object for multiplier calculation (Phase 2)
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    full_user = user_result.scalar_one()
+    points = _compute_points(commission_kobo, full_user)
+    
+    logger.info(
+        "Bills cashback: user=%d tier=%s service=betting commission=%d points=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points
+    )
 
     tx = BillTransaction(
         user_id=current_user.id,
@@ -1129,7 +1188,16 @@ async def topup_smile(
         amount_kobo=amount_kobo,
         service="isp_smile",
     )
-    points = _compute_points(commission_kobo)
+    
+    # Get full user object for multiplier calculation (Phase 2)
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    full_user = user_result.scalar_one()
+    points = _compute_points(commission_kobo, full_user)
+    
+    logger.info(
+        "Bills cashback: user=%d tier=%s service=isp_smile commission=%d points=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points
+    )
 
     tx = BillTransaction(
         user_id=current_user.id,
@@ -1232,7 +1300,16 @@ async def topup_spectranet(
         amount_kobo=amount_kobo,
         service="isp_spectranet",
     )
-    points = _compute_points(commission_kobo)
+    
+    # Get full user object for multiplier calculation (Phase 2)
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    full_user = user_result.scalar_one()
+    points = _compute_points(commission_kobo, full_user)
+    
+    logger.info(
+        "Bills cashback: user=%d tier=%s service=isp_spectranet commission=%d points=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points
+    )
 
     tx = BillTransaction(
         user_id=current_user.id,
@@ -1343,7 +1420,16 @@ async def buy_result_checker(
         amount_kobo=amount_kobo,
         service="education",
     )
-    points = _compute_points(commission_kobo)
+    
+    # Get full user object for multiplier calculation (Phase 2)
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    full_user = user_result.scalar_one()
+    points = _compute_points(commission_kobo, full_user)
+    
+    logger.info(
+        "Bills cashback: user=%d tier=%s service=education commission=%d points=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points
+    )
 
     tx = BillTransaction(
         user_id=current_user.id,
@@ -1455,7 +1541,16 @@ async def send_sms(
         amount_kobo=amount_kobo,
         service="sms",
     )
-    points = _compute_points(commission_kobo)
+    
+    # Get full user object for multiplier calculation (Phase 2)
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    full_user = user_result.scalar_one()
+    points = _compute_points(commission_kobo, full_user)
+    
+    logger.info(
+        "Bills cashback: user=%d tier=%s service=sms commission=%d points=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points
+    )
 
     tx = BillTransaction(
         user_id=current_user.id,

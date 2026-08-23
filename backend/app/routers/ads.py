@@ -746,6 +746,22 @@ async def admob_ssv_callback(
         return {"status": "ignored", "reason": "invalid_reward_amount"}
 
     points = int(reward_amount * USER_SHARE)
+    
+    # Apply premium multiplier to ad rewards (Phase 2)
+    from app.services.subscription import get_points_multiplier
+    base_points = points
+    
+    # Get current user for multiplier calculation
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    current_user = user_result.scalar_one_or_none()
+    
+    if current_user:
+        multiplier = get_points_multiplier(current_user, "ad")
+        points = int(base_points * multiplier)
+        logger.info(
+            "AdMob SSV: user=%s tier=%s base=%d multiplier=%.1fx final=%d",
+            user_id, current_user.tier.value, base_points, multiplier, points
+        )
 
     # Mark the AdRequest as credited (audit trail)
     await ads_service.mark_ad_request_credited(

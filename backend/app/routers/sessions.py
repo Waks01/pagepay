@@ -135,13 +135,20 @@ async def end_session(
 
     if not session.verified and session.scroll_events > 0 and effective_duration >= settings.session_verified_min_seconds:
         session.verified = True
-        bonus_credited = settings.reading_slice_bonus_points
+        
+        # Apply premium multiplier to reading bonus (Phase 2)
+        from app.services.subscription import get_points_multiplier
+        base_bonus = settings.reading_slice_bonus_points
+        multiplier = get_points_multiplier(current_user, "reading")
+        bonus_credited = int(base_bonus * multiplier)
+        
         current_user.points_balance += bonus_credited
         session.points_earned = bonus_credited
         bonus_eligible = True
         logger.info(
-            "session %d settled: user=%d verified=True bonus=%d new_balance=%d",
-            session.id, current_user.id, bonus_credited, current_user.points_balance,
+            "session %d settled: user=%d tier=%s verified=True base=%d multiplier=%.1fx bonus=%d new_balance=%d",
+            session.id, current_user.id, current_user.tier.value,
+            base_bonus, multiplier, bonus_credited, current_user.points_balance,
         )
 
     await db.commit()

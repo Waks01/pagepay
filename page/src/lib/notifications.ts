@@ -81,7 +81,8 @@ export async function requestNotificationPermissions(): Promise<boolean> {
         );
         return false;
       }
-      const authStatus = await messagingMod.requestPermission(messagingInstance);
+      const authStatus =
+        await messagingMod.requestPermission(messagingInstance);
       const enabled =
         authStatus === messagingMod.AuthorizationStatus.AUTHORIZED ||
         authStatus === messagingMod.AuthorizationStatus.PROVISIONAL;
@@ -223,7 +224,7 @@ export function setupNotificationListeners() {
     Notifications.setNotificationChannelAsync("default", {
       name: "Default",
       importance: Notifications.AndroidImportance.MAX,
-      sound: "default",
+      sound: null, // Use system default sound instead of custom 'default'
       showBadge: true,
       bypassDnd: false,
     }).catch((error) => {
@@ -260,7 +261,7 @@ export function setupNotificationListeners() {
               title: remoteMessage.notification?.title || "PagePay",
               body: remoteMessage.notification?.body || "",
               data: remoteMessage.data || {},
-              sound: "default",
+              sound: null, // Use system default sound
             },
             trigger: null,
           });

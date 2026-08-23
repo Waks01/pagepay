@@ -24,6 +24,8 @@ import { SkeletonPage } from "@/components/skeletons";
 import NotificationBell from "@/components/NotificationBell";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { UserAvatar } from "@/components/UserAvatar";
+import { PremiumBenefitsComparison } from "@/components/PremiumBenefitsComparison";
+import { PremiumBenefitsList } from "@/components/PremiumBenefitsList";
 
 type Tier = {
   tier: string;

@@ -168,7 +168,12 @@ class TaskProcessor:
             # Calculate net reward (after platform fee). Stored in kobo
             # because task.reward_amount is kobo (100 kobo = ₦1).
             net_reward_kobo = int(task.reward_amount * task.reward_multiplier * (100 - task.platform_fee_percent) / 100)
-            net_reward_points = kobo_to_points(net_reward_kobo)
+            base_reward_points = kobo_to_points(net_reward_kobo)
+            
+            # Apply premium multiplier to task rewards (Phase 2)
+            from app.services.subscription import get_points_multiplier
+            multiplier = get_points_multiplier(worker, "task")
+            net_reward_points = int(base_reward_points * multiplier)
 
             worker.points_balance += net_reward_points
             # submission.reward_paid is in kobo (matches the source-of-truth
@@ -178,7 +183,11 @@ class TaskProcessor:
             submission.payment_status = "paid"
             submission.paid_at = datetime.utcnow()
 
-            logger.info(f"Credited {net_reward_points} points (₦{net_reward_kobo / 100:.2f}) to user {worker.id}")
+            logger.info(
+                "Credited task reward: user=%d tier=%s base=%d multiplier=%.1fx final=%d points (₦%.2f)",
+                worker.id, worker.tier.value, base_reward_points, multiplier,
+                net_reward_points, net_reward_kobo / 100
+            )
         
         # Update worker reputation
         stmt = select(UserReputation).where(UserReputation.user_id == submission.worker_id)

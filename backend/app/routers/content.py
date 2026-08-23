@@ -563,7 +563,11 @@ async def continue_reading(
 
 
 @router.get("/{content_id:int}", response_model=ContentDetail)
-async def get_content(content_id: int, db: AsyncSession = Depends(get_db)):
+async def get_content(
+    content_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
     result = await db.execute(select(ContentCatalog).where(ContentCatalog.id == content_id))
     item = result.scalar_one_or_none()
     if not item:
@@ -583,6 +587,14 @@ async def get_content(content_id: int, db: AsyncSession = Depends(get_db)):
     unit_id = unit_result.scalar_one_or_none()
     audio_url = f"/api/v1/content/audio/{unit_id}.mp3" if unit_id else None
     
+    # Phase 3: Calculate ad gating info
+    from app.services.tier_benefits import is_content_ad_free, can_skip_ads
+    from app.models import UserTier
+    
+    user_tier = current_user.tier if current_user else UserTier.FREE
+    content_is_ad_free = is_content_ad_free(item.content_source)
+    skip_permissions = can_skip_ads(user_tier, item.content_source)
+    
     return ContentDetail(
         id=item.id,
         title=item.title,
@@ -593,12 +605,17 @@ async def get_content(content_id: int, db: AsyncSession = Depends(get_db)):
         estimated_read_minutes=item.estimated_read_minutes,
         is_sponsored=item.is_sponsored,
         parent_work_id=item.parent_work_id,
-        # v3 sentinel contract version. 0 for the existing catalog;
-        # the OpenStax ingest will bump this to 1 when it starts
-        # emitting sentinels (separate change, see migration 017).
         body_sentinels_version=item.body_sentinels_version,
         audio_url=audio_url,
+        # Phase 3: Ad gating info
+        content_source=item.content_source,
+        is_ad_free_content=content_is_ad_free,
+        can_skip_pre_read_ad=skip_permissions['pre_read'],
+        can_skip_post_read_ad=skip_permissions['post_read'],
+        show_pre_read_ad=not skip_permissions['pre_read'],
+        show_post_read_ad=not skip_permissions['post_read'],
     )
+
 
 
 @router.get("/works/{work_id}", response_model=BookDetail)
@@ -734,6 +751,56 @@ async def get_book_resume(
         percent_complete=min(100, percent),
         is_finished=rp.is_finished,
     )
+
+
+@router.get("/{content_id:int}/ad-gating")
+async def get_ad_gating_info(
+    content_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
+    """Get ad gating information for a specific content.
+    
+    Returns whether ads should be shown based on:
+    - Content source (study materials vs novels)
+    - User tier (free vs premium)
+    - .env configuration
+    
+    Phase 3: Content Type Detection & Ad Gating
+    """
+    # Get content to check its source
+    result = await db.execute(
+        select(ContentCatalog).where(ContentCatalog.id == content_id)
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Content not found")
+    
+    # Import tier benefits service
+    from app.services.tier_benefits import is_content_ad_free, can_skip_ads
+    from app.models import UserTier
+    
+    # Determine user tier
+    user_tier = current_user.tier if current_user else UserTier.FREE
+    
+    # Check if content is ad-free (study materials)
+    content_is_ad_free = is_content_ad_free(item.content_source)
+    
+    # Get skip permissions
+    skip_permissions = can_skip_ads(user_tier, item.content_source)
+    
+    return {
+        "content_id": content_id,
+        "content_source": item.content_source,
+        "content_type": item.content_type,
+        "user_tier": user_tier.value,
+        "is_ad_free_content": content_is_ad_free,
+        "can_skip_pre_read_ad": skip_permissions['pre_read'],
+        "can_skip_post_read_ad": skip_permissions['post_read'],
+        "can_skip_feed_ads": skip_permissions['feed'],
+        "show_pre_read_ad": not skip_permissions['pre_read'],
+        "show_post_read_ad": not skip_permissions['post_read'],
+    }
 
 
 @router.post("/refresh")

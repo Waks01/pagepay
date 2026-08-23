@@ -1,6 +1,7 @@
 """Subscription & Premium Tier Service
 
 Helpers for checking premium status, calculating benefits, and managing subscriptions.
+All multipliers come from tier_benefits.json or .env - zero hardcoding.
 """
 
 from datetime import datetime, timedelta
@@ -29,16 +30,49 @@ def is_premium(user: User) -> bool:
     return user.subscription_expires_at > datetime.utcnow()
 
 
-def get_points_multiplier(user: User) -> float:
-    """Get the points earning multiplier for a user.
+def get_points_multiplier(user: User, activity_type: str = "reading") -> float:
+    """Get the points earning multiplier for a user based on activity type.
 
-    Reads `settings.premium_points_multiplier` so ops can tune the
-    premium benefit without a deploy. The setting's default is 2.0
-    ("earn double on every credit"); override via env
-    `PREMIUM_POINTS_MULTIPLIER`. Free users always get 1.0 — we never
-    make the base rate worse than the published "earn points" pitch.
+    Uses tier_benefits.json for multipliers with .env as fallback.
+    Free users always get 1.0 multiplier.
+
+    Args:
+        user: User model instance
+        activity_type: Type of activity (reading, ad, task, daily, bills)
+            - reading: Reading slice completion bonus
+            - ad: Ad reward points (1.5x for premium)
+            - task: Task completion rewards
+            - daily: Daily reward claims
+            - bills: Bills/VTU cashback
+
+    Returns:
+        Multiplier to apply to base points (1.0 for free, 1.5-2.0 for premium)
+
+    Example:
+        >>> get_points_multiplier(premium_user, "reading")
+        2.0
+        >>> get_points_multiplier(premium_user, "ad")
+        1.5
+        >>> get_points_multiplier(free_user, "reading")
+        1.0
     """
-    return settings.premium_points_multiplier if is_premium(user) else 1.0
+    if not is_premium(user):
+        return 1.0
+
+    # Import here to avoid circular dependency
+    try:
+        from app.services.tier_benefits import get_multiplier
+        return get_multiplier(user.tier, activity_type)
+    except Exception:
+        # Fallback to .env settings if tier_benefits fails
+        multiplier_map = {
+            'reading': settings.premium_reading_multiplier,
+            'ad': settings.premium_ad_multiplier,
+            'task': settings.premium_task_multiplier,
+            'daily': settings.premium_daily_multiplier,
+            'bills': settings.premium_bills_multiplier,
+        }
+        return multiplier_map.get(activity_type, settings.premium_points_multiplier)
 
 
 def calculate_subscription_end_date(tier: UserTier, start_date: Optional[datetime] = None) -> datetime:

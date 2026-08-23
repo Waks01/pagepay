@@ -259,6 +259,15 @@ class ContentDetail(BaseModel):
     # has no audio (standalone articles, or units where TTS hasn't been
     # generated yet). The reader uses this to enable Listen mode.
     audio_url: str | None = None
+    
+    # Phase 3: Ad gating fields (optional, filled when user is authenticated)
+    # These tell the frontend whether to show ads based on content type and user tier
+    content_source: str | None = None  # gutenberg, openstax, gnews, etc.
+    is_ad_free_content: bool | None = None  # True for study materials
+    can_skip_pre_read_ad: bool | None = None  # Premium can skip on novels
+    can_skip_post_read_ad: bool | None = None
+    show_pre_read_ad: bool | None = None  # Computed: should ad be shown
+    show_post_read_ad: bool | None = None
 
 
 class SessionStart(BaseModel):
