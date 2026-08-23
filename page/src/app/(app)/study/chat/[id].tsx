@@ -104,26 +104,10 @@ export default function StudyChatScreen() {
           throw new Error(err.detail || 'Chat failed');
         }
 
-        const reader = res.body?.getReader();
-        if (!reader) {
-          const text = await res.text();
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, text } : m)),
-          );
-          return;
-        }
-
-        const decoder = new TextDecoder();
-        let accumulated = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          accumulated += decoder.decode(value, { stream: true });
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, text: accumulated } : m)),
-          );
-        }
+        const text = await res.text();
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, text } : m)),
+        );
       } catch (err) {
         const errorText = err instanceof Error ? err.message : 'Something went wrong';
         setMessages((prev) =>

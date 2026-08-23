@@ -1200,17 +1200,11 @@ async def end_study_session(
     if session["user_id"] != current_user.id:
         raise HTTPException(status_code=403, detail="Not your session")
     
-    return SessionEndResponse(
-        session_id=payload.session_id,
-        duration_seconds=session["duration_seconds"],
-        ended_at=session["ended_at"].isoformat(),
-    )
-
     # Notify on study milestone: 30+ minutes
     if session.get("duration_seconds", 0) >= 30 * 60:
         try:
-            from app.services.fcm import send_push_notification
-            from app.services.notifications import create_notification
+            from app.services.fcm import send_push_notification_background
+            from app.services.notifications import create_notification_background
             import asyncio
             duration_min = session["duration_seconds"] // 60
             asyncio.create_task(send_push_notification_background(
@@ -1229,3 +1223,9 @@ async def end_study_session(
             ))
         except Exception:
             pass
+
+    return SessionEndResponse(
+        session_id=payload.session_id,
+        duration_seconds=session["duration_seconds"],
+        ended_at=session["ended_at"].isoformat(),
+    )

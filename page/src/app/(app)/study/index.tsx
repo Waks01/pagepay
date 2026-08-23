@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -145,6 +145,7 @@ export default function StudyScreen() {
   );
   const [studySessionId, setStudySessionId] = useState<number | null>(null);
   const [studyDuration, setStudyDuration] = useState<number>(0);
+  const studySessionIdRef = useRef<number | null>(null);
   const [examType, setExamType] = useState<string | null>(null);
   const [generateMode, setGenerateMode] = useState<"topic" | "all">("all");
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -159,8 +160,11 @@ export default function StudyScreen() {
     }
 
     return () => {
-      if (studySessionId) {
-        endStudySession(studySessionId);
+      if (studySessionIdRef.current) {
+        const sid = studySessionIdRef.current;
+        endStudySession(sid);
+        studySessionIdRef.current = null;
+        setStudySessionId(null);
       }
     };
   }, [selectedMaterial]);
@@ -220,10 +224,10 @@ export default function StudyScreen() {
       if (res.ok) {
         const data = await res.json();
         setStudySessionId(data.session_id);
+        studySessionIdRef.current = data.session_id;
       }
     } catch (error) {
       if (__DEV__) console.error("Failed to start study session:", error);
-      // Don't throw - session tracking is optional
     }
   };
 
@@ -245,9 +249,10 @@ export default function StudyScreen() {
   };
 
   const handleBack = () => {
-    // End session when leaving material view
-    if (studySessionId) {
-      endStudySession(studySessionId);
+    if (studySessionIdRef.current) {
+      const sid = studySessionIdRef.current;
+      endStudySession(sid);
+      studySessionIdRef.current = null;
       setStudySessionId(null);
     }
     setSelectedMaterialId(null);
@@ -966,13 +971,6 @@ export default function StudyScreen() {
                   getTopicNames(selectedMaterial?.parsed_structure ?? null)
                     .length
                 }
-                mastered={0}
-                reviewing={0}
-                notStarted={
-                  getTopicNames(selectedMaterial?.parsed_structure ?? null)
-                    .length
-                }
-                progress={[]}
               />
             )}
 
