@@ -158,12 +158,10 @@ async def _update_reward_streak(user_id: int, db: AsyncSession, request: Request
     # First ensure login tracking is up to date
     streak = await _update_login_streak(user_id, db, request)
 
-    # Use client's local date for reward streak expiration check
-    today = _get_client_local_date(request) if request is not None else date.today()
-    yesterday = today - timedelta(days=1)
+    utc_now = datetime.now(timezone.utc)
 
-    # Check if reward streak has expired (claim was before yesterday in user's local time)
-    if streak.last_reward_claim_date and streak.last_reward_claim_date < yesterday.isoformat():
+    # Check if reward streak has expired (24+ hours since last claim)
+    if streak.reward_streak_expires_at and utc_now > streak.reward_streak_expires_at:
         # Streak expired - reset to 0
         streak.reward_streak = 0
         streak.reward_streak_expires_at = None
