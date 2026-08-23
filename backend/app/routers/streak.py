@@ -76,6 +76,7 @@ async def _update_login_streak(user_id: int, db: AsyncSession, request: Request 
     - If user misses a day → reset login streak to 1
     - Multiple opens on same day → no change
     """
+    print(f"[_update_login_streak PRINT] start user={user_id}", flush=True)
     logger.error(f"[_update_login_streak] start user={user_id}")
     streak_row = await db.execute(
         select(UserStreak).where(UserStreak.user_id == user_id)
@@ -172,8 +173,9 @@ async def _update_reward_streak(user_id: int, db: AsyncSession, request: Request
     - If user then claims → streak becomes 1
     - Consecutive days of claiming → streak increments
     """
-    # First ensure login tracking is up to date
+    print(f"[_update_reward_streak PRINT] start user={user_id}", flush=True)
     logger.error(f"[_update_reward_streak] start user={user_id}")
+    # First ensure login tracking is up to date
     streak = await _update_login_streak(user_id, db, request)
     logger.error(f"[_update_reward_streak] after_login_streak reward_streak={streak.reward_streak} expires={streak.reward_streak_expires_at}")
 
@@ -207,6 +209,7 @@ async def _claim_daily_reward_increment_streak(user_id: int, db: AsyncSession, r
     - If user already claimed today → no change
     - Set expiration to 24 hours from now
     """
+    print(f"[_claim_daily_reward_increment_streak PRINT] start user={user_id}", flush=True)
     logger.error(f"[_claim_daily_reward_increment_streak] start user={user_id}")
     streak = await _update_reward_streak(user_id, db, request)
 

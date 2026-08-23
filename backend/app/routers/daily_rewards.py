@@ -160,6 +160,7 @@ async def claim_daily_reward(
     db: AsyncSession = Depends(get_db),
 ):
     """Claim today's daily reward if available."""
+    print(f"[claimDailyReward PRINT] start user={current_user.id}", flush=True)
     try:
         logger.error(f"[claimDailyReward] start user={current_user.id}")
         streak = await _update_reward_streak(current_user.id, db, request)
@@ -230,10 +231,13 @@ async def claim_daily_reward(
             multiplier_value=claimable_reward.reward_value if claimable_reward.reward_type == "multiplier" else None
         )
         logger.error("[claimDailyReward] success")
+        print("[claimDailyReward PRINT] success", flush=True)
         return resp
     except HTTPException:
+        print("[claimDailyReward PRINT] http_exception", flush=True)
         raise
     except Exception as e:
+        print(f"[claimDailyReward PRINT] error user={current_user.id}: {e}", flush=True)
         logger.error(f"[claimDailyReward] error user={current_user.id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to claim daily reward")
 
