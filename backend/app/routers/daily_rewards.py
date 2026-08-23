@@ -161,12 +161,12 @@ async def claim_daily_reward(
 ):
     """Claim today's daily reward if available."""
     try:
-        logger.info(f"[claimDailyReward] start user={current_user.id}")
+        logger.error(f"[claimDailyReward] start user={current_user.id}")
         streak = await _update_reward_streak(current_user.id, db, request)
-        logger.info(f"[claimDailyReward] streak reward_streak={streak.reward_streak} last_reward_claim_date={streak.last_reward_claim_date}")
+        logger.error(f"[claimDailyReward] streak reward_streak={streak.reward_streak} last_reward_claim_date={streak.last_reward_claim_date}")
         
         rewards = await _get_or_create_default_rewards(db)
-        logger.info(f"[claimDailyReward] rewards_count={len(rewards)}")
+        logger.error(f"[claimDailyReward] rewards_count={len(rewards)}")
 
         client_date = request.headers.get("X-Client-Date")
         if client_date:
@@ -181,17 +181,17 @@ async def claim_daily_reward(
             offset = _get_timezone_offset_minutes(request)
             today = _user_local_date(utc_now, offset)
         today_str = today.isoformat()
-        logger.info(f"[claimDailyReward] today_str={today_str}")
+        logger.error(f"[claimDailyReward] today_str={today_str}")
 
         if streak.last_reward_claim_date == today_str:
-            logger.info("[claimDailyReward] already_claimed")
+            logger.error("[claimDailyReward] already_claimed")
             raise HTTPException(status_code=400, detail="Already claimed reward for today")
         
         claimable_reward = await _get_claimable_reward(streak, rewards, today_str)
-        logger.info(f"[claimDailyReward] claimable_reward={claimable_reward.id if claimable_reward else None}")
+        logger.error(f"[claimDailyReward] claimable_reward={claimable_reward.id if claimable_reward else None}")
         
         if not claimable_reward:
-            logger.info("[claimDailyReward] no_reward")
+            logger.error("[claimDailyReward] no_reward")
             raise HTTPException(status_code=400, detail="No reward available to claim")
         
         points_to_award = claimable_reward.reward_value
@@ -206,13 +206,15 @@ async def claim_daily_reward(
             points_earned=points_to_award
         )
         db.add(claim)
-        logger.info("[claimDailyReward] claim_added")
+        logger.error("[claimDailyReward] claim_added")
         
         current_user.points_balance += points_to_award
         
+        logger.error("[claimDailyReward] before_increment_streak")
         updated_streak = await _claim_daily_reward_increment_streak(current_user.id, db, request)
-        logger.info(f"[claimDailyReward] incremented reward_streak={updated_streak.reward_streak}")
+        logger.error(f"[claimDailyReward] incremented reward_streak={updated_streak.reward_streak}")
         
+        logger.error("[claimDailyReward] before_commit")
         await db.commit()
         await db.refresh(claim)
         
@@ -227,7 +229,7 @@ async def claim_daily_reward(
             is_multiplier=claimable_reward.reward_type == "multiplier",
             multiplier_value=claimable_reward.reward_value if claimable_reward.reward_type == "multiplier" else None
         )
-        logger.info("[claimDailyReward] success")
+        logger.error("[claimDailyReward] success")
         return resp
     except HTTPException:
         raise
