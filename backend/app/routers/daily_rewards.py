@@ -160,86 +160,62 @@ async def claim_daily_reward(
     db: AsyncSession = Depends(get_db),
 ):
     """Claim today's daily reward if available."""
-    print(f"[claimDailyReward PRINT] start user={current_user.id}", flush=True)
-    try:
-        logger.error(f"[claimDailyReward] start user={current_user.id}")
-        streak = await _update_reward_streak(current_user.id, db, request)
-        logger.error(f"[claimDailyReward] streak reward_streak={streak.reward_streak} last_reward_claim_date={streak.last_reward_claim_date}")
-        
-        rewards = await _get_or_create_default_rewards(db)
-        logger.error(f"[claimDailyReward] rewards_count={len(rewards)}")
+    streak = await _update_reward_streak(current_user.id, db, request)
+    rewards = await _get_or_create_default_rewards(db)
 
-        client_date = request.headers.get("X-Client-Date")
-        if client_date:
-            try:
-                today = date.fromisoformat(client_date)
-            except (TypeError, ValueError):
-                utc_now = datetime.now(timezone.utc)
-                offset = _get_timezone_offset_minutes(request)
-                today = _user_local_date(utc_now, offset)
-        else:
+    client_date = request.headers.get("X-Client-Date")
+    if client_date:
+        try:
+            today = date.fromisoformat(client_date)
+        except (TypeError, ValueError):
             utc_now = datetime.now(timezone.utc)
             offset = _get_timezone_offset_minutes(request)
             today = _user_local_date(utc_now, offset)
-        today_str = today.isoformat()
-        logger.error(f"[claimDailyReward] today_str={today_str}")
+    else:
+        utc_now = datetime.now(timezone.utc)
+        offset = _get_timezone_offset_minutes(request)
+        today = _user_local_date(utc_now, offset)
+    today_str = today.isoformat()
 
-        if streak.last_reward_claim_date == today_str:
-            logger.error("[claimDailyReward] already_claimed")
-            raise HTTPException(status_code=400, detail="Already claimed reward for today")
-        
-        claimable_reward = await _get_claimable_reward(streak, rewards, today_str)
-        logger.error(f"[claimDailyReward] claimable_reward={claimable_reward.id if claimable_reward else None}")
-        
-        if not claimable_reward:
-            logger.error("[claimDailyReward] no_reward")
-            raise HTTPException(status_code=400, detail="No reward available to claim")
-        
-        points_to_award = claimable_reward.reward_value
-        if claimable_reward.reward_type == "multiplier":
-            points_to_award = 500
-        
-        claim = UserRewardClaim(
-            user_id=current_user.id,
-            reward_id=claimable_reward.id,
-            claim_date=today_str,
-            streak_day=streak.reward_streak + 1,
-            points_earned=points_to_award
-        )
-        db.add(claim)
-        logger.error("[claimDailyReward] claim_added")
-        
-        current_user.points_balance += points_to_award
-        
-        logger.error("[claimDailyReward] before_increment_streak")
-        updated_streak = await _claim_daily_reward_increment_streak(current_user.id, db, request)
-        logger.error(f"[claimDailyReward] incremented reward_streak={updated_streak.reward_streak}")
-        
-        logger.error("[claimDailyReward] before_commit")
-        await db.commit()
-        await db.refresh(claim)
-        
-        resp = DailyRewardClaim(
-            success=True,
-            points_earned=points_to_award,
-            reward_title=claimable_reward.title,
-            reward_description=claimable_reward.description,
-            reward_emoji=claimable_reward.icon_emoji,
-            new_total_points=current_user.points_balance,
-            streak_day=updated_streak.reward_streak,
-            is_multiplier=claimable_reward.reward_type == "multiplier",
-            multiplier_value=claimable_reward.reward_value if claimable_reward.reward_type == "multiplier" else None
-        )
-        logger.error("[claimDailyReward] success")
-        print("[claimDailyReward PRINT] success", flush=True)
-        return resp
-    except HTTPException:
-        print("[claimDailyReward PRINT] http_exception", flush=True)
-        raise
-    except Exception as e:
-        print(f"[claimDailyReward PRINT] error user={current_user.id}: {e}", flush=True)
-        logger.error(f"[claimDailyReward] error user={current_user.id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to claim daily reward")
+    if streak.last_reward_claim_date == today_str:
+        raise HTTPException(status_code=400, detail="Already claimed reward for today")
+    
+    claimable_reward = await _get_claimable_reward(streak, rewards, today_str)
+    
+    if not claimable_reward:
+        raise HTTPException(status_code=400, detail="No reward available to claim")
+    
+    points_to_award = claimable_reward.reward_value
+    if claimable_reward.reward_type == "multiplier":
+        points_to_award = 500
+    
+    claim = UserRewardClaim(
+        user_id=current_user.id,
+        reward_id=claimable_reward.id,
+        claim_date=today_str,
+        streak_day=streak.reward_streak + 1,
+        points_earned=points_to_award
+    )
+    db.add(claim)
+    
+    current_user.points_balance += points_to_award
+    
+    updated_streak = await _claim_daily_reward_increment_streak(current_user.id, db, request)
+    
+    await db.commit()
+    await db.refresh(claim)
+    
+    return DailyRewardClaim(
+        success=True,
+        points_earned=points_to_award,
+        reward_title=claimable_reward.title,
+        reward_description=claimable_reward.description,
+        reward_emoji=claimable_reward.icon_emoji,
+        new_total_points=current_user.points_balance,
+        streak_day=updated_streak.reward_streak,
+        is_multiplier=claimable_reward.reward_type == "multiplier",
+        multiplier_value=claimable_reward.reward_value if claimable_reward.reward_type == "multiplier" else None
+    )
 
 
 @router.get("/daily/history")

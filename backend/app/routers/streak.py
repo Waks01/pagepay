@@ -76,8 +76,6 @@ async def _update_login_streak(user_id: int, db: AsyncSession, request: Request 
     - If user misses a day → reset login streak to 1
     - Multiple opens on same day → no change
     """
-    print(f"[_update_login_streak PRINT] start user={user_id}", flush=True)
-    logger.error(f"[_update_login_streak] start user={user_id}")
     streak_row = await db.execute(
         select(UserStreak).where(UserStreak.user_id == user_id)
     )
@@ -89,20 +87,15 @@ async def _update_login_streak(user_id: int, db: AsyncSession, request: Request 
     yesterday_str = yesterday.isoformat()
 
     if streak is None:
-        logger.error(f"[_update_login_streak] creating_new_streak user={user_id} today={today_str}")
-        # First time user - create streak record
         streak = UserStreak(
             user_id=user_id,
-            # Login tracking
             last_login_date=today_str,
             consecutive_login_days=1,
             longest_login_streak=1,
             total_logins=1,
-            # Legacy fields (map to login tracking)
             current_streak=1,
             longest_streak=1,
             last_activity_date=today_str,
-            # Reward tracking starts at 0
             reward_streak=0,
             longest_reward_streak=0,
             last_reward_claim_date=None,
@@ -110,54 +103,32 @@ async def _update_login_streak(user_id: int, db: AsyncSession, request: Request 
             reward_streak_expires_at=None
         )
         db.add(streak)
-        try:
-            await db.commit()
-            await db.refresh(streak)
-        except Exception as e:
-            logger.error(f"[_update_login_streak] CREATE FAILED user={user_id}: {e}", exc_info=True)
-            raise
-        logger.error(f"[_update_login_streak] created new_streak_id={streak.id}")
+        await db.commit()
+        await db.refresh(streak)
         return streak
 
     last_login = streak.last_login_date
-    logger.error(f"[_update_login_streak] existing streak last_login={last_login} today={today_str} yesterday={yesterday_str}")
     
     if last_login == today_str:
-        # User already logged in today - no change needed
-        logger.error("[_update_login_streak] already_logged_in_today")
         return streak
     elif last_login == yesterday_str:
-        # User logged in yesterday - continue login streak
         streak.consecutive_login_days += 1
         streak.longest_login_streak = max(streak.longest_login_streak, streak.consecutive_login_days)
         streak.total_logins += 1
-        logger.error(f"[_update_login_streak] continue_streak consecutive={streak.consecutive_login_days}")
     elif last_login and date.fromisoformat(last_login) < yesterday:
-        # User missed a day - reset login streak
         streak.consecutive_login_days = 1
         streak.total_logins += 1
-        logger.error("[_update_login_streak] reset_streak_missed_day")
     else:
-        # Edge case or first login - start fresh
         streak.consecutive_login_days = 1
         streak.total_logins += 1
-        logger.error("[_update_login_streak] edge_case_fresh_start")
         
-    # Update login tracking
     streak.last_login_date = today_str
-    
-    # Update legacy fields to match login tracking
     streak.current_streak = streak.consecutive_login_days
     streak.longest_streak = streak.longest_login_streak
     streak.last_activity_date = today_str
     
-    try:
-        await db.commit()
-        await db.refresh(streak)
-    except Exception as e:
-        logger.error(f"[_update_login_streak] COMMIT FAILED user={user_id}: {e}", exc_info=True)
-        raise
-    logger.error(f"[_update_login_streak] done user={user_id} consecutive={streak.consecutive_login_days}")
+    await db.commit()
+    await db.refresh(streak)
     return streak
 
 
@@ -173,18 +144,11 @@ async def _update_reward_streak(user_id: int, db: AsyncSession, request: Request
     - If user then claims → streak becomes 1
     - Consecutive days of claiming → streak increments
     """
-    print(f"[_update_reward_streak PRINT] start user={user_id}", flush=True)
-    logger.error(f"[_update_reward_streak] start user={user_id}")
-    # First ensure login tracking is up to date
     streak = await _update_login_streak(user_id, db, request)
-    logger.error(f"[_update_reward_streak] after_login_streak reward_streak={streak.reward_streak} expires={streak.reward_streak_expires_at}")
 
-    utc_now = datetime.now(timezone.utc)
+    utc_now = datetime.utcnow()
 
-    # Check if reward streak has expired (24+ hours since last claim)
     if streak.reward_streak_expires_at and utc_now > streak.reward_streak_expires_at:
-        logger.error(f"[_update_reward_streak] EXPIRED user={user_id} expires={streak.reward_streak_expires_at} now={utc_now}")
-        # Streak expired - reset to 0
         streak.reward_streak = 0
         streak.reward_streak_expires_at = None
         streak.last_reward_claim_date = None
@@ -192,9 +156,7 @@ async def _update_reward_streak(user_id: int, db: AsyncSession, request: Request
 
         await db.commit()
         await db.refresh(streak)
-        logger.error(f"[_update_reward_streak] after_reset reward_streak={streak.reward_streak}")
 
-    logger.error(f"[_update_reward_streak] done user={user_id}")
     return streak
 
 
@@ -209,50 +171,34 @@ async def _claim_daily_reward_increment_streak(user_id: int, db: AsyncSession, r
     - If user already claimed today → no change
     - Set expiration to 24 hours from now
     """
-    print(f"[_claim_daily_reward_increment_streak PRINT] start user={user_id}", flush=True)
-    logger.error(f"[_claim_daily_reward_increment_streak] start user={user_id}")
     streak = await _update_reward_streak(user_id, db, request)
 
-    utc_now = datetime.now(timezone.utc)
+    utc_now = datetime.utcnow()
     today = _get_client_local_date(request) if request is not None else date.today()
     today_str = today.isoformat()
     yesterday = today - timedelta(days=1)
     yesterday_str = yesterday.isoformat()
 
-    # Set expiration to 24 hours from now
     expiration_time = utc_now + timedelta(hours=24)
-
     last_claim = streak.last_reward_claim_date
-    logger.error(f"[_claim_daily_reward_increment_streak] last_claim={last_claim} today_str={today_str} yesterday_str={yesterday_str} reward_streak={streak.reward_streak}")
 
     if last_claim == today_str:
-        # Already claimed today - no streak change, but refresh expiration
         streak.reward_streak_expires_at = expiration_time
-        logger.error("[_claim_daily_reward_increment_streak] already_claimed_today_branch")
     elif last_claim == yesterday_str and streak.reward_streak > 0:
-        # Claimed yesterday - continue streak
         streak.reward_streak += 1
         streak.longest_reward_streak = max(streak.longest_reward_streak, streak.reward_streak)
         streak.reward_streak_expires_at = expiration_time
         streak.last_reward_claim_date = today_str
         streak.last_claim_date = today_str
-        logger.error(f"[_claim_daily_reward_increment_streak] continue_streak new={streak.reward_streak}")
     else:
-        # First claim or broken streak - start/restart at 1
         streak.reward_streak = 1
         streak.longest_reward_streak = max(streak.longest_reward_streak, 1)
         streak.reward_streak_expires_at = expiration_time
         streak.last_reward_claim_date = today_str
         streak.last_claim_date = today_str
-        logger.error("[_claim_daily_reward_increment_streak] first_claim_branch")
 
-    try:
-        await db.commit()
-        await db.refresh(streak)
-    except Exception as e:
-        logger.error(f"[_claim_daily_reward_increment_streak] COMMIT FAILED user={user_id}: {e}", exc_info=True)
-        raise
-    logger.error(f"[_claim_daily_reward_increment_streak] done user={user_id} reward_streak={streak.reward_streak}")
+    await db.commit()
+    await db.refresh(streak)
     return streak
 
 
