@@ -104,6 +104,21 @@ async def _handle_charge_failed(payment: Payment, reference: str, db: AsyncSessi
     payment.status = "failed"
     payment.webhook_confirmed = True
     payment.confirmed_at = datetime.utcnow()
+    
+    # Send notification: Payment failed (Phase 6)
+    if payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value):
+        try:
+            from app.services.premium_notifications import notify_payment_failed
+            tier = UserTier(payment.tier)
+            await notify_payment_failed(
+                db=db,
+                user_id=payment.user_id,
+                tier=tier,
+                reference=reference,
+                reason="Your bank declined the payment"
+            )
+        except Exception as e:
+            logger.error("Failed to send payment failed notification: %s", e)
 
 
 async def _handle_charge_abandoned(payment: Payment, reference: str, db: AsyncSession, logger):
@@ -112,6 +127,20 @@ async def _handle_charge_abandoned(payment: Payment, reference: str, db: AsyncSe
     payment.status = "cancelled"
     payment.webhook_confirmed = True
     payment.confirmed_at = datetime.utcnow()
+    
+    # Send notification: Payment cancelled (Phase 6)
+    if payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value):
+        try:
+            from app.services.premium_notifications import notify_payment_cancelled
+            tier = UserTier(payment.tier)
+            await notify_payment_cancelled(
+                db=db,
+                user_id=payment.user_id,
+                tier=tier,
+                reference=reference,
+            )
+        except Exception as e:
+            logger.error("Failed to send payment cancelled notification: %s", e)
 
 
 async def _handle_charge_expired(payment: Payment, reference: str, db: AsyncSession, logger):
@@ -142,6 +171,21 @@ async def _handle_charge_refunded(payment: Payment, reference: str, data: dict, 
     # If this was a successful premium subscription, downgrade user
     elif payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value) and old_status == "success":
         await _reverse_premium_subscription(payment, db, logger)
+        
+        # Send notification: Payment refunded (Phase 6)
+        try:
+            from app.services.premium_notifications import notify_payment_refunded
+            tier = UserTier(payment.tier)
+            await notify_payment_refunded(
+                db=db,
+                user_id=payment.user_id,
+                tier=tier,
+                amount_kobo=payment.amount_kobo,
+                reference=reference,
+                reason="Your premium subscription has been cancelled and refunded"
+            )
+        except Exception as e:
+            logger.error("Failed to send payment refunded notification: %s", e)
 
 
 async def _process_wallet_deposit(payment: Payment, reference: str, db: AsyncSession, logger):
@@ -176,6 +220,7 @@ async def _process_wallet_deposit(payment: Payment, reference: str, db: AsyncSes
             from app.services.fcm import send_wallet_update
             asyncio.create_task(
                 send_wallet_update(
+                    db=db,
                     user_id=payment.user_id,
                     amount_naira=deposit_naira,
                     transaction_type="credit",
@@ -246,21 +291,13 @@ async def _process_premium_subscription(payment: Payment, db: AsyncSession, logg
         except ImportError:
             logger.warning("FCM not available, skipping push notification")
         
-        # Send in-app notification
-        from app.services.notifications import create_notification
-        asyncio.create_task(
-            create_notification(
-                db=db,
-                user_id=payment.user_id,
-                title="🎉 Premium Activated!",
-                body=f"Your {tier_name} subscription is now active until {expires_at.strftime('%B %d, %Y')}. Enjoy ad-free reading and 2x earning points!",
-                category="subscriptions",
-                data={
-                    "type": "subscription_success",
-                    "tier": tier.value,
-                    "expires_at": expires_at.isoformat(),
-                },
-            )
+        # Send in-app notification (Phase 6)
+        from app.services.premium_notifications import notify_premium_activated
+        await notify_premium_activated(
+            db=db,
+            user_id=payment.user_id,
+            tier=tier,
+            expires_at=expires_at,
         )
         
     except Exception as exc:

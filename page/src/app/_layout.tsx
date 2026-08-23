@@ -36,7 +36,7 @@ import {
   onNotification,
   offNotification,
 } from "@/src/lib/socket";
-import { handleNotificationTap } from "@/src/lib/notifications";
+import { handleNotificationTap, setupNotificationListeners } from "@/src/lib/notifications";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -133,6 +133,11 @@ export default function RootLayout() {
     // switch waits on multiple secure-store reads before its
     // useQuery hooks can issue their network requests.
     warmTokenCache();
+  }, []);
+
+  useEffect(() => {
+    const cleanup = setupNotificationListeners();
+    return cleanup;
   }, []);
 
   if (!fontsLoaded || !hydrated || !isReady) {
