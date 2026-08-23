@@ -56,8 +56,24 @@ export type DailyRewardHistory = {
 export async function fetchDailyRewardConfig(): Promise<DailyRewardInfo[]> {
   const res = await apiFetch("/api/v1/rewards/daily/config");
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || "Failed to load daily reward config");
+    let errorMessage = `Failed to load daily reward config (HTTP ${res.status})`;
+    try {
+      const err = await res.json();
+      if (typeof err.detail === "string") {
+        errorMessage = err.detail;
+      } else if (typeof err.message === "string") {
+        errorMessage = err.message;
+      }
+    } catch {
+      errorMessage = res.statusText || errorMessage;
+    }
+    console.error("[fetchDailyRewardConfig] Error:", {
+      status: res.status,
+      statusText: res.statusText,
+      url: res.url,
+      message: errorMessage,
+    });
+    throw new Error(errorMessage);
   }
   return res.json();
 }
@@ -65,8 +81,24 @@ export async function fetchDailyRewardConfig(): Promise<DailyRewardInfo[]> {
 export async function fetchDailyRewardStatus(): Promise<DailyRewardStatus> {
   const res = await apiFetch("/api/v1/rewards/daily/status");
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || "Failed to load daily reward status");
+    let errorMessage = `Failed to load daily reward status (HTTP ${res.status})`;
+    try {
+      const err = await res.json();
+      if (typeof err.detail === "string") {
+        errorMessage = err.detail;
+      } else if (typeof err.message === "string") {
+        errorMessage = err.message;
+      }
+    } catch {
+      errorMessage = res.statusText || errorMessage;
+    }
+    console.error("[fetchDailyRewardStatus] Error:", {
+      status: res.status,
+      statusText: res.statusText,
+      url: res.url,
+      message: errorMessage,
+    });
+    throw new Error(errorMessage);
   }
   return res.json();
 }

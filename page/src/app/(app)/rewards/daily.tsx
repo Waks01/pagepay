@@ -91,6 +91,12 @@ export default function DailyRewardsScreen() {
     staleTime: 60 * 60 * 1000,
   });
 
+  useEffect(() => {
+    if (error) {
+      console.error("[DailyRewards] status error:", error);
+    }
+  }, [error]);
+
   const claimMutation = useMutation({
     mutationFn: claimDailyReward,
     onSuccess: () => {
