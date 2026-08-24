@@ -1,11 +1,17 @@
-export { SectionCard } from './SectionCard';
-export { SegmentedControl } from './SegmentedControl';
-export type { SegmentOption } from './SegmentedControl';
-export { PlanGrid } from './PlanGrid';
-export { ConfirmModal } from './ConfirmModal';
-export type { ConfirmRow } from './ConfirmModal';
-export { EarnBadge } from './EarnBadge';
-export { ErrorBanner } from './ErrorBanner';
-export { NetworkPicker } from './NetworkPicker';
-export type { NetworkOption } from './NetworkPicker';
-export { BuyScreenSkeleton } from './BuyScreenSkeleton';
+export { SectionCard } from "./SectionCard";
+export { NetworkPicker } from "./NetworkPicker";
+export { ConfirmModal } from "./ConfirmModal";
+export { EarnBadge } from "./EarnBadge";
+export { BuyScreenSkeleton } from "./BuyScreenSkeleton";
+export { BeneficiaryNamePrompt } from "./BeneficiaryNamePrompt";
+export { RecentTransactionsList } from "./RecentTransactionsList";
+export { ReceiptShareModal } from "./ReceiptShareModal";
+export { SegmentedControl } from "./SegmentedControl";
+export { PlanGrid } from "./PlanGrid";
+export { ErrorBanner } from "./ErrorBanner";
+
+// New components for backend features
+export { RateLimitDisplay } from "./RateLimitDisplay";
+export { BulkAirtimeModal } from "./BulkAirtimeModal";
+export { DisputeModal } from "./DisputeModal";
+export { ScheduleModal } from "./ScheduleModal";

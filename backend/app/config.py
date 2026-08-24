@@ -203,6 +203,12 @@ class Settings(BaseSettings):
     # this in dev (e.g. "100/minute") without touching code.
     auth_login_rate_limit: str = "5/15minutes"
 
+    # ── APScheduler: in-process scheduled jobs ────────────────────────
+    # Daily study reminder push notification time (UTC). Override via
+    # env DAILY_REMINDER_HOUR / DAILY_REMINDER_MINUTE.
+    daily_reminder_hour: int = 8
+    daily_reminder_minute: int = 0
+
     # ── Referral program ─────────────────────────────────────────────
     # Points credited to the referrer when their referee completes the
     # first verified reading session. 500 pts = ₦50 at the default

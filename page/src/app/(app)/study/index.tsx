@@ -37,7 +37,7 @@ import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import NotificationBell from "@/components/NotificationBell";
 import { SkeletonPage } from "@/components/skeletons";
-import { Skeleton } from "@/components/Skeleton";
+import { PagePaySpinner } from "@/components/PagePaySpinner";
 import { cacheAsset, getCachedAsset } from "@/src/features/study/storage";
 import { saveLastRoute, getLastRoute } from "@/src/shared/lib/screen-memory";
 
@@ -971,6 +971,13 @@ export default function StudyScreen() {
                   getTopicNames(selectedMaterial?.parsed_structure ?? null)
                     .length
                 }
+                mastered={0}
+                reviewing={0}
+                notStarted={
+                  getTopicNames(selectedMaterial?.parsed_structure ?? null)
+                    .length
+                }
+                progress={[]}
               />
             )}
 
@@ -1434,10 +1441,7 @@ function GenerateButton({
           },
         ]}
       >
-        <View style={styles.genBtnShimmer}>
-          <Skeleton width={20} height={20} borderRadius={10} />
-          <Skeleton width={50} height={12} borderRadius={4} />
-        </View>
+        <PagePaySpinner size={20} />
       </View>
     );
   }

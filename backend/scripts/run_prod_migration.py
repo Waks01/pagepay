@@ -1,21 +1,20 @@
 """One-shot migration runner for the production database.
 
 Run this from your local machine to apply pending Alembic migrations
-to the Render PostgreSQL database. Does the work of:
+to the production PostgreSQL database (Neon or Render). Does the work of:
 
-  1. Connecting to the database using the EXTERNAL connection URL
-     (the one with .ohio-postgres.render.com in the host, not the
-     internal one — the internal one only works from inside Render).
-  2. Reading the current Alembic revision.
-  3. Running `alembic upgrade head` if needed.
-  4. Verifying the result.
+   1. Connecting to the database using the external connection URL.
+   2. Reading the current Alembic revision.
+   3. Running `alembic upgrade head` if needed.
+   4. Verifying the result.
 
 Usage:
-    python scripts/run_prod_migration.py "<external_database_url>"
+    python scripts/run_prod_migration.py "<database_url>"
 
-The URL must be the EXTERNAL Database URL from the Render dashboard,
-not the Internal one. Format:
-    postgresql://pagepay:PASSWORD@dpg-XXXX.ohio-postgres.render.com/pagepay
+The URL should be the external connection string from your database
+provider. Supported formats:
+    Neon:   postgresql://user:pass@ep-XXXX.us-west-2.aws.neon.tech/dbname?sslmode=require
+    Render: postgresql://user:pass@dpg-XXXX.ohio-postgres.render.com/dbname
 
 The password is read from sys.argv so it doesn't end up in shell
 history or in any process listing beyond this run. After this script
@@ -46,7 +45,7 @@ def main() -> int:
     if len(sys.argv) != 2:
         die(
             "usage: python scripts/run_prod_migration.py "
-            "\"<external_database_url>\""
+            "\"<database_url>\""
         )
 
     url = sys.argv[1].strip()
@@ -54,28 +53,20 @@ def main() -> int:
     # Sanity-check the URL so we fail fast with a clear message
     # instead of a 30-second connection timeout.
     if not url.startswith("postgresql://") and not url.startswith("postgres://"):
-        die("URL must start with postgresql:// (external URL from Render).")
-    if ".ohio-postgres.render.com" not in url and "render.com" not in url:
-        die(
-            "URL doesn't look like a Render external host. "
-            "Use the External Database URL, not the Internal one "
-            "(the internal one only works from inside Render)."
-        )
-    if "dpg-" not in url:
-        die("URL is missing the dpg- host. Double-check you copied the full URL.")
+        die("URL must start with postgresql:// or postgres://")
 
     # This project's alembic/env.py uses async_engine_from_config, so the
-    # SQLAlchemy URL must point at an async driver (asyncpg). The Render
-    # external URL is `postgresql://...` (no driver) — we transparently
-    # rewrite it to `postgresql+asyncpg://...` so the env.py's async
-    # engine can pick it up. The script never echoes the URL back, so
-    # the password stays out of the log.
+    # SQLAlchemy URL must point at an async driver (asyncpg). The external
+    # URL is `postgresql://...` (no driver) — we transparently rewrite it
+    # to `postgresql+asyncpg://...` so the env.py's async engine can pick
+    # it up. The script never echoes the URL back, so the password stays
+    # out of the log.
     if url.startswith("postgresql://") and "+asyncpg" not in url and "+psycopg" not in url:
         url = "postgresql+asyncpg://" + url[len("postgresql://"):]
 
     if not ALEMBIC_INI.exists():
         die(f"alembic.ini not found at {ALEMBIC_INI}. "
-            f"Run this  the repo root or backend/ directory.")
+            f"Run this from the repo root or backend/ directory.")
 
     env = os.environ.copy()
     env["DATABASE_URL"] = url
@@ -121,7 +112,6 @@ def main() -> int:
 
     print()
     print("done. the production schema is up to date.")
-    print("if list_users is still 500ing, redeploy the pagepay service.")
     return 0
 
 

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,13 +9,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
 import { PagePay, Fonts } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { getDueCards, type SRSCard } from '@/src/features/study/spaced-repetition';
 import { PageHeader } from '@/components/PageHeader';
+import { PagePaySpinner } from '@/components/PagePaySpinner';
 
 export default function SrsDashboardScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
@@ -52,14 +54,14 @@ export default function SrsDashboardScreen() {
         style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}
       >
         <View style={[styles.boxBadge, { backgroundColor: boxColor + '22', borderColor: boxColor }]}>
-          <Text style={[styles.boxText, { color: boxColor }]}>Box {item.box}</Text>
+          <Text style={[styles.boxText, { color: boxColor }]}>{t('study.srs.box_label', { n: item.box })}</Text>
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.cardTitle, { color: tokens.ink }]} numberOfLines={1}>
             Asset #{item.assetId} · Card {item.cardIndex + 1}
           </Text>
           <Text style={[styles.cardMeta, { color: tokens.inkMuted }]} numberOfLines={1}>
-            {item.reviewCount} reviews · {item.successRate}% success
+            {t('study.srs.reviews_label', { count: item.reviewCount, percent: item.successRate })}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} />
@@ -71,8 +73,8 @@ export default function SrsDashboardScreen() {
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <PageHeader
-          title="Review Due"
-          subtitle={loading ? 'Loading…' : `${dueCards.length} ${dueCards.length === 1 ? 'card' : 'cards'} ready`}
+          title={t('study.srs.title')}
+          subtitle={loading ? t('study.srs.loading') : t('study.srs.cards_ready_other', { count: dueCards.length })}
           showBack
           onBack={() => router.back()}
           backgroundColor={tokens.card}
@@ -82,8 +84,8 @@ export default function SrsDashboardScreen() {
 
         {loading ? (
           <View style={styles.loadingBlock}>
-            <ActivityIndicator size="small" color={tokens.mint} />
-            <Text style={[styles.loadingLabel, { color: tokens.inkMuted }]}>Loading review data…</Text>
+            <PagePaySpinner size={32} />
+            <Text style={[styles.loadingLabel, { color: tokens.inkMuted }]}>{t('study.srs.loading_review_data')}</Text>
           </View>
         ) : (
           <>
@@ -92,25 +94,25 @@ export default function SrsDashboardScreen() {
                 <Text style={[styles.statValue, { color: tokens.mint, fontFamily: Fonts.editorialSemiBold as string }]}>
                   {dueCards.length}
                 </Text>
-                <Text style={[styles.statLabel, { color: tokens.mint }]}>Due Today</Text>
+                <Text style={[styles.statLabel, { color: tokens.mint }]}>{t('study.srs.due_today')}</Text>
               </Animated.View>
               <Animated.View entering={FadeIn.delay(60).duration(220)} style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
                 <Text style={[styles.statValue, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
                   {masteredCount}
                 </Text>
-                <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>Mastered</Text>
+                <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>{t('study.srs.mastered')}</Text>
               </Animated.View>
               <Animated.View entering={FadeIn.delay(120).duration(220)} style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
                 <Text style={[styles.statValue, { color: tokens.signal, fontFamily: Fonts.editorialSemiBold as string }]}>
                   {learningCount}
                 </Text>
-                <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>Learning</Text>
+                <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>{t('study.srs.learning')}</Text>
               </Animated.View>
             </View>
 
             <View style={styles.sectionHeaderRow}>
               <Text style={[styles.sectionTitle, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
-                Due for Review
+                {t('study.srs.due_for_review')}
               </Text>
               <Text style={[styles.sectionMeta, { color: tokens.inkMuted }]}>
                 {dueCards.length} cards
@@ -123,10 +125,10 @@ export default function SrsDashboardScreen() {
                   <Ionicons name="checkmark-done-circle-outline" size={28} color={tokens.mint} />
                 </View>
                 <Text style={[styles.emptyTitle, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
-                  All caught up
+                  {t('study.srs.all_caught_up')}
                 </Text>
                 <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>
-                  No cards due today. Keep up the great work!
+                  {t('study.srs.no_cards_today')}
                 </Text>
               </View>
             ) : (

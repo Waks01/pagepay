@@ -16,6 +16,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Svg, Circle, Defs, LinearGradient, Stop } from "react-native-svg";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -68,6 +69,7 @@ function AnimatedFireEmoji() {
 }
 
 export default function DailyRewardsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
@@ -327,8 +329,8 @@ export default function DailyRewardsScreen() {
 
   const getWeekNumber = (day: number) => Math.ceil(day / 7);
   const getWeekLabel = (weekNum: number) => {
-    if (weekNum <= 4) return `Week ${weekNum}`;
-    return "Month Completion";
+    if (weekNum <= 4) return t("daily_rewards.week_n", { n: weekNum });
+    return t("daily_rewards.month_completion");
   };
 
   const renderDayCard = (
@@ -438,7 +440,7 @@ export default function DailyRewardsScreen() {
             <Ionicons name="arrow-back" size={24} color={tokens.ink} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: tokens.ink }]}>
-            Daily Rewards
+            {t("daily_rewards.title")}
           </Text>
           <View style={{ width: 24 }} />
         </View>
@@ -514,14 +516,14 @@ export default function DailyRewardsScreen() {
             <Ionicons name="arrow-back" size={24} color={tokens.ink} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: tokens.ink }]}>
-            Daily Rewards
+            {t("daily_rewards.title")}
           </Text>
           <View style={{ width: 24 }} />
         </View>
 
         <View style={styles.content}>
           <StateBlock
-            message="Failed to load daily rewards"
+            message={t("daily_rewards.load_failed")}
             onRetry={() => refetch()}
             tokens={tokens}
           />
@@ -536,9 +538,9 @@ export default function DailyRewardsScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={tokens.ink} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: tokens.ink }]}>
-          Daily Rewards
-        </Text>
+          <Text style={[styles.headerTitle, { color: tokens.ink }]}>
+            {t("daily_rewards.title")}
+          </Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -591,14 +593,14 @@ export default function DailyRewardsScreen() {
                 {currentStreak}
               </Text>
               <Text style={[styles.streakLabel, { color: tokens.inkMuted }]}>
-                Day Streak
+                {t("daily_rewards.day_streak")}
               </Text>
             </View>
           </View>
           <Text style={[styles.streakSubtitle, { color: tokens.inkMuted }]}>
             {currentStreak === 0
-              ? "Start your daily streak by claiming today's reward!"
-              : `You're on fire! ${7 - (currentStreak % 7)} more days to complete the week.`}
+              ? t("daily_rewards.start_streak")
+              : t("daily_rewards.on_fire", { days: 7 - (currentStreak % 7) })}
           </Text>
         </View>
 
@@ -619,7 +621,9 @@ export default function DailyRewardsScreen() {
             <Text style={styles.claimEmoji}>{todayReward.icon_emoji}</Text>
             <View style={styles.claimContent}>
               <Text style={[styles.claimTitle, { color: tokens.mintText }]}>
-                {claimingReward ? "Claiming..." : "Claim Today's Reward"}
+                {claimingReward
+                  ? t("daily_rewards.claiming")
+                  : t("daily_rewards.claim_button")}
               </Text>
               <Text style={[styles.claimSubtitle, { color: tokens.mintText }]}>
                 Day {currentStreak + 1} • +{todayReward.reward_value}{" "}
@@ -681,11 +685,11 @@ export default function DailyRewardsScreen() {
                 <Text
                   style={[styles.weekBadgeText, { color: tokens.inkMuted }]}
                 >
-                  {week.weekNum === 1
-                    ? currentStreak >= 7
-                      ? "Completed"
-                      : "In Progress"
-                    : "Locked"}
+                    {week.weekNum === 1
+                      ? currentStreak >= 7
+                        ? t("daily_rewards.completed")
+                        : t("daily_rewards.in_progress")
+                      : t("daily_rewards.locked")}
                 </Text>
               </View>
             </View>
@@ -712,7 +716,7 @@ export default function DailyRewardsScreen() {
         {/* Milestones Timeline */}
         <View style={styles.milestonesSection}>
           <Text style={[styles.sectionTitle, { color: tokens.ink }]}>
-            Milestones
+            {t("daily_rewards.milestones")}
           </Text>
 
           {currentStreak < 14 && (
@@ -724,17 +728,17 @@ export default function DailyRewardsScreen() {
             >
               <View style={styles.milestoneContent}>
                 <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
-                  Two Week Warrior
+                  {t("daily_rewards.two_week_warrior")}
                 </Text>
                 <Text
                   style={[styles.milestoneSubtitle, { color: tokens.inkMuted }]}
                 >
-                  Day 14 • 20% bonus multiplier
+                  {t("daily_rewards.milestone_day_14")}
                 </Text>
                 <Text
                   style={[styles.milestoneProgress, { color: tokens.mint }]}
                 >
-                  {14 - currentStreak} days to go
+                  {t("daily_rewards.days_to_go", { days: 14 - currentStreak })}
                 </Text>
               </View>
               <View
@@ -757,17 +761,17 @@ export default function DailyRewardsScreen() {
             >
               <View style={styles.milestoneContent}>
                 <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
-                  Three Week Legend
+                  {t("daily_rewards.three_week_legend")}
                 </Text>
                 <Text
                   style={[styles.milestoneSubtitle, { color: tokens.inkMuted }]}
                 >
-                  Day 21 • 1500 bonus points
+                  {t("daily_rewards.milestone_day_21")}
                 </Text>
                 <Text
                   style={[styles.milestoneProgress, { color: tokens.mint }]}
                 >
-                  {21 - currentStreak} days to go
+                  {t("daily_rewards.days_to_go", { days: 21 - currentStreak })}
                 </Text>
               </View>
               <View
@@ -790,17 +794,17 @@ export default function DailyRewardsScreen() {
             >
               <View style={styles.milestoneContent}>
                 <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
-                  Monthly Master
+                  {t("daily_rewards.monthly_master")}
                 </Text>
                 <Text
                   style={[styles.milestoneSubtitle, { color: tokens.inkMuted }]}
                 >
-                  Day 30 • 50% bonus multiplier
+                  {t("daily_rewards.milestone_day_30")}
                 </Text>
                 <Text
                   style={[styles.milestoneProgress, { color: tokens.mint }]}
                 >
-                  {30 - currentStreak} days to go
+                  {t("daily_rewards.days_to_go", { days: 30 - currentStreak })}
                 </Text>
               </View>
               <View

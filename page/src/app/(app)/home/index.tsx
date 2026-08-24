@@ -791,4 +791,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
+  shareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 8,
+    borderWidth: 1,
+  },
+  shareBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
 });

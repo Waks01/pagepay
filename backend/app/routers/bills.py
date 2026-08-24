@@ -24,12 +24,13 @@ import uuid
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
 from app.config import settings
 from app.database import get_db
-from app.models import BillTransaction, User, Beneficiary
+from app.models import BillTransaction, User, Beneficiary, BillDispute, ScheduledBill
 from app.routers.auth import get_current_user
 from app.schemas import (
     AirtimePurchaseRequest,
@@ -43,10 +44,22 @@ from app.schemas import (
     BeneficiaryOut,
     BeneficiaryCreate,
     BeneficiaryDeleteResponse,
+    BillDisputeCreate,
+    BillDisputeOut,
+    BillDisputeListResponse,
+    BulkAirtimePurchaseRequest,
+    BulkAirtimePurchaseResponse,
+    BulkPurchaseResult,
+    ScheduledBillCreate,
+    ScheduledBillOut,
+    ScheduledBillListResponse,
+    ScheduledBillCancelResponse,
 )
 from app.services.money import kobo_to_points
 from app.services.peyflex import get_client as get_peyflex_client, get_public_client as get_peyflex_public_client, PeyflexError
 from app.services.bigisub import get_client as get_bigisub_client, BigisubError
+from app.services.pdf_receipt import generate_receipt_pdf
+from app.services.rate_limiter import enforce_rate_limits, get_remaining_quota
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/bills", tags=["bills"])
@@ -163,6 +176,9 @@ async def buy_airtime(
     db: AsyncSession = Depends(get_db),
 ) -> AirtimePurchaseResponse:
     """Buy airtime and earn points from the commission."""
+    # Enforce rate limits (10/hour, 50/day)
+    await enforce_rate_limits(current_user.id, "airtime")
+    
     reference = _generate_reference()
     amount_kobo = payload.amount_naira * 100
 
@@ -269,6 +285,187 @@ async def buy_airtime(
 
 # ── Data ──────────────────────────────────────────────────────────────
 
+@router.post("/airtime/bulk", response_model=BulkAirtimePurchaseResponse)
+async def buy_airtime_bulk(
+    payload: BulkAirtimePurchaseRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BulkAirtimePurchaseResponse:
+    """Buy airtime for multiple numbers in parallel.
+    
+    Processes up to 50 recipients at once. Each purchase is independent:
+    - Success/failure per recipient
+    - Points earned per successful purchase
+    - Failed purchases don't rollback successful ones
+    
+    Total cost is deducted upfront; failed purchases are refunded.
+    """
+    # Enforce rate limits (counts as 1 bulk request, not N individual)
+    await enforce_rate_limits(current_user.id, "airtime")
+    
+    recipients = payload.recipients
+    if len(recipients) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 recipients per bulk purchase")
+    
+    # Calculate total cost
+    total_amount_kobo = sum(r.amount_naira * 100 for r in recipients)
+    
+    # Check user balance
+    user_row = (
+        await db.execute(
+            select(User).where(User.id == current_user.id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if user_row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user_row.points_balance < kobo_to_points(total_amount_kobo):
+        raise HTTPException(status_code=402, detail="Insufficient balance for bulk purchase")
+    
+    # Debit total amount upfront
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(points_balance=User.points_balance - kobo_to_points(total_amount_kobo))
+    )
+    
+    # Process purchases in parallel
+    results = []
+    total_points_earned = 0
+    successful_count = 0
+    failed_count = 0
+    
+    async def process_one(recipient: BulkAirtimeRecipient) -> BulkPurchaseResult:
+        """Process one recipient's airtime purchase."""
+        reference = _generate_reference()
+        amount_kobo = recipient.amount_naira * 100
+        
+        try:
+            # Call VTU provider
+            result = await _get_vtu_client().buy_airtime(
+                network=recipient.network,
+                mobile_number=recipient.phone,
+                amount=recipient.amount_naira,
+            )
+            
+            if result.status != "success":
+                return BulkPurchaseResult(
+                    phone=recipient.phone,
+                    network=recipient.network,
+                    amount_naira=recipient.amount_naira,
+                    status="failed",
+                    error_message=result.message,
+                )
+            
+            # Calculate commission and points
+            commission_kobo = _effective_commission_kobo(
+                amount_kobo=amount_kobo,
+                service="airtime",
+                discount=result.discount,
+            )
+            
+            # Get full user object for multiplier
+            user_result = await db.execute(select(User).where(User.id == current_user.id))
+            full_user = user_result.scalar_one()
+            points = _compute_points(commission_kobo, full_user)
+            
+            # Record transaction
+            tx = BillTransaction(
+                user_id=current_user.id,
+                service="airtime",
+                provider=settings.bills_provider,
+                phone=recipient.phone,
+                amount_naira=recipient.amount_naira,
+                commission_naira=commission_kobo,
+                points_earned=points,
+                reference=reference,
+                status="success",
+                external_ref=result.reference,
+            )
+            db.add(tx)
+            
+            return BulkPurchaseResult(
+                phone=recipient.phone,
+                network=recipient.network,
+                amount_naira=recipient.amount_naira,
+                status="success",
+                reference=reference,
+                points_earned=points,
+            )
+            
+        except (PeyflexError, BigisubError) as exc:
+            logger.error("Bulk airtime purchase failed for %s: %s", recipient.phone, exc)
+            return BulkPurchaseResult(
+                phone=recipient.phone,
+                network=recipient.network,
+                amount_naira=recipient.amount_naira,
+                status="failed",
+                error_message=str(exc),
+            )
+    
+    # Execute all purchases in parallel
+    results = await asyncio.gather(*[process_one(r) for r in recipients])
+    
+    # Sum up results
+    for result in results:
+        if result.status == "success":
+            successful_count += 1
+            total_points_earned += result.points_earned
+        else:
+            failed_count += 1
+    
+    # Refund failed purchases and credit earned points
+    failed_refund_kobo = sum(
+        r.amount_naira * 100 for r in results if r.status == "failed"
+    )
+    
+    await db.execute(
+        update(User)
+        .where(User.id == current_user.id)
+        .values(
+            points_balance=User.points_balance + kobo_to_points(failed_refund_kobo) + total_points_earned
+        )
+    )
+    
+    # Get new balance
+    user_result = await db.execute(select(User).where(User.id == current_user.id))
+    updated_user = user_result.scalar_one()
+    new_balance = updated_user.points_balance
+    
+    await db.commit()
+    
+    # Send notification
+    from app.services.notifications import create_notification_background
+    from app.services.fcm import send_push_notification_background
+    
+    asyncio.create_task(create_notification_background(
+        user_id=current_user.id,
+        title="Bulk Airtime Purchase Complete",
+        body=f"Processed {len(recipients)} purchases: {successful_count} successful, {failed_count} failed. Earned {total_points_earned} points.",
+        category="wallet_updates",
+        data={"type": "bulk_airtime", "successful": str(successful_count), "failed": str(failed_count)},
+    ))
+    asyncio.create_task(send_push_notification_background(
+        user_id=current_user.id,
+        title="Bulk Airtime Purchase Complete",
+        body=f"Processed {len(recipients)} purchases: {successful_count} successful, {failed_count} failed.",
+        data={"type": "bulk_airtime", "successful": str(successful_count), "failed": str(failed_count)},
+        category="wallet_updates",
+    ))
+    
+    return BulkAirtimePurchaseResponse(
+        total_requested=len(recipients),
+        successful=successful_count,
+        failed=failed_count,
+        total_amount=sum(r.amount_naira for r in recipients),
+        total_points_earned=total_points_earned,
+        new_balance=new_balance,
+        results=results,
+    )
+
+
+# ── Data ──────────────────────────────────────────────────────────────
+
 @router.get("/data/networks")
 async def list_data_networks():
     """List data networks available on VTU provider."""
@@ -308,6 +505,9 @@ async def buy_data(
     db: AsyncSession = Depends(get_db),
 ) -> BillsPurchaseResponse:
     """Buy data bundle and earn points."""
+    # Enforce rate limits (10/hour, 50/day)
+    await enforce_rate_limits(current_user.id, "data")
+    
     reference = _generate_reference()
 
     # Fetch plan price to know how much to charge
@@ -437,6 +637,9 @@ async def buy_electricity(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Buy electricity tokens and earn points."""
+    # Enforce rate limits (5/hour, 20/day)
+    await enforce_rate_limits(current_user.id, "electricity")
+    
     reference = _generate_reference()
     amount_kobo = payload.amount_naira * 100
 
@@ -570,6 +773,9 @@ async def buy_tv(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Subscribe cable TV and earn points."""
+    # Enforce rate limits (5/hour, 20/day)
+    await enforce_rate_limits(current_user.id, "tv")
+    
     reference = _generate_reference()
 
     # Fetch plan price
@@ -1698,6 +1904,36 @@ async def create_beneficiary(
     return BeneficiaryOut.model_validate(beneficiary)
 
 
+@router.put("/beneficiaries/{beneficiary_id}", response_model=BeneficiaryOut)
+async def update_beneficiary(
+    beneficiary_id: int,
+    payload: BeneficiaryCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BeneficiaryOut:
+    """Update an existing beneficiary."""
+    row = (
+        await db.execute(
+            select(Beneficiary).where(
+                Beneficiary.id == beneficiary_id,
+                Beneficiary.user_id == current_user.id,
+            )
+        )
+    ).first()
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="Beneficiary not found")
+    
+    beneficiary = row[0]
+    beneficiary.name = payload.name
+    beneficiary.phone = payload.phone
+    beneficiary.network = payload.network
+    
+    await db.commit()
+    await db.refresh(beneficiary)
+    return BeneficiaryOut.model_validate(beneficiary)
+
+
 @router.delete("/beneficiaries/{beneficiary_id}", response_model=BeneficiaryDeleteResponse)
 async def delete_beneficiary(
     beneficiary_id: int,
@@ -1720,3 +1956,354 @@ async def delete_beneficiary(
     await db.commit()
     return BeneficiaryDeleteResponse(deleted=True)
 
+
+# ── Receipt PDF Generation ──────────────────────────────────────────
+
+@router.get("/receipt/{reference}")
+async def download_receipt_pdf(
+    reference: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download PDF receipt for a bill transaction.
+    
+    Returns a downloadable PDF file with transaction details, QR code,
+    and PagePay branding.
+    """
+    # Find transaction by reference
+    result = await db.execute(
+        select(BillTransaction).where(
+            BillTransaction.reference == reference,
+            BillTransaction.user_id == current_user.id,
+        )
+    )
+    transaction = result.scalar_one_or_none()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Generate PDF
+    try:
+        pdf_bytes = generate_receipt_pdf(transaction)
+    except Exception as exc:
+        logger.error("Failed to generate PDF receipt: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to generate receipt")
+    
+    # Return PDF as downloadable file
+    filename = f"pagepay-receipt-{reference}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Type": "application/pdf",
+        },
+    )
+
+
+# ── VTU Dispute/Refund System ───────────────────────────────────────
+
+@router.post("/disputes", response_model=BillDisputeOut)
+async def create_dispute(
+    payload: BillDisputeCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BillDisputeOut:
+    """Open a dispute for a failed VTU transaction.
+    
+    If airtime/data/electricity wasn't delivered despite wallet debit,
+    user can open a dispute. Auto-refund triggers after 24 hours if
+    VTU provider doesn't confirm delivery.
+    """
+    # Find the transaction
+    result = await db.execute(
+        select(BillTransaction).where(
+            BillTransaction.reference == payload.transaction_reference,
+            BillTransaction.user_id == current_user.id,
+        )
+    )
+    transaction = result.scalar_one_or_none()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Only allow disputes for transactions that appeared to succeed
+    # but user claims weren't delivered
+    if transaction.status != "success":
+        raise HTTPException(
+            status_code=400,
+            detail="Can only dispute successful transactions that weren't delivered"
+        )
+    
+    # Check if dispute already exists
+    existing = await db.execute(
+        select(BillDispute).where(
+            BillDispute.transaction_id == transaction.id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Dispute already exists for this transaction")
+    
+    # Create dispute with auto-refund timer (24 hours from now)
+    from datetime import timedelta
+    auto_refund_at = datetime.utcnow() + timedelta(hours=24)
+    
+    dispute = BillDispute(
+        user_id=current_user.id,
+        transaction_id=transaction.id,
+        transaction_reference=transaction.reference,
+        reason=payload.reason,
+        status="open",
+        auto_refund_at=auto_refund_at,
+    )
+    
+    db.add(dispute)
+    await db.commit()
+    await db.refresh(dispute)
+    
+    # Send notification
+    from app.services.notifications import create_notification_background
+    from app.services.fcm import send_push_notification_background
+    
+    asyncio.create_task(create_notification_background(
+        user_id=current_user.id,
+        title="Dispute Opened",
+        body=f"Your dispute for {transaction.reference} has been opened. We'll investigate and respond within 24 hours.",
+        category="wallet_updates",
+        data={"type": "dispute", "dispute_id": str(dispute.id), "reference": transaction.reference},
+    ))
+    asyncio.create_task(send_push_notification_background(
+        user_id=current_user.id,
+        title="Dispute Opened",
+        body=f"Your dispute for {transaction.reference} has been opened. We'll investigate and respond within 24 hours.",
+        data={"type": "dispute", "dispute_id": str(dispute.id), "reference": transaction.reference},
+        category="wallet_updates",
+    ))
+    
+    return BillDisputeOut.model_validate(dispute)
+
+
+@router.get("/disputes", response_model=BillDisputeListResponse)
+async def list_disputes(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    status: str | None = Query(default=None, description="Filter by status: open, investigating, refunded, rejected"),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> BillDisputeListResponse:
+    """List user's bill disputes with pagination."""
+    query = (
+        select(BillDispute)
+        .where(BillDispute.user_id == current_user.id)
+        .order_by(BillDispute.created_at.desc())
+    )
+    
+    if status:
+        query = query.where(BillDispute.status == status)
+    
+    count_query = select(BillDispute.id).where(BillDispute.user_id == current_user.id)
+    if status:
+        count_query = count_query.where(BillDispute.status == status)
+    
+    total_result = await db.execute(count_query)
+    total = len(total_result.scalars().all())
+    
+    offset = (page - 1) * limit
+    paginated_query = query.offset(offset).limit(limit)
+    result = await db.execute(paginated_query)
+    items = result.scalars().all()
+    
+    return BillDisputeListResponse(
+        items=[BillDisputeOut.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.get("/disputes/{dispute_id}", response_model=BillDisputeOut)
+async def get_dispute(
+    dispute_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BillDisputeOut:
+    """Get details of a specific dispute."""
+    result = await db.execute(
+        select(BillDispute).where(
+            BillDispute.id == dispute_id,
+            BillDispute.user_id == current_user.id,
+        )
+    )
+    dispute = result.scalar_one_or_none()
+    
+    if not dispute:
+        raise HTTPException(status_code=404, detail="Dispute not found")
+    
+    return BillDisputeOut.model_validate(dispute)
+
+
+
+
+# ── Scheduled/Recurring Purchases ───────────────────────────────────
+
+@router.post("/schedule", response_model=ScheduledBillOut)
+async def create_scheduled_bill(
+    payload: ScheduledBillCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ScheduledBillOut:
+    """Schedule a future or recurring bill purchase.
+    
+    Supported services: airtime, data
+    Schedule types: once, daily, weekly, monthly
+    
+    The background job checks every minute and executes due schedules.
+    """
+    # Validate service-specific fields
+    if payload.service == "airtime" and not payload.amount_naira:
+        raise HTTPException(status_code=400, detail="amount_naira is required for airtime")
+    if payload.service == "data" and not payload.plan_code:
+        raise HTTPException(status_code=400, detail="plan_code is required for data")
+    
+    # Validate next_run_at is in future
+    if payload.next_run_at <= datetime.utcnow():
+        raise HTTPException(status_code=400, detail="next_run_at must be in the future")
+    
+    # Create schedule
+    schedule = ScheduledBill(
+        user_id=current_user.id,
+        service=payload.service,
+        phone=payload.phone,
+        network=payload.network,
+        amount_naira=payload.amount_naira or 0,
+        plan_code=payload.plan_code,
+        schedule_type=payload.schedule_type,
+        next_run_at=payload.next_run_at,
+        status="active",
+    )
+    
+    db.add(schedule)
+    await db.commit()
+    await db.refresh(schedule)
+    
+    # Register with APScheduler
+    from app.services.scheduled_bills import scheduler
+    if scheduler:
+        if payload.schedule_type == "once":
+            scheduler.add_job(
+                execute_scheduled_purchase,
+                'date',
+                run_date=payload.next_run_at,
+                args=[schedule.id],
+                id=f"schedule_{schedule.id}",
+            )
+        elif payload.schedule_type == "daily":
+            scheduler.add_job(
+                execute_scheduled_purchase,
+                'interval',
+                days=1,
+                start_date=payload.next_run_at,
+                args=[schedule.id],
+                id=f"schedule_{schedule.id}",
+            )
+        elif payload.schedule_type == "weekly":
+            scheduler.add_job(
+                execute_scheduled_purchase,
+                'interval',
+                weeks=1,
+                start_date=payload.next_run_at,
+                args=[schedule.id],
+                id=f"schedule_{schedule.id}",
+            )
+        elif payload.schedule_type == "monthly":
+            scheduler.add_job(
+                execute_scheduled_purchase,
+                'interval',
+                days=30,
+                start_date=payload.next_run_at,
+                args=[schedule.id],
+                id=f"schedule_{schedule.id}",
+            )
+    
+    logger.info("Created scheduled %s purchase for user %d", payload.service, current_user.id)
+    
+    return ScheduledBillOut.model_validate(schedule)
+
+
+@router.get("/schedules", response_model=ScheduledBillListResponse)
+async def list_scheduled_bills(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    status: str | None = Query(default=None, description="Filter by status: active, completed, cancelled, failed"),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> ScheduledBillListResponse:
+    """List user's scheduled bills with pagination."""
+    query = (
+        select(ScheduledBill)
+        .where(ScheduledBill.user_id == current_user.id)
+        .order_by(ScheduledBill.next_run_at.asc())
+    )
+    
+    if status:
+        query = query.where(ScheduledBill.status == status)
+    
+    count_query = select(ScheduledBill.id).where(ScheduledBill.user_id == current_user.id)
+    if status:
+        count_query = count_query.where(ScheduledBill.status == status)
+    
+    total_result = await db.execute(count_query)
+    total = len(total_result.scalars().all())
+    
+    offset = (page - 1) * limit
+    paginated_query = query.offset(offset).limit(limit)
+    result = await db.execute(paginated_query)
+    items = result.scalars().all()
+    
+    return ScheduledBillListResponse(
+        items=[ScheduledBillOut.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        limit=limit,
+    )
+
+
+@router.delete("/schedules/{schedule_id}", response_model=ScheduledBillCancelResponse)
+async def cancel_scheduled_bill(
+    schedule_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ScheduledBillCancelResponse:
+    """Cancel a scheduled bill purchase."""
+    result = await db.execute(
+        select(ScheduledBill).where(
+            ScheduledBill.id == schedule_id,
+            ScheduledBill.user_id == current_user.id,
+        )
+    )
+    schedule = result.scalar_one_or_none()
+    
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Scheduled bill not found")
+    
+    if schedule.status != "active":
+        raise HTTPException(status_code=400, detail="Can only cancel active schedules")
+    
+    await db.execute(
+        update(ScheduledBill)
+        .where(ScheduledBill.id == schedule_id)
+        .values(status="cancelled", updated_at=datetime.utcnow())
+    )
+    await db.commit()
+    
+    # Remove from APScheduler
+    from app.services.scheduled_bills import scheduler
+    if scheduler:
+        try:
+            scheduler.remove_job(f"schedule_{schedule_id}")
+        except Exception:
+            pass  # Job might not exist
+    
+    logger.info("Cancelled scheduled bill %d for user %d", schedule_id, current_user.id)
+    
+    return ScheduledBillCancelResponse(cancelled=True, id=schedule_id)

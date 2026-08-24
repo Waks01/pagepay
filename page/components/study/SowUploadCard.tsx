@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { PagePaySpinner } from '@/components/PagePaySpinner';
 
 type SowUploadCardProps = {
   uploading: boolean;
@@ -27,7 +28,7 @@ function UploadStatusIcon({ uploading, progress, tokens }: { uploading: boolean;
     return <Ionicons name="checkmark-circle" size={22} color={tokens.mint} />;
   }
   if (uploading) {
-    return <ActivityIndicator size="small" color={tokens.mint} />;
+    return <PagePaySpinner size={18} />;
   }
   return <Ionicons name="cloud-upload-outline" size={22} color={tokens.mint} />;
 }

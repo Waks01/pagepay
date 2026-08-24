@@ -35,6 +35,7 @@ from app.seed import run_all_seeds, run_migrations
 from app.services.task_processor import task_processor
 from app.services.ai_verification import verification_service
 from app.services.fcm import initialize_firebase
+from app.services.scheduler import register_daily_reminder_job
 from app.websocket import sio
 
 logging.basicConfig(
@@ -215,6 +216,21 @@ async def lifespan(app: FastAPI):
         "VTU provider configured: %s",
         getattr(settings, "bills_provider", "peyflex"),
     )
+    
+    # Initialize APScheduler for scheduled bill purchases
+    try:
+        await initialize_scheduler()
+        logger.info("APScheduler initialized for scheduled bill purchases")
+    except Exception as exc:
+        logger.error("APScheduler initialization failed: %s", exc)
+    
+    # Register daily study reminder job on the existing APScheduler instance
+    import app.services.scheduled_bills as _scheduled_bills
+    if _scheduled_bills.scheduler is not None and _scheduled_bills.scheduler.running:
+        register_daily_reminder_job(_scheduled_bills.scheduler)
+        logger.info("Daily study reminder job registered with APScheduler")
+    else:
+        logger.warning("Scheduler not available; daily reminder not registered")
     
     # Start Phase 7 background task processor
     # Only start if explicitly enabled via settings.run_task_processor

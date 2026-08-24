@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
@@ -9,6 +10,7 @@ import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 type PaymentResult = 'success' | 'cancelled' | 'error';
 
 export default function SubscriptionSuccessScreen() {
+  const { t } = useTranslation();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const router = useRouter();
@@ -25,13 +27,13 @@ export default function SubscriptionSuccessScreen() {
       <View style={[styles.container, { backgroundColor: tokens.paper }]}>
         <Ionicons name="close-circle-outline" size={64} color={tokens.signal} />
         <Text style={[styles.title, { color: tokens.ink }]}>
-          Payment Cancelled
+          {t('premium.payment_cancelled_title')}
         </Text>
         <Text style={[styles.message, { color: tokens.inkMuted }]}>
-          Your payment was cancelled. You can try again when you're ready.
+          {t('premium.payment_cancelled_body')}
         </Text>
         <TouchableOpacity onPress={() => router.back()} style={[styles.button, { backgroundColor: tokens.mint }]}>
-          <Text style={[styles.buttonText, { color: tokens.mintText }]}>Go Back</Text>
+          <Text style={[styles.buttonText, { color: tokens.mintText }]}>{t('common.back')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -42,13 +44,13 @@ export default function SubscriptionSuccessScreen() {
       <View style={[styles.container, { backgroundColor: tokens.paper }]}>
         <Ionicons name="alert-circle-outline" size={64} color={tokens.signal} />
         <Text style={[styles.title, { color: tokens.ink }]}>
-          Payment Error
+          {t('premium.payment_error_title')}
         </Text>
         <Text style={[styles.message, { color: tokens.inkMuted }]}>
-          Something went wrong with your payment. Please contact support if you were charged.
+          {t('premium.payment_error_body')}
         </Text>
         <TouchableOpacity onPress={() => router.back()} style={[styles.button, { backgroundColor: tokens.mint }]}>
-          <Text style={[styles.buttonText, { color: tokens.mintText }]}>Go Back</Text>
+          <Text style={[styles.buttonText, { color: tokens.mintText }]}>{t('common.back')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -58,13 +60,13 @@ export default function SubscriptionSuccessScreen() {
     <View style={[styles.container, { backgroundColor: tokens.paper }]}>
       <Ionicons name="checkmark-circle" size={64} color={tokens.mint} />
       <Text style={[styles.title, { color: tokens.ink }]}>
-        Payment Successful!
+        {t('premium.premium_activated_title')}
       </Text>
       <Text style={[styles.message, { color: tokens.inkMuted }]}>
-        Welcome to PagePay Premium! Your subscription is now active.
+        {t('premium.premium_activated_body')}
       </Text>
       <TouchableOpacity onPress={() => router.replace('/premium')} style={[styles.button, { backgroundColor: tokens.mint }]}>
-        <Text style={[styles.buttonText, { color: tokens.mintText }]}>Continue</Text>
+        <Text style={[styles.buttonText, { color: tokens.mintText }]}>{t('common.done')}</Text>
       </TouchableOpacity>
     </View>
   );

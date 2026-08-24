@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import Animated, {
@@ -18,6 +18,7 @@ import { PLATFORM_ENV } from '@/src/shared/lib/ads';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { RewardedAd } from '@/components/ads/RewardedAd';
+import { PagePaySpinner } from '@/components/PagePaySpinner';
 
 type UnlockModalProps = {
   visible: boolean;
@@ -254,7 +255,7 @@ export function UnlockModal({
                   {canAfford ? 'Instant access' : `Need ${pointsCost - userBalance} more`}
                 </Text>
                 {loadingMethod === 'points' && (
-                  <ActivityIndicator size="small" color={tokens.mint} style={styles.choiceSpinner} />
+                  <PagePaySpinner size={18} />
                 )}
               </Pressable>
 
@@ -288,7 +289,7 @@ export function UnlockModal({
                   ~30 seconds
                 </Text>
                 {loadingMethod === 'ad' && (
-                  <ActivityIndicator size="small" color={tokens.paper} style={styles.choiceSpinner} />
+                  <PagePaySpinner size={18} />
                 )}
               </Pressable>
             </View>

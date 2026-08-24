@@ -112,7 +112,14 @@ class BillTransaction(Base):
     status: Mapped[str] = mapped_column(String(20))            # "success" | "failed" | "pending"
     external_ref: Mapped[str | None] = mapped_column(String(100))  # peyflex transaction id
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    # Delivery verification (webhooks from BIGISUB/providers)
+    delivery_status: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "delivered" | "failed" | "pending"
+    delivery_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivery_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
@@ -1658,3 +1665,100 @@ class WorkShare(Base):
     work_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
     platform: Mapped[str] = mapped_column(String(50), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class BillDispute(Base):
+    """Dispute record for failed VTU bill transactions.
+    
+    When a user reports that airtime/data/electricity wasn't delivered
+    despite wallet debit, they open a dispute. The system auto-refunds
+    after 24 hours if the VTU provider doesn't confirm delivery.
+    
+    Lifecycle:
+      1. User opens dispute → status='open', auto_refund_at = now + 24h
+      2. Admin/webhook updates → status='investigating'
+      3. Resolution:
+         - Confirmed delivered → status='rejected' (no refund)
+         - Confirmed failed → status='refunded', points restored
+         - 24h timeout → auto-refund job sets status='refunded'
+    
+    Indexes: user_id for per-user queries, transaction_id for lookups,
+    status for admin filtering, auto_refund_at for cron job.
+    """
+    __tablename__ = "bill_disputes"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    transaction_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    transaction_reference: Mapped[str] = mapped_column(String(100))
+    
+    # Dispute details
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True)
+    # Status values: 'open', 'investigating', 'refunded', 'rejected'
+    
+    # Refund tracking
+    amount_refunded: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    auto_refund_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    
+    # Resolution
+    resolved_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+
+class ScheduledBill(Base):
+    """Scheduled/recurring bill purchase.
+    
+    Allows users to schedule future or recurring airtime/data purchases.
+    A background task checks every minute for due schedules and executes them.
+    
+    Schedule types:
+    - once: Execute at specific datetime, then mark as completed
+    - daily: Execute every day at specific time
+    - weekly: Execute every week on specific day and time
+    - monthly: Execute every month on specific day and time
+    
+    Lifecycle:
+      1. User creates schedule → status='active'
+      2. Background job checks next_run_at
+      3. When due, job executes purchase → last_run_at updated
+      4. For recurring: next_run_at calculated based on frequency
+      5. For once: status='completed' after execution
+      6. User can cancel → status='cancelled'
+    
+    Indexes: user_id for per-user queries, status for job filtering,
+    next_run_at for finding due schedules.
+    """
+    __tablename__ = "scheduled_bills"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    
+    # Purchase details
+    service: Mapped[str] = mapped_column(String(50))  # "airtime" | "data"
+    phone: Mapped[str] = mapped_column(String(20))
+    network: Mapped[str] = mapped_column(String(20))
+    amount_naira: Mapped[int] = mapped_column(Integer)  # For airtime
+    plan_code: Mapped[str | None] = mapped_column(String(100), nullable=True)  # For data
+    
+    # Schedule configuration
+    schedule_type: Mapped[str] = mapped_column(String(20))  # "once" | "daily" | "weekly" | "monthly"
+    next_run_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    
+    # Status tracking
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    # Status values: 'active', 'completed', 'cancelled', 'failed'
+    
+    # Execution tracking
+    execution_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

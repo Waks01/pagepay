@@ -24,6 +24,13 @@ import {
   ConfirmModal,
   EarnBadge,
   BuyScreenSkeleton,
+  BeneficiaryNamePrompt,
+  RecentTransactionsList,
+  ReceiptShareModal,
+  RateLimitDisplay,
+  BulkAirtimeModal,
+  DisputeModal,
+  ScheduleModal,
 } from "@/src/components/bills";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
 import { Skeleton } from "@/components/Skeleton";
@@ -88,6 +95,17 @@ export default function BuyAirtimeScreen() {
   const [saveAsBeneficiary, setSaveAsBeneficiary] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+
+  // New modal states for backend features
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [disputeTransaction, setDisputeTransaction] = useState<{
+    reference: string;
+    details: any;
+  } | null>(null);
 
   const networksQ = useQuery({
     queryKey: ["airtime-networks"],
@@ -105,6 +123,20 @@ export default function BuyAirtimeScreen() {
       if (!res.ok) throw new Error("Failed to load beneficiaries");
       return (await res.json()) as Beneficiary[];
     },
+  });
+
+  // Fetch recent airtime transactions
+  const recentTxQ = useQuery({
+    queryKey: ["bills-history", "airtime", "recent"],
+    queryFn: async () => {
+      const res = await apiFetch(
+        "/api/v1/bills/history?service=airtime&limit=3",
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.items || [];
+    },
+    staleTime: 60 * 1000, // 1 minute
   });
 
   const createBeneficiaryMutation = useMutation({
@@ -284,9 +316,13 @@ export default function BuyAirtimeScreen() {
   };
 
   const handleSuccessDone = async () => {
+    // If user wants to save and hasn't already saved this number
     if (saveAsBeneficiary && successData && !selectedBeneficiaryId) {
-      await handleSaveBeneficiary();
+      setShowNamePrompt(true);
+      return; // Don't close yet, wait for name input
     }
+
+    // Reset and close
     setPurchaseState("idle");
     setSuccessData(null);
     setPhone("");
@@ -296,6 +332,46 @@ export default function BuyAirtimeScreen() {
     setCustomAmount("");
     setSelectedBeneficiaryId(null);
     setSaveAsBeneficiary(false);
+  };
+
+  const handleSaveBeneficiaryWithName = async (name: string) => {
+    if (!successData || !phone || !selectedNetworkId) {
+      setShowNamePrompt(false);
+      return;
+    }
+
+    const networkName =
+      networkList.find((n) => n.id === selectedNetworkId)?.name || "mtn";
+
+    try {
+      await createBeneficiaryMutation.mutateAsync({
+        name,
+        phone,
+        network: networkName,
+      });
+      setShowNamePrompt(false);
+      setSaveAsBeneficiary(false);
+
+      // Now close the success screen
+      handleSuccessDone();
+    } catch {
+      // Silently ignore save failures, close anyway
+      setShowNamePrompt(false);
+      handleSuccessDone();
+    }
+  };
+
+  const handleRetryTransaction = (tx: any) => {
+    // Prefill form with transaction data
+    setPhone(tx.phone || "");
+    if (tx.network) {
+      const matched = networkList.find(
+        (n) => n.name.toLowerCase() === tx.network.toLowerCase(),
+      );
+      if (matched) setSelectedNetworkId(matched.id);
+    }
+    setSelectedAmount(tx.amount_naira);
+    setCustomAmount("");
   };
 
   // Pull-to-refresh: invalidate the catalog queries so TanStack Query
@@ -421,6 +497,20 @@ export default function BuyAirtimeScreen() {
           </View>
         )}
 
+        {/* Share Receipt Button */}
+        <TouchableOpacity
+          onPress={() => setShowReceiptModal(true)}
+          style={[
+            styles.shareBtn,
+            { backgroundColor: tokens.card, borderColor: tokens.border },
+          ]}
+        >
+          <Ionicons name="share-outline" size={20} color={tokens.ink} />
+          <Text style={[styles.shareBtnText, { color: tokens.ink }]}>
+            Share Receipt
+          </Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           onPress={handleSuccessDone}
           style={[styles.payBtn, { backgroundColor: tokens.mint }]}
@@ -429,6 +519,40 @@ export default function BuyAirtimeScreen() {
             {t("common.done")}
           </Text>
         </TouchableOpacity>
+
+        {/* Beneficiary Name Prompt */}
+        <BeneficiaryNamePrompt
+          visible={showNamePrompt}
+          phone={phone}
+          network={selectedNetwork?.name || ""}
+          onSave={handleSaveBeneficiaryWithName}
+          onCancel={() => {
+            setShowNamePrompt(false);
+            setSaveAsBeneficiary(false);
+            handleSuccessDone();
+          }}
+          saving={createBeneficiaryMutation.isPending}
+        />
+
+        {/* Receipt Share Modal */}
+        <ReceiptShareModal
+          visible={showReceiptModal}
+          onClose={() => setShowReceiptModal(false)}
+          receipt={
+            successData
+              ? {
+                  reference: successData.reference,
+                  service: "airtime",
+                  amount: successData.amount_naira,
+                  points_earned: successData.points_earned,
+                  date: new Date().toISOString(),
+                  phone: successData.phone,
+                  network: successData.network,
+                  status: successData.status,
+                }
+              : null
+          }
+        />
       </View>
     );
   }
@@ -522,13 +646,28 @@ export default function BuyAirtimeScreen() {
         }
       >
         {/* Header */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={24} color={tokens.ink} />
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <TouchableOpacity onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={24} color={tokens.ink} />
+            </TouchableOpacity>
+            <Text style={[styles.title, { color: tokens.ink }]}>
+              {t("bills.airtime.title")}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => router.push("/(app)/home/beneficiaries" as any)}
+            style={styles.headerBtn}
+          >
+            <Ionicons name="people-outline" size={22} color={tokens.ink} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: tokens.ink }]}>
-            {t("bills.airtime.title")}
-          </Text>
         </View>
 
         {/* Beneficiary chips */}
@@ -572,6 +711,27 @@ export default function BuyAirtimeScreen() {
               })}
             </ScrollView>
           </View>
+        )}
+
+        {/* Recent Transactions */}
+        {recentTxQ.data && recentTxQ.data.length > 0 && (
+          <RecentTransactionsList
+            transactions={recentTxQ.data}
+            onRetry={handleRetryTransaction}
+            onViewAll={() => router.push("/(app)/home/transactions/" as any)}
+            onDispute={(tx) => {
+              setDisputeTransaction({
+                reference: tx.id.toString(),
+                details: {
+                  service: "airtime",
+                  amount: tx.amount_naira,
+                  phone: tx.phone,
+                  network: tx.network || "Unknown",
+                },
+              });
+              setShowDisputeModal(true);
+            }}
+          />
         )}
 
         {/* SECTION 1: Phone */}
@@ -773,6 +933,40 @@ export default function BuyAirtimeScreen() {
           />
         </SectionCard>
 
+        {/* Rate Limit Display */}
+        <RateLimitDisplay service="airtime" />
+
+        {/* Quick Actions */}
+        <SectionCard>
+          <View style={styles.quickActions}>
+            <TouchableOpacity
+              onPress={() => setShowBulkModal(true)}
+              style={[
+                styles.quickActionBtn,
+                { backgroundColor: tokens.card, borderColor: tokens.border },
+              ]}
+            >
+              <Ionicons name="people-outline" size={20} color={tokens.ink} />
+              <Text style={[styles.quickActionText, { color: tokens.ink }]}>
+                Bulk Purchase
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setShowScheduleModal(true)}
+              style={[
+                styles.quickActionBtn,
+                { backgroundColor: tokens.card, borderColor: tokens.border },
+              ]}
+            >
+              <Ionicons name="time-outline" size={20} color={tokens.ink} />
+              <Text style={[styles.quickActionText, { color: tokens.ink }]}>
+                Schedule
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SectionCard>
+
         {/* Pay button */}
         <TouchableOpacity
           onPress={handleBuyPress}
@@ -821,6 +1015,44 @@ export default function BuyAirtimeScreen() {
           onCancel={() => setShowConfirmModal(false)}
           onConfirm={handleConfirmPurchase}
         />
+
+        {/* Bulk Airtime Modal */}
+        <BulkAirtimeModal
+          visible={showBulkModal}
+          onClose={() => setShowBulkModal(false)}
+          onSuccess={(result) => {
+            Alert.alert(
+              "Bulk Purchase Complete",
+              `${result.total_successful} of ${result.total_successful + result.total_failed} purchases succeeded.\n\nTotal: ₦${result.total_amount.toLocaleString()}\nPoints Earned: ${result.total_points_earned}`,
+            );
+            queryClient.invalidateQueries({ queryKey: ["me"] });
+          }}
+        />
+
+        {/* Schedule Modal */}
+        <ScheduleModal
+          visible={showScheduleModal}
+          onClose={() => setShowScheduleModal(false)}
+          service="airtime"
+          defaultData={{
+            network: selectedNetwork?.id || "mtn",
+            phone: phone,
+            amount: finalAmount,
+          }}
+        />
+
+        {/* Dispute Modal */}
+        {disputeTransaction && (
+          <DisputeModal
+            visible={showDisputeModal}
+            onClose={() => {
+              setShowDisputeModal(false);
+              setDisputeTransaction(null);
+            }}
+            transactionReference={disputeTransaction.reference}
+            transactionDetails={disputeTransaction.details}
+          />
+        )}
       </ScrollView>
     </View>
   );
@@ -1020,5 +1252,42 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 2,
     elevation: 2,
+  },
+  shareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 8,
+    borderWidth: 1,
+  },
+  shareBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  quickActions: {
+    flexDirection: "row",
+    gap: 12,
+    paddingVertical: 8,
+  },
+  quickActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  quickActionText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  headerBtn: {
+    padding: 8,
+    borderRadius: 12,
   },
 });

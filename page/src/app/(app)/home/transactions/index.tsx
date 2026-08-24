@@ -214,34 +214,34 @@ const getTxMeta = (type: string, tokens: (typeof PagePay)["light"]) => {
 };
 
 const FILTERS = [
-  { key: "all", label: "All" },
-  { key: "earn", label: "Earned" },
-  { key: "spend", label: "Spent" },
-  { key: "airtime", label: "Airtime" },
-  { key: "data", label: "Data" },
-  { key: "electricity", label: "Electricity" },
-  { key: "internet", label: "Internet" },
-  { key: "tv", label: "TV" },
-  { key: "recharge", label: "Recharge" },
-  { key: "betting", label: "Betting" },
-  { key: "isp", label: "ISP" },
-  { key: "education", label: "Education" },
-  { key: "sms", label: "Bulk SMS" },
-  { key: "wallet", label: "Wallet" },
-  { key: "withdraw", label: "Withdrawals" },
-  { key: "ad", label: "Ad Reward" },
-  { key: "read", label: "Reading" },
-  { key: "study", label: "Study" },
-  { key: "premium", label: "Premium" },
-  { key: "bonus", label: "Bonus" },
+  { key: "all", label: "transactions.filter_all" },
+  { key: "earn", label: "transactions.filter_earned" },
+  { key: "spend", label: "transactions.filter_spent" },
+  { key: "airtime", label: "bills.services.airtime" },
+  { key: "data", label: "bills.services.data" },
+  { key: "electricity", label: "bills.services.electricity" },
+  { key: "internet", label: "bills.services.isp" },
+  { key: "tv", label: "bills.services.tv" },
+  { key: "recharge", label: "bills.services.recharge_pin" },
+  { key: "betting", label: "bills.services.betting" },
+  { key: "isp", label: "bills.services.isp" },
+  { key: "education", label: "bills.services.education" },
+  { key: "sms", label: "bills.services.sms" },
+  { key: "wallet", label: "wallet.fund_wallet" },
+  { key: "withdraw", label: "wallet.withdraw" },
+  { key: "ad", label: "transactions.filter_ad" },
+  { key: "read", label: "transactions.filter_read" },
+  { key: "study", label: "study.title" },
+  { key: "premium", label: "premium.title" },
+  { key: "bonus", label: "transactions.filter_bonus" },
 ] as const;
 
 const DATE_FILTERS = [
-  { key: "all", label: "All Dates" },
-  { key: "Today", label: "Today" },
-  { key: "Yesterday", label: "Yesterday" },
-  { key: "This Week", label: "This Week" },
-  { key: "This Month", label: "This Month" },
+  { key: "all", label: "transactions.date_all" },
+  { key: "Today", label: "transactions.date_today" },
+  { key: "Yesterday", label: "transactions.date_yesterday" },
+  { key: "This Week", label: "transactions.date_this_week" },
+  { key: "This Month", label: "transactions.date_this_month" },
 ] as const;
 
 function dateLabel(d: Date) {
@@ -261,6 +261,13 @@ function dateLabel(d: Date) {
     year: "numeric",
   });
 }
+
+const DATE_LABEL_TRANSLATION_MAP: Record<string, string> = {
+  Today: "transactions.date_today",
+  Yesterday: "transactions.date_yesterday",
+  "This Week": "transactions.date_this_week",
+  "This Month": "transactions.date_this_month",
+};
 
 const fmtTime = (d: Date) => {
   if (Number.isNaN(d.getTime())) return "";
@@ -487,7 +494,7 @@ export default function TransactionHistoryScreen() {
                 style={[styles.txAmount, { color: isPositive ? mintC : inkC }]}
               >
                 {prefix}
-                {Math.abs(item.amount).toLocaleString()} pts
+                {Math.abs(item.amount).toLocaleString()} {t("wallet.points_suffix")}
               </Text>
               <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
                 <Text style={[styles.statusText, { color: statusColor }]}>
@@ -505,6 +512,8 @@ export default function TransactionHistoryScreen() {
   const renderSectionHeader = useCallback(
     ({ section }: { section: { title: string } }) => {
       const isActive = dateFilter === section.title;
+      const translatedTitle =
+        DATE_LABEL_TRANSLATION_MAP[section.title] || section.title;
       return (
         <TouchableOpacity
           onPress={() => {
@@ -520,7 +529,7 @@ export default function TransactionHistoryScreen() {
               { color: isActive ? tokens.mint : tokens.inkMuted },
             ]}
           >
-            {section.title}
+            {t(translatedTitle)}
           </Text>
           {isActive && (
             <Ionicons name="close-circle" size={14} color={tokens.mint} />
@@ -528,13 +537,13 @@ export default function TransactionHistoryScreen() {
         </TouchableOpacity>
       );
     },
-    [tokens, dateFilter, resetPage],
+    [t, tokens, dateFilter, resetPage],
   );
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper }}>
       <PageHeader
-        title="Wallet"
+        title={t("wallet.title")}
         showBack
         right={<NotificationBell />}
         backgroundColor={tokens.card}
@@ -553,7 +562,7 @@ export default function TransactionHistoryScreen() {
         <View style={styles.center}>
           <Text style={{ fontSize: 40, marginBottom: 12 }}>⚠️</Text>
           <Text style={[styles.errorTitle, { color: tokens.ink }]}>
-            Couldn't load transactions
+            {t("transactions.load_failed")}
           </Text>
           <Text style={[styles.errorText, { color: tokens.inkMuted }]}>
             {(() => {
@@ -569,7 +578,7 @@ export default function TransactionHistoryScreen() {
             style={[styles.retryBtn, { backgroundColor: tokens.mint }]}
           >
             <Text style={[styles.retryText, { color: tokens.mintText }]}>
-              Tap to retry
+              {t("transactions.tap_retry")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -583,10 +592,10 @@ export default function TransactionHistoryScreen() {
         >
           <Text style={{ fontSize: 40, marginBottom: 12 }}>📭</Text>
           <Text style={[styles.emptyTitle, { color: tokens.ink }]}>
-            No transactions found
+            {t("transactions.no_transactions")}
           </Text>
           <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>
-            Try adjusting your filters or search query
+            {t("transactions.no_transactions_hint")}
           </Text>
         </View>
       ) : (
@@ -611,11 +620,11 @@ export default function TransactionHistoryScreen() {
                       },
                     ]}
                   >
-                    <Text
-                      style={[styles.balanceLabel, { color: tokens.inkMuted }]}
-                    >
-                      Available Balance
-                    </Text>
+                      <Text
+                        style={[styles.balanceLabel, { color: tokens.inkMuted }]}
+                      >
+                        {t("wallet.balance_label")}
+                      </Text>
                     <View
                       style={{ flexDirection: "row", alignItems: "baseline" }}
                     >
@@ -634,7 +643,7 @@ export default function TransactionHistoryScreen() {
                         ]}
                       >
                         {" "}
-                        pts
+                        {t("wallet.points_suffix")}
                       </Text>
                     </View>
                     <Text
@@ -683,19 +692,19 @@ export default function TransactionHistoryScreen() {
                         }
                         style={{ marginRight: 4 }}
                       />
-                      <Text
-                        style={[
-                          styles.filterLabel,
-                          {
-                            color:
-                              dateFilter === f.key
-                                ? tokens.mintText
-                                : tokens.inkMuted,
-                          },
-                        ]}
-                      >
-                        {f.label}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.filterLabel,
+                            {
+                              color:
+                                dateFilter === f.key
+                                  ? tokens.mintText
+                                  : tokens.inkMuted,
+                            },
+                          ]}
+                        >
+                          {t(f.label)}
+                        </Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -760,7 +769,7 @@ export default function TransactionHistoryScreen() {
                 />
                 <TextInput
                   style={[styles.searchInput, { color: tokens.ink }]}
-                  placeholder="Search transactions..."
+                  placeholder={t("transactions.search_placeholder")}
                   placeholderTextColor={tokens.inkMuted}
                   value={search}
                   onChangeText={(text) => {
@@ -792,10 +801,10 @@ export default function TransactionHistoryScreen() {
             >
               <Text style={{ fontSize: 40, marginBottom: 12 }}>📭</Text>
               <Text style={[styles.emptyTitle, { color: tokens.ink }]}>
-                No transactions found
+                {t("transactions.no_transactions")}
               </Text>
               <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>
-                Try adjusting your filters or search query
+                {t("transactions.no_transactions_hint")}
               </Text>
             </View>
           }

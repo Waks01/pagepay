@@ -1,8 +1,9 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, StyleProp, ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, StyleProp, ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { PagePaySpinner } from './PagePaySpinner';
 
 type Variant = 'mint' | 'ink' | 'ghost';
 
@@ -78,7 +79,7 @@ export function PrimaryButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={fg} />
+        <PagePaySpinner size={24} />
       ) : (
         <Text style={[styles.label, { color: fg }]}>{title}</Text>
       )}

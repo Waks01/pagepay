@@ -19,7 +19,7 @@ type ProgressDashboardProps = {
   mastered: number;
   reviewing: number;
   notStarted: number;
-  progress: ProgressItem[];
+  progress?: ProgressItem[];
 };
 
 const STATUS_CONFIG: Record<
@@ -42,6 +42,7 @@ export function ProgressDashboard({
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
 
+  const safeProgress = progress ?? [];
   const overallMastery = totalTopics > 0 ? Math.round((mastered / totalTopics) * 100) : 0;
 
   return (
@@ -68,7 +69,7 @@ export function ProgressDashboard({
 
       {/* Per-topic list — keeps the existing icon-badge layout, just tokenized. */}
       <View style={styles.list}>
-        {progress.map((item) => {
+        {safeProgress.map((item) => {
           const config = STATUS_CONFIG[item.status] || STATUS_CONFIG['not_started'];
           const tint = (tokens as any)[config.tint] as string;
           const soft = (tokens as any)[config.soft] as string;

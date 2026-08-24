@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,12 +12,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { PageHeader } from '@/components/PageHeader';
+import { PagePaySpinner } from '@/components/PagePaySpinner';
 
 type ExamType = 'jamb' | 'waec' | 'neco' | 'nabteb' | 'custom' | null;
 
@@ -48,6 +49,7 @@ const EXAM_TYPES: { value: ExamType; label: string; duration: number; questions:
 ];
 
 export default function ExamModeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
@@ -311,7 +313,7 @@ export default function ExamModeScreen() {
             accessibilityState={{ disabled: currentQuestionIndex === 0 }}
           >
             <Ionicons name="chevron-back" size={18} color={tokens.ink} />
-            <Text style={[styles.navBtnText, { color: tokens.ink }]}>Previous</Text>
+              <Text style={[styles.navBtnText, { color: tokens.ink }]}>{t('study.exam_mode.previous')}</Text>
           </Pressable>
 
           {currentQuestionIndex < questions.length - 1 ? (
@@ -319,7 +321,7 @@ export default function ExamModeScreen() {
               onPress={() => setCurrentQuestionIndex((prev) => prev + 1)}
               style={({ pressed }) => [styles.navBtn, { backgroundColor: tokens.mint, opacity: pressed ? 0.85 : 1 }]}
             >
-              <Text style={[styles.navBtnText, { color: tokens.mintText }]}>Next</Text>
+              <Text style={[styles.navBtnText, { color: tokens.mintText }]}>{t('study.exam_mode.next')}</Text>
               <Ionicons name="chevron-forward" size={18} color={tokens.mintText} />
             </Pressable>
           ) : (
@@ -327,7 +329,7 @@ export default function ExamModeScreen() {
               onPress={handleSubmitExam}
               style={({ pressed }) => [styles.navBtn, { backgroundColor: tokens.signal, opacity: pressed ? 0.85 : 1 }]}
             >
-              <Text style={[styles.navBtnText, { color: '#fff' }]}>Submit</Text>
+              <Text style={[styles.navBtnText, { color: '#fff' }]}>{t('study.exam_mode.submit')}</Text>
               <Ionicons name="checkmark" size={18} color="#fff" />
             </Pressable>
           )}
@@ -344,7 +346,7 @@ export default function ExamModeScreen() {
 
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
-        <PageHeader title="Exam Result" showBack onBack={() => router.back()} backgroundColor={tokens.card} borderBottomColor={tokens.border} tokens={tokens} />
+        <PageHeader title={t('study.exam_mode.exam_result')} showBack onBack={() => router.back()} backgroundColor={tokens.card} borderBottomColor={tokens.border} tokens={tokens} />
         <ScrollView contentContainerStyle={styles.resultScroll}>
           <Animated.View entering={FadeInDown.duration(320).springify()} style={styles.resultHero}>
             <View style={[styles.resultBadge, { backgroundColor: passed ? tokens.mintSoft : tokens.signalFaint }]}>
@@ -357,7 +359,7 @@ export default function ExamModeScreen() {
             <Text
               style={[styles.resultTitle, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}
             >
-              {passed ? 'You passed!' : 'Almost there.'}
+              {passed ? t('study.exam_mode.you_passed') : t('study.exam_mode.almost_there')}
             </Text>
             <Text style={[styles.resultSubtitle, { color: tokens.inkMuted }]}>
               {passed
@@ -371,27 +373,27 @@ export default function ExamModeScreen() {
               {score}
               <Text style={[styles.scorePctSym, { color: passed ? tokens.mint : tokens.signal }]}>%</Text>
             </Text>
-            <Text style={[styles.scoreLabel, { color: tokens.inkMuted }]}>FINAL SCORE</Text>
+            <Text style={[styles.scoreLabel, { color: tokens.inkMuted }]}>{t('study.exam_mode.final_score')}</Text>
           </Animated.View>
 
           <View style={styles.resultStats}>
             <Animated.View entering={FadeInDown.delay(200).duration(220)} style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
               <Text style={[styles.statValue, { color: tokens.mint, fontFamily: Fonts.editorialSemiBold as string }]}>{correctCount}</Text>
-              <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>Correct</Text>
+              <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>{t('study.exam_mode.correct')}</Text>
             </Animated.View>
             <Animated.View entering={FadeInDown.delay(260).duration(220)} style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
               <Text style={[styles.statValue, { color: tokens.signal, fontFamily: Fonts.editorialSemiBold as string }]}>{wrongCount}</Text>
-              <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>Wrong</Text>
+              <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>{t('study.exam_mode.wrong')}</Text>
             </Animated.View>
             <Animated.View entering={FadeInDown.delay(320).duration(220)} style={[styles.statBox, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
               <Text style={[styles.statValue, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>{questions.length}</Text>
-              <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>Total</Text>
+              <Text style={[styles.statLabel, { color: tokens.inkMuted }]}>{t('study.exam_mode.total')}</Text>
             </Animated.View>
           </View>
 
           <View style={styles.resultActions}>
-            <PrimaryButton title="Back to Setup" onPress={handleRestart} variant="mint" style={{ width: '100%' }} />
-            <PrimaryButton title="Done" onPress={() => router.back()} variant="ghost" style={{ width: '100%' }} />
+            <PrimaryButton title={t('study.exam_mode.back_to_setup')} onPress={handleRestart} variant="mint" style={{ width: '100%' }} />
+            <PrimaryButton title={t('study.exam_mode.done')} onPress={() => router.back()} variant="ghost" style={{ width: '100%' }} />
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -403,8 +405,8 @@ export default function ExamModeScreen() {
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: tokens.paper }}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <PageHeader
-          title="Exam Mode"
-          subtitle="Timed mock test, scored automatically"
+          title={t('study.exam_mode.title')}
+          subtitle={t('study.exam_mode.subtitle')}
           showBack
           onBack={() => router.back()}
           backgroundColor={tokens.card}
@@ -431,7 +433,7 @@ export default function ExamModeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Retry"
               >
-                <Text style={styles.retryText}>Retry</Text>
+                <Text style={styles.retryText}>{t('study.exam_mode.retry')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -448,7 +450,7 @@ export default function ExamModeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={[styles.sectionLabel, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
-              Pick exam type
+              {t('study.exam_mode.pick_exam_type')}
             </Text>
             <Text style={[styles.sectionMeta, { color: tokens.inkMuted }]}>{EXAM_TYPES.length} options</Text>
           </View>
@@ -493,7 +495,7 @@ export default function ExamModeScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <Text style={[styles.sectionLabel, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
-                Choose material
+                {t('study.exam_mode.choose_material')}
               </Text>
               <Text style={[styles.sectionMeta, { color: tokens.inkMuted }]}>
                 {materialsQ.data?.length ?? 0} available
@@ -501,7 +503,7 @@ export default function ExamModeScreen() {
             </View>
             {materialsQ.isLoading ? (
               <View style={[styles.stateBlock, { borderColor: tokens.border }]}>
-                <ActivityIndicator size="small" color={tokens.mint} />
+                <PagePaySpinner size={32} />
               </View>
             ) : materialsQ.data && materialsQ.data.length > 0 ? (
               <View style={styles.materialList}>
@@ -560,14 +562,14 @@ export default function ExamModeScreen() {
                 {examConfig.duration} min · {examConfig.questions} questions
               </Text>
               <Text style={[styles.summarySub, { color: tokens.mint }]}>
-                60% required to pass · timed, single attempt
+                {t('study.exam_mode.pass_requirement')}
               </Text>
             </View>
           </View>
         )}
 
         <PrimaryButton
-          title={submitting ? 'Preparing exam…' : 'Start Exam'}
+          title={submitting ? t('study.exam_mode.preparing_exam') : t('study.exam_mode.start_exam')}
           onPress={handleStartExam}
           loading={submitting}
           disabled={!selectedExamType || !selectedMaterialId || submitting}

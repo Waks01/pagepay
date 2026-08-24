@@ -170,7 +170,7 @@ export default function TransactionDetailScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: tokens.paper }}>
         <PageHeader
-          title="Transaction"
+          title={t("transactions.title")}
           showBack
           backgroundColor={tokens.card}
           borderBottomColor={tokens.border}
@@ -190,7 +190,7 @@ export default function TransactionDetailScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: tokens.paper }}>
         <PageHeader
-          title="Transaction"
+          title={t("transactions.title")}
           showBack
           backgroundColor={tokens.card}
           borderBottomColor={tokens.border}
@@ -198,12 +198,12 @@ export default function TransactionDetailScreen() {
           tokens={tokens}
         />
         <View style={styles.center}>
-          <Text style={[styles.errorText, { color: tokens.inkMuted }]}>{error || 'Transaction not found'}</Text>
+          <Text style={[styles.errorText, { color: tokens.inkMuted }]}>{error || t("transactions.transaction_not_found")}</Text>
           <TouchableOpacity
             onPress={() => router.back()}
             style={[styles.backBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
           >
-            <Text style={{ color: tokens.mint, fontWeight: '600' }}>Go back</Text>
+            <Text style={{ color: tokens.mint, fontWeight: '600' }}>{t("transactions.go_back")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -245,15 +245,23 @@ export default function TransactionDetailScreen() {
   const handleShareAction = async (action: 'share-image' | 'save-image' | 'share-pdf' | 'save-pdf') => {
     setSharing(true);
     try {
+      const typeLabel = t(`transaction_detail.types.${txType}`);
+      const receiptMessage = t('transaction_detail.share_receipt', {
+        type: typeLabel,
+        description: d.description as string,
+        amount: `${isPositive ? '+' : '-'}${absPoints} pts`,
+        status: status.charAt(0).toUpperCase() + status.slice(1),
+        date: dateStr,
+      });
       if (action === 'share-image' || action === 'save-image') {
         await Share.share({
-          message: `PagePay Receipt\n${meta.label}: ${d.description}\nAmount: ${isPositive ? '+' : '-'}${absPoints} pts\nStatus: ${status}\nDate: ${dateStr}`,
+          message: receiptMessage,
           title: 'PagePay Receipt',
         });
       } else if (action === 'share-pdf' || action === 'save-pdf') {
         await Share.share({
-          message: `PagePay Receipt\n${meta.label}: ${d.description}\nAmount: ${isPositive ? '+' : '-'}${absPoints} pts\nStatus: ${status}\nDate: ${dateStr}`,
-          title: 'PagePay Receipt PDF',
+          message: receiptMessage,
+          title: t('transaction_detail.share_receipt_pdf'),
         });
       }
     } catch {
@@ -266,162 +274,185 @@ export default function TransactionDetailScreen() {
 
   const renderTypeDetails = () => {
     const details = (d as any).details || {};
+    const sectionKey = {
+      airtime: 'sections.airtime',
+      data: 'sections.data',
+      electricity: 'sections.electricity',
+      internet: 'sections.internet',
+      tv: 'sections.tv',
+      recharge: 'sections.recharge',
+      betting: 'sections.betting',
+      isp: 'sections.isp',
+      education: 'sections.education',
+      sms: 'sections.sms',
+      wallet: 'sections.wallet',
+      withdraw: 'sections.withdrawal',
+      ad: 'sections.ad_reward',
+      read: 'sections.reading',
+      study: 'sections.study',
+      premium: 'sections.subscription',
+      bonus: 'sections.bonus',
+    }[txType] ?? 'sections.transaction_info';
+
+    const row = (key: string, value: string | number, mono = false) =>
+      DetailRow(t(`transaction_detail.labels.${key}`), String(value), mono, tokens);
+
     switch (txType) {
       case 'airtime':
         return (
-          <DetailSection title="Airtime Details" tokens={tokens}>
-            {DetailRow('Network', details.network as string || 'N/A', false, tokens)}
-            {DetailRow('Phone Number', details.phone as string || 'N/A', false, tokens)}
-            {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('network', details.network as string || 'N/A')}
+            {row('phone_number', details.phone as string || 'N/A')}
+            {row('amount_paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`)}
+            {row('points_earned', `+${absPoints} pts`)}
           </DetailSection>
         );
       case 'data':
         return (
-          <DetailSection title="Data Bundle Details" tokens={tokens}>
-            {DetailRow('Network', details.network as string || 'N/A', false, tokens)}
-            {DetailRow('Phone Number', details.phone as string || 'N/A', false, tokens)}
-            {DetailRow('Plan', details.plan as string || 'N/A', false, tokens)}
-            {DetailRow('Validity', details.validity as string || 'N/A', false, tokens)}
-            {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('network', details.network as string || 'N/A')}
+            {row('phone_number', details.phone as string || 'N/A')}
+            {row('plan', details.plan as string || 'N/A')}
+            {row('validity', details.validity as string || 'N/A')}
+            {row('amount_paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`)}
+            {row('points_earned', `+${absPoints} pts`)}
           </DetailSection>
         );
       case 'electricity':
         return (
-          <DetailSection title="Electricity Bill Details" tokens={tokens}>
-            {DetailRow('Disco', details.disco as string || 'N/A', false, tokens)}
-            {DetailRow('Meter Number', details.meterNumber as string || 'N/A', false, tokens)}
-            {DetailRow('Units Purchased', `${details.units as number || 0} kWh`, false, tokens)}
-            {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('disco', details.disco as string || 'N/A')}
+            {row('meter_number', details.meterNumber as string || 'N/A')}
+            {row('units_purchased', `${details.units as number || 0} kWh`)}
+            {row('amount_paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`)}
+            {row('points_earned', `+${absPoints} pts`)}
           </DetailSection>
         );
       case 'internet':
         return (
-          <DetailSection title="Internet Payment Details" tokens={tokens}>
-            {DetailRow('Provider', details.provider as string || 'N/A', false, tokens)}
-            {DetailRow('Account', details.account as string || 'N/A', false, tokens)}
-            {DetailRow('Plan', details.plan as string || 'N/A', false, tokens)}
-            {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('provider', details.provider as string || 'N/A')}
+            {row('account', details.account as string || 'N/A')}
+            {row('plan', details.plan as string || 'N/A')}
+            {row('amount_paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`)}
+            {row('points_earned', `+${absPoints} pts`)}
           </DetailSection>
         );
       case 'tv':
         return (
-          <DetailSection title="TV Subscription Details" tokens={tokens}>
-            {DetailRow('Provider', details.provider as string || 'N/A', false, tokens)}
-            {DetailRow('Smartcard No.', details.smartcard as string || 'N/A', false, tokens)}
-            {DetailRow('Package', details.package as string || 'N/A', false, tokens)}
-            {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('provider', details.provider as string || 'N/A')}
+            {row('smartcard', details.smartcard as string || 'N/A')}
+            {row('package', details.package as string || 'N/A')}
+            {row('amount_paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`)}
+            {row('points_earned', `+${absPoints} pts`)}
           </DetailSection>
         );
       case 'recharge':
         return (
-          <DetailSection title="Recharge Pin Details" tokens={tokens}>
-            {DetailRow('Pin Code', details.pin as string || 'N/A', false, tokens)}
-            {DetailRow('Pin Value', `₦${((details.value as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('pin_code', details.pin as string || 'N/A')}
+            {row('pin_value', `₦${((details.value as number) || 0).toLocaleString()}`)}
+            {row('points_earned', `+${absPoints} pts`)}
           </DetailSection>
         );
       case 'betting':
         return (
-          <DetailSection title="Betting Funding Details" tokens={tokens}>
-            {DetailRow('Platform', details.site as string || 'N/A', false, tokens)}
-            {DetailRow('Username', details.username as string || 'N/A', false, tokens)}
-            {DetailRow('Amount Funded', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('platform', details.site as string || 'N/A')}
+            {row('username', details.username as string || 'N/A')}
+            {row('amount_funded', `₦${((details.amountNaira as number) || 0).toLocaleString()}`)}
+            {row('points_earned', `+${absPoints} pts`)}
           </DetailSection>
         );
       case 'isp':
         return (
-          <DetailSection title="ISP Payment Details" tokens={tokens}>
-            {DetailRow('Provider', details.provider as string || 'N/A', false, tokens)}
-            {DetailRow('Account', details.account as string || 'N/A', false, tokens)}
-            {DetailRow('Plan', details.plan as string || 'N/A', false, tokens)}
-            {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('provider', details.provider as string || 'N/A')}
+            {row('account', details.account as string || 'N/A')}
+            {row('plan', details.plan as string || 'N/A')}
+            {row('amount_paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`)}
+            {row('points_earned', `+${absPoints} pts`)}
           </DetailSection>
         );
       case 'education':
         return (
-          <DetailSection title="Education Payment Details" tokens={tokens}>
-            {DetailRow('Exam Type', details.examType as string || 'N/A', false, tokens)}
-            {DetailRow('Registration ID', details.registrationId as string || 'N/A', false, tokens)}
-            {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('exam_type', details.examType as string || 'N/A')}
+            {row('registration_id', details.registrationId as string || 'N/A')}
+            {row('amount_paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`)}
+            {row('points_earned', `+${absPoints} pts`)}
           </DetailSection>
         );
       case 'sms':
         return (
-          <DetailSection title="Bulk SMS Details" tokens={tokens}>
-            {DetailRow('Sender ID', details.senderId as string || 'N/A', false, tokens)}
-            {DetailRow('Units Purchased', `${details.units as number || 0}`, false, tokens)}
-            {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('sender_id', details.senderId as string || 'N/A')}
+            {row('units_purchased', `${details.units as number || 0}`)}
+            {row('amount_paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`)}
+            {row('points_earned', `+${absPoints} pts`)}
           </DetailSection>
         );
       case 'wallet':
         return (
-          <DetailSection title="Wallet Funding Details" tokens={tokens}>
-            {DetailRow('Source', details.source as string || 'N/A', false, tokens)}
-            {DetailRow('Amount', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Reference', details.reference as string || 'N/A', false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('source', details.source as string || 'N/A')}
+            {row('amount', `₦${((details.amountNaira as number) || 0).toLocaleString()}`)}
+            {row('reference', details.reference as string || 'N/A', true)}
           </DetailSection>
         );
       case 'withdraw':
         return (
           <>
-            <DetailSection title="Withdrawal Details" tokens={tokens}>
-              {DetailRow('Amount', `${absPoints} pts`, false, tokens)}
-              {DetailRow('Fee', `${(details.fee || 0).toLocaleString()} pts`, false, tokens)}
-              {DetailRow('Total Debited', `${(absPoints + (details.fee || 0)).toLocaleString()} pts`, false, tokens)}
-              {DetailRow('Balance After', `${(details.balanceAfter || 0).toLocaleString()} pts`, false, tokens, true)}
+            <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+              {row('amount', `${absPoints} pts`)}
+              {row('fee', `${(details.fee || 0).toLocaleString()} pts`)}
+              {row('total_debited', `${(absPoints + (details.fee || 0)).toLocaleString()} pts`)}
+              {row('balance_after', `${(details.balanceAfter || 0).toLocaleString()} pts`, true)}
             </DetailSection>
-            <DetailSection title="Bank Details" tokens={tokens}>
-              {DetailRow('Bank', (details.bank as string) || 'N/A', false, tokens)}
-              {DetailRow('Account', `****${(details.accountLast4 as string) || '0000'}`, false, tokens, true)}
+            <DetailSection title={t('transaction_detail.sections.bank')} tokens={tokens}>
+              {row('bank', (details.bank as string) || 'N/A')}
+              {row('account', `****${(details.accountLast4 as string) || '0000'}`, true)}
             </DetailSection>
           </>
         );
       case 'ad':
         return (
-          <DetailSection title="Ad Reward Details" tokens={tokens}>
-            {DetailRow('Ad Type', details.adType as string || 'N/A', false, tokens)}
-            {DetailRow('Reward Earned', `+${absPoints} pts`, false, tokens)}
-            {DetailRow('Campaign ID', details.campaign as string || 'N/A', false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('ad_type', details.adType as string || 'N/A')}
+            {row('reward_earned', `+${absPoints} pts`)}
+            {row('campaign_id', details.campaign as string || 'N/A', true)}
           </DetailSection>
         );
       case 'read':
         return (
-          <DetailSection title="Reading Reward Details" tokens={tokens}>
-            {DetailRow('Book Title', details.title as string || 'N/A', false, tokens)}
-            {DetailRow('Pages Read', `${details.pages as number || 0}`, false, tokens)}
-            {DetailRow('Reward Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('book_title', details.title as string || 'N/A')}
+            {row('pages_read', `${details.pages as number || 0}`)}
+            {row('reward_earned', `+${absPoints} pts`, true)}
           </DetailSection>
         );
       case 'study':
         return (
-          <DetailSection title="Study Session Details" tokens={tokens}>
-            {DetailRow('Topic', details.topic as string || 'N/A', false, tokens)}
-            {DetailRow('Duration', details.duration as string || 'N/A', false, tokens)}
-            {DetailRow('Points Earned', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('topic', details.topic as string || 'N/A')}
+            {row('duration', details.duration as string || 'N/A')}
+            {row('points_earned', `+${absPoints} pts`, true)}
           </DetailSection>
         );
       case 'premium':
         return (
-          <DetailSection title="Subscription Details" tokens={tokens}>
-            {DetailRow('Plan', details.plan as string || 'N/A', false, tokens)}
-            {DetailRow('Amount Paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`, false, tokens)}
-            {DetailRow('Next Billing', details.nextBilling as string || 'N/A', false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('plan', details.plan as string || 'N/A')}
+            {row('amount_paid', `₦${((details.amountNaira as number) || 0).toLocaleString()}`)}
+            {row('next_billing', details.nextBilling as string || 'N/A', true)}
           </DetailSection>
         );
       case 'bonus':
         return (
-          <DetailSection title="Bonus Details" tokens={tokens}>
-            {DetailRow('Reason', details.reason as string || 'N/A', false, tokens)}
-            {DetailRow('Bonus Points', `+${absPoints} pts`, false, tokens, true)}
+          <DetailSection title={t(`transaction_detail.${sectionKey}`)} tokens={tokens}>
+            {row('reason', details.reason as string || 'N/A')}
+            {row('bonus_points', `+${absPoints} pts`, true)}
           </DetailSection>
         );
       default:
@@ -435,7 +466,7 @@ export default function TransactionDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: tokens.paper }}>
       <PageHeader
-        title={`${meta.label} Details`}
+        title={t(`transaction_detail.headers.${txType}`)}
         showBack
         backgroundColor={tokens.card}
         borderBottomColor={tokens.border}
@@ -460,7 +491,7 @@ export default function TransactionDetailScreen() {
           <Text style={[styles.heroAmount, { color: isPositive ? tokens.mint : tokens.ink }]}>
             {isPositive ? '+' : '-'}{absPoints.toLocaleString()}
           </Text>
-          <Text style={[styles.heroLabel, { color: tokens.inkMuted }]}>Points</Text>
+          <Text style={[styles.heroLabel, { color: tokens.inkMuted }]}>{t('transaction_detail.labels.points')}</Text>
           <Text style={[styles.heroDesc, { color: tokens.inkMuted }]} numberOfLines={1}>
             {d.description as string}
           </Text>
@@ -470,12 +501,12 @@ export default function TransactionDetailScreen() {
         {renderTypeDetails()}
 
         {/* Transaction Information */}
-        <DetailSection title="Transaction Information" tokens={tokens}>
-          {DetailRow('Transaction ID', txId as string, true, tokens)}
-          {DetailRow('Reference', ref as string, true, tokens)}
-          {DetailRow('Date & Time', `${dateStr} · ${timeStr}`, false, tokens)}
-          {DetailRow('Type', meta.label, false, tokens)}
-          {DetailRow('Status', status.charAt(0).toUpperCase() + status.slice(1), false, tokens, true)}
+        <DetailSection title={t('transaction_detail.sections.transaction_info')} tokens={tokens}>
+          {DetailRow(t('transaction_detail.labels.transaction_id'), txId as string, true, tokens)}
+          {DetailRow(t('transaction_detail.labels.reference'), ref as string, true, tokens)}
+          {DetailRow(t('transaction_detail.labels.date_time'), `${dateStr} · ${timeStr}`, false, tokens)}
+          {DetailRow(t('transaction_detail.labels.type'), t(`transaction_detail.types.${txType}`), false, tokens)}
+          {DetailRow(t('transaction_detail.labels.status'), status.charAt(0).toUpperCase() + status.slice(1), false, tokens, true)}
         </DetailSection>
 
         {/* Actions — wrapped in a card section per the design preview. */}
@@ -486,15 +517,15 @@ export default function TransactionDetailScreen() {
               style={[styles.actionBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
             >
               <Ionicons name="share-outline" size={18} color={tokens.ink} />
-              <Text style={[styles.actionBtnText, { color: tokens.ink }]}>Share Receipt</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {}}
-              style={[styles.actionBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
-            >
-              <Ionicons name="chatbubble-outline" size={18} color={tokens.ink} />
-              <Text style={[styles.actionBtnText, { color: tokens.ink }]}>Support</Text>
-            </TouchableOpacity>
+               <Text style={[styles.actionBtnText, { color: tokens.ink }]}>{t('transactions.share_receipt')}</Text>
+             </TouchableOpacity>
+             <TouchableOpacity
+               onPress={() => {}}
+               style={[styles.actionBtn, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+             >
+               <Ionicons name="chatbubble-outline" size={18} color={tokens.ink} />
+               <Text style={[styles.actionBtnText, { color: tokens.ink }]}>{t('transactions.support')}</Text>
+             </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -506,7 +537,7 @@ export default function TransactionDetailScreen() {
           <Pressable style={styles.shareBackdrop} onPress={closeShare} />
           <View style={[styles.shareSheet, { backgroundColor: tokens.card }]}>
             <View style={[styles.shareHandle, { backgroundColor: tokens.border }]} />
-            <Text style={[styles.shareTitle, { color: tokens.ink }]}>Share Receipt</Text>
+             <Text style={[styles.shareTitle, { color: tokens.ink }]}>{t('transactions.share_receipt')}</Text>
 
             <TouchableOpacity
               style={[styles.shareOption, { backgroundColor: tokens.paper, borderColor: tokens.border }]}
@@ -517,8 +548,8 @@ export default function TransactionDetailScreen() {
                 <Ionicons name="image-outline" size={22} color={tokens.mint} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>Share as Image</Text>
-                <Text style={[styles.shareOptionDesc, { color: tokens.inkMuted }]}>Send receipt as an image</Text>
+                 <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>{t('transactions.share_as_image')}</Text>
+                 <Text style={[styles.shareOptionDesc, { color: tokens.inkMuted }]}>{t('transactions.send_receipt_image')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} />
             </TouchableOpacity>
@@ -532,8 +563,8 @@ export default function TransactionDetailScreen() {
                 <Ionicons name="download-outline" size={22} color={tokens.mint} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>Save as Image</Text>
-                <Text style={[styles.shareOptionDesc, { color: tokens.inkMuted }]}>Save receipt image to gallery</Text>
+                 <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>{t('transactions.save_as_image')}</Text>
+                 <Text style={[styles.shareOptionDesc, { color: tokens.inkMuted }]}>{t('transactions.save_receipt_image')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} />
             </TouchableOpacity>
@@ -549,8 +580,8 @@ export default function TransactionDetailScreen() {
                 <Ionicons name="document-outline" size={22} color={tokens.error} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>Share as PDF</Text>
-                <Text style={[styles.shareOptionDesc, { color: tokens.inkMuted }]}>Send receipt as PDF document</Text>
+                 <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>{t('transactions.share_as_pdf')}</Text>
+                 <Text style={[styles.shareOptionDesc, { color: tokens.inkMuted }]}>{t('transactions.send_receipt_pdf')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} />
             </TouchableOpacity>
@@ -564,14 +595,14 @@ export default function TransactionDetailScreen() {
                 <Ionicons name="download-outline" size={22} color={tokens.error} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>Save as PDF</Text>
-                <Text style={[styles.shareOptionDesc, { color: tokens.inkMuted }]}>Save receipt PDF to files</Text>
+                 <Text style={[styles.shareOptionTitle, { color: tokens.ink }]}>{t('transactions.save_as_pdf')}</Text>
+                 <Text style={[styles.shareOptionDesc, { color: tokens.inkMuted }]}>{t('transactions.save_receipt_pdf')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} />
             </TouchableOpacity>
 
             <TouchableOpacity onPress={closeShare} style={styles.shareCancel}>
-              <Text style={[styles.shareCancelText, { color: tokens.inkMuted }]}>Cancel</Text>
+              <Text style={[styles.shareCancelText, { color: tokens.inkMuted }]}>{t('transactions.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>

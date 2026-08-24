@@ -38,3 +38,12 @@ resend==2.4.0
 
 # v3 §3.3 Listen mode — TTS audio generation
 edge-tts==6.1.18
+apscheduler==3.10.4
+
+# PDF generation for bill receipts
+reportlab==4.2.5
+qrcode[pil]==8.0
+
+# Redis for purchase rate limiting
+redis==5.2.1
+aioredis==2.0.1

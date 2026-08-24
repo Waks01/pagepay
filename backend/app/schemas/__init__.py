@@ -180,7 +180,14 @@ class BillTransactionOut(BaseModel):
     status: str
     external_ref: str | None
     error_message: str | None
+    
+    # Delivery verification fields
+    delivery_status: str | None
+    delivery_verified_at: datetime | None
+    delivery_message: str | None
+    
     created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -1976,3 +1983,126 @@ class FillRateFunnelItem(BaseModel):
     show_rate: float
     completion_rate: float
     overall_completion_rate: float
+
+
+
+# ── VTU Dispute/Refund schemas ──────────────────────────────────────
+
+
+class BillDisputeCreate(BaseModel):
+    """POST /bills/disputes - Open a dispute for a failed VTU transaction."""
+    transaction_reference: str = Field(min_length=1, max_length=100)
+    reason: str = Field(min_length=10, max_length=1000, description="Explain what went wrong with the purchase")
+
+
+class BillDisputeOut(BaseModel):
+    """One dispute record."""
+    id: int
+    user_id: int
+    transaction_id: int
+    transaction_reference: str
+    reason: str
+    status: str
+    amount_refunded: int | None
+    auto_refund_at: datetime | None
+    refunded_at: datetime | None
+    resolution_note: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BillDisputeListResponse(BaseModel):
+    """Paginated list of disputes."""
+    items: list[BillDisputeOut]
+    total: int
+    page: int
+    limit: int
+
+
+
+# ── Bulk Purchase schemas ───────────────────────────────────────────
+
+
+class BulkAirtimeRecipient(BaseModel):
+    """One recipient in a bulk airtime purchase."""
+    phone: str = Field(min_length=10, max_length=15)
+    network: str = Field(..., description="mtn, airtel, glo, 9mobile")
+    amount_naira: int = Field(ge=25, le=50000)
+
+
+class BulkAirtimePurchaseRequest(BaseModel):
+    """POST /bills/airtime/bulk - Buy airtime for multiple numbers."""
+    recipients: list[BulkAirtimeRecipient] = Field(min_length=1, max_length=50, description="Up to 50 recipients")
+
+
+class BulkPurchaseResult(BaseModel):
+    """Result for one recipient in bulk purchase."""
+    phone: str
+    network: str
+    amount_naira: int
+    status: str  # "success" | "failed"
+    reference: str | None = None
+    points_earned: int = 0
+    error_message: str | None = None
+
+
+class BulkAirtimePurchaseResponse(BaseModel):
+    """Response after bulk airtime purchase."""
+    total_requested: int
+    successful: int
+    failed: int
+    total_amount: int
+    total_points_earned: int
+    new_balance: int
+    results: list[BulkPurchaseResult]
+
+
+
+# ── Scheduled Bill schemas ──────────────────────────────────────────
+
+
+class ScheduledBillCreate(BaseModel):
+    """POST /bills/schedule - Create a scheduled/recurring bill purchase."""
+    service: Literal["airtime", "data"]
+    phone: str = Field(min_length=10, max_length=15)
+    network: str
+    amount_naira: int | None = Field(default=None, ge=25, le=50000, description="Required for airtime")
+    plan_code: str | None = Field(default=None, description="Required for data")
+    schedule_type: Literal["once", "daily", "weekly", "monthly"]
+    next_run_at: datetime = Field(description="When to first execute (ISO 8601)")
+
+
+class ScheduledBillOut(BaseModel):
+    """One scheduled bill record."""
+    id: int
+    user_id: int
+    service: str
+    phone: str
+    network: str
+    amount_naira: int
+    plan_code: str | None
+    schedule_type: str
+    next_run_at: datetime
+    last_run_at: datetime | None
+    status: str
+    execution_count: int
+    last_error: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ScheduledBillListResponse(BaseModel):
+    """Paginated list of scheduled bills."""
+    items: list[ScheduledBillOut]
+    total: int
+    page: int
+    limit: int
+
+
+class ScheduledBillCancelResponse(BaseModel):
+    """Response after cancelling a schedule."""
+    cancelled: bool
+    id: int
