@@ -110,6 +110,8 @@ export default function RootLayout() {
                 prev.filter((n) => n.id !== notification.id),
               );
             }, 8000);
+            queryClient.invalidateQueries({ queryKey: ["notifications"] });
+            queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
           });
         }
       } catch (error) {

@@ -82,7 +82,8 @@ export default function DailyRewardsScreen() {
   } = useQuery({
     queryKey: ["daily-reward-status"],
     queryFn: fetchDailyRewardStatus,
-    staleTime: 60 * 60 * 1000,
+    staleTime: 0, // Always fetch fresh data - reward status can change when user claims
+    cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes but always revalidate
   });
 
   const { data: rewardConfig = [] } = useQuery({
@@ -100,7 +101,9 @@ export default function DailyRewardsScreen() {
   const claimMutation = useMutation({
     mutationFn: claimDailyReward,
     onSuccess: () => {
+      // Invalidate the status query to force a refresh with the new streak
       queryClient.invalidateQueries({ queryKey: ["daily-reward-status"] });
+      console.log("[DailyRewards] Claim successful, invalidating status query");
     },
     onError: (error: Error) => {
       console.error("Daily reward claim error:", error.message);
@@ -122,6 +125,20 @@ export default function DailyRewardsScreen() {
   const todayReward = rewardStatus?.todays_reward;
   const canClaim = rewardStatus?.can_claim_today;
   const rewards = rewardConfig.length > 0 ? rewardConfig : [];
+
+  // Debug: Log to ensure we're using the correct streak
+  useEffect(() => {
+    if (rewardStatus) {
+      console.log(
+        "[DailyRewards] Reward streak:",
+        currentStreak,
+        "Can claim:",
+        canClaim,
+        "Next day:",
+        currentStreak + 1,
+      );
+    }
+  }, [rewardStatus, currentStreak, canClaim]);
 
   const weekProgress = useMemo(() => {
     const currentDayInWeek = currentStreak % 7 || 7;

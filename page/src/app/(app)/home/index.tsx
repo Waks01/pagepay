@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { fetchDailyRewardStatus } from "@/src/features/rewards/api";
@@ -202,40 +203,41 @@ export default function HomeScreen() {
       style={[styles.root, { backgroundColor: tokens.paper }]}
     >
       <View style={styles.header}>
-        {/* Row 1: avatar + streak + points + bell */}
+        {/* Row 1: avatar + daily rewards + points + bell */}
         <View style={styles.iconsRow}>
           <UserAvatar size={32} />
-          {streakData && streakData.current_streak > 0 && (
-            <TouchableOpacity
-              onPress={() => router.push("/rewards/daily")}
-              style={[
-                styles.streakBadge,
-                { backgroundColor: tokens.mintSoft, borderColor: tokens.mint },
-              ]}
-            >
-              <Text style={styles.streakEmoji}>🔥</Text>
-              <Text style={[styles.streakText, { color: tokens.mint }]}>
-                {streakData.current_streak}d
-              </Text>
-            </TouchableOpacity>
-          )}
 
-          {/* Daily Rewards Button */}
+          {/* Daily Rewards Button - shows streak if active, otherwise gift icon */}
           <TouchableOpacity
             onPress={() => router.push("/rewards/daily")}
             style={[
-              styles.rewardsButton,
-              { backgroundColor: tokens.card, borderColor: tokens.border },
+              streakData && streakData.current_streak > 0
+                ? styles.streakBadge
+                : styles.rewardsButton,
+              streakData && streakData.current_streak > 0
+                ? { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }
+                : { backgroundColor: tokens.card, borderColor: tokens.border },
             ]}
           >
-            <Text style={styles.rewardsEmoji}>🎁</Text>
-            {dailyRewardsQuery.data?.can_claim_today && (
-              <View
-                style={[
-                  styles.rewardsBadge,
-                  { backgroundColor: tokens.accent },
-                ]}
-              />
+            {streakData && streakData.current_streak > 0 ? (
+              <>
+                <Text style={styles.streakEmoji}>🔥</Text>
+                <Text style={[styles.streakText, { color: tokens.mint }]}>
+                  {streakData.current_streak}d
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.rewardsEmoji}>🎁</Text>
+                {dailyRewardsQuery.data?.can_claim_today && (
+                  <View
+                    style={[
+                      styles.rewardsBadge,
+                      { backgroundColor: tokens.accent },
+                    ]}
+                  />
+                )}
+              </>
             )}
           </TouchableOpacity>
 
@@ -468,6 +470,43 @@ export default function HomeScreen() {
             />
           </ScrollView>
         </View>
+
+        {/* Transaction History Quick Access */}
+        <TouchableOpacity
+          onPress={() => router.push("/home/transactions")}
+          style={[
+            styles.transactionCard,
+            { backgroundColor: tokens.card, borderColor: tokens.border },
+          ]}
+          activeOpacity={0.7}
+        >
+          <View style={styles.transactionLeft}>
+            <View
+              style={[
+                styles.transactionIcon,
+                { backgroundColor: tokens.mintSoft },
+              ]}
+            >
+              <Ionicons name="receipt-outline" size={22} color={tokens.mint} />
+            </View>
+            <View style={styles.transactionText}>
+              <Text
+                style={[
+                  styles.transactionTitle,
+                  { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+                ]}
+              >
+                {t("home.transaction_history")}
+              </Text>
+              <Text
+                style={[styles.transactionSubtitle, { color: tokens.inkMuted }]}
+              >
+                {t("home.transaction_history_subtitle")}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={tokens.inkMuted} />
+        </TouchableOpacity>
 
         {/* Browse by category */}
         <View style={styles.section}>
@@ -716,5 +755,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
+  },
+  transactionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 12,
+  },
+  transactionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  transactionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  transactionText: {
+    flex: 1,
+    gap: 4,
+  },
+  transactionTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+  },
+  transactionSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

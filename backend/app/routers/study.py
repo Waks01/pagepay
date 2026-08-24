@@ -28,6 +28,7 @@ from app.ai.prompts import (
     SOW_PARSER,
     VIDEO_SCRIPT_GENERATOR,
 )
+from app.ai.router import route_ai
 from app.models import (
     StudyAsset,
     StudyMaterial,

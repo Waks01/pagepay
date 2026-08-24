@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 from pydantic import BaseModel, Field
 
 from app.database import get_db
-from app.models import ReadingSession, ContentCatalog, AdEvent, User, Payment, BillTransaction, PayoutTransaction, PointCredit, StudyTransaction, StudyMaterial, PayoutAccount as PayoutAccountRow
+from app.models import ReadingSession, ContentCatalog, AdEvent, User, Payment, BillTransaction, PayoutTransaction, PointCredit, StudyTransaction, StudyMaterial, PayoutAccount as PayoutAccountRow, UserRewardClaim, DailyReward
 from app.routers.auth import get_current_user
 from app.routers.payouts import paystack_webhook as _payouts_paystack_webhook
 from app.services.paystack import get_client
@@ -110,6 +110,16 @@ async def list_transactions(
     )
     bill_txs = (await db.execute(bill_stmt)).scalars().all()
 
+    reward_claims = (
+        await db.execute(
+            select(UserRewardClaim, DailyReward)
+            .join(DailyReward, UserRewardClaim.reward_id == DailyReward.id)
+            .where(UserRewardClaim.user_id == current_user.id)
+            .order_by(UserRewardClaim.claimed_at.desc())
+            .limit(limit)
+        )
+    ).all()
+
     out: list[Transaction] = []
     for session, title, read_order, total_slices in sessions:
         sid = session.id
@@ -150,6 +160,15 @@ async def list_transactions(
                 id=bill.id, type="earn", points=bill.points_earned,
                 description=description,
                 date=bill.created_at,
+            )
+        )
+
+    for claim, reward in reward_claims:
+        out.append(
+            Transaction(
+                id=claim.id, type="earn", points=claim.points_earned,
+                description=f"Daily Reward - Day {claim.streak_day} ({reward.title})",
+                date=claim.claimed_at,
             )
         )
 
@@ -705,6 +724,33 @@ async def get_wallet_history(
             "details": {
                 "reason": credit.source,
                 "points": credit.points,
+            },
+        })
+
+    reward_claims = (
+        await db.execute(
+            select(UserRewardClaim, DailyReward)
+            .join(DailyReward, UserRewardClaim.reward_id == DailyReward.id)
+            .where(UserRewardClaim.user_id == current_user.id)
+            .order_by(UserRewardClaim.claimed_at.desc())
+        )
+    ).all()
+    for claim, reward in reward_claims:
+        items.append({
+            "kind": "daily_reward",
+            "type": "daily_reward",
+            "status": "success",
+            "txId": f"DRC-{claim.id}",
+            "ref": f"DRC-{claim.id}",
+            "description": f"Daily Reward - Day {claim.streak_day} ({reward.title})",
+            "points": claim.points_earned,
+            "amount": claim.points_earned,
+            "date": claim.claimed_at,
+            "details": {
+                "streak_day": claim.streak_day,
+                "reward_title": reward.title,
+                "reward_type": reward.reward_type,
+                "points_earned": claim.points_earned,
             },
         })
 

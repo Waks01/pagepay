@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack } from "expo-router";
 
 export default function HomeTabLayout() {
   return (
@@ -13,6 +13,7 @@ export default function HomeTabLayout() {
       <Stack.Screen name="buy-isp" />
       <Stack.Screen name="buy-education" />
       <Stack.Screen name="buy-sms" />
+      <Stack.Screen name="transactions" />
       <Stack.Screen name="bills-history" />
       <Stack.Screen name="beneficiaries" />
       <Stack.Screen name="payment-history" />
@@ -21,7 +22,7 @@ export default function HomeTabLayout() {
       <Stack.Screen name="forgot-password-otp" />
       <Stack.Screen name="reset-password" />
       <Stack.Screen name="legal" />
-      <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="modal" options={{ presentation: "modal" }} />
       <Stack.Screen name="animations-playground" />
       <Stack.Screen name="sponsor/register" />
       <Stack.Screen name="sponsor/kyc" />

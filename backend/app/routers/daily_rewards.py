@@ -62,11 +62,15 @@ async def _get_claimable_reward(user_streak: UserStreak, rewards: List[DailyRewa
     
     Uses reward_streak (claim-based) instead of current_streak (login-based).
     The reward day is based on consecutive days of claiming, not consecutive logins.
+    
+    IMPORTANT: This uses reward_streak which only increments when user CLAIMS a reward,
+    not when they just open the app. Login streaks are tracked separately.
     """
     if user_streak.last_reward_claim_date == today_str:
         return None  # Already claimed today
         
     # Use reward streak instead of login streak
+    # reward_streak tracks actual claims, not logins
     reward_day = user_streak.reward_streak + 1  # Next reward day to claim
     
     # Find the appropriate reward for the reward day
@@ -99,8 +103,32 @@ async def get_daily_reward_status(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get the user's current daily reward status - what they can claim today."""
+    """Get the user's current daily reward status - what they can claim today.
+    
+    IMPORTANT: This endpoint updates login streaks but NOT reward streaks.
+    Reward streaks only increment when the user actually claims via /daily/claim.
+    """
+    # Get the current streak state (updates login tracking, checks reward expiration)
+    streak_before = await db.execute(
+        select(UserStreak).where(UserStreak.user_id == current_user.id)
+    )
+    streak_before_obj = streak_before.scalar_one_or_none()
+    reward_streak_before = streak_before_obj.reward_streak if streak_before_obj else 0
+    
     streak = await _update_reward_streak(current_user.id, db, request)
+    
+    # Verify reward_streak only changes due to expiration, not due to login
+    if reward_streak_before > 0 and streak.reward_streak == 0:
+        logger.info(
+            "Reward streak expired: user=%d was=%d now=0",
+            current_user.id, reward_streak_before
+        )
+    elif reward_streak_before != streak.reward_streak:
+        logger.warning(
+            "UNEXPECTED reward_streak change in /daily/status: user=%d before=%d after=%d",
+            current_user.id, reward_streak_before, streak.reward_streak
+        )
+    
     rewards = await _get_or_create_default_rewards(db)
 
     client_date = request.headers.get("X-Client-Date")
@@ -127,8 +155,11 @@ async def get_daily_reward_status(
     )
     recent_claims = history_query.fetchall()
     
+    # IMPORTANT: Return reward_streak (claim-based), NOT current_streak (login-based)
+    # reward_streak only increments when user actually claims a reward
+    # current_streak increments every time user opens the app
     return DailyRewardStatus(
-        current_streak=streak.reward_streak,
+        current_streak=streak.reward_streak,  # This is the REWARD claim streak, not login streak
         longest_streak=streak.longest_reward_streak,
         can_claim_today=claimable_reward is not None,
         todays_reward=DailyRewardInfo(
