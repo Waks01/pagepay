@@ -26,7 +26,7 @@ import {
 } from "@/src/shared/lib/current-user";
 import { useStreak } from "@/src/features/community/hooks/use-community";
 import { displayName } from "@/src/shared/lib/display-name";
-import { formatPointsCompact } from "@/src/shared/lib/money";
+import { formatPointsCompact, POINTS_PER_NAIRA_VALUE } from "@/src/shared/lib/money";
 import { CategoryChip } from "@/components/CategoryChip";
 import { ContentCard, ContentItem } from "@/components/ContentCard";
 import { ResumeCard } from "@/components/ResumeCard";
@@ -191,7 +191,8 @@ export default function HomeScreen() {
     return t("home.greeting_night");
   }, [t]);
 
-  const points = user?.points_balance ?? 0;
+  const serviceCreditPoints = user?.service_credit_balance ?? 0;
+  const cashableNaira = (user?.cashable_balance ?? 0) / POINTS_PER_NAIRA_VALUE;
   const items = feedQuery.data ?? [];
   const streakData = streakQuery.data as { current_streak: number } | undefined;
 
@@ -244,7 +245,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             onPress={() => router.push("/wallet")}
             accessibilityRole="button"
-            accessibilityLabel={t("home.wallet_access", { points })}
+            accessibilityLabel={t("home.wallet_access", { points: serviceCreditPoints })}
             style={[
               styles.balanceChip,
               { backgroundColor: tokens.card, borderColor: tokens.border },
@@ -260,10 +261,21 @@ export default function HomeScreen() {
                 { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
               ]}
             >
-              {formatPointsCompact(points)}
+              {formatPointsCompact(serviceCreditPoints)}
             </Text>
             <Text style={[styles.balanceLabel, { color: tokens.inkMuted }]}>
               {t("home.points_label")}
+            </Text>
+            <Text
+              style={[
+                styles.balanceAmount,
+                { color: tokens.mint, fontFamily: "SpaceGrotesk_700Bold", marginLeft: 8 },
+              ]}
+            >
+              ₦{cashableNaira.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </Text>
+            <Text style={[styles.balanceLabel, { color: tokens.inkMuted }]}>
+              {t("wallet.cashable_label")}
             </Text>
           </TouchableOpacity>
 

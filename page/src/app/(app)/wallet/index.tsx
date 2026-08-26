@@ -396,61 +396,68 @@ export default function WalletScreen() {
               {userLoading ? (
                 <SkeletonBalanceCard />
               ) : (
-                <View style={{ gap: 6 }}>
-                  <View style={{ flexDirection: "row", gap: 24 }}>
-                    <View>
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          color: c.inkMuted,
-                          textTransform: "uppercase",
-                          letterSpacing: 1.2,
-                          marginBottom: 4,
-                        }}
-                      >
-                        {t("wallet.service_credits_label")}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: Fonts.display,
-                          fontSize: 36,
-                          color: c.ink,
-                          lineHeight: 40,
-                        }}
-                      >
-                        {formatPoints(serviceCreditBalance)}
-                      </Text>
-                    </View>
-                    <View>
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          color: c.inkMuted,
-                          textTransform: "uppercase",
-                          letterSpacing: 1.2,
-                          marginBottom: 4,
-                        }}
-                      >
-                        {t("wallet.cashable_label")}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: Fonts.display,
-                          fontSize: 36,
-                          color: c.ink,
-                          lineHeight: 40,
-                        }}
-                      >
-                        {formatPoints(cashableBalance)}
-                      </Text>
+                  <View style={{ gap: 6 }}>
+                    <View style={{ flexDirection: "row", gap: 24 }}>
+                      <View>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: c.inkMuted,
+                            textTransform: "uppercase",
+                            letterSpacing: 1.2,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {t("wallet.service_credits_label")}
+                        </Text>
+                        <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+                          <Text
+                            style={{
+                              fontFamily: Fonts.display,
+                              fontSize: 36,
+                              color: c.ink,
+                              lineHeight: 40,
+                            }}
+                          >
+                            {formatPoints(serviceCreditBalance)}
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              color: c.inkMuted,
+                              marginLeft: 6,
+                              fontWeight: "600",
+                            }}
+                          >
+                            {t("wallet.points_suffix")}
+                          </Text>
+                        </View>
+                      </View>
+                      <View>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: c.inkMuted,
+                            textTransform: "uppercase",
+                            letterSpacing: 1.2,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {t("wallet.cashable_label")}
+                        </Text>
+                        <Text
+                          style={{
+                            fontFamily: Fonts.display,
+                            fontSize: 36,
+                            color: c.mint,
+                            lineHeight: 40,
+                          }}
+                        >
+                          {pointsToNairaString(cashableBalance)}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                  <Text
-                    style={{ fontSize: 13, color: c.inkMuted, marginTop: 4 }}
-                  >
-                    {t("wallet.approx")} {pointsToNairaString(balance)}
-                  </Text>
-                </View>
               )}
               <View
                 style={{

@@ -157,8 +157,8 @@
     "greeting_afternoon": "Good afternoon",
     "greeting_evening": "Good evening",
     "greeting_night": "Burning the midnight oil?",
-    "points_label": "pts",
-    "wallet_access": "View wallet, current balance {{points}} points",
+    "points_label": "SP",
+    "wallet_access": "View wallet, current balance {{points}} SP",
     "keep_reading": "Keep reading",
     "browse": "Browse",
     "browse_by_level": "Browse by level",
@@ -181,9 +181,9 @@
   "wallet": {
     "title": "PagePay",
     "balance_label": "Your balance",
-    "points_suffix": "pts",
+    "points_suffix": "SP",
     "approx": "≈",
-    "service_credits_label": "Service Credits",
+    "service_credits_label": "SP",
     "cashable_label": "Cashable",
     "tier": {
       "free": "Free",

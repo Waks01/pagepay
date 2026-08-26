@@ -145,7 +145,7 @@ class Settings(BaseSettings):
     # (service_credit_balance + cashable_balance). When False, legacy
     # behavior writes to points_balance. Default False for staged rollout.
     # Override via env `WALLET_SPLIT_ENABLED`.
-    wallet_split_enabled: bool = False
+    wallet_split_enabled: bool = True
     # Daily ad impression cap across all networks and use cases.
     # Override via env `DAILY_AD_IMPRESSION_CAP`.
     daily_ad_impression_cap: int = 200
