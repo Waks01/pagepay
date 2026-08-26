@@ -156,7 +156,9 @@
     "withdrawal_failed": "Yọkuro ko ṣiṣẹ",
     "withdrawal_pending": "N yọ owo kuro",
     "withdrawal_success": "Ti yọ si banki",
-    "fee_label": "pẹlu {{amount}} owo"
+    "fee_label": "pẹlu {{amount}} owo",
+    "view_all": "Wo Gbogbo",
+    "status_pending": "Ti nduro"
   },
   "tasks": {
     "title": "Awọn Iṣẹ Ti o Wa",

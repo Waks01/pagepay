@@ -3,6 +3,8 @@ export type UserMe = {
   email: string | null;
   phone: string | null;
   username: string | null;
+  service_credit_balance: number;
+  cashable_balance: number;
   points_balance: number;
   tier: string;
   is_worker: boolean;
@@ -14,7 +16,7 @@ export type UserMe = {
 
 /** One row from GET /api/v1/wallet/history. Mirrors backend/app/routers/wallet.py. */
 export type HistoryItem = {
-  kind: 'read' | 'ad' | 'bill' | 'payment' | 'withdrawal' | 'study' | 'bonus' | 'history';
+  kind: 'read' | 'ad' | 'bill' | 'payment' | 'withdrawal' | 'study' | 'bonus' | 'history' | 'daily_reward';
   type: string;
   status: 'success' | 'pending' | 'failed';
   txId: string;
@@ -25,5 +27,6 @@ export type HistoryItem = {
   /** Signed amount: positive kobo for credits, negative for debits. */
   amount: number;
   date: string;
+  ledger: 'service_credit' | 'cashable' | null;
   details: Record<string, unknown>;
 };

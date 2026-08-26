@@ -158,7 +158,7 @@ export default function WalletScreen() {
   const txQ = useQuery({
     queryKey: ["wallet", "transactions"],
     queryFn: async () => {
-      const res = await apiFetch("/api/v1/wallet/transactions");
+      const res = await apiFetch("/api/v1/wallet/transactions?limit=10");
       if (!res.ok) throw new Error("Failed to load transactions");
       return (await res.json()) as Transaction[];
     },
@@ -214,6 +214,8 @@ export default function WalletScreen() {
   );
 
   const balance = meQ?.points_balance ?? 0;
+  const serviceCreditBalance = meQ?.service_credit_balance ?? 0;
+  const cashableBalance = meQ?.cashable_balance ?? 0;
   const tier = meQ?.tier ?? "free";
   const getTierLabel = (tier: string) => {
     const key = tier as "free" | "premium_monthly" | "premium_yearly";
@@ -221,7 +223,7 @@ export default function WalletScreen() {
   };
   const transactions = txQ.data ?? [];
   const withdrawals = withdrawalsQ.data ?? [];
-  const belowMin = balance < MIN_WITHDRAWAL_POINTS;
+  const belowMin = cashableBalance < MIN_WITHDRAWAL_POINTS;
 
   const onRefresh = () => {
     // The user object is in the global store — refresh it explicitly
@@ -280,6 +282,9 @@ export default function WalletScreen() {
     return db.localeCompare(da);
   });
 
+  // Limit to first 10 transactions for wallet overview
+  const limitedItems = combinedItems.slice(0, 10);
+
   return (
     <View style={{ flex: 1, backgroundColor: c.paper }}>
       <View
@@ -306,7 +311,7 @@ export default function WalletScreen() {
         </View>
       </View>
       <FlatList
-        data={combinedItems}
+        data={limitedItems}
         keyExtractor={(item, index) => {
           if (item.kind === "session") return `s-${item.data.id}`;
           if (item.kind === "payment") return `p-${item.data.id}-${index}`;
@@ -391,38 +396,61 @@ export default function WalletScreen() {
               {userLoading ? (
                 <SkeletonBalanceCard />
               ) : (
-                <>
-                  <View
-                    style={{ flexDirection: "row", alignItems: "baseline" }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: Fonts.display,
-                        fontSize: 48,
-                        color: c.ink,
-                        letterSpacing: -1.2,
-                        lineHeight: 52,
-                      }}
-                    >
-                      {formatPoints(balance)}
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 18,
-                        color: c.inkMuted,
-                        fontFamily: undefined,
-                        marginLeft: 4,
-                      }}
-                    >
-                      {t("wallet.points_suffix")}
-                    </Text>
+                <View style={{ gap: 6 }}>
+                  <View style={{ flexDirection: "row", gap: 24 }}>
+                    <View>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: c.inkMuted,
+                          textTransform: "uppercase",
+                          letterSpacing: 1.2,
+                          marginBottom: 4,
+                        }}
+                      >
+                        {t("wallet.service_credits_label")}
+                      </Text>
+                      <Text
+                        style={{
+                          fontFamily: Fonts.display,
+                          fontSize: 36,
+                          color: c.ink,
+                          lineHeight: 40,
+                        }}
+                      >
+                        {formatPoints(serviceCreditBalance)}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: c.inkMuted,
+                          textTransform: "uppercase",
+                          letterSpacing: 1.2,
+                          marginBottom: 4,
+                        }}
+                      >
+                        {t("wallet.cashable_label")}
+                      </Text>
+                      <Text
+                        style={{
+                          fontFamily: Fonts.display,
+                          fontSize: 36,
+                          color: c.ink,
+                          lineHeight: 40,
+                        }}
+                      >
+                        {formatPoints(cashableBalance)}
+                      </Text>
+                    </View>
                   </View>
                   <Text
                     style={{ fontSize: 13, color: c.inkMuted, marginTop: 4 }}
                   >
                     {t("wallet.approx")} {pointsToNairaString(balance)}
                   </Text>
-                </>
+                </View>
               )}
               <View
                 style={{
@@ -499,7 +527,7 @@ export default function WalletScreen() {
                 {t("wallet.history_title")}
               </Text>
               <TouchableOpacity
-                onPress={() => router.push("/wallet/history")}
+                onPress={() => router.push("/home/transactions")}
                 hitSlop={8}
               >
                 <Text
@@ -509,7 +537,7 @@ export default function WalletScreen() {
                     fontSize: 13,
                   }}
                 >
-                  View All
+                  {t("wallet.view_all")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -600,7 +628,7 @@ export default function WalletScreen() {
 
       <WithdrawModal
         visible={showWithdraw}
-        balancePoints={balance}
+        balancePoints={cashableBalance}
         payoutAccount={payoutAccount}
         onRequestLink={() => {
           setShowWithdraw(false);
@@ -713,7 +741,7 @@ function PaymentRow({
                 marginTop: 2,
               }}
             >
-              Pending
+              {t("wallet.status_pending")}
             </Text>
           ) : null}
         </View>

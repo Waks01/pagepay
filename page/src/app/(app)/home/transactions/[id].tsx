@@ -29,6 +29,7 @@ type HistoryTx = {
     txId: string;
     ref: string;
     status: string;
+    ledger: 'service_credit' | 'cashable' | null;
     details: Record<string, unknown>;
   };
 };
@@ -49,12 +50,12 @@ const formatDate = (iso: string | null) => {
   });
 };
 
-const statusColor = (status: string, tokens: (typeof PagePay)['light']) => {
+const statusColor = (status: string) => {
   switch (status) {
-    case 'success': return tokens.success;
-    case 'pending': return tokens.pending;
-    case 'failed': return tokens.failed;
-    default: return tokens.inkMuted;
+    case 'success': return '#0E7C66';
+    case 'pending': return '#92400E';
+    case 'failed': return '#991B1B';
+    default: return '#64748B';
   }
 };
 
@@ -274,25 +275,28 @@ export default function TransactionDetailScreen() {
 
   const renderTypeDetails = () => {
     const details = (d as any).details || {};
-    const sectionKey = {
-      airtime: 'sections.airtime',
-      data: 'sections.data',
-      electricity: 'sections.electricity',
-      internet: 'sections.internet',
-      tv: 'sections.tv',
-      recharge: 'sections.recharge',
-      betting: 'sections.betting',
-      isp: 'sections.isp',
-      education: 'sections.education',
-      sms: 'sections.sms',
-      wallet: 'sections.wallet',
-      withdraw: 'sections.withdrawal',
-      ad: 'sections.ad_reward',
-      read: 'sections.reading',
-      study: 'sections.study',
-      premium: 'sections.subscription',
-      bonus: 'sections.bonus',
-    }[txType] ?? 'sections.transaction_info';
+    const sectionKey = (() => {
+      const map: Record<string, string> = {
+        airtime: 'sections.airtime',
+        data: 'sections.data',
+        electricity: 'sections.electricity',
+        internet: 'sections.internet',
+        tv: 'sections.tv',
+        recharge: 'sections.recharge',
+        betting: 'sections.betting',
+        isp: 'sections.isp',
+        education: 'sections.education',
+        sms: 'sections.sms',
+        wallet: 'sections.wallet',
+        withdraw: 'sections.withdrawal',
+        ad: 'sections.ad_reward',
+        read: 'sections.reading',
+        study: 'sections.study',
+        premium: 'sections.subscription',
+        bonus: 'sections.bonus',
+      };
+      return map[txType] || 'sections.transaction_info';
+    })();
 
     const row = (key: string, value: string | number, mono = false) =>
       DetailRow(t(`transaction_detail.labels.${key}`), String(value), mono, tokens);
@@ -506,7 +510,8 @@ export default function TransactionDetailScreen() {
           {DetailRow(t('transaction_detail.labels.reference'), ref as string, true, tokens)}
           {DetailRow(t('transaction_detail.labels.date_time'), `${dateStr} · ${timeStr}`, false, tokens)}
           {DetailRow(t('transaction_detail.labels.type'), t(`transaction_detail.types.${txType}`), false, tokens)}
-          {DetailRow(t('transaction_detail.labels.status'), status.charAt(0).toUpperCase() + status.slice(1), false, tokens, true)}
+          {DetailRow(t('transaction_detail.labels.status'), status.charAt(0).toUpperCase() + status.slice(1), false, tokens)}
+          {(d as any).ledger && DetailRow(t('wallet.ledger.label'), t(`wallet.ledger.${(d as any).ledger}`), false, tokens, true)}
         </DetailSection>
 
         {/* Actions — wrapped in a card section per the design preview. */}
@@ -576,7 +581,7 @@ export default function TransactionDetailScreen() {
               onPress={() => handleShareAction('share-pdf')}
               disabled={sharing}
             >
-              <View style={[styles.shareIcon, { backgroundColor: tokens.failedFaint }]}>
+              <View style={[styles.shareIcon, { backgroundColor: tokens.signalSoft }]}>
                 <Ionicons name="document-outline" size={22} color={tokens.error} />
               </View>
               <View style={{ flex: 1 }}>
@@ -591,7 +596,7 @@ export default function TransactionDetailScreen() {
               onPress={() => handleShareAction('save-pdf')}
               disabled={sharing}
             >
-              <View style={[styles.shareIcon, { backgroundColor: tokens.failedFaint }]}>
+              <View style={[styles.shareIcon, { backgroundColor: tokens.signalSoft }]}>
                 <Ionicons name="download-outline" size={22} color={tokens.error} />
               </View>
               <View style={{ flex: 1 }}>

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import (
     String, Integer, BigInteger, Boolean, Text, DateTime, Time, Enum, Float,
-    SmallInteger, JSON, UniqueConstraint, ForeignKey, Index,
+    SmallInteger, JSON, UniqueConstraint, ForeignKey, Index, text,
 )
 from datetime import datetime, time
 import enum
@@ -26,6 +26,9 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(12), unique=True, index=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255))
     points_balance: Mapped[int] = mapped_column(BigInteger, default=0)
+    service_credit_balance: Mapped[int] = mapped_column(BigInteger, default=0, index=True)
+    cashable_balance: Mapped[int] = mapped_column(BigInteger, default=0, index=True)
+    device_id_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     tier: Mapped[UserTier] = mapped_column(Enum(UserTier), default=UserTier.FREE)
     referral_code: Mapped[str | None] = mapped_column(String(12), unique=True)
     referred_by: Mapped[str | None] = mapped_column(String(12), index=True)
@@ -285,6 +288,7 @@ class AdEvent(Base):
     #                          fabricate a "1 point" floor)
     #   "duplicate"          — transaction_id already seen; idempotent no-op
     credit_status: Mapped[str] = mapped_column(String(50), default="credited")
+    use_case: Mapped[str | None] = mapped_column(String(50), nullable=True, server_default="wallet_topup")
 
 
 class AdSsvLog(Base):
@@ -642,6 +646,39 @@ class StudyMaterial(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class SowUploadJob(Base):
+    """One row per in-flight SOW image/document upload.
+
+    The upload endpoint reads the file synchronously (so we still
+    enforce the 5 MB / 10 MB cap and content-type allowlist before
+    returning), inserts a `queued` row, fires an `asyncio.create_task`
+    worker, and returns the job id immediately. The worker opens its
+    own `AsyncSessionLocal`, runs OCR + the SOW parser AI call, writes
+    the resulting `StudyMaterial`, and updates this row to `completed`
+    (or `failed`). The client polls `GET /study/sow/jobs/{id}` to drive
+    its progress bar through the 80→100 window.
+
+    `id` is a UUID4 string (not an int) so the URL is short, there's no
+    enumeration risk, and concurrent uploads don't leak row counts.
+    `user_id` is indexed and used as the per-user scoping filter on the
+    polling endpoint — user A can never see user B's job state.
+    """
+
+    __tablename__ = "sow_upload_jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    status: Mapped[str] = mapped_column(
+        String(20), default="queued", index=True
+    )  # queued | processing | completed | failed
+    material_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class QuizSession(Base):
     """One row per study quiz / flashcard / essay attempt.
 
@@ -893,6 +930,31 @@ class UserRewardClaim(Base):
 
     __table_args__ = (
         Index("ix_user_reward_claims_user_date", "user_id", "claim_date", unique=True),
+    )
+
+
+class StreakFreezeLog(Base):
+    """Track streak freeze attempts (ad, points, premium)."""
+
+    __tablename__ = "streak_freeze_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    method: Mapped[str] = mapped_column(String(20), nullable=False)  # 'ad' | 'points' | 'premium'
+    sv_spent: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    streak_length_at_freeze: Mapped[int] = mapped_column(Integer, nullable=False)
+    ad_event_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    device_id_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        Index(
+            "uq_streak_freeze_one_ad_per_day",
+            "user_id",
+            text("(created_at::date)"),
+            unique=True,
+            postgresql_where=text("method = 'ad'"),
+        ),
     )
 
 
@@ -1382,6 +1444,7 @@ class AdRequest(Base):
     # Set when status=rejected. Surfaces why a legitimate-looking SSV
     # callback didn't result in a credit.
     rejection_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    use_case: Mapped[str | None] = mapped_column(String(50), nullable=True, server_default="wallet_topup")
 
 
 class RevokedJWT(Base):

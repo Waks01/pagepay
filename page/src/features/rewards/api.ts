@@ -107,8 +107,16 @@ export async function fetchDailyRewardStatus(): Promise<DailyRewardStatus> {
   return res.json();
 }
 
-export async function claimDailyReward(): Promise<DailyRewardClaim> {
-  const res = await apiFetch("/api/v1/rewards/daily/claim", { method: "POST" });
+export async function claimDailyReward(deviceId?: string): Promise<DailyRewardClaim> {
+  const body: Record<string, string | undefined> = {};
+  if (deviceId) {
+    body.device_id = deviceId;
+  }
+  const res = await apiFetch("/api/v1/rewards/daily/claim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) {
     let errorMessage = `Failed to claim daily reward (HTTP ${res.status})`;
 

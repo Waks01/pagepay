@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Svg, Circle, Defs, LinearGradient, Stop } from "react-native-svg";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import * as Notifications from "expo-notifications";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -24,6 +25,7 @@ import Animated, {
   withTiming,
   Easing,
 } from "react-native-reanimated";
+import { getDeviceFingerprint } from "@/src/shared/lib/device-fingerprint";
 
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
@@ -75,17 +77,22 @@ export default function DailyRewardsScreen() {
   const tokens = PagePay[scheme];
   const queryClient = useQueryClient();
   const [claimingReward, setClaimingReward] = useState(false);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+
+  useEffect(() => {
+    getDeviceFingerprint().then(setDeviceId).catch(() => setDeviceId(null));
+  }, []);
 
   const {
     data: rewardStatus,
     isLoading,
     error,
     refetch,
-  } = useQuery({
+  } = useQuery<DailyRewardStatus>({
     queryKey: ["daily-reward-status"],
     queryFn: fetchDailyRewardStatus,
-    staleTime: 0, // Always fetch fresh data - reward status can change when user claims
-    cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes but always revalidate
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
   });
 
   const { data: rewardConfig = [] } = useQuery({
@@ -101,15 +108,22 @@ export default function DailyRewardsScreen() {
   }, [error]);
 
   const claimMutation = useMutation({
-    mutationFn: claimDailyReward,
+    mutationFn: (deviceId?: string) => claimDailyReward(deviceId),
     onSuccess: () => {
-      // Invalidate the status query to force a refresh with the new streak
       queryClient.invalidateQueries({ queryKey: ["daily-reward-status"] });
       console.log("[DailyRewards] Claim successful, invalidating status query");
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: t("daily_rewards.notification_title"),
+          body: t("daily_rewards.notification_body"),
+        },
+        trigger: null,
+      }).catch((error) => {
+        console.error("[DailyRewards] Failed to schedule notification:", error);
+      });
     },
     onError: (error: Error) => {
       console.error("Daily reward claim error:", error.message);
-      // Error will be shown by UI state automatically
     },
   });
 
@@ -117,7 +131,7 @@ export default function DailyRewardsScreen() {
     if (!rewardStatus?.can_claim_today) return;
     setClaimingReward(true);
     try {
-      await claimMutation.mutateAsync();
+      await claimMutation.mutateAsync(deviceId || undefined);
     } finally {
       setClaimingReward(false);
     }
@@ -303,12 +317,14 @@ export default function DailyRewardsScreen() {
     if (dbReward) return dbReward;
     const fallback = fallbackRewards[dayNumber];
     if (fallback) {
+      const fallbackTitleKey = `daily_rewards.fallback_titles.day_${dayNumber}`;
+      const fallbackTitle = t(fallbackTitleKey);
       return {
         id: dayNumber,
         day_number: dayNumber,
         reward_type: fallback.reward_type as "points" | "multiplier",
         reward_value: fallback.reward_value,
-        title: fallback.title,
+        title: fallbackTitle !== fallbackTitleKey ? fallbackTitle : fallback.title,
         description: "",
         icon_emoji: fallback.icon_emoji,
       };
@@ -386,7 +402,7 @@ export default function DailyRewardsScreen() {
         ]}
       >
         <Text style={[styles.dayNumber, { color: dayNumberColor }]}>
-          Day {dayNumber}
+          {t("daily_rewards.day_label", { day: dayNumber })}
         </Text>
 
         {reward && (
@@ -455,18 +471,21 @@ export default function DailyRewardsScreen() {
               height={RING_SIZE}
               borderRadius={RING_SIZE / 2}
             />
-            <Skeleton width={120} height={20} style={{ marginTop: 16 }} />
+            <View style={{ marginTop: 16 }}>
+              <Skeleton width={120} height={20} />
+            </View>
           </View>
 
           <Skeleton
             width="100%"
             height={56}
-            style={{ borderRadius: 999, marginBottom: 24 }}
+            borderRadius={999}
+            marginBottom={24}
           />
 
           {[...Array(5)].map((_, weekIdx) => (
             <View key={weekIdx} style={{ marginBottom: 24 }}>
-              <Skeleton width={120} height={20} style={{ marginBottom: 12 }} />
+               <Skeleton width={120} height={20} marginBottom={12} />
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View
                   style={{
@@ -489,11 +508,9 @@ export default function DailyRewardsScreen() {
                       ]}
                     >
                       <Skeleton width={40} height={10} />
-                      <Skeleton
-                        width={32}
-                        height={32}
-                        style={{ marginVertical: 6 }}
-                      />
+                      <View style={{ marginVertical: 6 }}>
+                        <Skeleton width={32} height={32} />
+                      </View>
                       <Skeleton width={40} height={12} />
                     </View>
                   ))}
@@ -626,8 +643,8 @@ export default function DailyRewardsScreen() {
                   : t("daily_rewards.claim_button")}
               </Text>
               <Text style={[styles.claimSubtitle, { color: tokens.mintText }]}>
-                Day {currentStreak + 1} • +{todayReward.reward_value}{" "}
-                {todayReward.reward_type === "points" ? "points" : "% bonus"}
+                {t("daily_rewards.day_label", { day: currentStreak + 1 })} • +{todayReward.reward_value}{" "}
+                {todayReward.reward_type === "points" ? t("daily_rewards.reward_points") : t("daily_rewards.reward_multiplier")}
               </Text>
             </View>
             {claimingReward ? (
@@ -655,7 +672,7 @@ export default function DailyRewardsScreen() {
           >
             <Ionicons name="alert-circle" size={20} color={tokens.signal} />
             <Text style={[styles.errorText, { color: tokens.signal }]}>
-              {claimMutation.error?.message || "Failed to claim reward"}
+              {claimMutation.error?.message || t("daily_rewards.claim_failed")}
             </Text>
             <TouchableOpacity
               onPress={() => claimMutation.reset()}

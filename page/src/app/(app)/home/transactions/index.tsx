@@ -63,6 +63,7 @@ type TxItem = {
   txId: string;
   ref: string;
   details: Record<string, unknown>;
+  ledger: "service_credit" | "cashable" | null;
 };
 
 const getTxMeta = (type: string, tokens: (typeof PagePay)["light"]) => {
@@ -236,6 +237,26 @@ const FILTERS = [
   { key: "bonus", label: "transactions.filter_bonus" },
 ] as const;
 
+const SERVICE_LABEL_MAP: Record<string, string> = {
+  airtime: "bills.services.airtime",
+  data: "bills.services.data",
+  electricity: "bills.services.electricity",
+  internet: "bills.services.isp",
+  tv: "bills.services.tv",
+  recharge: "bills.services.recharge_pin",
+  betting: "bills.services.betting",
+  isp: "bills.services.isp",
+  education: "bills.services.education",
+  sms: "bills.services.sms",
+  wallet: "wallet.fund_wallet",
+  withdraw: "wallet.withdraw",
+  ad: "transactions.filter_ad",
+  read: "transactions.filter_read",
+  study: "study.title",
+  premium: "premium.title",
+  bonus: "transactions.filter_bonus",
+};
+
 const DATE_FILTERS = [
   { key: "all", label: "transactions.date_all" },
   { key: "Today", label: "transactions.date_today" },
@@ -305,28 +326,33 @@ export default function TransactionHistoryScreen() {
       }
     },
   });
-  const balance = meQ.data?.points_balance ?? 0;
+  const balance =
+    meQ.data?.service_credit_balance ?? meQ.data?.points_balance ?? 0;
+  const cashableBalance = meQ.data?.cashable_balance ?? 0;
 
   const historyQ = useQuery({
-    queryKey: ["bills", "history", filter, dateFilter, search, page],
+    queryKey: ["wallet", "history", filter, dateFilter, search, page],
     queryFn: async () => {
       try {
         const params = new URLSearchParams({
           limit: String(PAGE_SIZE),
-          page: String(page + 1), // Backend uses 1-indexed pages
+          page: String(page + 1),
         });
         if (filter !== "all") {
           if (filter === "earn" || filter === "spend") {
-            // Bills are always "spend" type, skip this filter
+            params.set("tx_type", filter);
           } else {
             params.set("service", filter);
           }
         }
-        // Note: dateFilter and search not supported by /bills/history yet
-        // if (dateFilter !== "all") params.set("date", dateFilter);
-        // if (search) params.set("search", search);
+        if (dateFilter !== "all") {
+          params.set("date", dateFilter);
+        }
+        if (search) {
+          params.set("search", search);
+        }
         const res = await apiFetch(
-          `/api/v1/bills/history?${params.toString()}`,
+          `/api/v1/wallet/history?${params.toString()}`,
         );
         if (!res.ok) {
           const text = await res.text().catch(() => "");
@@ -345,26 +371,69 @@ export default function TransactionHistoryScreen() {
   const hasMore = historyQ.data ? historyQ.data.length >= PAGE_SIZE : false;
 
   const transactions: TxItem[] = useMemo(() => {
-    return (historyQ.data ?? []).map((tx: any, index) => {
-      // Backend returns BillTransactionOut format:
-      // - service: string (airtime, data, electricity, etc.)
-      // - amount_naira: int (amount in naira)
-      // - points_earned: int (points earned from commission)
-      // - created_at: datetime string
-      // - status: success | pending | failed
+    return (historyQ.data ?? []).map((tx: any, index: number) => {
+      const typeMap: Record<string, TxType> = {
+        bill: "airtime",
+        payment: "wallet",
+        withdrawal: "withdraw",
+        session: "read",
+        ad: "ad",
+        study: "study",
+        premium: "premium",
+        bonus: "bonus",
+        history: "earn",
+      };
+      const rawType = tx.tx_type || tx.type || "history";
+      const mappedType =
+        (typeMap[rawType] as TxType) ||
+        (rawType as TxType) ||
+        "earn";
+
+      const service = tx.service || mappedType;
+      const amount =
+        tx.amount !== undefined
+          ? Math.abs(tx.amount)
+          : tx.points_earned || 0;
+
+      let description = "";
+      if (rawType === "bill") {
+        description = t(
+          SERVICE_LABEL_MAP[service] || "transaction_detail.default",
+          { service: service.replace("_", " ") },
+        );
+      } else if (rawType === "session") {
+        description = t("transactions.filter_read");
+      } else if (rawType === "ad") {
+        description = t("transactions.filter_ad");
+      } else if (rawType === "study") {
+        description = t("study.title");
+      } else if (rawType === "premium") {
+        description = t("premium.title");
+      } else if (rawType === "bonus") {
+        description = t("transactions.filter_bonus");
+      } else if (rawType === "payment") {
+        description = t("wallet.fund_wallet");
+      } else if (rawType === "withdrawal") {
+        description = t("wallet.withdraw");
+      } else if (rawType === "history") {
+        description = t("transactions.filter_earned");
+      } else {
+        description = t("transactions.filter_earned");
+      }
 
       return {
         id: tx.id?.toString() || `tx-${index}`,
-        type: tx.service as TxType,
-        description: `${tx.service.replace("_", " ").toUpperCase()} Purchase`,
-        amount: tx.points_earned || 0, // Show points earned
+        type: mappedType,
+        description,
+        amount,
         status: tx.status || "success",
         date:
           typeof tx.created_at === "string"
             ? tx.created_at
             : new Date(tx.created_at).toISOString(),
-        txId: tx.reference || "",
-        ref: tx.reference || "",
+        txId: tx.reference || tx.id?.toString() || "",
+        ref: tx.reference || tx.id?.toString() || "",
+        ledger: tx.ledger ?? null,
         details: {
           phone: tx.phone,
           meter_number: tx.meter_number,
@@ -374,10 +443,13 @@ export default function TransactionHistoryScreen() {
           provider: tx.provider,
           external_ref: tx.external_ref,
           error_message: tx.error_message,
+          tx_type: tx.tx_type,
+          service: tx.service,
+          description: tx.description,
         },
       };
     });
-  }, [historyQ.data]);
+  }, [historyQ.data, t]);
 
   const grouped = useMemo(() => {
     const map: Record<string, TxItem[]> = {};
@@ -463,6 +535,19 @@ export default function TransactionHistoryScreen() {
       const mutedC = tokens.inkMuted || "#666";
       const mintC = tokens.mint || "#0E7C66";
 
+      const ledgerLabel =
+        item.ledger === "service_credit"
+          ? t("wallet.ledger.service_credit")
+          : item.ledger === "cashable"
+            ? t("wallet.ledger.cashable")
+            : null;
+      const ledgerColor =
+        item.ledger === "service_credit"
+          ? tokens.signal
+          : item.ledger === "cashable"
+            ? tokens.mint
+            : null;
+
       return (
         <View style={{ marginBottom: 8 }}>
           <TouchableOpacity
@@ -488,6 +573,16 @@ export default function TransactionHistoryScreen() {
               <Text style={[styles.txMeta, { color: mutedC }]}>
                 {fmtTime(new Date(item.date))} · {item.txId}
               </Text>
+              {ledgerLabel && (
+                <Text
+                  style={[
+                    styles.txMeta,
+                    { color: ledgerColor || mutedC, marginTop: 2 },
+                  ]}
+                >
+                  {ledgerLabel}
+                </Text>
+              )}
             </View>
             <View style={{ alignItems: "flex-end", flexShrink: 0 }}>
               <Text
@@ -498,7 +593,7 @@ export default function TransactionHistoryScreen() {
               </Text>
               <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
                 <Text style={[styles.statusText, { color: statusColor }]}>
-                  {status}
+                  {t(`transactions.status.${status}`)}
                 </Text>
               </View>
             </View>
@@ -506,7 +601,7 @@ export default function TransactionHistoryScreen() {
         </View>
       );
     },
-    [tokens, openDetail],
+    [tokens, openDetail, t],
   );
 
   const renderSectionHeader = useCallback(
@@ -570,7 +665,7 @@ export default function TransactionHistoryScreen() {
               if (err && typeof err === "object" && "message" in err)
                 return String(err.message);
               if (typeof err === "string") return err;
-              return "Network error";
+               return t("transactions.network_error");
             })()}
           </Text>
           <TouchableOpacity
@@ -620,37 +715,86 @@ export default function TransactionHistoryScreen() {
                       },
                     ]}
                   >
-                      <Text
-                        style={[styles.balanceLabel, { color: tokens.inkMuted }]}
-                      >
-                        {t("wallet.balance_label")}
-                      </Text>
                     <View
-                      style={{ flexDirection: "row", alignItems: "baseline" }}
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        marginBottom: 8,
+                      }}
                     >
-                      <Text
-                        style={[
-                          styles.balanceAmount,
-                          { color: tokens.ink, fontFamily: Fonts.display },
-                        ]}
-                      >
-                        {formatPoints(balance)}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.balanceSuffix,
-                          { color: tokens.inkMuted },
-                        ]}
-                      >
-                        {" "}
-                        {t("wallet.points_suffix")}
-                      </Text>
+                      <View>
+                        <Text
+                          style={[
+                            styles.balanceLabel,
+                            { color: tokens.inkMuted },
+                          ]}
+                        >
+                          {t("wallet.service_credits_label")}
+                        </Text>
+                        <View
+                          style={{ flexDirection: "row", alignItems: "baseline" }}
+                        >
+                          <Text
+                            style={[
+                              styles.balanceAmount,
+                              { color: tokens.ink, fontFamily: Fonts.display },
+                            ]}
+                          >
+                            {formatPoints(balance)}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.balanceSuffix,
+                              { color: tokens.inkMuted },
+                            ]}
+                          >
+                            {" "}
+                            {t("wallet.points_suffix")}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[styles.balanceSub, { color: tokens.inkMuted }]}
+                        >
+                          ≈ {pointsToNairaString(balance)}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: "flex-end" }}>
+                        <Text
+                          style={[
+                            styles.balanceLabel,
+                            { color: tokens.inkMuted },
+                          ]}
+                        >
+                          {t("wallet.cashable_label")}
+                        </Text>
+                        <View
+                          style={{ flexDirection: "row", alignItems: "baseline" }}
+                        >
+                          <Text
+                            style={[
+                              styles.balanceAmount,
+                              { color: tokens.mint, fontFamily: Fonts.display },
+                            ]}
+                          >
+                            {formatPoints(cashableBalance)}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.balanceSuffix,
+                              { color: tokens.inkMuted },
+                            ]}
+                          >
+                            {" "}
+                            {t("wallet.points_suffix")}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[styles.balanceSub, { color: tokens.inkMuted }]}
+                        >
+                          ≈ {pointsToNairaString(cashableBalance)}
+                        </Text>
+                      </View>
                     </View>
-                    <Text
-                      style={[styles.balanceSub, { color: tokens.inkMuted }]}
-                    >
-                      ≈ {pointsToNairaString(balance)}
-                    </Text>
                   </View>
                 )}
               </View>
@@ -748,7 +892,7 @@ export default function TransactionHistoryScreen() {
                           },
                         ]}
                       >
-                        {f.label}
+                         {t(f.label)}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -830,7 +974,7 @@ export default function TransactionHistoryScreen() {
                 ]}
               >
                 <Text style={[styles.loadMoreText, { color: tokens.mint }]}>
-                  {historyQ.isFetching ? "Loading..." : "Load More"}
+                  {historyQ.isFetching ? t("transactions.loading") : t("transactions.load_more")}
                 </Text>
               </TouchableOpacity>
             ) : null
