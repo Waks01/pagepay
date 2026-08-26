@@ -107,7 +107,7 @@
     "greeting_evening": "Good evening",
     "greeting_night": "You still dey work?",
     "points_label": "SP",
-    "wallet_access": "View wallet, current balance {{points}} SP",
+    "wallet_access": "View wallet, {{sp}} SP \u00b7 \u20a6{{cash}}",
     "keep_reading": "Continue reading",
     "browse": "See wetin dey",
     "browse_by_level": "See by level",

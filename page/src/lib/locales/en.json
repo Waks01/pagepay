@@ -158,7 +158,7 @@
     "greeting_evening": "Good evening",
     "greeting_night": "Burning the midnight oil?",
     "points_label": "SP",
-    "wallet_access": "View wallet, current balance {{points}} SP",
+    "wallet_access": "View wallet, {{sp}} SP · ₦{{cash}}",
     "keep_reading": "Keep reading",
     "browse": "Browse",
     "browse_by_level": "Browse by level",
@@ -184,7 +184,7 @@
     "points_suffix": "SP",
     "approx": "≈",
     "service_credits_label": "SP",
-    "cashable_label": "Cashable",
+    "cashable_label": "C",
     "tier": {
       "free": "Free",
       "premium_monthly": "Premium · Monthly",

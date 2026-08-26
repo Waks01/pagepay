@@ -182,6 +182,12 @@ export default function HomeScreen() {
     }
   }, [feedQuery, inProgressQuery]);
 
+  useFocusEffect(
+    useCallback(() => {
+      void useCurrentUserStore.getState().refresh();
+    }, [])
+  );
+
   const greeting = useMemo(() => {
     const h = new Date().getHours();
     if (h < 5) return t("home.greeting_still_up");
@@ -245,7 +251,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             onPress={() => router.push("/wallet")}
             accessibilityRole="button"
-            accessibilityLabel={t("home.wallet_access", { points: serviceCreditPoints })}
+            accessibilityLabel={t("home.wallet_access", { sp: serviceCreditPoints, cash: cashableNaira.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) })}
             style={[
               styles.balanceChip,
               { backgroundColor: tokens.card, borderColor: tokens.border },
@@ -257,25 +263,24 @@ export default function HomeScreen() {
             />
             <Text
               style={[
-                styles.balanceAmount,
+                styles.balanceAmountCompact,
                 { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
               ]}
+              numberOfLines={1}
             >
-              {formatPointsCompact(serviceCreditPoints)}
+              {formatPointsCompact(serviceCreditPoints)} SP
             </Text>
-            <Text style={[styles.balanceLabel, { color: tokens.inkMuted }]}>
-              {t("home.points_label")}
+            <Text style={[styles.balanceSeparator, { color: tokens.inkMuted }]}>
+              ·
             </Text>
             <Text
               style={[
-                styles.balanceAmount,
-                { color: tokens.mint, fontFamily: "SpaceGrotesk_700Bold", marginLeft: 8 },
+                styles.balanceAmountCompact,
+                { color: tokens.mint, fontFamily: "SpaceGrotesk_700Bold" },
               ]}
+              numberOfLines={1}
             >
-              ₦{cashableNaira.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-            </Text>
-            <Text style={[styles.balanceLabel, { color: tokens.inkMuted }]}>
-              {t("wallet.cashable_label")}
+              ₦{cashableNaira.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} C
             </Text>
           </TouchableOpacity>
 
@@ -648,16 +653,26 @@ const styles = StyleSheet.create({
   balanceChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
   },
   balanceDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  balanceAmountCompact: {
+    fontSize: 12,
+    lineHeight: 14,
+    letterSpacing: -0.2,
+  },
+  balanceSeparator: {
+    fontSize: 12,
+    lineHeight: 14,
+    marginHorizontal: 2,
   },
   balanceAmount: {
     fontSize: 15,

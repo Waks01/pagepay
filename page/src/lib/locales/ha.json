@@ -107,7 +107,7 @@
     "greeting_evening": "Barka da yamma",
     "greeting_night": "Har yanzu kana aiki?",
     "points_label": "SP",
-    "wallet_access": "View wallet, current balance {{points}} SP",
+    "wallet_access": "View wallet, {{sp}} SP \u00b7 \u20a6{{cash}}",
     "keep_reading": "Ci gaba da karantawa",
     "browse": "Bincika",
     "browse_by_level": "Bincika ta mataki",

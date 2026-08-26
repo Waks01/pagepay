@@ -107,7 +107,7 @@
     "greeting_evening": "Mgbede \u1ecdma",
     "greeting_night": "\u1eca ka na-ar\u1ee5 \u1ecdr\u1ee5 n'abal\u1ecb?",
     "points_label": "SP",
-    "wallet_access": "View wallet, current balance {{points}} SP",
+    "wallet_access": "View wallet, {{sp}} SP \u00b7 \u20a6{{cash}}",
     "keep_reading": "Gaa n'ihu na-ag\u1ee5",
     "browse": "Ch\u1ecdghar\u1ecba",
     "browse_by_level": "Ch\u1ecdghar\u1ecba site na \u1ecdkwa",
