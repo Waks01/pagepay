@@ -224,11 +224,18 @@ async def bigisub_delivery_verification(
         from app.services.money import kobo_to_points
         
         refund_points = kobo_to_points(transaction.amount_naira * 100)
-        await db.execute(
-            update(User)
-            .where(User.id == transaction.user_id)
-            .values(points_balance=User.points_balance + refund_points)
-        )
+        if settings.wallet_split_enabled:
+            await db.execute(
+                update(User)
+                .where(User.id == transaction.user_id)
+                .values(cashable_balance=User.cashable_balance + refund_points)
+            )
+        else:
+            await db.execute(
+                update(User)
+                .where(User.id == transaction.user_id)
+                .values(points_balance=User.points_balance + refund_points)
+            )
         
         # Send refund notification
         import asyncio

@@ -40,6 +40,7 @@ class Transaction(BaseModel):
     points: int
     description: str
     date: datetime
+    ledger: str | None = None  # "service_credit" | "cashable" | None
 
 
 @router.get("/transactions", response_model=list[Transaction])
@@ -132,6 +133,7 @@ async def list_transactions(
                 id=sid, type="earn", points=session.points_earned,
                 description=f'Read "{title}{slice_info}"',
                 date=session.end_time,
+                ledger="cashable",
             )
         )
 
@@ -141,6 +143,7 @@ async def list_transactions(
                 id=event.id, type="earn", points=event.user_points_credited,
                 description="Rewarded ad",
                 date=event.created_at,
+                ledger="service_credit",
             )
         )
 
@@ -160,6 +163,7 @@ async def list_transactions(
                 id=bill.id, type="earn", points=bill.points_earned,
                 description=description,
                 date=bill.created_at,
+                ledger="cashable",
             )
         )
 
@@ -169,6 +173,7 @@ async def list_transactions(
                 id=claim.id, type="earn", points=claim.points_earned,
                 description=f"Daily Reward - Day {claim.streak_day} ({reward.title})",
                 date=claim.claimed_at,
+                ledger="service_credit",
             )
         )
 
@@ -483,6 +488,7 @@ def _map_bill_row(tx: BillTransaction) -> dict:
         "points": tx.points_earned,
         "amount": -int(amount_naira * 100),
         "date": tx.created_at,
+        "ledger": "cashable",
         "details": details,
     }
 
@@ -523,6 +529,7 @@ async def get_wallet_history(
             "points": session.points_earned,
             "amount": session.points_earned,
             "date": session.end_time,
+            "ledger": "cashable",
             "details": {
                 "title": title,
                 "pages": session.duration_seconds // 60,
@@ -550,6 +557,7 @@ async def get_wallet_history(
             "points": event.user_points_credited or 0,
             "amount": event.user_points_credited or 0,
             "date": event.created_at,
+            "ledger": "service_credit",
             "details": {
                 "adType": event.ad_type,
                 "campaign": event.ad_unit,
@@ -587,6 +595,7 @@ async def get_wallet_history(
                 "points": 0,
                 "amount": payment.amount_kobo,
                 "date": payment.created_at,
+                "ledger": "cashable",
                 "details": {
                     "source": payment.provider.title(),
                     "amountNaira": amount_naira,
@@ -605,6 +614,7 @@ async def get_wallet_history(
                 "points": 0,
                 "amount": -payment.amount_kobo,
                 "date": payment.created_at,
+                "ledger": None,
                 "details": {
                     "plan": payment.tier.replace("premium_", "").title(),
                     "amountNaira": amount_naira,
@@ -637,6 +647,7 @@ async def get_wallet_history(
             "points": points,
             "amount": -points,
             "date": w.created_at,
+            "ledger": "cashable",
             "details": {
                 "fee": w.fee_kobo,
                 "balanceAfter": w.balance_after_debit,
@@ -672,6 +683,7 @@ async def get_wallet_history(
                 "points": -st.points_spent,
                 "amount": -st.points_spent,
                 "date": st.created_at,
+                "ledger": "service_credit",
                 "details": {
                     "topic": title,
                     "duration": "N/A",
@@ -690,6 +702,7 @@ async def get_wallet_history(
                 "points": st.points_spent,
                 "amount": st.points_spent,
                 "date": st.created_at,
+                "ledger": "service_credit",
                 "details": {
                     "topic": title,
                     "duration": "N/A",
@@ -711,6 +724,10 @@ async def get_wallet_history(
             "referral_referee": "Referral Bonus",
             "referral_referrer": "Referral Bonus",
         }.get(credit.source, credit.source.replace("_", " ").title())
+        ledger = "service_credit" if credit.source in (
+            "welcome_bonus", "referral_referee", "referral_referrer",
+            "daily_reward", "quiz_bonus", "rewarded_ad",
+        ) else "cashable"
         items.append({
             "kind": "bonus",
             "type": "bonus",
@@ -721,6 +738,7 @@ async def get_wallet_history(
             "points": credit.points,
             "amount": credit.points,
             "date": credit.created_at,
+            "ledger": ledger,
             "details": {
                 "reason": credit.source,
                 "points": credit.points,
@@ -746,6 +764,7 @@ async def get_wallet_history(
             "points": claim.points_earned,
             "amount": claim.points_earned,
             "date": claim.claimed_at,
+            "ledger": "service_credit",
             "details": {
                 "streak_day": claim.streak_day,
                 "reward_title": reward.title,
@@ -1007,6 +1026,10 @@ async def get_wallet_history_detail(
             "points": credit.points,
             "amount": credit.points,
             "date": credit.created_at,
+            "ledger": "service_credit" if credit.source in (
+                "welcome_bonus", "referral_referee", "referral_referrer",
+                "daily_reward", "quiz_bonus", "rewarded_ad",
+            ) else "cashable",
             "details": {
                 "reason": credit.source,
                 "points": credit.points,
@@ -1060,6 +1083,7 @@ async def get_wallet_history_detail(
             "points": w.amount_kobo,
             "amount": -w.amount_kobo,
             "date": w.created_at,
+            "ledger": "cashable",
             "details": {
                 "fee": w.fee_kobo,
                 "balanceAfter": w.balance_after_debit,
@@ -1089,6 +1113,7 @@ async def get_wallet_history_detail(
                 "points": 0,
                 "amount": payment.amount_kobo,
                 "date": payment.created_at,
+                "ledger": "cashable",
                 "details": {
                     "source": payment.provider.title(),
                     "amountNaira": payment.amount_kobo / 100,
@@ -1105,6 +1130,7 @@ async def get_wallet_history_detail(
             "points": 0,
             "amount": -payment.amount_kobo,
             "date": payment.created_at,
+            "ledger": None,
             "details": {
                 "plan": payment.tier.replace("premium_", "").title(),
                 "amountNaira": payment.amount_kobo / 100,
@@ -1148,6 +1174,7 @@ async def get_wallet_history_detail(
                 "points": session.points_earned,
                 "amount": session.points_earned,
                 "date": session.end_time,
+                "ledger": "cashable",
                 "details": {
                     "title": title,
                     "pages": session.duration_seconds // 60,
@@ -1173,6 +1200,7 @@ async def get_wallet_history_detail(
                 "points": event.user_points_credited or 0,
                 "amount": event.user_points_credited or 0,
                 "date": event.created_at,
+                "ledger": "service_credit",
                 "details": {
                     "adType": event.ad_type,
                     "campaign": event.ad_unit,

@@ -94,11 +94,18 @@ async def grant_welcome_bonus(db: AsyncSession, user: User) -> bool:
 
     # 2. Credit the wallet. Same atomic-increment pattern as the AdMob
     #    SSV handler in routers/ads.py.
-    await db.execute(
-        update(User)
-        .where(User.id == user.id)
-        .values(points_balance=User.points_balance + bonus_points)
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == user.id)
+            .values(service_credit_balance=User.service_credit_balance + bonus_points)
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == user.id)
+            .values(points_balance=User.points_balance + bonus_points)
+        )
     await db.commit()
     await db.refresh(user)
 

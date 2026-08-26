@@ -63,25 +63,46 @@ async def execute_scheduled_purchase(schedule_id: int):
             
             # Check balance
             amount_kobo = schedule.amount_naira * 100
-            if user.points_balance < kobo_to_points(amount_kobo):
-                logger.warning("Insufficient balance for schedule %d", schedule_id)
-                await db.execute(
-                    update(ScheduledBill)
-                    .where(ScheduledBill.id == schedule_id)
-                    .values(
-                        last_error="Insufficient balance",
-                        updated_at=datetime.utcnow(),
+            if settings.wallet_split_enabled:
+                if user.cashable_balance < kobo_to_points(amount_kobo):
+                    logger.warning("Insufficient balance for schedule %d", schedule_id)
+                    await db.execute(
+                        update(ScheduledBill)
+                        .where(ScheduledBill.id == schedule_id)
+                        .values(
+                            last_error="Insufficient balance",
+                            updated_at=datetime.utcnow(),
+                        )
                     )
-                )
-                await db.commit()
-                return
+                    await db.commit()
+                    return
+            else:
+                if user.points_balance < kobo_to_points(amount_kobo):
+                    logger.warning("Insufficient balance for schedule %d", schedule_id)
+                    await db.execute(
+                        update(ScheduledBill)
+                        .where(ScheduledBill.id == schedule_id)
+                        .values(
+                            last_error="Insufficient balance",
+                            updated_at=datetime.utcnow(),
+                        )
+                    )
+                    await db.commit()
+                    return
             
             # Debit wallet
-            await db.execute(
-                update(User)
-                .where(User.id == schedule.user_id)
-                .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
-            )
+            if settings.wallet_split_enabled:
+                await db.execute(
+                    update(User)
+                    .where(User.id == schedule.user_id)
+                    .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+                )
+            else:
+                await db.execute(
+                    update(User)
+                    .where(User.id == schedule.user_id)
+                    .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+                )
             
             # Execute purchase
             from app.services.peyflex import get_client as get_peyflex_client, PeyflexError
@@ -109,11 +130,18 @@ async def execute_scheduled_purchase(schedule_id: int):
             
             if result.status != "success":
                 # Refund on failure
-                await db.execute(
-                    update(User)
-                    .where(User.id == schedule.user_id)
-                    .values(points_balance=User.points_balance + kobo_to_points(amount_kobo))
-                )
+                if settings.wallet_split_enabled:
+                    await db.execute(
+                        update(User)
+                        .where(User.id == schedule.user_id)
+                        .values(cashable_balance=User.cashable_balance + kobo_to_points(amount_kobo))
+                    )
+                else:
+                    await db.execute(
+                        update(User)
+                        .where(User.id == schedule.user_id)
+                        .values(points_balance=User.points_balance + kobo_to_points(amount_kobo))
+                    )
                 await db.execute(
                     update(ScheduledBill)
                     .where(ScheduledBill.id == schedule_id)
@@ -155,11 +183,18 @@ async def execute_scheduled_purchase(schedule_id: int):
             db.add(tx)
             
             # Credit points
-            await db.execute(
-                update(User)
-                .where(User.id == schedule.user_id)
-                .values(points_balance=User.points_balance + points)
-            )
+            if settings.wallet_split_enabled:
+                await db.execute(
+                    update(User)
+                    .where(User.id == schedule.user_id)
+                    .values(cashable_balance=User.cashable_balance + points)
+                )
+            else:
+                await db.execute(
+                    update(User)
+                    .where(User.id == schedule.user_id)
+                    .values(points_balance=User.points_balance + points)
+                )
             
             # Update schedule
             if schedule.schedule_type == "once":

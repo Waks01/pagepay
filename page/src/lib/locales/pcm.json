@@ -156,7 +156,9 @@
     "withdrawal_failed": "E no work",
     "withdrawal_pending": "Dey send money",
     "withdrawal_success": "Don send money",
-    "fee_label": "with {{amount}} charge"
+    "fee_label": "with {{amount}} charge",
+    "view_all": "See All",
+    "status_pending": "Dey wait"
   },
   "tasks": {
     "title": "Work Wey Dey",

@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en" data-scheme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PagePay — Design hub · Phase 1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    body {
+      display: block;
+      padding: 0;
+      background: var(--paper-2);
+    }
+    .hub {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--s7) var(--s6) var(--s9);
+    }
+    .hub-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: var(--s7);
+      padding-bottom: var(--s5);
+      border-bottom: 1px solid var(--border);
+    }
+    .hub-head .left .crumb {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-bottom: var(--s2);
+    }
+    .hub-head .left h1 {
+      font-family: var(--font-display);
+      font-size: 36px;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+    .hub-head .left .tag {
+      display: inline-block;
+      margin-top: var(--s3);
+      padding: var(--s1) var(--s3);
+      background: var(--mint-soft);
+      color: var(--mint);
+      border-radius: var(--r-pill);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .hub-head .right {
+      text-align: right;
+    }
+    .hub-head .right .count {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .hub-head .right .sub {
+      font-size: 13px;
+      color: var(--ink-muted);
+    }
+    .phase-meta {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--s3);
+      margin-bottom: var(--s7);
+    }
+    .phase-card {
+      padding: var(--s4);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-card);
+    }
+    .phase-card .label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--ink-muted);
+      margin-bottom: var(--s2);
+    }
+    .phase-card .v {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 18px;
+    }
+    .phase-card .sub {
+      font-size: 13px;
+      color: var(--ink-muted);
+      margin-top: var(--s1);
+    }
+    .phase-card .swatches {
+      display: flex;
+      gap: 4px;
+      margin-top: var(--s3);
+    }
+    .swatches .sw {
+      width: 18px;
+      height: 18px;
+      border-radius: var(--r-pill);
+      border: 1px solid var(--border);
+    }
+    .group {
+      margin-bottom: var(--s7);
+    }
+    .group-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: var(--s4);
+    }
+    .group-head h2 {
+      font-family: var(--font-display);
+      font-size: 22px;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+    .group-head .meta {
+      font-size: 13px;
+      color: var(--ink-muted);
+    }
+    .screen-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--s4);
+    }
+    .screen-card {
+      display: block;
+      text-decoration: none;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-card);
+      overflow: hidden;
+      transition: transform 200ms ease, box-shadow 200ms ease;
+      color: var(--ink);
+    }
+    .screen-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-lg);
+    }
+    .screen-card .preview {
+      aspect-ratio: 9/16;
+      background: var(--paper);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+    .screen-card .preview iframe {
+      width: 375px;
+      height: 812px;
+      border: none;
+      transform: scale(0.42);
+      transform-origin: top left;
+      pointer-events: none;
+    }
+    .screen-card .preview .fallback {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 28px;
+      color: var(--ink-muted);
+    }
+    .screen-card .preview-wrap {
+      width: 158px;
+      height: 340px;
+      position: relative;
+      overflow: hidden;
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }
+    .screen-card .info {
+      padding: var(--s4);
+    }
+    .screen-card .info .num {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      margin-bottom: var(--s1);
+    }
+    .screen-card .info .title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: var(--s1);
+    }
+    .screen-card .info .sub {
+      font-size: 13px;
+      color: var(--ink-muted);
+    }
+    .screen-card .open-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: var(--s3);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--mint);
+    }
+    .legend {
+      display: flex;
+      gap: var(--s5);
+      padding: var(--s4);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-card);
+      margin-bottom: var(--s7);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: var(--s2);
+      font-size: 13px;
+      color: var(--ink-muted);
+    }
+    .legend-item .swatch-mini {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+    }
+    .footer {
+      margin-top: var(--s9);
+      padding-top: var(--s5);
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--ink-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-switch" role="tablist" aria-label="Theme">
+    <button data-theme="light" class="active">Light</button>
+    <button data-theme="dark">Dark</button>
+    <button data-theme="sepia">Sepia</button>
+  </div>
+
+  <div class="hub">
+    <div class="hub-head">
+      <div class="left">
+        <div class="crumb">PagePay · Mobile Design</div>
+        <h1>Phase 1 — Premium Redesign</h1>
+        <div class="tag">Immersive UI/UX · Read-to-Earn</div>
+      </div>
+      <div class="right">
+        <div class="count">27</div>
+        <div class="sub">screens · 3 themes · guided prototype</div>
+      </div>
+    </div>
+
+    <div class="phase-meta">
+      <div class="phase-card">
+        <div class="label">Theme · light</div>
+        <div class="v">Mint on paper</div>
+        <div class="sub">#0E7C66 / #FBFAF6</div>
+        <div class="swatches">
+          <div class="sw" style="background: #0E7C66;"></div>
+          <div class="sw" style="background: #FBFAF6;"></div>
+          <div class="sw" style="background: #0E1116;"></div>
+        </div>
+      </div>
+      <div class="phase-card">
+        <div class="label">Theme · dark</div>
+        <div class="v">Mint on ink</div>
+        <div class="sub">#34C39B / #0E1116</div>
+        <div class="swatches">
+          <div class="sw" style="background: #34C39B;"></div>
+          <div class="sw" style="background: #0E1116;"></div>
+          <div class="sw" style="background: #FBFAF6;"></div>
+        </div>
+      </div>
+      <div class="phase-card">
+        <div class="label">Theme · sepia</div>
+        <div class="v">Bronze on cream</div>
+        <div class="sub">#7C5E2A / #F5ECD7</div>
+        <div class="swatches">
+          <div class="sw" style="background: #7C5E2A;"></div>
+          <div class="sw" style="background: #F5ECD7;"></div>
+          <div class="sw" style="background: #3E2C1C;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item">
+        <div class="swatch-mini" style="background: var(--mint);"></div>
+        Primary CTA
+      </div>
+      <div class="legend-item">
+        <div class="swatch-mini" style="background: var(--signal);"></div>
+        Destructive / streak
+      </div>
+      <div class="legend-item">
+        <div class="swatch-mini" style="background: var(--indigo);"></div>
+        Cash wallet
+      </div>
+      <div class="legend-item">
+        <div class="swatch-mini" style="background: var(--gold);"></div>
+        Bonus / reward
+      </div>
+      <div class="legend-item" style="margin-left: auto;">
+        Design language shifted to Glassmorphism & Bento Grids.
+      </div>
+    </div>
+
+    <!-- Auth -->
+    <div class="group">
+      <div class="group-head">
+        <h2>Authentication · 4 screens</h2>
+        <span class="meta">Forms, OTP, social, password recovery</span>
+      </div>
+      <div class="screen-grid">
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">01 · Auth</div>
+            <div class="title">Sign in</div>
+            <div class="sub">Email/phone + password, Google + Apple, forgot link.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">02 · Auth</div>
+            <div class="title">Create account</div>
+            <div class="sub">Welcome bonus banner, referral code, live strength meter.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">03 · Auth</div>
+            <div class="title">Verify email OTP</div>
+            <div class="sub">6-digit auto-advance input, resend timer, error shake.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">04 · Auth</div>
+            <div class="title">Forgot password</div>
+            <div class="sub">Email or SMS delivery picker, reset link flow.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Onboarding -->
+    <div class="group">
+      <div class="group-head">
+        <h2>Onboarding · 3 screens</h2>
+        <span class="meta">Carousel, theme picker, notifications</span>
+      </div>
+      <div class="screen-grid">
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">05 · Onboarding</div>
+            <div class="title">Welcome carousel</div>
+            <div class="sub">3 slides: read · earn · AI study. Skip, dot nav, auto-advance.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">06 · Onboarding</div>
+            <div class="title">Pick a theme</div>
+            <div class="sub">Light · dark · sepia with live preview card. Saves preference.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">07 · Onboarding</div>
+            <div class="title">Notifications opt-in</div>
+            <div class="sub">Per-channel toggles: streak, bonus, recs, study.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Home & Wallet -->
+    <div class="group">
+      <div class="group-head">
+        <h2>Home & Wallet · 4 screens</h2>
+        <span class="meta">Bento grid hub, beneficiaries, transactions, and receipts</span>
+      </div>
+      <div class="screen-grid">
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">08 · Home</div>
+            <div class="title">Knowledge Home</div>
+            <div class="sub">Bento grid layout · Growth Hub · Power Hub FAB.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">09 · Home</div>
+            <div class="title">Beneficiaries</div>
+            <div class="sub">Phone contacts + saved wallets. Network-tagged chips.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">10 · Home</div>
+            <div class="title">Transactions</div>
+            <div class="sub">Daily grouped list with filters + 3-stat summary header.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">11 · Home</div>
+            <div class="title">TX Detail</div>
+            <div class="sub">Full receipt layout with status, TX ID, and timestamp.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- VTU Services -->
+    <div class="group">
+      <div class="group-head">
+        <h2>VTU Services · 9 screens</h2>
+        <span class="meta">Guided smart flows for all supported services</span>
+      </div>
+      <div class="screen-grid">
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">12 · VTU</div>
+            <div class="title">Buy Airtime</div>
+            <div class="sub">Guided flow: Who $\rightarrow$ What $\rightarrow$ Earn.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">13 · VTU</div>
+            <div class="title">Buy Data</div>
+            <div class="sub">Guided flow: Who $\rightarrow$ What $\rightarrow$ Earn.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">14 · VTU</div>
+            <div class="title">Electricity</div>
+            <div class="sub">Guided flow: Meter $\rightarrow$ Amount $\rightarrow$ Earn.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">15 · VTU</div>
+            <div class="title">TV Subscription</div>
+            <div class="sub">Guided flow: Provider $\rightarrow$ Pack $\rightarrow$ Earn.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">16 · VTU</div>
+            <div class="title">Recharge Pin</div>
+            <div class="sub">Guided flow: Network $\rightarrow$ Amount $\rightarrow$ Earn.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">17 · VTU</div>
+            <div class="title">Betting Fund</div>
+            <div class="sub">Guided flow: Platform $\rightarrow$ Amount $\rightarrow$ Earn.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">18 · VTU</div>
+            <div class="title">ISP Subscription</div>
+            <div class="sub">Guided flow: Account $\rightarrow$ Plan $\rightarrow$ Earn.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">19 · VTU</div>
+            <div class="title">Education</div>
+            <div class="sub">Guided flow: Exam $\rightarrow$ ID $\rightarrow$ Earn.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">20 · VTU</div>
+            <div class="title">Bulk SMS</div>
+            <div class="sub">Guided flow: Sender $\rightarrow$ Units $\rightarrow$ Earn.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Wallet Management -->
+    <div class="group">
+      <div class="group-head">
+        <h2>Wallet Management · 1 screen</h2>
+        <span class="meta">Funding and payment methods</span>
+      </div>
+      <div class="screen-grid">
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">21 · Wallet</div>
+            <div class="title">Fund Wallet</div>
+            <div class="sub">Amount hero · method selector · quick chips.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Security & Recovery -->
+    <div class="group">
+      <div class="group-head">
+        <h2>Security & Recovery · 5 screens</h2>
+        <span class="meta">Password resets and PIN security</span>
+      </div>
+      <div class="screen-grid">
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">22 · Security</div>
+            <div class="title">Forgot Password</div>
+            <div class="sub">Reset initiation flow.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">23 · Security</div>
+            <div class="title">Forgot Password OTP</div>
+            <div class="sub">Verification of reset code.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">24 · Security</div>
+            <div class="title">Reset Password</div>
+            <div class="sub">New password entry and confirmation.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">25 · Security</div>
+            <div class="title">PIN Setup</div>
+            <div class="sub">4-digit secure PIN creation.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">26 · Security</div>
+            <div class="title">PIN Verify/Change</div>
+            <div class="sub">Security validation and update flow.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Legal -->
+    <div class="group">
+      <div class="group-head">
+        <h2>Legal · 1 screen</h2>
+        <span class="meta">Terms, Privacy, and Regulations</span>
+      </div>
+      <div class="screen-grid">
+        <a href="prototype.html" class="screen-card">
+          <div class="preview">
+            <div class="preview-wrap">
+              <iframe src="prototype.html" loading="lazy" sandbox="allow-same-origin"></iframe>
+            </div>
+          </div>
+          <div class="info">
+            <div class="num">27 · Legal</div>
+            <div class="title">Terms & Privacy</div>
+            <div class="sub">Comprehensive legal documentation.</div>
+            <div class="open-link">Open <span>→</span></div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Phase 1 · 27 of 49 production screens</span>
+      <span>Redesign based on Glassmorphism & Bento Grid patterns.</span>
+    </div>
+  </div>
+
+  <script>
+    const switcher = document.querySelector('.theme-switch');
+    switcher.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.documentElement.dataset.scheme = btn.dataset.theme;
+        switcher.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      });
+    });
+  </script>
+</body>
+</html>

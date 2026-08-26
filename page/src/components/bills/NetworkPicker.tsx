@@ -1,6 +1,13 @@
-import { View, Text, TouchableOpacity, StyleSheet, Image, ViewStyle } from 'react-native';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { PagePay } from '@/constants/theme';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+  ViewStyle,
+} from "react-native";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import { PagePay } from "@/constants/theme";
 
 export type NetworkOption = {
   /** Identifier from the API (e.g. "mtn", "airtel", "9mobile", or for
@@ -32,11 +39,11 @@ type NetworkPickerProps = {
  * The keys are lowercased to handle casing variations returned by the API.
  */
 const NETWORK_LOGO_MAP: Record<string, any> = {
-  mtn: require('@/assets/images/networks/mtn.jpg'),
-  airtel: require('@/assets/images/networks/airtel.png'),
-  glo: require('@/assets/images/networks/glo.png'),
-  '9mobile': require('@/assets/images/networks/9mobile.png'),
-  etisalat: require('@/assets/images/networks/9mobile.png'), // legacy name
+  mtn: require("@/assets/images/networks/mtn.jpg"),
+  airtel: require("@/assets/images/networks/airtel.png"),
+  glo: require("@/assets/images/networks/glo.png"),
+  "9mobile": require("@/assets/images/networks/9mobile.png"),
+  etisalat: require("@/assets/images/networks/9mobile.png"), // legacy name
 };
 
 /**
@@ -44,10 +51,10 @@ const NETWORK_LOGO_MAP: Record<string, any> = {
  * This map bridges those IDs to the brand keys used by NETWORK_LOGO_MAP.
  */
 const NUMERIC_ID_TO_BRAND: Record<string, string> = {
-  '1': 'mtn',
-  '2': 'glo',
-  '3': 'airtel',
-  '4': '9mobile',
+  "1": "mtn",
+  "2": "glo",
+  "3": "airtel",
+  "4": "9mobile",
 };
 
 /**
@@ -56,20 +63,12 @@ const NUMERIC_ID_TO_BRAND: Record<string, string> = {
  * have art for yet.
  */
 const NETWORK_FALLBACK_COLORS: Record<string, string> = {
-  mtn: '#FFCC00',
-  airtel: '#E60000',
-  glo: '#0C8442',
-  '9mobile': '#0066B3',
-  etisalat: '#0066B3',
+  mtn: "#FFCC00",
+  airtel: "#E60000",
+  glo: "#0C8442",
+  "9mobile": "#0066B3",
+  etisalat: "#0066B3",
 };
-
-function resolveLogo(id: string | number | undefined | null) {
-  return NETWORK_LOGO_MAP[resolveBrand(id)] ?? null;
-}
-
-function resolveFallbackColor(id: string | number | undefined | null) {
-  return NETWORK_FALLBACK_COLORS[resolveBrand(id)] ?? '#6B7280';
-}
 
 /**
  * Strip variant suffixes from a network identifier so identifiers like
@@ -79,14 +78,22 @@ function resolveFallbackColor(id: string | number | undefined | null) {
  */
 export function resolveBrand(id: string | number | undefined | null): string {
   if (id === undefined || id === null) {
-    return '';
+    return "";
   }
   const lower = String(id).toLowerCase();
   if (NETWORK_LOGO_MAP[lower]) return lower;
   const numericBrand = NUMERIC_ID_TO_BRAND[lower];
   if (numericBrand) return numericBrand;
-  const head = lower.split('_')[0];
+  const head = lower.split("_")[0];
   return NETWORK_LOGO_MAP[head] ? head : lower;
+}
+
+function resolveLogo(id: string | number | undefined | null) {
+  return NETWORK_LOGO_MAP[resolveBrand(id)] ?? null;
+}
+
+function resolveFallbackColor(id: string | number | undefined | null) {
+  return NETWORK_FALLBACK_COLORS[resolveBrand(id)] ?? "#6B7280";
 }
 
 /**
@@ -109,18 +116,12 @@ export function NetworkPicker({
   const tokens = PagePay[scheme];
 
   return (
-    <View
-      style={[
-        styles.grid,
-        { columnGap: 10, rowGap: 12 },
-        style,
-      ]}
-    >
+    <View style={[styles.grid, { columnGap: 10, rowGap: 12 }, style]}>
       {options.map((opt) => {
         const isActive = String(opt.id) === String(value);
         const logo = resolveLogo(opt.id);
         const fallbackColor = resolveFallbackColor(opt.id);
-        const initial = opt.name.trim().charAt(0).toUpperCase() || '?';
+        const initial = opt.name.trim().charAt(0).toUpperCase() || "?";
 
         return (
           <TouchableOpacity
@@ -142,7 +143,7 @@ export function NetworkPicker({
               style={[
                 styles.logoWrap,
                 {
-                  backgroundColor: logo ? '#fff' : fallbackColor,
+                  backgroundColor: logo ? "#fff" : fallbackColor,
                   borderColor: isActive ? tokens.mint : tokens.border,
                 },
               ]}
@@ -159,7 +160,7 @@ export function NetworkPicker({
                 styles.name,
                 {
                   color: isActive ? tokens.ink : tokens.inkMuted,
-                  fontWeight: isActive ? '700' : '600',
+                  fontWeight: isActive ? "700" : "600",
                 },
               ]}
             >
@@ -179,43 +180,43 @@ export function NetworkPicker({
 
 const styles = StyleSheet.create({
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   chip: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: 6,
     borderRadius: 14,
     borderWidth: 1,
     gap: 6,
-    position: 'relative',
+    position: "relative",
   },
   logoWrap: {
     width: 44,
     height: 44,
     borderRadius: 22,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   logo: {
-    width: '85%',
-    height: '85%',
+    width: "85%",
+    height: "85%",
   },
   fallbackInitial: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#fff',
+    fontWeight: "800",
+    color: "#fff",
   },
   name: {
     fontSize: 11,
-    textAlign: 'center',
-    maxWidth: '100%',
+    textAlign: "center",
+    maxWidth: "100%",
   },
   activeDot: {
-    position: 'absolute',
+    position: "absolute",
     top: 4,
     right: 4,
     width: 8,

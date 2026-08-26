@@ -1,4 +1,4 @@
-import { apiFetch } from "@/src/shared/api/client";
+import { apiFetch, apiUpload } from "@/src/shared/api/client";
 import { File } from "expo-file-system";
 
 export type MaterialSummary = {
@@ -30,6 +30,27 @@ export type SowUploadResponse = {
   title: string;
   exam_type: string | null;
   parsed_structure: Record<string, unknown> | null;
+};
+
+/**
+ * Response from the async SOW upload endpoints (image / document).
+ * The endpoint reads + validates the file synchronously, inserts a
+ * `sow_upload_jobs` row, fires a background worker, and returns the
+ * job id immediately. The client then polls
+ * `GET /api/v1/study/sow/jobs/{job_id}` to drive its progress bar
+ * through the 80→100 window and learn the resulting `material_id`.
+ */
+export type SowUploadJobAccepted = {
+  job_id: string;
+  status: "queued" | "processing" | "completed" | "failed";
+};
+
+export type SowJobStatus = {
+  job_id: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  material_id?: number | null;
+  error?: string | null;
+  updated_at: string;
 };
 
 export type GenerateAssetRequest = {
@@ -104,56 +125,85 @@ export async function uploadSowText(
   return res.json();
 }
 
+export type UploadProgressCallback = (loaded: number, total: number) => void;
+
 export async function uploadSowImage(
   file: { uri: string; name: string; type: string },
   exam_type?: string | null,
-): Promise<SowUploadResponse> {
-  try {
-    const form = new FormData();
-    form.append("file", new File(file.uri));
-    if (exam_type) {
-      form.append("exam_type", exam_type);
-    }
-
-    const res = await apiFetch("/api/v1/study/sow/upload-image", {
-      method: "POST",
-      body: form,
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || "Image upload failed");
-    }
-    return res.json();
-  } catch (err) {
-    if (err instanceof Error) throw err;
-    throw new Error("Image upload failed");
+  onProgress?: UploadProgressCallback,
+): Promise<SowUploadJobAccepted> {
+  const form = new FormData();
+  form.append("file", new File(file.uri));
+  if (exam_type) {
+    form.append("exam_type", exam_type);
   }
+
+  const res = await apiUpload(
+    "/api/v1/study/sow/upload-image",
+    form,
+    onProgress ? { onProgress } : undefined,
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Image upload failed");
+  }
+  return res.json();
 }
 
 export async function uploadSowDocument(
   file: { uri: string; name: string; type: string },
   exam_type?: string | null,
-): Promise<SowUploadResponse> {
-  try {
-    const form = new FormData();
-    form.append("file", new File(file.uri));
-    if (exam_type) {
-      form.append("exam_type", exam_type);
-    }
-
-    const res = await apiFetch("/api/v1/study/sow/upload-document", {
-      method: "POST",
-      body: form,
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || "Document upload failed");
-    }
-    return res.json();
-  } catch (err) {
-    if (err instanceof Error) throw err;
-    throw new Error("Document upload failed");
+  onProgress?: UploadProgressCallback,
+): Promise<SowUploadJobAccepted> {
+  const form = new FormData();
+  form.append("file", new File(file.uri));
+  if (exam_type) {
+    form.append("exam_type", exam_type);
   }
+
+  const res = await apiUpload(
+    "/api/v1/study/sow/upload-document",
+    form,
+    onProgress ? { onProgress } : undefined,
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Document upload failed");
+  }
+  return res.json();
+}
+
+/**
+ * Poll the status of an in-flight SOW upload. Calls `onTick(status)`
+ * on every poll so the caller can advance its progress bar. Resolves
+ * with the final `SowJobStatus` (status === "completed" | "failed")
+ * or rejects after `timeoutMs`. Linear 1s polling for v1 — easy to
+ * reason about and matches the project's `recent-credits` pattern.
+ */
+export async function pollSowJob(
+  jobId: string,
+  onTick?: (status: SowJobStatus) => void,
+  opts: { intervalMs?: number; timeoutMs?: number } = {},
+): Promise<SowJobStatus> {
+  const { intervalMs = 1000, timeoutMs = 180_000 } = opts;
+  const deadline = Date.now() + timeoutMs;
+  let last: SowJobStatus | null = null;
+  while (Date.now() < deadline) {
+    const res = await apiFetch(`/api/v1/study/sow/jobs/${jobId}`);
+    if (!res.ok) {
+      throw new Error("Failed to fetch upload status");
+    }
+    const status = (await res.json()) as SowJobStatus;
+    last = status;
+    onTick?.(status);
+    if (status.status === "completed" || status.status === "failed") {
+      return status;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(
+    `Upload processing timed out after ${Math.round(timeoutMs / 1000)}s`,
+  );
 }
 
 export async function fetchMaterials(): Promise<MaterialSummary[]> {

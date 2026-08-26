@@ -51,3 +51,4 @@ firebase-service-account.js
 *.log
 push_trace.log
 git_token_helper.sh
+client

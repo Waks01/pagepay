@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, ViewStyle } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,6 +16,7 @@ type SkeletonProps = {
   height: number;
   borderRadius?: number;
   marginBottom?: number;
+  style?: ViewStyle;
 };
 
 export function Skeleton({
@@ -23,6 +24,7 @@ export function Skeleton({
   height,
   borderRadius = 8,
   marginBottom = 0,
+  style,
 }: SkeletonProps) {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
@@ -47,6 +49,6 @@ export function Skeleton({
   }));
 
   return (
-    <Animated.View style={[{ width, height, borderRadius, marginBottom }, animStyle] as any} />
+    <Animated.View style={[{ width, height, borderRadius, marginBottom }, style, animStyle] as any} />
   );
 }

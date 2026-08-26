@@ -1,5 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchMaterials, fetchMaterial, generateAsset, unlockAsset, uploadSowText, uploadSowImage, uploadSowDocument, claimQuizBonus, routeAi, generateExample, checkExampleAnswer } from '../api';
+import {
+  fetchMaterials,
+  fetchMaterial,
+  generateAsset,
+  unlockAsset,
+  uploadSowText,
+  uploadSowImage,
+  uploadSowDocument,
+  claimQuizBonus,
+  routeAi,
+  generateExample,
+  checkExampleAnswer,
+  type UploadProgressCallback,
+} from '../api';
 
 export function useMaterials() {
   return useQuery({
@@ -29,8 +42,11 @@ export function useUploadSow() {
 export function useUploadSowImage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { file: { uri: string; name: string; type: string }; exam_type?: string | null }) =>
-      uploadSowImage(payload.file, payload.exam_type),
+    mutationFn: (payload: {
+      file: { uri: string; name: string; type: string };
+      exam_type?: string | null;
+      onProgress?: UploadProgressCallback;
+    }) => uploadSowImage(payload.file, payload.exam_type, payload.onProgress),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['study', 'materials'] });
     },
@@ -40,8 +56,11 @@ export function useUploadSowImage() {
 export function useUploadSowDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { file: { uri: string; name: string; type: string }; exam_type?: string | null }) =>
-      uploadSowDocument(payload.file, payload.exam_type),
+    mutationFn: (payload: {
+      file: { uri: string; name: string; type: string };
+      exam_type?: string | null;
+      onProgress?: UploadProgressCallback;
+    }) => uploadSowDocument(payload.file, payload.exam_type, payload.onProgress),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['study', 'materials'] });
     },

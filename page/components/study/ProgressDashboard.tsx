@@ -42,8 +42,31 @@ export function ProgressDashboard({
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
 
-  const safeProgress = progress ?? [];
+  const hasProgress = Array.isArray(progress) && progress.length > 0;
   const overallMastery = totalTopics > 0 ? Math.round((mastered / totalTopics) * 100) : 0;
+
+  // No progress data yet — render a calm placeholder so the screen never
+  // crashes if the backend hasn't returned per-topic progress (or the
+  // caller hasn't wired it up yet). Avoids `undefined.map` runtime crash.
+  if (!hasProgress) {
+    return (
+      <View
+        style={[
+          styles.container,
+          styles.placeholder,
+          { borderColor: tokens.border },
+        ]}
+      >
+        <Ionicons name="analytics-outline" size={20} color={tokens.inkMuted} />
+        <Text style={[styles.placeholderTitle, { color: tokens.ink }]}>
+          Progress will appear here
+        </Text>
+        <Text style={[styles.placeholderSub, { color: tokens.inkMuted }]}>
+          Complete a quiz or review session to start tracking your mastery.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -69,7 +92,7 @@ export function ProgressDashboard({
 
       {/* Per-topic list — keeps the existing icon-badge layout, just tokenized. */}
       <View style={styles.list}>
-        {safeProgress.map((item) => {
+        {progress!.map((item) => {
           const config = STATUS_CONFIG[item.status] || STATUS_CONFIG['not_started'];
           const tint = (tokens as any)[config.tint] as string;
           const soft = (tokens as any)[config.soft] as string;
@@ -139,6 +162,23 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     gap: 12,
+  },
+  placeholder: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    gap: 6,
+  },
+  placeholderTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  placeholderSub: {
+    fontSize: 12,
+    textAlign: 'center',
   },
   hero: {
     borderRadius: 14,

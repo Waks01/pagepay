@@ -227,7 +227,7 @@ export default function ExamModeScreen() {
           <Pressable
             onPress={handleExit}
             accessibilityRole="button"
-            accessibilityLabel="Exit exam"
+            accessibilityLabel={t('study.exam_mode.exit_exam')}
             style={({ pressed }) => [styles.exitBtn, { borderColor: tokens.border, backgroundColor: tokens.card, opacity: pressed ? 0.7 : 1 }]}
           >
             <Ionicons name="close" size={20} color={tokens.ink} />
@@ -431,7 +431,7 @@ export default function ExamModeScreen() {
                 }}
                 style={[styles.retryBtn, { backgroundColor: tokens.signal }]}
                 accessibilityRole="button"
-                accessibilityLabel="Retry"
+                accessibilityLabel={t('study.exam_mode.retry')}
               >
                 <Text style={styles.retryText}>{t('study.exam_mode.retry')}</Text>
               </TouchableOpacity>
@@ -440,7 +440,7 @@ export default function ExamModeScreen() {
               onPress={() => { setError(null); setRetryAction(null); }}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel="Dismiss"
+              accessibilityLabel={t('study.exam_mode.dismiss')}
             >
               <Ionicons name="close" size={16} color={tokens.signal} accessibilityLabel="" />
             </TouchableOpacity>

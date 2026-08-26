@@ -4,7 +4,7 @@ import { launchCameraAsync, launchImageLibraryAsync, MediaType, requestCameraPer
 export function useImagePicker() {
   const [picking, setPicking] = useState(false);
 
-  const pickImage = async (): Promise<{ uri: string; name: string; type: string } | null> => {
+  const pickImage = async (): Promise<{ uri: string; name: string; type: string; size: number | null } | null> => {
     setPicking(true);
     try {
       const result = await launchImageLibraryAsync({
@@ -21,13 +21,14 @@ export function useImagePicker() {
         uri: asset.uri,
         name: `sow_${Date.now()}.jpg`,
         type: asset.type || 'image/jpeg',
+        size: typeof (asset as any).fileSize === 'number' ? (asset as any).fileSize as number : null,
       };
     } finally {
       setPicking(false);
     }
   };
 
-  const takePhoto = async (): Promise<{ uri: string; name: string; type: string } | null> => {
+  const takePhoto = async (): Promise<{ uri: string; name: string; type: string; size: number | null } | null> => {
     setPicking(true);
     try {
       // Request camera permission
@@ -35,7 +36,7 @@ export function useImagePicker() {
       if (status !== 'granted') {
         return null;
       }
-      
+
       const result = await launchCameraAsync({
         allowsEditing: true,
         quality: 0.8,
@@ -49,6 +50,7 @@ export function useImagePicker() {
         uri: asset.uri,
         name: `sow_${Date.now()}.jpg`,
         type: asset.type || 'image/jpeg',
+        size: typeof (asset as any).fileSize === 'number' ? (asset as any).fileSize as number : null,
       };
     } finally {
       setPicking(false);

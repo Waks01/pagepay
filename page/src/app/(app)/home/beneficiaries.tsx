@@ -254,13 +254,15 @@ export default function BeneficiariesScreen() {
                 disabled={createMutation.isPending || updateMutation.isPending}
                 style={[styles.saveBtn, { backgroundColor: tokens.mint }]}
               >
-                <Text style={[styles.saveBtnText, { color: tokens.mintText }]}>
-                  {createMutation.isPending || updateMutation.isPending
-                    ? "Saving..."
-                    : editingId
-                      ? "Update"
-                      : "Save"}
-                </Text>
+                {createMutation.isPending || updateMutation.isPending ? (
+                  <PagePaySpinner size={16} />
+                ) : (
+                  <Text
+                    style={[styles.saveBtnText, { color: tokens.mintText }]}
+                  >
+                    {editingId ? "Update" : "Save"}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>

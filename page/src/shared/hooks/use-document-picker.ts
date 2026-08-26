@@ -4,7 +4,7 @@ import * as DocumentPicker from 'expo-document-picker';
 export function useDocumentPicker() {
   const [picking, setPicking] = useState(false);
 
-  const pickDocument = async (): Promise<{ uri: string; name: string; type: string } | null> => {
+  const pickDocument = async (): Promise<{ uri: string; name: string; type: string; size: number | null } | null> => {
     setPicking(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -19,6 +19,7 @@ export function useDocumentPicker() {
         uri: asset.uri,
         name: asset.name,
         type: asset.mimeType || 'application/octet-stream',
+        size: typeof asset.size === 'number' ? asset.size : null,
       };
     } finally {
       setPicking(false);

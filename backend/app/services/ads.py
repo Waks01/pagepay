@@ -327,7 +327,7 @@ def points_for_rewarded_ad() -> int:
 
 
 async def create_ad_request(
-    db: AsyncSession, user_id: int, ad_unit: str, session_id: int | None = None
+    db: AsyncSession, user_id: int, ad_unit: str, session_id: int | None = None, use_case: str = "wallet_topup"
 ) -> AdRequest:
     """Issue a new AdRequest row and return it.
 
@@ -353,6 +353,7 @@ async def create_ad_request(
         status="issued",
         created_at=now,
         expires_at=now + timedelta(seconds=settings.ad_request_token_ttl_seconds),
+        use_case=use_case,
     )
     db.add(req)
     try:

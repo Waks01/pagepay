@@ -156,7 +156,9 @@
     "withdrawal_failed": "Cirewa ya kasa",
     "withdrawal_pending": "Ana jiran cirewa",
     "withdrawal_success": "An cire zuwa banki",
-    "fee_label": "har da {{amount}} kuɗin"
+    "fee_label": "har da {{amount}} kuɗin",
+    "view_all": "Duba Duka",
+    "status_pending": "Ana jira"
   },
   "tasks": {
     "title": "Ayyukan Da Ke Samuwa",

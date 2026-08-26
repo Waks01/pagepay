@@ -5,6 +5,8 @@ ad-or-points gated unlock → streaming study chat.
 """
 
 import logging
+import uuid
+import asyncio
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -30,6 +32,7 @@ from app.ai.prompts import (
 )
 from app.ai.router import route_ai
 from app.models import (
+    SowUploadJob,
     StudyAsset,
     StudyMaterial,
     StudyProgress,
@@ -37,7 +40,7 @@ from app.models import (
     User,
     ReadingSession,
 )
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.routers.auth import get_current_user
 from app.config import settings
 from app.services.sanitize import (
@@ -56,6 +59,8 @@ from app.schemas import (
     MaterialSummary,
     QuizCompleteRequest,
     QuizCompleteResponse,
+    SowUploadJobAccepted,
+    SowUploadJobStatus,
     SowUploadRequest,
     SowUploadResponse,
     StudyProgressListResponse,
@@ -137,16 +142,20 @@ async def upload_sow(
     )
 
 
-@router.post("/sow/upload-image", response_model=SowUploadResponse, status_code=201)
+@router.post("/sow/upload-image", response_model=SowUploadJobAccepted, status_code=202)
 async def upload_sow_image(
     file: UploadFile = File(...),
     exam_type: str | None = Form(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a SOW image. OCR via Gemini Vision then parse as text."""
-    api_key = None
-    from app.config import settings
+    """Upload a SOW image. The file is read and validated synchronously
+    so the 5 MB cap + content-type allowlist still hold before we
+    return. OCR (Gemini Vision) + SOW AI parsing then run in a
+    background task. The client polls
+    `GET /api/v1/study/sow/jobs/{job_id}` to drive its progress bar
+    through the 80→100 window.
+    """
     api_key = settings.gemini_api_key
     if not api_key:
         raise HTTPException(status_code=503, detail="Gemini not configured for image upload")
@@ -174,79 +183,39 @@ async def upload_sow_image(
             detail=f"Image too large (max {MAX_SOW_IMAGE_BYTES // (1024*1024)} MB)",
         )
 
-    # Use Gemini Vision for OCR
-    import base64
-    import httpx
-    from app.ai.prompts import SOW_PARSER
-
-    b64 = base64.b64encode(contents).decode()
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-    headers = {"x-goog-api-key": api_key}
-    body = {
-        "contents": [{
-            "parts": [
-                {"text": "Extract all text from this image. Return the raw text exactly as written, preserving structure (headings, bullet points, numbering)."},
-                {"inline_data": {"mime_type": file.content_type or "image/jpeg", "data": b64}},
-            ]
-        }],
-        "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.1},
-    }
-
-    extracted_text = ""
-    try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(url, json=body, headers=headers)
-            if resp.status_code == 200:
-                data = resp.json()
-                extracted_text = data["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception as exc:
-        logger.error("Gemini Vision OCR failed: %s", exc)
-        raise HTTPException(status_code=502, detail="Image OCR failed") from exc
-
-    if not extracted_text.strip():
-        raise HTTPException(status_code=400, detail="Could not extract text from image")
-
-    # Now parse the extracted text
-    prompt = SOW_PARSER.format(raw_text=extracted_text)
-    ai_result = await route_ai(prompt, task_type="heavy", db=db)
-
-    parsed = None
-    try:
-        import json as _json
-        parsed = _json.loads(ai_result["response"])
-    except Exception:
-        logger.error("SOW parser returned non-JSON: %s", ai_result["response"][:200])
-
-    title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
-
-    material = StudyMaterial(
-        user_id=current_user.id,
-        title=title,
-        exam_type=exam_type,
-        raw_input=f"[IMAGE: {safe_name}]\n{extracted_text}",
-        parsed_structure=_json.dumps(parsed) if parsed else None,
-        ai_model_used=ai_result.get("provider"),
-    )
-    db.add(material)
+    # Insert the job row, fire the worker, return immediately.
+    job = SowUploadJob(id=str(uuid.uuid4()), user_id=current_user.id, status="queued")
+    db.add(job)
     await db.commit()
-    await db.refresh(material)
+    await db.refresh(job)
 
-    return SowUploadResponse(
-        material_id=material.id,
-        title=material.title,
-        exam_type=material.exam_type,
-        parsed_structure=parsed,
+    asyncio.create_task(
+        _process_sow_image_job(
+            job_id=job.id,
+            user_id=current_user.id,
+            exam_type=exam_type,
+            contents=contents,
+            safe_name=safe_name,
+            content_type=file.content_type or "image/jpeg",
+        )
     )
 
+    return SowUploadJobAccepted(job_id=job.id, status="queued")
 
-@router.post("/sow/upload-document", response_model=SowUploadResponse, status_code=201)
+
+@router.post("/sow/upload-document", response_model=SowUploadJobAccepted, status_code=202)
 async def upload_sow_document(
     file: UploadFile = File(...),
     exam_type: str | None = Form(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a SOW document (PDF, DOCX, TXT). Extract text then parse."""
+    """Upload a SOW document (PDF, DOCX, TXT). The file is read and
+    validated synchronously so the 10 MB cap holds; text extraction
+    + SOW AI parsing then run in a background task. The client
+    polls `GET /api/v1/study/sow/jobs/{job_id}` to drive its progress
+    bar through the 80→100 window.
+    """
     # Sanitize filename before we read the body — the path-traversal
     # filename is the most likely attack vector, the body size is
     # secondary.
@@ -261,88 +230,302 @@ async def upload_sow_document(
             detail=f"Document too large (max {MAX_SOW_DOC_BYTES // (1024*1024)} MB)",
         )
 
-    extracted_text = ""
-    # Use the sanitized name for the extension check too — if a
-    # malicious user names a PDF "evil.jpg", the sanitized name
-    # still ends in .jpg and is correctly rejected by the parser
-    # branch below.
-    filename = safe_name
+    # Reject early if the extension is not one we know how to parse —
+    # do this inline so the client gets a fast 400 instead of finding
+    # out via the polling endpoint.
+    filename_lower = safe_name.lower()
+    if not (
+        filename_lower.endswith(".pdf")
+        or filename_lower.endswith(".docx")
+        or filename_lower.endswith(".doc")
+        or filename_lower.endswith(".txt")
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Upload PDF, DOCX, or TXT.",
+        )
 
-    # Determine file type and extract text
-    if filename.lower().endswith('.pdf'):
-        # Extract text from PDF
+    job = SowUploadJob(id=str(uuid.uuid4()), user_id=current_user.id, status="queued")
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    asyncio.create_task(
+        _process_sow_document_job(
+            job_id=job.id,
+            user_id=current_user.id,
+            exam_type=exam_type,
+            contents=contents,
+            safe_name=safe_name,
+        )
+    )
+
+    return SowUploadJobAccepted(job_id=job.id, status="queued")
+
+
+@router.get("/sow/jobs/{job_id}", response_model=SowUploadJobStatus)
+async def get_sow_job_status(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Poll for the status of an in-flight SOW upload.
+
+    Scoped to `current_user.id` so a user can never see another
+    user's job state. Returns 404 on miss — we don't leak the
+    existence of someone else's job.
+    """
+    row = await db.get(SowUploadJob, job_id)
+    if row is None or row.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return SowUploadJobStatus(
+        job_id=row.id,
+        status=row.status,
+        material_id=row.material_id,
+        error=row.error_message,
+        updated_at=row.updated_at,
+    )
+
+
+# ── Background workers ───────────────────────────────────────────────
+
+
+async def _ocr_image_with_gemini(
+    contents: bytes, content_type: str, api_key: str
+) -> str:
+    """Send the image to Gemini Vision and return the extracted text.
+
+    Kept as a private helper so the image worker stays small. Raises
+    on any failure (network, non-200, empty body) so the worker can
+    mark the job as `failed` with a category string instead of an
+    exception that crashes the asyncio task.
+    """
+    import base64
+    import httpx
+
+    b64 = base64.b64encode(contents).decode()
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    headers = {"x-goog-api-key": api_key}
+    body = {
+        "contents": [{
+            "parts": [
+                {"text": "Extract all text from this image. Return the raw text exactly as written, preserving structure (headings, bullet points, numbering)."},
+                {"inline_data": {"mime_type": content_type, "data": b64}},
+            ]
+        }],
+        "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.1},
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(url, json=body, headers=headers)
+        if resp.status_code != 200:
+            raise RuntimeError(f"gemini_vision_http_{resp.status_code}")
+        data = resp.json()
+    try:
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError("gemini_vision_malformed_response") from exc
+
+
+async def _extract_document_text(contents: bytes, filename: str) -> str:
+    """Branch on extension and extract plain text from PDF / DOCX / TXT.
+
+    Raises a `ValueError` with a user-safe category on any failure;
+    the document worker translates that into the right
+    `error_message` on the job row.
+    """
+    fname = filename.lower()
+    if fname.endswith(".pdf"):
         try:
             import pypdf
             from io import BytesIO
-            pdf_reader = pypdf.PdfReader(BytesIO(contents))
-            text_parts = []
-            for page in pdf_reader.pages:
-                text_parts.append(page.extract_text())
-            extracted_text = "\n".join(text_parts)
+            reader = pypdf.PdfReader(BytesIO(contents))
+            return "\n".join(p.extract_text() or "" for p in reader.pages)
         except Exception as exc:
             logger.error("PDF extraction failed: %s", exc)
-            raise HTTPException(status_code=400, detail="Could not extract text from PDF. Try uploading as image or text.") from exc
-
-    elif filename.lower().endswith(('.docx', '.doc')):
-        # Extract text from Word document
+            raise ValueError("pdf_extraction_failed") from exc
+    if fname.endswith((".docx", ".doc")):
         try:
             import docx
             from io import BytesIO
             doc = docx.Document(BytesIO(contents))
-            text_parts = [para.text for para in doc.paragraphs]
-            extracted_text = "\n".join(text_parts)
+            return "\n".join(para.text for para in doc.paragraphs)
         except Exception as exc:
             logger.error("DOCX extraction failed: %s", exc)
-            raise HTTPException(status_code=400, detail="Could not extract text from Word document. Try uploading as PDF or text.") from exc
-
-    elif filename.lower().endswith('.txt'):
-        # Plain text file
+            raise ValueError("docx_extraction_failed") from exc
+    if fname.endswith(".txt"):
         try:
-            extracted_text = contents.decode('utf-8')
+            return contents.decode("utf-8")
         except UnicodeDecodeError:
             try:
-                extracted_text = contents.decode('latin-1')
+                return contents.decode("latin-1")
             except Exception as exc:
                 logger.error("Text file decode failed: %s", exc)
-                raise HTTPException(status_code=400, detail="Could not decode text file.") from exc
-    else:
-        raise HTTPException(status_code=400, detail="Unsupported file type. Upload PDF, DOCX, or TXT.")
+                raise ValueError("text_decode_failed") from exc
+    raise ValueError("unsupported_file_type")
 
-    if not extracted_text.strip():
-        raise HTTPException(status_code=400, detail="Could not extract text from document")
 
-    # Parse the extracted text with AI
-    from app.ai.prompts import SOW_PARSER
-    prompt = SOW_PARSER.format(raw_text=extracted_text)
-    ai_result = await route_ai(prompt, task_type="heavy", db=db)
-
-    parsed = None
+def _parse_ai_response(response_text: str) -> dict | None:
+    """Best-effort JSON parse of the SOW parser's output. Returns None
+    on failure (the AI may occasionally return non-JSON — we log it
+    and store the raw material with no parsed structure)."""
+    import json as _json
     try:
-        import json as _json
-        parsed = _json.loads(ai_result["response"])
+        return _json.loads(response_text)
     except Exception:
-        logger.error("SOW parser returned non-JSON: %s", ai_result["response"][:200])
+        logger.error("SOW parser returned non-JSON: %s", response_text[:200])
+        return None
 
-    title = (parsed or {}).get("title", filename) if isinstance(parsed, dict) else filename
 
-    material = StudyMaterial(
-        user_id=current_user.id,
-        title=title,
-        exam_type=exam_type,
-        raw_input=f"[DOCUMENT: {filename}]\n{extracted_text}",
-        parsed_structure=_json.dumps(parsed) if parsed else None,
-        ai_model_used=ai_result.get("provider"),
-    )
-    db.add(material)
-    await db.commit()
-    await db.refresh(material)
+async def _run_sow_parser(extracted_text: str) -> tuple[dict | None, str | None, str | None]:
+    """Run the SOW parser AI prompt. Returns (parsed, provider, raw_response).
 
-    return SowUploadResponse(
-        material_id=material.id,
-        title=material.title,
-        exam_type=material.exam_type,
-        parsed_structure=parsed,
-    )
+    Pulled out of the workers so the image + document paths share the
+    exact same parsing logic.
+    """
+    prompt = SOW_PARSER.format(raw_text=extracted_text)
+    ai_result = await route_ai(prompt, task_type="heavy")
+    parsed = _parse_ai_response(ai_result.get("response", ""))
+    return parsed, ai_result.get("provider"), ai_result.get("response", "")
+
+
+async def _mark_job_status(
+    job_id: str, status: str, *, material_id: int | None = None, error: str | None = None
+) -> None:
+    """Update a job row using its own session.
+
+    The worker runs in a background task with no shared session, so
+    each status flip opens `AsyncSessionLocal` briefly.
+    """
+    async with AsyncSessionLocal() as db:
+        row = await db.get(SowUploadJob, job_id)
+        if row is None:
+            return
+        row.status = status
+        if material_id is not None:
+            row.material_id = material_id
+        if error is not None:
+            row.error_message = error
+        row.updated_at = datetime.utcnow()
+        await db.commit()
+
+
+async def _process_sow_image_job(
+    job_id: str,
+    user_id: int,
+    exam_type: str | None,
+    contents: bytes,
+    safe_name: str,
+    content_type: str,
+) -> None:
+    """Background worker for the image SOW upload.
+
+    Opens its own `AsyncSessionLocal` so it doesn't share a session
+    with the request that fired it. Never raises — every error path
+    ends in a `failed` row so the polling endpoint has something to
+    report.
+    """
+    try:
+        await _mark_job_status(job_id, "processing")
+
+        api_key = settings.gemini_api_key
+        if not api_key:
+            raise RuntimeError("gemini_not_configured")
+
+        try:
+            extracted_text = await _ocr_image_with_gemini(contents, content_type, api_key)
+        except Exception as exc:
+            logger.error("Gemini Vision OCR failed for job %s: %s", job_id, exc)
+            raise RuntimeError("image_ocr_failed") from exc
+
+        if not extracted_text.strip():
+            raise RuntimeError("image_ocr_empty")
+
+        try:
+            parsed, provider, _ = await _run_sow_parser(extracted_text)
+        except Exception as exc:
+            logger.error("SOW parser AI failed for job %s: %s", job_id, exc)
+            raise RuntimeError("ai_parser_failed") from exc
+
+        title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
+
+        import json as _json
+        async with AsyncSessionLocal() as db:
+            material = StudyMaterial(
+                user_id=user_id,
+                title=title,
+                exam_type=exam_type,
+                raw_input=f"[IMAGE: {safe_name}]\n{extracted_text}",
+                parsed_structure=_json.dumps(parsed) if parsed else None,
+                ai_model_used=provider,
+            )
+            db.add(material)
+            await db.commit()
+            await db.refresh(material)
+            material_id = material.id
+
+        await _mark_job_status(job_id, "completed", material_id=material_id)
+    except Exception as exc:
+        logger.exception("SOW image job %s failed", job_id)
+        await _mark_job_status(job_id, "failed", error=str(exc) or exc.__class__.__name__)
+
+
+async def _process_sow_document_job(
+    job_id: str,
+    user_id: int,
+    exam_type: str | None,
+    contents: bytes,
+    safe_name: str,
+) -> None:
+    """Background worker for the document SOW upload. Same shape as
+    the image worker — runs extraction + AI parse, writes the
+    material, updates the job row.
+    """
+    try:
+        await _mark_job_status(job_id, "processing")
+
+        try:
+            extracted_text = await _extract_document_text(contents, safe_name)
+        except ValueError as exc:
+            # Already a user-safe category from the extractor.
+            await _mark_job_status(job_id, "failed", error=str(exc))
+            return
+        except Exception as exc:
+            logger.error("Document extraction crashed for job %s: %s", job_id, exc)
+            await _mark_job_status(job_id, "failed", error="document_extraction_failed")
+            return
+
+        if not extracted_text.strip():
+            await _mark_job_status(job_id, "failed", error="empty_extracted_text")
+            return
+
+        try:
+            parsed, provider, _ = await _run_sow_parser(extracted_text)
+        except Exception as exc:
+            logger.error("SOW parser AI failed for job %s: %s", job_id, exc)
+            await _mark_job_status(job_id, "failed", error="ai_parser_failed")
+            return
+
+        title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
+
+        import json as _json
+        async with AsyncSessionLocal() as db:
+            material = StudyMaterial(
+                user_id=user_id,
+                title=title,
+                exam_type=exam_type,
+                raw_input=f"[DOCUMENT: {safe_name}]\n{extracted_text}",
+                parsed_structure=_json.dumps(parsed) if parsed else None,
+                ai_model_used=provider,
+            )
+            db.add(material)
+            await db.commit()
+            await db.refresh(material)
+            material_id = material.id
+
+        await _mark_job_status(job_id, "completed", material_id=material_id)
+    except Exception as exc:
+        logger.exception("SOW document job %s failed", job_id)
+        await _mark_job_status(job_id, "failed", error=str(exc) or exc.__class__.__name__)
 
 
 # ── GET /study/materials ────────────────────────────────────────────
@@ -903,22 +1086,36 @@ async def unlock_asset(
         )
 
     if payload.method == "points":
-        user_result = await db.execute(
-            select(User.points_balance).where(User.id == current_user.id)
-        )
-        balance = user_result.scalar_one() or 0
-
-        if balance < asset.points_to_unlock:
-            raise HTTPException(
-                status_code=402,
-                detail=f"Need {asset.points_to_unlock} pts. You have {balance}.",
+        if settings.wallet_split_enabled:
+            balance_result = await db.execute(
+                select(User.service_credit_balance).where(User.id == current_user.id)
             )
-
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(points_balance=User.points_balance - asset.points_to_unlock)
-        )
+            balance = balance_result.scalar_one() or 0
+            if balance < asset.points_to_unlock:
+                raise HTTPException(
+                    status_code=402,
+                    detail=f"Need {asset.points_to_unlock} service credits. You have {balance}.",
+                )
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(service_credit_balance=User.service_credit_balance - asset.points_to_unlock)
+            )
+        else:
+            balance_result = await db.execute(
+                select(User.points_balance).where(User.id == current_user.id)
+            )
+            balance = balance_result.scalar_one() or 0
+            if balance < asset.points_to_unlock:
+                raise HTTPException(
+                    status_code=402,
+                    detail=f"Need {asset.points_to_unlock} pts. You have {balance}.",
+                )
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(points_balance=User.points_balance - asset.points_to_unlock)
+            )
 
         txn = StudyTransaction(
             user_id=current_user.id,
@@ -930,9 +1127,14 @@ async def unlock_asset(
         db.add(txn)
         await db.commit()
 
-        new_balance_result = await db.execute(
-            select(User.points_balance).where(User.id == current_user.id)
-        )
+        if settings.wallet_split_enabled:
+            new_balance_result = await db.execute(
+                select(User.service_credit_balance).where(User.id == current_user.id)
+            )
+        else:
+            new_balance_result = await db.execute(
+                select(User.points_balance).where(User.id == current_user.id)
+            )
         new_balance = new_balance_result.scalar_one() or 0
 
         import json as _json
@@ -1007,15 +1209,22 @@ async def complete_quiz(
 
     bonus_awarded = False
     bonus_points = 0
-    new_balance = current_user.points_balance
+    new_balance = current_user.service_credit_balance if settings.wallet_split_enabled else current_user.points_balance
 
     if payload.score >= BONUS_THRESHOLD:
         bonus_points = BONUS_POINTS
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(points_balance=User.points_balance + bonus_points)
-        )
+        if settings.wallet_split_enabled:
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(service_credit_balance=User.service_credit_balance + bonus_points)
+            )
+        else:
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(points_balance=User.points_balance + bonus_points)
+            )
         txn = StudyTransaction(
             user_id=current_user.id,
             asset_id=asset.id,
@@ -1025,9 +1234,14 @@ async def complete_quiz(
         )
         db.add(txn)
         await db.commit()
-        new_balance_result = await db.execute(
-            select(User.points_balance).where(User.id == current_user.id)
-        )
+        if settings.wallet_split_enabled:
+            new_balance_result = await db.execute(
+                select(User.service_credit_balance).where(User.id == current_user.id)
+            )
+        else:
+            new_balance_result = await db.execute(
+                select(User.points_balance).where(User.id == current_user.id)
+            )
         new_balance = new_balance_result.scalar_one() or 0
         bonus_awarded = True
 

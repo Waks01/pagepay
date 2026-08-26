@@ -209,7 +209,7 @@ export function DisputeModal({
                       Service:
                     </Text>
                     <Text style={[styles.detailValue, { color: tokens.ink }]}>
-                      {transactionDetails?.service?.toUpperCase() || "AIRTIME"}
+                      {(transactionDetails?.service || "airtime").toUpperCase()}
                     </Text>
                   </View>
 

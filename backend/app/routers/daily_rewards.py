@@ -4,6 +4,7 @@ Handles the daily claim system where users can claim rewards based on their logi
 Supports daily rewards (days 1-7), weekly bonuses, and monthly rewards.
 """
 
+import hashlib
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
@@ -12,13 +13,18 @@ from sqlalchemy import select, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import User, UserStreak, DailyReward, UserRewardClaim
+from app.models import User, UserStreak, DailyReward, UserRewardClaim, StreakFreezeLog, AdEvent
 from app.routers.auth import get_current_user
 from app.routers.streak import _update_reward_streak, _claim_daily_reward_increment_streak, _get_timezone_offset_minutes, _user_local_date
-from app.schemas import DailyRewardInfo, DailyRewardStatus, DailyRewardClaim, DailyRewardHistory
+from app.schemas import DailyRewardInfo, DailyRewardStatus, DailyRewardClaim, DailyRewardHistory, StreakFreezeByAdRequest, StreakFreezeByAdResponse, StreakFreezeByPointsRequest, StreakFreezeByPointsResponse
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/rewards", tags=["daily_rewards"])
+
+
+def hash_device_id(device_id: str) -> str:
+    """SHA-256 hash a raw device id for safe storage."""
+    return hashlib.sha256(device_id.encode()).hexdigest()
 
 
 async def _get_or_create_default_rewards(db: AsyncSession) -> List[DailyReward]:
@@ -184,13 +190,24 @@ async def get_daily_reward_status(
     )
 
 
-@router.post("/daily/claim")
+@router.post("/daily/claim", response_model=DailyRewardClaim)
 async def claim_daily_reward(
     request: Request,
+    payload: DailyRewardClaimRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Claim today's daily reward if available."""
+    # Device id hash guard for streak anti-abuse
+    if payload.device_id:
+        device_hash = hash_device_id(payload.device_id)
+        if current_user.device_id_hash is None:
+            current_user.device_id_hash = device_hash
+        elif current_user.device_id_hash != device_hash:
+            raise HTTPException(
+                status_code=403,
+                detail="Streak is bound to a different device.",
+            )
     streak = await _update_reward_streak(current_user.id, db, request)
     rewards = await _get_or_create_default_rewards(db)
 
@@ -235,7 +252,10 @@ async def claim_daily_reward(
     )
     db.add(claim)
     
-    current_user.points_balance += points_to_award
+    if settings.wallet_split_enabled:
+        current_user.service_credit_balance += points_to_award
+    else:
+        current_user.points_balance += points_to_award
     
     logger.info(
         "Daily reward claimed: user=%d tier=%s base=%d multiplier=%.1fx final=%d streak=%d",
@@ -281,7 +301,7 @@ async def claim_daily_reward(
         reward_title=claimable_reward.title,
         reward_description=claimable_reward.description,
         reward_emoji=claimable_reward.icon_emoji,
-        new_total_points=current_user.points_balance,
+        new_total_points=current_user.service_credit_balance if settings.wallet_split_enabled else current_user.points_balance,
         streak_day=updated_streak.reward_streak,
         is_multiplier=claimable_reward.reward_type == "multiplier",
         multiplier_value=claimable_reward.reward_value if claimable_reward.reward_type == "multiplier" else None
@@ -343,3 +363,145 @@ async def get_daily_reward_config(
         }
         for r in rewards
     ]
+
+
+def _streak_freeze_cost(previous_streak_day: int) -> int:
+    if previous_streak_day <= 6:
+        return 5
+    elif previous_streak_day <= 13:
+        return 10
+    elif previous_streak_day <= 20:
+        return 15
+    elif previous_streak_day <= 29:
+        return 20
+    else:
+        return 30
+
+
+async def _get_last_claim(db: AsyncSession, user_id: int) -> UserRewardClaim | None:
+    result = await db.execute(
+        select(UserRewardClaim)
+        .where(UserRewardClaim.user_id == user_id)
+        .order_by(desc(UserRewardClaim.claimed_at))
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+@router.post("/daily/freeze-by-ad", response_model=StreakFreezeByAdResponse)
+async def freeze_streak_by_ad(
+    payload: StreakFreezeByAdRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if payload.device_id:
+        device_hash = hash_device_id(payload.device_id)
+        if current_user.device_id_hash is None:
+            current_user.device_id_hash = device_hash
+        elif current_user.device_id_hash != device_hash:
+            raise HTTPException(status_code=403, detail="Streak is bound to a different device.")
+
+    streak = await _update_reward_streak(current_user.id, db, request)
+
+    if streak.reward_streak > 0:
+        raise HTTPException(status_code=400, detail="Streak is not broken.")
+
+    last_claim = await _get_last_claim(db, current_user.id)
+    if not last_claim or (datetime.utcnow() - last_claim.claimed_at) > timedelta(hours=48):
+        raise HTTPException(status_code=400, detail="No recent streak to recover.")
+
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    existing = await db.execute(
+        select(StreakFreezeLog).where(
+            StreakFreezeLog.user_id == current_user.id,
+            StreakFreezeLog.method == "ad",
+            StreakFreezeLog.created_at >= today_start,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Ad-recovery already used today.")
+
+    ad_event_id = None
+    recent_ad = await db.execute(
+        select(AdEvent).where(
+            AdEvent.user_id == current_user.id,
+            AdEvent.credit_status == "credited",
+        ).order_by(desc(AdEvent.created_at)).limit(1)
+    )
+    recent_ad_row = recent_ad.scalar_one_or_none()
+    if recent_ad_row:
+        ad_event_id = recent_ad_row.id
+
+    yesterday = date.today() - timedelta(days=1)
+    streak.reward_streak = last_claim.streak_day
+    streak.last_reward_claim_date = yesterday.isoformat()
+    streak.last_claim_date = yesterday.isoformat()
+    streak.reward_streak_expires_at = datetime.utcnow() + timedelta(hours=24)
+
+    freeze_log = StreakFreezeLog(
+        user_id=current_user.id,
+        method="ad",
+        sv_spent=0,
+        streak_length_at_freeze=last_claim.streak_day,
+        ad_event_id=ad_event_id,
+        device_id_hash=current_user.device_id_hash,
+    )
+    db.add(freeze_log)
+    await db.commit()
+    await db.refresh(streak)
+
+    next_claim = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    return StreakFreezeByAdResponse(recovered=True, next_claim_available_at=next_claim)
+
+
+@router.post("/daily/freeze-by-points", response_model=StreakFreezeByPointsResponse)
+async def freeze_streak_by_points(
+    payload: StreakFreezeByPointsRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if payload.device_id:
+        device_hash = hash_device_id(payload.device_id)
+        if current_user.device_id_hash is None:
+            current_user.device_id_hash = device_hash
+        elif current_user.device_id_hash != device_hash:
+            raise HTTPException(status_code=403, detail="Streak is bound to a different device.")
+
+    streak = await _update_reward_streak(current_user.id, db, request)
+
+    if streak.reward_streak > 0:
+        raise HTTPException(status_code=400, detail="Streak is not broken.")
+
+    last_claim = await _get_last_claim(db, current_user.id)
+    if not last_claim or (datetime.utcnow() - last_claim.claimed_at) > timedelta(hours=48):
+        raise HTTPException(status_code=400, detail="No recent streak to recover.")
+
+    cost = _streak_freeze_cost(last_claim.streak_day)
+    if current_user.service_credit_balance < cost:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient service credits. Need {cost} sv to recover streak.",
+        )
+
+    current_user.service_credit_balance -= cost
+    yesterday = date.today() - timedelta(days=1)
+    streak.reward_streak = last_claim.streak_day
+    streak.last_reward_claim_date = yesterday.isoformat()
+    streak.last_claim_date = yesterday.isoformat()
+    streak.reward_streak_expires_at = datetime.utcnow() + timedelta(hours=24)
+
+    freeze_log = StreakFreezeLog(
+        user_id=current_user.id,
+        method="points",
+        sv_spent=cost,
+        streak_length_at_freeze=last_claim.streak_day,
+        device_id_hash=current_user.device_id_hash,
+    )
+    db.add(freeze_log)
+    await db.commit()
+    await db.refresh(current_user)
+    await db.refresh(streak)
+
+    return StreakFreezeByPointsResponse(recovered=True, sv_spent=cost, new_balance=current_user.service_credit_balance)

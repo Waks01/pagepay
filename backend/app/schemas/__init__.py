@@ -75,7 +75,9 @@ class UserMe(BaseModel):
     email: str | None
     phone: str | None
     username: str | None
-    points_balance: int
+    service_credit_balance: int = 0
+    cashable_balance: int = 0
+    points_balance: int = 0
     tier: str
     created_at: datetime
     is_worker: bool = True
@@ -188,6 +190,7 @@ class BillTransactionOut(BaseModel):
     
     created_at: datetime
     updated_at: datetime
+    ledger: str = "cashable"
 
     model_config = {"from_attributes": True}
 
@@ -310,6 +313,7 @@ class SessionEndResponse(BaseModel):
     bonus_eligible: bool
     slice_bonus_credited: int
     new_balance: int
+    new_cashable_balance: int
 
 
 class SessionClaimResponse(BaseModel):
@@ -554,6 +558,17 @@ class AdRequestTokenRequest(BaseModel):
         description="The ad slot the client wants to show (e.g. 'rewarded_android').",
     )
     session_id: int | None = Field(default=None, description="The active reading session id, if any.")
+    use_case: Literal[
+        "wallet_topup",
+        "study_unlock",
+        "streak_recovery",
+        "withdrawal_fee_offset",
+        "quiz_extra_life",
+        "daily_bonus_boost",
+    ] = Field(
+        default="wallet_topup",
+        description="Why the client wants an ad. Defaults to wallet_topup for legacy clients.",
+    )
 
 
 class AdRequestTokenResponse(BaseModel):
@@ -753,6 +768,36 @@ class SowUploadResponse(BaseModel):
     title: str
     exam_type: str | None = None
     parsed_structure: dict | None = None
+
+
+class SowUploadJobAccepted(BaseModel):
+    """Response for the async SOW upload endpoints (image / document).
+
+    The endpoint reads the file synchronously (so the 5 MB / 10 MB cap
+    and content-type allowlist still hold before the request returns),
+    inserts a `sow_upload_jobs` row, fires a background worker, and
+    returns the job id immediately. The client then polls
+    `GET /study/sow/jobs/{job_id}` for status updates.
+    """
+
+    job_id: str
+    status: str  # always "queued" on first response
+
+
+class SowUploadJobStatus(BaseModel):
+    """Polling response for an in-flight SOW upload.
+
+    `status` is one of: queued, processing, completed, failed. On
+    `completed`, `material_id` is populated and the client can fetch
+    the full `MaterialDetail` via `GET /materials/{material_id}`. On
+    `failed`, `error` carries a short, user-safe message.
+    """
+
+    job_id: str
+    status: str
+    material_id: int | None = None
+    error: str | None = None
+    updated_at: datetime
 
 
 class MaterialSummary(BaseModel):
@@ -1075,9 +1120,32 @@ class DailyRewardClaim(BaseModel):
     multiplier_value: int | None
 
 
+class DailyRewardClaimRequest(BaseModel):
+    device_id: str | None = None
+
+
 class DailyRewardHistory(BaseModel):
     claims: list[dict]
     total_points_earned: int
+
+
+class StreakFreezeByAdRequest(BaseModel):
+    device_id: str | None = None
+
+
+class StreakFreezeByAdResponse(BaseModel):
+    recovered: bool
+    next_claim_available_at: datetime | None = None
+
+
+class StreakFreezeByPointsRequest(BaseModel):
+    device_id: str | None = None
+
+
+class StreakFreezeByPointsResponse(BaseModel):
+    recovered: bool
+    sv_spent: int
+    new_balance: int
 
 
 class DailyActiveUsers(BaseModel):

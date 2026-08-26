@@ -179,7 +179,7 @@ async def issue_ad_request_token(
 
     try:
         req = await ads_service.create_ad_request(
-            db=db, user_id=current_user.id, ad_unit=payload.ad_unit, session_id=payload.session_id
+            db=db, user_id=current_user.id, ad_unit=payload.ad_unit, session_id=payload.session_id, use_case=payload.use_case
         )
     except Exception as exc:
         logger.error(
@@ -763,6 +763,43 @@ async def admob_ssv_callback(
             user_id, current_user.tier.value, base_points, multiplier, points
         )
 
+    # ── 6a. Daily ad impression cap (global, all networks + use cases) ──
+    DAILY_CAP = settings.daily_ad_impression_cap
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    cap_result = await db.execute(
+        select(func.count(AdEvent.id))
+        .where(AdEvent.user_id == user_id)
+        .where(AdEvent.ad_type == "rewarded")
+        .where(AdEvent.credit_status == "credited")
+        .where(AdEvent.created_at >= today_start)
+    )
+    ads_watched_today = cap_result.scalar() or 0
+    if ads_watched_today >= DAILY_CAP:
+        await ads_service.mark_ad_request_rejected(
+            db, req, reason="daily_ad_impression_cap_hit",
+            extra_metadata={
+                "today_count": ads_watched_today,
+                "cap": DAILY_CAP,
+                "use_case": getattr(req, "use_case", "wallet_topup"),
+            },
+        )
+        await log_ssv_attempt(
+            user_id=user_id,
+            token=token,
+            status="rejected_daily_ad_impression_cap",
+            rejection_reason=(
+                f"daily ad impression cap {DAILY_CAP} hit "
+                f"(today={ads_watched_today})"
+            ),
+            points_credited=0,
+        )
+        await db.commit()
+        logger.info(
+            "AdMob SSV: daily ad cap hit user=%s today=%d cap=%d use_case=%s",
+            user_id, ads_watched_today, DAILY_CAP, getattr(req, "use_case", "wallet_topup"),
+        )
+        return {"status": "ignored", "reason": "daily_ad_impression_cap"}
+
     # Mark the AdRequest as credited (audit trail)
     await ads_service.mark_ad_request_credited(
         db, req, points=points, admob_transaction_id=transaction_id or None
@@ -775,22 +812,36 @@ async def admob_ssv_callback(
         # settled at /session/end, ad bonuses at the SSV webhook). We
         # keep `req.session_id` on the AdEvent for analytics so we can
         # still measure "ads watched during a reading session" separately.
-        await db.execute(
-            update(User)
-            .where(User.id == user_id)
-            .values(points_balance=User.points_balance + points)
-        )
+        if settings.wallet_split_enabled:
+            await db.execute(
+                update(User)
+                .where(User.id == user_id)
+                .values(service_credit_balance=User.service_credit_balance + points)
+            )
+        else:
+            await db.execute(
+                update(User)
+                .where(User.id == user_id)
+                .values(points_balance=User.points_balance + points)
+            )
         logger.info(
             "AdMob SSV: session-bound credit → wallet user=%s session=%s pts=%d",
             user_id, req.session_id, points,
         )
     else:
         # Fallback: credit the global wallet immediately
-        await db.execute(
-            update(User)
-            .where(User.id == user_id)
-            .values(points_balance=User.points_balance + points)
-        )
+        if settings.wallet_split_enabled:
+            await db.execute(
+                update(User)
+                .where(User.id == user_id)
+                .values(service_credit_balance=User.service_credit_balance + points)
+            )
+        else:
+            await db.execute(
+                update(User)
+                .where(User.id == user_id)
+                .values(points_balance=User.points_balance + points)
+            )
         logger.info(
             "AdMob SSV: global credit user=%s pts=%d",
             user_id, points,
@@ -810,6 +861,7 @@ async def admob_ssv_callback(
         fx_rate_used=None,
         user_points_credited=points,
         credit_status="credited",
+        use_case=getattr(req, "use_case", "wallet_topup") or "wallet_topup",
     )
     db.add(event)
 

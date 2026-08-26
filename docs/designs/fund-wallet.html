@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en" data-scheme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PagePay — Fund wallet</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--s4) var(--s5);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-row .back-btn {
+      width: 36px; height: 36px;
+      border-radius: var(--r-pill);
+      background: none; border: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--ink);
+    }
+    .header-row h1 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 17px; margin: 0;
+    }
+    .header-row .help-btn {
+      background: none; border: none;
+      color: var(--mint); cursor: pointer;
+      padding: var(--s2);
+      font-family: var(--font-sans);
+      font-weight: 600; font-size: 13px;
+    }
+
+    .body { padding: var(--s5); }
+
+    .amount-display {
+      text-align: center;
+      padding: var(--s7) 0;
+    }
+    .amount-display .label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--ink-muted);
+      margin-bottom: var(--s3);
+    }
+    .amount-display .price {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 56px;
+      letter-spacing: -0.03em;
+      color: var(--ink);
+    }
+    .amount-display .price .currency {
+      color: var(--ink-muted);
+      font-size: 32px;
+    }
+    .amount-display .sub {
+      font-size: 13px;
+      color: var(--ink-muted);
+      margin-top: var(--s2);
+    }
+    .amount-display .sub .mint { color: var(--mint); font-weight: 600; }
+
+    .quick-amounts {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--s2);
+      margin-bottom: var(--s5);
+    }
+    .amt-chip {
+      padding: var(--s3);
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: var(--r-card);
+      text-align: center;
+      cursor: pointer;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--ink);
+      transition: border-color 160ms ease;
+    }
+    .amt-chip.selected {
+      border-color: var(--mint);
+      background: var(--mint-faint);
+    }
+    .amt-chip .bonus {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--mint);
+      margin-top: 2px;
+    }
+
+    .method-tabs {
+      display: flex;
+      gap: var(--s2);
+      margin-bottom: var(--s5);
+      border-bottom: 1px solid var(--border);
+    }
+    .method-tab {
+      flex: 1;
+      padding: var(--s3);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--ink-muted);
+      cursor: pointer;
+    }
+    .method-tab.active {
+      color: var(--mint);
+      border-bottom-color: var(--mint);
+    }
+
+    .method-card {
+      display: flex;
+      align-items: center;
+      gap: var(--s4);
+      padding: var(--s4);
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: var(--r-card);
+      cursor: pointer;
+      margin-bottom: var(--s3);
+    }
+    .method-card.selected {
+      border-color: var(--mint);
+      background: var(--mint-faint);
+    }
+    .method-card .logo {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--r-input);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 12px;
+      color: white;
+    }
+    .logo.paystack { background: #011B33; }
+    .logo.flutterwave { background: #FB923C; }
+    .logo.bank { background: var(--indigo); }
+    .logo.usdt { background: #26A17B; }
+
+    .method-card .info { flex: 1; }
+    .method-card .info .name {
+      font-weight: 600;
+      font-size: 15px;
+    }
+    .method-card .info .desc {
+      font-size: 12px;
+      color: var(--ink-muted);
+    }
+    .method-card .radio {
+      width: 22px;
+      height: 22px;
+      border: 2px solid var(--border-strong);
+      border-radius: var(--r-pill);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .method-card.selected .radio {
+      border-color: var(--mint);
+      background: var(--mint);
+    }
+    .method-card.selected .radio::after {
+      content: '';
+      width: 10px;
+      height: 10px;
+      background: white;
+      border-radius: var(--r-pill);
+    }
+
+    .saved-card {
+      display: flex;
+      align-items: center;
+      gap: var(--s3);
+      padding: var(--s3) var(--s4);
+      background: var(--paper-2);
+      border-radius: var(--r-card);
+      margin-bottom: var(--s3);
+      font-size: 13px;
+    }
+    .saved-card .chip {
+      background: var(--mint-soft);
+      color: var(--mint);
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: var(--r-pill);
+    }
+
+    .breakdown {
+      background: var(--paper-2);
+      border-radius: var(--r-card);
+      padding: var(--s4);
+      margin-bottom: var(--s5);
+    }
+    .breakdown .row {
+      display: flex;
+      justify-content: space-between;
+      padding: var(--s2) 0;
+      font-size: 14px;
+    }
+    .breakdown .row.total {
+      border-top: 1px solid var(--border);
+      margin-top: var(--s2);
+      padding-top: var(--s3);
+      font-weight: 700;
+    }
+    .breakdown .row .mint { color: var(--mint); }
+    .breakdown .row .muted { color: var(--ink-muted); }
+  </style>
+</head>
+<body>
+  <div class="theme-switch" role="tablist" aria-label="Theme">
+    <button data-theme="light" class="active">Light</button>
+    <button data-theme="dark">Dark</button>
+    <button data-theme="sepia">Sepia</button>
+  </div>
+
+  <div class="phone">
+    <div class="status-bar">
+      <span>9:41</span>
+      <div class="right">
+        <span>●●●●</span>
+        <span>Wi-Fi</span>
+        <span>100%</span>
+      </div>
+    </div>
+
+    <div class="screen">
+      <div class="header-row">
+        <a href="home-main.html" class="back-btn" aria-label="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+        <h1>Fund wallet</h1>
+        <button class="help-btn">Help</button>
+      </div>
+
+      <div class="body">
+        <div class="amount-display">
+          <div class="label">You're funding</div>
+          <div class="price"><span class="currency">₦</span>5,000</div>
+          <div class="sub">~<span class="mint">+$3.20</span> · +150 sv bonus on this top-up</div>
+        </div>
+
+        <div class="quick-amounts">
+          <div class="amt-chip" data-amt="1000">₦1,000</div>
+          <div class="amt-chip" data-amt="2000">₦2,000</div>
+          <div class="amt-chip selected" data-amt="5000">
+            ₦5,000
+            <span class="bonus">+150 sv</span>
+          </div>
+          <div class="amt-chip" data-amt="10000">₦10,000</div>
+        </div>
+
+        <div class="field" style="margin-bottom: var(--s5);">
+          <label for="amt">Or enter custom amount</label>
+          <div class="input-wrap">
+            <span class="input-icon" style="font-weight: 700; color: var(--ink-muted); font-size: 16px;">₦</span>
+            <input id="amt" type="number" class="input" placeholder="0" value="5000" style="padding-left: 44px;">
+          </div>
+        </div>
+
+        <h3 class="display" style="margin-bottom: var(--s3);">Payment method</h3>
+
+        <div class="method-tabs" role="tablist">
+          <button class="method-tab active" data-tab="card">Card</button>
+          <button class="method-tab" data-tab="bank">Bank</button>
+          <button class="method-tab" data-tab="usdt">Crypto</button>
+        </div>
+
+        <div class="saved-card">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--mint)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="9 12 12 15 16 10"></polyline></svg>
+          <span style="flex: 1;">Visa •••• 4421</span>
+          <span class="chip">Default</span>
+        </div>
+
+        <div class="method-card selected">
+          <div class="logo paystack">PS</div>
+          <div class="info">
+            <div class="name">Paystack</div>
+            <div class="desc">Card, bank transfer, USSD</div>
+          </div>
+          <div class="radio"></div>
+        </div>
+
+        <div class="method-card">
+          <div class="logo flutterwave">FW</div>
+          <div class="info">
+            <div class="name">Flutterwave</div>
+            <div class="desc">All Nigerian banks supported</div>
+          </div>
+          <div class="radio"></div>
+        </div>
+
+        <div class="method-card">
+          <div class="logo bank">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="22" x2="21" y2="22"></line><line x1="6" y1="18" x2="6" y2="11"></line><line x1="10" y1="18" x2="10" y2="11"></line><line x1="14" y1="18" x2="14" y2="11"></line><line x1="18" y1="18" x2="18" y2="11"></line><polygon points="12 2 20 7 4 7"></polygon></svg>
+          </div>
+          <div class="info">
+            <div class="name">Bank transfer</div>
+            <div class="desc">Generate a 10-digit account number</div>
+          </div>
+          <div class="radio"></div>
+        </div>
+
+        <div class="breakdown">
+          <div class="row">
+            <span class="muted">Top-up amount</span>
+            <span>₦5,000.00</span>
+          </div>
+          <div class="row">
+            <span class="muted">Processing fee</span>
+            <span>₦0.00</span>
+          </div>
+          <div class="row">
+            <span class="muted">sv bonus (3%)</span>
+            <span class="mint">+150 sv</span>
+          </div>
+          <div class="row total">
+            <span>Total to pay</span>
+            <span>₦5,000.00</span>
+          </div>
+        </div>
+
+        <a href="#" class="btn btn-primary btn-full">Continue to payment</a>
+
+        <p class="small" style="text-align: center; margin-top: var(--s4); color: var(--ink-faint);">
+          Secured by Paystack · PCI-DSS Level 1
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const switcher = document.querySelector('.theme-switch');
+    switcher.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.documentElement.dataset.scheme = btn.dataset.theme;
+        switcher.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      });
+    });
+    document.querySelectorAll('.amt-chip').forEach(c => {
+      c.addEventListener('click', () => {
+        document.querySelectorAll('.amt-chip').forEach(x => x.classList.remove('selected'));
+        c.classList.add('selected');
+        document.getElementById('amt').value = c.dataset.amt;
+      });
+    });
+    document.querySelectorAll('.method-tab').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('.method-tab').forEach(x => x.classList.remove('active'));
+        t.classList.add('active');
+      });
+    });
+    document.querySelectorAll('.method-card').forEach(c => {
+      c.addEventListener('click', () => {
+        document.querySelectorAll('.method-card').forEach(x => x.classList.remove('selected'));
+        c.classList.add('selected');
+      });
+    });
+  </script>
+</body>
+</html>

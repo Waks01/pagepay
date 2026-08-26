@@ -82,8 +82,7 @@
       "expo-video"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
       "apiUrl": "https://pagepay-fff6.onrender.com",

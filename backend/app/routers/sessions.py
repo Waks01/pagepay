@@ -142,13 +142,17 @@ async def end_session(
         multiplier = get_points_multiplier(current_user, "reading")
         bonus_credited = int(base_bonus * multiplier)
         
-        current_user.points_balance += bonus_credited
+        if settings.wallet_split_enabled:
+            current_user.cashable_balance += bonus_credited
+        else:
+            current_user.points_balance += bonus_credited
         session.points_earned = bonus_credited
         bonus_eligible = True
         logger.info(
             "session %d settled: user=%d tier=%s verified=True base=%d multiplier=%.1fx bonus=%d new_balance=%d",
             session.id, current_user.id, current_user.tier.value,
-            base_bonus, multiplier, bonus_credited, current_user.points_balance,
+            base_bonus, multiplier, bonus_credited,
+            current_user.cashable_balance if settings.wallet_split_enabled else current_user.points_balance,
         )
 
     await db.commit()
@@ -183,6 +187,7 @@ async def end_session(
         bonus_eligible=bonus_eligible,
         slice_bonus_credited=bonus_credited,
         new_balance=current_user.points_balance,
+        new_cashable_balance=current_user.cashable_balance,
     )
 
 

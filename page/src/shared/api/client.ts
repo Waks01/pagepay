@@ -148,6 +148,98 @@ export async function apiFetch(
   return res;
 }
 
+/**
+ * Multipart upload via XMLHttpRequest.
+ *
+ * `fetch()` in React Native does not surface upload progress events —
+ * only `XMLHttpRequest` does (via `xhr.upload.onprogress`). This helper
+ * is the parallel of `apiFetch` for the two SOW upload endpoints
+ * (`/api/v1/study/sow/upload-image` and `/study/sow/upload-document`)
+ * where we want wire-level progress.
+ *
+ * 401 auto-retry is intentionally NOT implemented: retrying a multipart
+ * XHR after token refresh is fragile in RN (FormData body reuse, in-
+ * flight listeners). If the token expires mid-upload, the caller gets
+ * the same "Unauthorized" surface as today.
+ */
+export type ApiUploadOptions = {
+  onProgress?: (loaded: number, total: number) => void;
+  timeoutMs?: number;
+};
+
+export type ApiUploadResult = {
+  ok: boolean;
+  status: number;
+  json: () => Promise<any>;
+  text: () => Promise<string>;
+};
+
+export async function apiUpload(
+  path: string,
+  formData: FormData,
+  options: ApiUploadOptions = {},
+): Promise<ApiUploadResult> {
+  const { onProgress, timeoutMs = 120_000 } = options;
+  const token = await getToken();
+  const clientDate = new Date().toISOString().split("T")[0];
+
+  return new Promise<ApiUploadResult>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}${path}`, true);
+    xhr.timeout = timeoutMs;
+
+    if (token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    }
+    xhr.setRequestHeader("X-Client-Date", clientDate);
+    // Do NOT set Content-Type — RN's runtime adds the multipart
+    // boundary when the body is FormData.
+
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && e.total > 0) {
+          onProgress(e.loaded, e.total);
+        }
+      };
+    }
+
+    xhr.onerror = () => {
+      reject(
+        new Error(
+          `Can't reach the server at ${API_URL}. Check your connection and try again.`,
+        ),
+      );
+    };
+    xhr.ontimeout = () => {
+      reject(new Error("Upload timed out. Try again on a faster connection."));
+    };
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        _onUnauthenticated?.();
+        reject(new Error("Unauthorized"));
+        return;
+      }
+      const result: ApiUploadResult = {
+        ok: xhr.status >= 200 && xhr.status < 300,
+        status: xhr.status,
+        json: () => Promise.resolve().then(() => JSON.parse(xhr.responseText || "null")),
+        text: () => Promise.resolve(xhr.responseText || ""),
+      };
+      resolve(result);
+    };
+
+    try {
+      xhr.send(formData);
+    } catch (e) {
+      reject(
+        new Error(
+          `Can't reach the server at ${API_URL}. Check your connection and try again.`,
+        ),
+      );
+    }
+  });
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Phase 4: Premium Tier Benefits API
 // ────────────────────────────────────────────────────────────────────

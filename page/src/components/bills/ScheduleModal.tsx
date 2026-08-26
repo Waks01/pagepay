@@ -16,12 +16,11 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
-import { NetworkPicker } from "./NetworkPicker";
 
 type ScheduleType = "once" | "daily" | "weekly" | "monthly";
 
@@ -37,26 +36,26 @@ const SCHEDULE_OPTIONS: ScheduleOption[] = [
     id: "once",
     title: "One Time",
     description: "Schedule for a specific date and time",
-    icon: "calendar-outline"
+    icon: "calendar-outline",
   },
   {
     id: "daily",
     title: "Daily",
     description: "Repeat every day at the same time",
-    icon: "refresh-outline"
+    icon: "refresh-outline",
   },
   {
-    id: "weekly", 
+    id: "weekly",
     title: "Weekly",
     description: "Repeat every week on the same day",
-    icon: "calendar"
+    icon: "calendar",
   },
   {
     id: "monthly",
     title: "Monthly",
     description: "Repeat every month on the same date",
-    icon: "calendar-clear-outline"
-  }
+    icon: "calendar-clear-outline",
+  },
 ];
 
 type Props = {
@@ -71,17 +70,24 @@ type Props = {
   };
 };
 
-export function ScheduleModal({ visible, onClose, service, defaultData }: Props) {
+export function ScheduleModal({
+  visible,
+  onClose,
+  service,
+  defaultData,
+}: Props) {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const queryClient = useQueryClient();
-  
+
   const [scheduleType, setScheduleType] = useState<ScheduleType>("once");
   const [network, setNetwork] = useState(defaultData?.network || "mtn");
   const [phone, setPhone] = useState(defaultData?.phone || "");
   const [amount, setAmount] = useState(defaultData?.amount || 100);
   const [planCode, setPlanCode] = useState(defaultData?.plan_code || "");
-  const [nextRunAt, setNextRunAt] = useState(new Date(Date.now() + 60 * 60 * 1000)); // 1 hour from now
+  const [nextRunAt, setNextRunAt] = useState(
+    new Date(Date.now() + 60 * 60 * 1000),
+  ); // 1 hour from now
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const scheduleMutation = useMutation({
@@ -110,7 +116,7 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
       Alert.alert(
         "Schedule Created",
         `Your ${service} purchase has been scheduled successfully. You'll receive notifications when it executes.`,
-        [{ text: "OK" }]
+        [{ text: "OK" }],
       );
       queryClient.invalidateQueries({ queryKey: ["schedules"] });
       onClose();
@@ -137,7 +143,10 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
     }
 
     if (!/^0[789][01]\d{8}$/.test(phone.trim())) {
-      Alert.alert("Validation Error", "Please enter a valid Nigerian phone number");
+      Alert.alert(
+        "Validation Error",
+        "Please enter a valid Nigerian phone number",
+      );
       return false;
     }
 
@@ -162,19 +171,21 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
   const handleSchedule = () => {
     if (!validateForm()) return;
 
-    const scheduleOption = SCHEDULE_OPTIONS.find(opt => opt.id === scheduleType);
-    
+    const scheduleOption = SCHEDULE_OPTIONS.find(
+      (opt) => opt.id === scheduleType,
+    );
+
     Alert.alert(
       "Confirm Schedule",
       `Schedule ${service} purchase?\n\n` +
-      `Type: ${scheduleOption?.title}\n` +
-      `Amount: ₦${amount.toLocaleString()}\n` +
-      `Phone: ${phone}\n` +
-      `Next Run: ${nextRunAt.toLocaleString()}`,
+        `Type: ${scheduleOption?.title}\n` +
+        `Amount: ₦${amount.toLocaleString()}\n` +
+        `Phone: ${phone}\n` +
+        `Next Run: ${nextRunAt.toLocaleString()}`,
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Schedule", 
+        {
+          text: "Schedule",
           onPress: () => {
             const data: any = {
               service,
@@ -190,25 +201,25 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
             }
 
             scheduleMutation.mutate(data);
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   const formatNextRun = () => {
     const now = new Date();
     const diffMs = nextRunAt.getTime() - now.getTime();
-    
+
     if (diffMs < 0) return "Past date";
-    
+
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffHours / 24);
-    
+
     if (diffDays > 0) {
-      return `In ${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+      return `In ${diffDays} day${diffDays !== 1 ? "s" : ""}`;
     } else if (diffHours > 0) {
-      return `In ${diffHours} hour${diffHours !== 1 ? 's' : ''}`;
+      return `In ${diffHours} hour${diffHours !== 1 ? "s" : ""}`;
     } else {
       return `In ${Math.floor(diffMs / (1000 * 60))} minutes`;
     }
@@ -239,7 +250,7 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
               <Text style={[styles.sectionTitle, { color: tokens.ink }]}>
                 Schedule Type
               </Text>
-              
+
               {SCHEDULE_OPTIONS.map((option) => (
                 <TouchableOpacity
                   key={option.id}
@@ -247,34 +258,59 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
                   style={[
                     styles.scheduleOption,
                     {
-                      backgroundColor: scheduleType === option.id ? tokens.mintSoft : tokens.card,
-                      borderColor: scheduleType === option.id ? tokens.mint : tokens.border,
-                    }
+                      backgroundColor:
+                        scheduleType === option.id
+                          ? tokens.mintSoft
+                          : tokens.card,
+                      borderColor:
+                        scheduleType === option.id
+                          ? tokens.mint
+                          : tokens.border,
+                    },
                   ]}
                 >
-                  <Ionicons 
-                    name={option.icon as any} 
-                    size={20} 
-                    color={scheduleType === option.id ? tokens.mint : tokens.inkMuted} 
+                  <Ionicons
+                    name={option.icon as any}
+                    size={20}
+                    color={
+                      scheduleType === option.id ? tokens.mint : tokens.inkMuted
+                    }
                   />
                   <View style={styles.scheduleContent}>
                     <Text style={[styles.scheduleTitle, { color: tokens.ink }]}>
                       {option.title}
                     </Text>
-                    <Text style={[styles.scheduleDescription, { color: tokens.inkMuted }]}>
+                    <Text
+                      style={[
+                        styles.scheduleDescription,
+                        { color: tokens.inkMuted },
+                      ]}
+                    >
                       {option.description}
                     </Text>
                   </View>
-                  
-                  <View style={[
-                    styles.radioButton,
-                    {
-                      borderColor: scheduleType === option.id ? tokens.mint : tokens.border,
-                      backgroundColor: scheduleType === option.id ? tokens.mint : "transparent",
-                    }
-                  ]}>
+
+                  <View
+                    style={[
+                      styles.radioButton,
+                      {
+                        borderColor:
+                          scheduleType === option.id
+                            ? tokens.mint
+                            : tokens.border,
+                        backgroundColor:
+                          scheduleType === option.id
+                            ? tokens.mint
+                            : "transparent",
+                      },
+                    ]}
+                  >
                     {scheduleType === option.id && (
-                      <Ionicons name="checkmark" size={12} color={tokens.mintText} />
+                      <Ionicons
+                        name="checkmark"
+                        size={12}
+                        color={tokens.mintText}
+                      />
                     )}
                   </View>
                 </TouchableOpacity>
@@ -286,24 +322,34 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
               <Text style={[styles.sectionTitle, { color: tokens.ink }]}>
                 {scheduleType === "once" ? "Date & Time" : "Start Date & Time"}
               </Text>
-              
+
               <TouchableOpacity
                 onPress={() => setShowDatePicker(true)}
                 style={[
                   styles.dateTimeButton,
-                  { backgroundColor: tokens.card, borderColor: tokens.border }
+                  { backgroundColor: tokens.card, borderColor: tokens.border },
                 ]}
               >
-                <Ionicons name="time-outline" size={20} color={tokens.inkMuted} />
+                <Ionicons
+                  name="time-outline"
+                  size={20}
+                  color={tokens.inkMuted}
+                />
                 <View style={styles.dateTimeContent}>
                   <Text style={[styles.dateTimeText, { color: tokens.ink }]}>
                     {nextRunAt.toLocaleString()}
                   </Text>
-                  <Text style={[styles.dateTimeSubtext, { color: tokens.inkMuted }]}>
+                  <Text
+                    style={[styles.dateTimeSubtext, { color: tokens.inkMuted }]}
+                  >
                     {formatNextRun()}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={tokens.inkMuted}
+                />
               </TouchableOpacity>
 
               {showDatePicker && (
@@ -326,10 +372,31 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
               <Text style={[styles.sectionTitle, { color: tokens.ink }]}>
                 Network
               </Text>
-              <NetworkPicker
-                selectedNetwork={network}
-                onNetworkSelect={setNetwork}
-              />
+              <View
+                style={[
+                  styles.networkDropdown,
+                  { backgroundColor: tokens.card, borderColor: tokens.border },
+                ]}
+              >
+                <TouchableOpacity
+                  style={styles.networkSelector}
+                  onPress={() => {
+                    const networks = ["mtn", "airtel", "glo", "9mobile"];
+                    const currentIndex = networks.indexOf(network);
+                    const nextIndex = (currentIndex + 1) % networks.length;
+                    setNetwork(networks[nextIndex]);
+                  }}
+                >
+                  <Text style={[styles.networkText, { color: tokens.ink }]}>
+                    {network.toUpperCase()}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={16}
+                    color={tokens.inkMuted}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Phone Number */}
@@ -340,11 +407,11 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
               <TextInput
                 style={[
                   styles.textInput,
-                  { 
+                  {
                     backgroundColor: tokens.card,
                     borderColor: tokens.border,
                     color: tokens.ink,
-                  }
+                  },
                 ]}
                 value={phone}
                 onChangeText={setPhone}
@@ -363,11 +430,11 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
               <TextInput
                 style={[
                   styles.textInput,
-                  { 
+                  {
                     backgroundColor: tokens.card,
                     borderColor: tokens.border,
                     color: tokens.ink,
-                  }
+                  },
                 ]}
                 value={amount.toString()}
                 onChangeText={(text) => setAmount(parseInt(text) || 0)}
@@ -386,11 +453,11 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
                 <TextInput
                   style={[
                     styles.textInput,
-                    { 
+                    {
                       backgroundColor: tokens.card,
                       borderColor: tokens.border,
                       color: tokens.ink,
-                    }
+                    },
                   ]}
                   value={planCode}
                   onChangeText={setPlanCode}
@@ -402,15 +469,25 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
 
             {/* Warning for recurring schedules */}
             {scheduleType !== "once" && (
-              <View style={[styles.warningBanner, { backgroundColor: tokens.goldSoft }]}>
-                <Ionicons name="warning-outline" size={20} color={tokens.gold} />
+              <View
+                style={[
+                  styles.warningBanner,
+                  { backgroundColor: tokens.goldSoft },
+                ]}
+              >
+                <Ionicons
+                  name="warning-outline"
+                  size={20}
+                  color={tokens.gold}
+                />
                 <View style={styles.warningContent}>
                   <Text style={[styles.warningTitle, { color: tokens.gold }]}>
                     Recurring Purchase
                   </Text>
                   <Text style={[styles.warningText, { color: tokens.gold }]}>
-                    This will automatically purchase {service} {scheduleType} until you cancel the schedule.
-                    Ensure you have sufficient balance for future purchases.
+                    This will automatically purchase {service} {scheduleType}{" "}
+                    until you cancel the schedule. Ensure you have sufficient
+                    balance for future purchases.
                   </Text>
                 </View>
               </View>
@@ -424,12 +501,16 @@ export function ScheduleModal({ visible, onClose, service, defaultData }: Props)
             style={[
               styles.scheduleBtn,
               {
-                backgroundColor: scheduleMutation.isPending ? tokens.cardSecondary : tokens.mint,
-              }
+                backgroundColor: scheduleMutation.isPending
+                  ? tokens.cardSecondary
+                  : tokens.mint,
+              },
             ]}
           >
             <Text style={[styles.scheduleBtnText, { color: tokens.mintText }]}>
-              {scheduleMutation.isPending ? "Scheduling..." : `Schedule ${service.charAt(0).toUpperCase() + service.slice(1)}`}
+              {scheduleMutation.isPending
+                ? "Scheduling..."
+                : `Schedule ${service.charAt(0).toUpperCase() + service.slice(1)}`}
             </Text>
           </TouchableOpacity>
         </View>

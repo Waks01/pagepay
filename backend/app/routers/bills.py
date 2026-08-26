@@ -190,14 +190,25 @@ async def buy_airtime(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < kobo_to_points(amount_kobo):
-        raise HTTPException(status_code=402, detail="Insufficient balance")
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
+    else:
+        if user_row.points_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
 
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+        )
 
     # 2. Call VTU provider
     try:
@@ -245,12 +256,20 @@ async def buy_airtime(
     )
     db.add(tx)
 
-    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance + points)
-    )
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance + points)
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance + points)
+        )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -319,15 +338,25 @@ async def buy_airtime_bulk(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
     
-    if user_row.points_balance < kobo_to_points(total_amount_kobo):
-        raise HTTPException(status_code=402, detail="Insufficient balance for bulk purchase")
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < kobo_to_points(total_amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance for bulk purchase")
+    else:
+        if user_row.points_balance < kobo_to_points(total_amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance for bulk purchase")
     
-    # Debit total amount upfront
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - kobo_to_points(total_amount_kobo))
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(total_amount_kobo))
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance - kobo_to_points(total_amount_kobo))
+        )
     
     # Process purchases in parallel
     results = []
@@ -419,13 +448,22 @@ async def buy_airtime_bulk(
         r.amount_naira * 100 for r in results if r.status == "failed"
     )
     
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(
-            points_balance=User.points_balance + kobo_to_points(failed_refund_kobo) + total_points_earned
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(
+                cashable_balance=User.cashable_balance + kobo_to_points(failed_refund_kobo) + total_points_earned
+            )
         )
-    )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(
+                points_balance=User.points_balance + kobo_to_points(failed_refund_kobo) + total_points_earned
+            )
+        )
     
     # Get new balance
     user_result = await db.execute(select(User).where(User.id == current_user.id))
@@ -532,14 +570,25 @@ async def buy_data(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < kobo_to_points(amount_kobo):
-        raise HTTPException(status_code=402, detail="Insufficient balance")
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
+    else:
+        if user_row.points_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
 
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+        )
 
     try:
         result = await _get_vtu_client().buy_data(
@@ -585,12 +634,20 @@ async def buy_data(
     )
     db.add(tx)
 
-    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance + points)
-    )
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance + points)
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance + points)
+        )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -651,14 +708,25 @@ async def buy_electricity(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < kobo_to_points(amount_kobo):
-        raise HTTPException(status_code=402, detail="Insufficient balance")
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
+    else:
+        if user_row.points_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
 
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+        )
 
     try:
         result = await _get_vtu_client().buy_electricity(
@@ -713,12 +781,20 @@ async def buy_electricity(
     )
     db.add(tx)
 
-    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance + points)
-    )
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance + points)
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance + points)
+        )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -800,14 +876,25 @@ async def buy_tv(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < kobo_to_points(amount_kobo):
-        raise HTTPException(status_code=402, detail="Insufficient balance")
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
+    else:
+        if user_row.points_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
 
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+        )
 
     try:
         result = await _get_vtu_client().buy_cable(
@@ -862,12 +949,20 @@ async def buy_tv(
     )
     db.add(tx)
 
-    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance + points)
-    )
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance + points)
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance + points)
+        )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -1099,14 +1194,25 @@ async def buy_recharge_pin(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < kobo_to_points(amount_kobo):
-        raise HTTPException(status_code=402, detail="Insufficient balance")
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
+    else:
+        if user_row.points_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
 
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+        )
 
     try:
         result = await _get_vtu_client().buy_recharge_pin(
@@ -1146,12 +1252,20 @@ async def buy_recharge_pin(
     )
     db.add(tx)
 
-    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance + points)
-    )
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance + points)
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance + points)
+        )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -1233,14 +1347,25 @@ async def fund_betting(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < kobo_to_points(amount_kobo):
-        raise HTTPException(status_code=402, detail="Insufficient balance")
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
+    else:
+        if user_row.points_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
 
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+        )
 
     try:
         result = await _get_vtu_client().fund_betting_wallet(
@@ -1281,12 +1406,20 @@ async def fund_betting(
     )
     db.add(tx)
 
-    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance + points)
-    )
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance + points)
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance + points)
+        )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -1375,14 +1508,25 @@ async def topup_smile(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < kobo_to_points(amount_kobo):
-        raise HTTPException(status_code=402, detail="Insufficient balance")
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
+    else:
+        if user_row.points_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
 
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+        )
 
     try:
         result = await _get_vtu_client().topup_smile(account_number, plan_id)
@@ -1418,12 +1562,20 @@ async def topup_smile(
     )
     db.add(tx)
 
-    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance + points)
-    )
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance + points)
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance + points)
+        )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -1487,14 +1639,25 @@ async def topup_spectranet(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < kobo_to_points(amount_kobo):
-        raise HTTPException(status_code=402, detail="Insufficient balance")
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
+    else:
+        if user_row.points_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
 
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+        )
 
     try:
         result = await _get_vtu_client().topup_spectranet(account_number, plan_id)
@@ -1530,12 +1693,20 @@ async def topup_spectranet(
     )
     db.add(tx)
 
-    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance + points)
-    )
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance + points)
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance + points)
+        )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -1607,14 +1778,25 @@ async def buy_result_checker(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < kobo_to_points(amount_kobo):
-        raise HTTPException(status_code=402, detail="Insufficient balance")
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
+    else:
+        if user_row.points_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
 
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+        )
 
     try:
         result = await _get_vtu_client().buy_result_checker(exam_code, quantity)
@@ -1650,12 +1832,20 @@ async def buy_result_checker(
     )
     db.add(tx)
 
-    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance + points)
-    )
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance + points)
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance + points)
+        )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -1728,14 +1918,25 @@ async def send_sms(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user_row.points_balance < kobo_to_points(amount_kobo):
-        raise HTTPException(status_code=402, detail="Insufficient balance")
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
+    else:
+        if user_row.points_balance < kobo_to_points(amount_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient balance")
 
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
-    )
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance - kobo_to_points(amount_kobo))
+        )
 
     try:
         result = await _get_vtu_client().send_sms(sender_name, recipients, message)
@@ -1771,12 +1972,20 @@ async def send_sms(
     )
     db.add(tx)
 
-    new_balance = user_row.points_balance - kobo_to_points(amount_kobo) + points
-    await db.execute(
-        update(User)
-        .where(User.id == current_user.id)
-        .values(points_balance=User.points_balance + points)
-    )
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    if settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(cashable_balance=User.cashable_balance + points)
+        )
+    else:
+        await db.execute(
+            update(User)
+            .where(User.id == current_user.id)
+            .values(points_balance=User.points_balance + points)
+        )
     await db.commit()
 
     from app.services.notifications import create_notification_background

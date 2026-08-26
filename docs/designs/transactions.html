@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en" data-scheme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PagePay — Transactions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--s4) var(--s5);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-row .back-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--r-pill);
+      background: none;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--ink);
+    }
+    .header-row h1 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 17px;
+      margin: 0;
+    }
+    .filter-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--r-pill);
+      background: none;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--ink);
+    }
+
+    .filters {
+      display: flex;
+      gap: var(--s2);
+      padding: var(--s4) var(--s5);
+      overflow-x: auto;
+    }
+    .filter-chip {
+      padding: var(--s2) var(--s4);
+      border-radius: var(--r-pill);
+      background: var(--paper-2);
+      color: var(--ink);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .filter-chip.active {
+      background: var(--mint);
+      color: var(--mint-text);
+      border-color: var(--mint);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: var(--s3);
+      padding: 0 var(--s5) var(--s5);
+    }
+    .summary .card {
+      text-align: center;
+      padding: var(--s4) var(--s3);
+    }
+    .summary .label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-muted);
+      margin-bottom: var(--s2);
+    }
+    .summary .amount {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .summary .amount.mint { color: var(--mint); }
+    .summary .amount.signal { color: var(--signal); }
+
+    .group-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--s4) var(--s5) var(--s2);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+
+    .tx-row {
+      display: flex;
+      align-items: center;
+      gap: var(--s3);
+      padding: var(--s4) var(--s5);
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+    }
+    .tx-row:hover { background: var(--paper-2); }
+    .tx-row .ico {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--r-card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .tx-row .ico.mint { background: var(--mint-soft); color: var(--mint); }
+    .tx-row .ico.signal { background: var(--signal-soft); color: var(--signal); }
+    .tx-row .ico.indigo { background: rgba(42,47,88,0.12); color: var(--indigo); }
+    .tx-row .ico.gold { background: rgba(184,134,44,0.15); color: var(--gold); }
+
+    .tx-row .main { flex: 1; min-width: 0; }
+    .tx-row .main .title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+    .tx-row .main .sub {
+      font-size: 12px;
+      color: var(--ink-muted);
+      display: flex;
+      align-items: center;
+      gap: var(--s2);
+    }
+    .tx-row .main .sub .status {
+      color: var(--mint);
+      font-weight: 600;
+    }
+    .tx-row .main .sub .status.pending { color: var(--gold); }
+    .tx-row .main .sub .status.failed { color: var(--signal); }
+
+    .tx-row .end {
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .tx-row .end .amt {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+    .tx-row .end .amt.mint { color: var(--mint); }
+    .tx-row .end .amt.signal { color: var(--signal); }
+    .tx-row .end .ref {
+      font-size: 11px;
+      color: var(--ink-faint);
+      font-family: var(--font-mono);
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-switch" role="tablist" aria-label="Theme">
+    <button data-theme="light" class="active">Light</button>
+    <button data-theme="dark">Dark</button>
+    <button data-theme="sepia">Sepia</button>
+  </div>
+
+  <div class="phone">
+    <div class="status-bar">
+      <span>9:41</span>
+      <div class="right">
+        <span>●●●●</span>
+        <span>Wi-Fi</span>
+        <span>100%</span>
+      </div>
+    </div>
+
+    <div class="screen">
+      <div class="header-row">
+        <a href="home-main.html" class="back-btn" aria-label="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+        <h1>Transactions</h1>
+        <button class="filter-btn" aria-label="Filter">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+        </button>
+      </div>
+
+      <div class="summary">
+        <div class="card">
+          <div class="label">In · sv</div>
+          <div class="amount mint">+482</div>
+        </div>
+        <div class="card">
+          <div class="label">Out · sv</div>
+          <div class="amount signal">−120</div>
+        </div>
+        <div class="card">
+          <div class="label">Cash spent</div>
+          <div class="amount">₦3,200</div>
+        </div>
+      </div>
+
+      <div class="filters">
+        <button class="filter-chip active">All</button>
+        <button class="filter-chip">Reads</button>
+        <button class="filter-chip">Ads</button>
+        <button class="filter-chip">Bonuses</button>
+        <button class="filter-chip">Airtime</button>
+        <button class="filter-chip">Withdrawals</button>
+        <button class="filter-chip">P2P</button>
+      </div>
+
+      <div class="group-label">
+        <span>Today</span>
+        <span class="muted">3 transactions</span>
+      </div>
+
+      <div class="tx-row">
+        <div class="ico mint">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+        </div>
+        <div class="main">
+          <div class="title">Read · The Famished Road</div>
+          <div class="sub">2 slices · <span class="status">Verified</span></div>
+        </div>
+        <div class="end">
+          <div class="amt mint">+34 sv</div>
+          <div class="ref">9:12 AM</div>
+        </div>
+      </div>
+
+      <div class="tx-row">
+        <div class="ico indigo">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path></svg>
+        </div>
+        <div class="main">
+          <div class="title">Sent · Chinedu Ibe</div>
+          <div class="sub">P2P transfer · <span class="status pending">Pending</span></div>
+        </div>
+        <div class="end">
+          <div class="amt signal">−₦500</div>
+          <div class="ref">8:34 AM</div>
+        </div>
+      </div>
+
+      <div class="tx-row">
+        <div class="ico gold">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+        </div>
+        <div class="main">
+          <div class="title">Airtime · MTN</div>
+          <div class="sub">0803 ••• 7890 · <span class="status">Delivered</span></div>
+        </div>
+        <div class="end">
+          <div class="amt signal">−₦1,000</div>
+          <div class="ref">7:50 AM</div>
+        </div>
+      </div>
+
+      <div class="group-label">
+        <span>Yesterday</span>
+        <span class="muted">5 transactions</span>
+      </div>
+
+      <div class="tx-row">
+        <div class="ico mint">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line></svg>
+        </div>
+        <div class="main">
+          <div class="title">Daily bonus · Day 11</div>
+          <div class="sub">Streak milestone · <span class="status">Claimed</span></div>
+        </div>
+        <div class="end">
+          <div class="amt mint">+100 sv</div>
+          <div class="ref">23:58</div>
+        </div>
+      </div>
+
+      <div class="tx-row">
+        <div class="ico mint">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+        </div>
+        <div class="main">
+          <div class="title">Read · Purple Hibiscus</div>
+          <div class="sub">1 slice · <span class="status">Verified</span></div>
+        </div>
+        <div class="end">
+          <div class="amt mint">+18 sv</div>
+          <div class="ref">21:14</div>
+        </div>
+      </div>
+
+      <div class="tx-row">
+        <div class="ico signal">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12 L21 12 M12 3 L12 21"></path></svg>
+        </div>
+        <div class="main">
+          <div class="title">Withdraw to bank</div>
+          <div class="sub">GTBank •••4471 · <span class="status">Completed</span></div>
+        </div>
+        <div class="end">
+          <div class="amt signal">−₦2,000</div>
+          <div class="ref">18:42</div>
+        </div>
+      </div>
+
+      <div class="tx-row">
+        <div class="ico gold">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 L15 8 L22 9 L17 14 L18 21 L12 18 L6 21 L7 14 L2 9 L9 8 Z"></path></svg>
+        </div>
+        <div class="main">
+          <div class="title">Rewarded ad</div>
+          <div class="sub">Pre-read · AdMob · <span class="status">Verified</span></div>
+        </div>
+        <div class="end">
+          <div class="amt mint">+16 sv</div>
+          <div class="ref">14:22</div>
+        </div>
+      </div>
+
+      <div class="tx-row">
+        <div class="ico signal">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        </div>
+        <div class="main">
+          <div class="title">Funded wallet</div>
+          <div class="sub">Paystack · <span class="status">Success</span></div>
+        </div>
+        <div class="end">
+          <div class="amt mint">+₦3,000</div>
+          <div class="ref">09:01</div>
+        </div>
+      </div>
+
+      <div class="spacer-6"></div>
+
+      <nav class="tabbar">
+        <a href="home-main.html" class="tab active">
+          <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></div>
+          Home
+        </a>
+        <a href="#" class="tab">
+          <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg></div>
+          Read
+        </a>
+        <a href="#" class="tab">
+          <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 L15 8 L22 9 L17 14 L18 21 L12 18 L6 21 L7 14 L2 9 L9 8 Z"></path></svg></div>
+          Rewards
+        </a>
+        <a href="#" class="tab">
+          <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></svg></div>
+          Me
+        </a>
+      </nav>
+    </div>
+  </div>
+
+  <script>
+    const switcher = document.querySelector('.theme-switch');
+    switcher.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.documentElement.dataset.scheme = btn.dataset.theme;
+        switcher.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      });
+    });
+    document.querySelectorAll('.filter-chip').forEach(c => {
+      c.addEventListener('click', () => {
+        document.querySelectorAll('.filter-chip').forEach(x => x.classList.remove('active'));
+        c.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

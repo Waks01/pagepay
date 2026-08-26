@@ -176,8 +176,12 @@ async def validate_referral(
     else:
         referral.referee_completed_first_session = True
 
-    referrer.points_balance = (referrer.points_balance or 0) + REFERRER_REWARD
-    referee.points_balance = (referee.points_balance or 0) + REFEREE_REWARD
+    if settings.wallet_split_enabled:
+        referrer.service_credit_balance = (referrer.service_credit_balance or 0) + REFERRER_REWARD
+        referee.service_credit_balance = (referee.service_credit_balance or 0) + REFEREE_REWARD
+    else:
+        referrer.points_balance = (referrer.points_balance or 0) + REFERRER_REWARD
+        referee.points_balance = (referee.points_balance or 0) + REFEREE_REWARD
     referrer.referrals_today_count = (referrer.referrals_today_count or 0) + 1
     referral.reward_granted = True
 

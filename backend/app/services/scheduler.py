@@ -1,11 +1,11 @@
 import logging
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.database import AsyncSessionLocal
-from app.models import User, UserStreak, UserNotificationPreference, Notification
+from app.models import User, UserStreak, UserNotificationPreference, Notification, ReadingSession
 from app.services.fcm import send_push_notification, is_in_quiet_hours
 from app.services.notifications import create_notification
 
@@ -72,3 +72,38 @@ def register_daily_reminder_job(scheduler: AsyncIOScheduler) -> None:
                 sent += 1
 
         logger.info("Daily study reminder sent to %d users", sent)
+
+
+def register_reading_session_cleanup_job(scheduler: AsyncIOScheduler) -> None:
+    @scheduler.async_job(
+        "cron",
+        hour=3,
+        minute=0,
+        misfire_grace_time=7200,
+        coalesce=True,
+    )
+    async def cleanup_old_reading_sessions():
+        now = datetime.utcnow()
+        unverified_cutoff = now - timedelta(days=7)
+        verified_cutoff = now - timedelta(days=60)
+
+        async with AsyncSessionLocal() as db:
+            unverified_deleted = await db.execute(
+                delete(ReadingSession)
+                .where(ReadingSession.end_time.is_not(None))
+                .where(ReadingSession.verified == False)  # noqa: E712
+                .where(ReadingSession.end_time < unverified_cutoff)
+            )
+            verified_deleted = await db.execute(
+                delete(ReadingSession)
+                .where(ReadingSession.end_time.is_not(None))
+                .where(ReadingSession.verified == True)  # noqa: E712
+                .where(ReadingSession.end_time < verified_cutoff)
+            )
+            await db.commit()
+
+        logger.info(
+            "ReadingSession cleanup: removed %d unverified, %d verified sessions",
+            unverified_deleted.rowcount,
+            verified_deleted.rowcount,
+        )

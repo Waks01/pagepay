@@ -156,7 +156,9 @@
     "withdrawal_failed": "Mwepu ego dara",
     "withdrawal_pending": "Mwepu ego na-eche",
     "withdrawal_success": "Wepụrụ n'ụlọ akụ",
-    "fee_label": "gụnyere {{amount}} ụgwọ"
+    "fee_label": "gụnyere {{amount}} ụgwọ",
+    "view_all": "Lee Ha Niile",
+    "status_pending": "Na-eche"
   },
   "tasks": {
     "title": "Ọrụ Dị",

@@ -137,6 +137,35 @@ async def _ensure_critical_columns():
         logger.error("Critical-column backfill failed: %s", exc)
 
 
+async def _ensure_wallet_split_columns():
+    """Defensive backfill for the split-wallet columns.
+
+    The 038_split_wallet_ledgers migration is the canonical fix, but
+    the prod DB has been observed stuck at alembic rev 021 (see
+    _ensure_critical_columns for context). This helper runs the same
+    `ADD COLUMN IF NOT EXISTS` pattern as a belt-and-suspenders so the
+    new code paths don't 500 if the migration never lands.
+    """
+    from sqlalchemy import text
+
+    additions = (
+        ("users", "service_credit_balance", "BIGINT NOT NULL DEFAULT 0"),
+        ("users", "cashable_balance",       "BIGINT NOT NULL DEFAULT 0"),
+        ("users", "device_id_hash",         "VARCHAR(64) NULL"),
+    )
+    try:
+        async with engine.begin() as conn:
+            for table, column, ddl in additions:
+                await conn.execute(text(
+                    f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS "
+                    f"{column} {ddl}"
+                ))
+        logger.info("Wallet-split backfill: ensured %d columns exist",
+                    len(additions))
+    except Exception as exc:
+        logger.error("Wallet-split backfill failed: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global processor_task
@@ -181,6 +210,8 @@ async def lifespan(app: FastAPI):
     # strictly additive and idempotent.
     logger.info("Scheduling critical-column backfill...")
     asyncio.create_task(_ensure_critical_columns())
+    logger.info("Scheduling wallet-split column backfill...")
+    asyncio.create_task(_ensure_wallet_split_columns())
 
     # Pre-warm AdMob SSV verifier keys in background so the first
     # callback doesn't block on a 10s HTTPS fetch.
@@ -228,9 +259,11 @@ async def lifespan(app: FastAPI):
     import app.services.scheduled_bills as _scheduled_bills
     if _scheduled_bills.scheduler is not None and _scheduled_bills.scheduler.running:
         register_daily_reminder_job(_scheduled_bills.scheduler)
-        logger.info("Daily study reminder job registered with APScheduler")
+        from app.services.scheduler import register_reading_session_cleanup_job
+        register_reading_session_cleanup_job(_scheduled_bills.scheduler)
+        logger.info("Daily study reminder and reading session cleanup jobs registered")
     else:
-        logger.warning("Scheduler not available; daily reminder not registered")
+        logger.warning("Scheduler not available; scheduled jobs not registered")
     
     # Start Phase 7 background task processor
     # Only start if explicitly enabled via settings.run_task_processor

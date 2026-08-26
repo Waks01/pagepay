@@ -233,6 +233,19 @@ export function setupNotificationListeners() {
         error,
       );
     });
+
+    Notifications.setNotificationChannelAsync("rewards", {
+      name: "Rewards",
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: null,
+      showBadge: true,
+      bypassDnd: false,
+    }).catch((error) => {
+      console.error(
+        "[notifications] Failed to create rewards channel:",
+        error,
+      );
+    });
   }
 
   getFirebaseMessaging()

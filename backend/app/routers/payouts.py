@@ -208,11 +208,14 @@ async def _process_wallet_deposit(payment: Payment, reference: str, db: AsyncSes
         ).scalar_one_or_none()
         
         if user_row is not None:
-            old_balance = user_row.points_balance or 0
-            user_row.points_balance = old_balance + deposit_points
+            if settings.wallet_split_enabled:
+                user_row.cashable_balance = (user_row.cashable_balance or 0) + deposit_points
+            else:
+                old_balance = user_row.points_balance or 0
+                user_row.points_balance = old_balance + deposit_points
             logger.info(
-                "✅ WALLET CREDITED: user=%s ref=%s amount_kobo=%s points_added=%d old_balance=%d new_balance=%d",
-                payment.user_id, reference, deposit_amount_kobo, deposit_points, old_balance, user_row.points_balance,
+                "✅ WALLET CREDITED: user=%s ref=%s amount_kobo=%s points_added=%d",
+                payment.user_id, reference, deposit_amount_kobo, deposit_points,
             )
             deposit_naira = deposit_amount_kobo / 100
             
@@ -795,18 +798,28 @@ async def withdraw(
             detail="Withdrawals temporarily unavailable. Please try again later.",
         )
 
-    if user_row.points_balance < total_debit_points:
-        # Surface the exact shortfall so the client can show
-        # "you need ₦X more to cover the fee" instead of a generic
-        # "insufficient balance" error.
-        shortfall_points = total_debit_points - user_row.points_balance
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Insufficient points balance. You need {shortfall_points} more "
-                f"points to cover the {fee_kobo} kobo withdrawal fee."
-            ),
-        )
+    if settings.wallet_split_enabled:
+        if user_row.cashable_balance < total_debit_points:
+            shortfall_points = total_debit_points - user_row.cashable_balance
+            raise HTTPException(
+                status_code=402,
+                detail=(
+                    "Insufficient withdrawable balance. "
+                    f"You need {shortfall_points} more points to cover the withdrawal fee."
+                ),
+            )
+        balance_snapshot = user_row.cashable_balance
+    else:
+        if user_row.points_balance < total_debit_points:
+            shortfall_points = total_debit_points - user_row.points_balance
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Insufficient points balance. You need {shortfall_points} more "
+                    f"points to cover the {fee_kobo} kobo withdrawal fee."
+                ),
+            )
+        balance_snapshot = user_row.points_balance
 
     # Step 4: create the transaction row. fee_kobo is persisted so the
     # audit trail shows the gross debit, and so the webhook reversal
@@ -820,13 +833,16 @@ async def withdraw(
         recipient_code=payout_row.recipient_code,
         reason=payload.reason,
         status="pending",
-        balance_after_debit=user_row.points_balance - total_debit_points,
+        balance_after_debit=balance_snapshot - total_debit_points,
     )
     db.add(txn)
 
     # Step 5: debit the wallet by the GROSS amount (withdrawal + fee),
     # converted from kobo → points via POINTS_PER_NAIRA.
-    user_row.points_balance -= total_debit_points
+    if settings.wallet_split_enabled:
+        user_row.cashable_balance -= total_debit_points
+    else:
+        user_row.points_balance -= total_debit_points
 
     # Step 6: call Paystack with the NET amount (just the withdrawal —
     # the user paid the fee separately and it stays in our balance).
@@ -860,6 +876,7 @@ async def withdraw(
     await db.refresh(txn)
     await db.refresh(user_row)
 
+    balance_for_log = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
     logger.info(
         "User %s withdrew %d kobo (fee=%d) → ref=%s status=%s new_balance_points=%d",
         user_row.id,
@@ -867,13 +884,13 @@ async def withdraw(
         fee_kobo,
         reference,
         txn.status,
-        user_row.points_balance,
+        balance_for_log,
     )
 
     return WithdrawalResponse(
         transfer_reference=reference,
         status=txn.status,
-        new_balance_points=user_row.points_balance,
+        new_balance_points=user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance,
         fee_kobo=fee_kobo,
         amount_kobo=payload.amount_kobo,
         amount_points=kobo_to_points(payload.amount_kobo),
@@ -1090,7 +1107,10 @@ async def paystack_webhook(
                 # reversal lands in the same unit the debit used.
                 refund_kobo = txn.amount_kobo + (txn.fee_kobo or 0)
                 refund_points = kobo_to_points(refund_kobo)
-                user_row.points_balance = user_row.points_balance + refund_points
+                if settings.wallet_split_enabled:
+                    user_row.cashable_balance = user_row.cashable_balance + refund_points
+                else:
+                    user_row.points_balance = user_row.points_balance + refund_points
                 logger.info(
                     "Reversed %d kobo debit (amount=%d + fee=%d, %d points) for user=%s ref=%s (event=%s)",
                     refund_kobo,

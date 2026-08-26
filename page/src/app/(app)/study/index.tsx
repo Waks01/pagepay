@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 
 import { apiFetch } from "@/src/shared/api/client";
+import { pollSowJob } from "@/src/features/study/api";
 import {
   useMaterials,
   useUploadSow,
@@ -284,13 +285,14 @@ export default function StudyScreen() {
         throw new Error(t("study.errors.text_too_long"));
       }
 
-      // Simulate initial progress
-      setUploadProgress(20);
+      // Text uploads are JSON (not multipart), so there is no wire-level
+      // progress to surface. Show a small "in flight" tick to confirm
+      // activity, then jump straight to 100 when the response arrives.
+      setUploadProgress(50);
       const result = await uploadMutation.mutateAsync({
         text,
         exam_type: examType,
       });
-      setUploadProgress(80);
       setSelectedMaterialId(result.material_id);
       const res = await apiFetch(
         `/api/v1/study/materials/${result.material_id}`,
@@ -309,6 +311,36 @@ export default function StudyScreen() {
     }
   };
 
+  // Wire-level progress for file uploads. The XHR fires onprogress with
+  // real byte counts; we map that to 0..80% of the bar. 80→99 is the
+  // server AI-processing window — the polling endpoint doesn't give us
+  // a percentage, so we tick 1% per poll to show the bar advancing
+  // while the work is happening. 100 means the follow-up material
+  // fetch is done.
+  const handleUploadProgress = (loaded: number, total: number) => {
+    if (total <= 0) return;
+    const pct = Math.min(80, Math.round((loaded / total) * 80));
+    setUploadProgress(pct);
+  };
+
+  const handlePollTick = () => {
+    setUploadProgress((prev) => (prev >= 99 ? prev : Math.min(99, prev + 1)));
+  };
+
+  // Shared tail: after the SOW job is completed, fetch the full
+  // MaterialDetail so the screen can render the asset browser. The
+  // 100% tick is held until this fetch resolves so the success banner
+  // only shows when there's actually something to show.
+  const finalizeUploadSuccess = async (materialId: number) => {
+    setSelectedMaterialId(materialId);
+    const res = await apiFetch(`/api/v1/study/materials/${materialId}`);
+    if (res.ok) {
+      setSelectedMaterial(await res.json());
+    }
+    setUploadProgress(100);
+    setTimeout(() => setUploadProgress(undefined), 2000);
+  };
+
   const handleUploadImage = async (examType: string | null) => {
     setError(null);
     setRetryAction(null);
@@ -320,35 +352,25 @@ export default function StudyScreen() {
         return;
       }
 
-      // Client-side file validation
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (file.uri && file.uri.startsWith("file://")) {
-        // Check file size (only possible for local files)
-        // Note: React Native doesn't provide direct file size access
-        // This is a placeholder - actual implementation would need native module
-      }
-
       // Validate file type
       const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
       if (file.type && !validTypes.includes(file.type.toLowerCase())) {
         throw new Error(t("study.errors.invalid_file_type"));
       }
 
-      setUploadProgress(20);
-      const result = await uploadImageMutation.mutateAsync({
+      const { job_id } = await uploadImageMutation.mutateAsync({
         file: { uri: file.uri, name: file.name, type: file.type },
         exam_type: examType,
+        onProgress: handleUploadProgress,
       });
+      // Wire phase done; server now runs OCR + SOW AI parse. Poll the
+      // job and tick 80→99 monotonically while we wait.
       setUploadProgress(80);
-      setSelectedMaterialId(result.material_id);
-      const res = await apiFetch(
-        `/api/v1/study/materials/${result.material_id}`,
-      );
-      if (res.ok) {
-        setSelectedMaterial(await res.json());
+      const job = await pollSowJob(job_id, handlePollTick);
+      if (job.status === "failed" || !job.material_id) {
+        throw new Error(job.error || "Image processing failed");
       }
-      setUploadProgress(100);
-      setTimeout(() => setUploadProgress(undefined), 2000);
+      await finalizeUploadSuccess(job.material_id);
     } catch (err) {
       setUploadProgress(undefined);
       const message = err instanceof Error ? err.message : "Upload failed";
@@ -368,21 +390,17 @@ export default function StudyScreen() {
         setUploadProgress(undefined);
         return;
       }
-      setUploadProgress(20);
-      const result = await uploadImageMutation.mutateAsync({
+      const { job_id } = await uploadImageMutation.mutateAsync({
         file: { uri: file.uri, name: file.name, type: file.type },
         exam_type: examType,
+        onProgress: handleUploadProgress,
       });
       setUploadProgress(80);
-      setSelectedMaterialId(result.material_id);
-      const res = await apiFetch(
-        `/api/v1/study/materials/${result.material_id}`,
-      );
-      if (res.ok) {
-        setSelectedMaterial(await res.json());
+      const job = await pollSowJob(job_id, handlePollTick);
+      if (job.status === "failed" || !job.material_id) {
+        throw new Error(job.error || "Photo processing failed");
       }
-      setUploadProgress(100);
-      setTimeout(() => setUploadProgress(undefined), 2000);
+      await finalizeUploadSuccess(job.material_id);
     } catch (err) {
       setUploadProgress(undefined);
       const message = err instanceof Error ? err.message : "Upload failed";
@@ -422,21 +440,17 @@ export default function StudyScreen() {
         throw new Error(t("study.errors.invalid_format"));
       }
 
-      setUploadProgress(20);
-      const result = await uploadDocumentMutation.mutateAsync({
+      const { job_id } = await uploadDocumentMutation.mutateAsync({
         file: { uri: file.uri, name: file.name, type: file.type },
         exam_type: examType,
+        onProgress: handleUploadProgress,
       });
       setUploadProgress(80);
-      setSelectedMaterialId(result.material_id);
-      const res = await apiFetch(
-        `/api/v1/study/materials/${result.material_id}`,
-      );
-      if (res.ok) {
-        setSelectedMaterial(await res.json());
+      const job = await pollSowJob(job_id, handlePollTick);
+      if (job.status === "failed" || !job.material_id) {
+        throw new Error(job.error || "Document processing failed");
       }
-      setUploadProgress(100);
-      setTimeout(() => setUploadProgress(undefined), 2000);
+      await finalizeUploadSuccess(job.material_id);
     } catch (err) {
       setUploadProgress(undefined);
       const message = err instanceof Error ? err.message : "Upload failed";
@@ -977,7 +991,6 @@ export default function StudyScreen() {
                   getTopicNames(selectedMaterial?.parsed_structure ?? null)
                     .length
                 }
-                progress={[]}
               />
             )}
 

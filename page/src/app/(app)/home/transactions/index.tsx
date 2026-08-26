@@ -336,13 +336,13 @@ export default function TransactionHistoryScreen() {
       try {
         const params = new URLSearchParams({
           limit: String(PAGE_SIZE),
-          page: String(page + 1),
+          offset: String(page * PAGE_SIZE),
         });
         if (filter !== "all") {
           if (filter === "earn" || filter === "spend") {
-            params.set("tx_type", filter);
+            params.set("direction", filter);
           } else {
-            params.set("service", filter);
+            params.set("type", filter);
           }
         }
         if (dateFilter !== "all") {
@@ -359,7 +359,7 @@ export default function TransactionHistoryScreen() {
           throw new Error(text || `Server returned ${res.status}`);
         }
         const data = await res.json();
-        return data.items || [];
+        return Array.isArray(data) ? data : [];
       } catch (e) {
         if (e instanceof Error) throw e;
         throw new Error(typeof e === "string" ? e : "Failed to load history");
@@ -385,15 +385,11 @@ export default function TransactionHistoryScreen() {
       };
       const rawType = tx.tx_type || tx.type || "history";
       const mappedType =
-        (typeMap[rawType] as TxType) ||
-        (rawType as TxType) ||
-        "earn";
+        (typeMap[rawType] as TxType) || (rawType as TxType) || "earn";
 
       const service = tx.service || mappedType;
       const amount =
-        tx.amount !== undefined
-          ? Math.abs(tx.amount)
-          : tx.points_earned || 0;
+        tx.amount !== undefined ? Math.abs(tx.amount) : tx.points_earned || 0;
 
       let description = "";
       if (rawType === "bill") {
@@ -589,7 +585,8 @@ export default function TransactionHistoryScreen() {
                 style={[styles.txAmount, { color: isPositive ? mintC : inkC }]}
               >
                 {prefix}
-                {Math.abs(item.amount).toLocaleString()} {t("wallet.points_suffix")}
+                {Math.abs(item.amount).toLocaleString()}{" "}
+                {t("wallet.points_suffix")}
               </Text>
               <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
                 <Text style={[styles.statusText, { color: statusColor }]}>
@@ -665,7 +662,7 @@ export default function TransactionHistoryScreen() {
               if (err && typeof err === "object" && "message" in err)
                 return String(err.message);
               if (typeof err === "string") return err;
-               return t("transactions.network_error");
+              return t("transactions.network_error");
             })()}
           </Text>
           <TouchableOpacity
@@ -732,7 +729,10 @@ export default function TransactionHistoryScreen() {
                           {t("wallet.service_credits_label")}
                         </Text>
                         <View
-                          style={{ flexDirection: "row", alignItems: "baseline" }}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "baseline",
+                          }}
                         >
                           <Text
                             style={[
@@ -753,7 +753,10 @@ export default function TransactionHistoryScreen() {
                           </Text>
                         </View>
                         <Text
-                          style={[styles.balanceSub, { color: tokens.inkMuted }]}
+                          style={[
+                            styles.balanceSub,
+                            { color: tokens.inkMuted },
+                          ]}
                         >
                           ≈ {pointsToNairaString(balance)}
                         </Text>
@@ -768,7 +771,10 @@ export default function TransactionHistoryScreen() {
                           {t("wallet.cashable_label")}
                         </Text>
                         <View
-                          style={{ flexDirection: "row", alignItems: "baseline" }}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "baseline",
+                          }}
                         >
                           <Text
                             style={[
@@ -789,7 +795,10 @@ export default function TransactionHistoryScreen() {
                           </Text>
                         </View>
                         <Text
-                          style={[styles.balanceSub, { color: tokens.inkMuted }]}
+                          style={[
+                            styles.balanceSub,
+                            { color: tokens.inkMuted },
+                          ]}
                         >
                           ≈ {pointsToNairaString(cashableBalance)}
                         </Text>
@@ -836,19 +845,19 @@ export default function TransactionHistoryScreen() {
                         }
                         style={{ marginRight: 4 }}
                       />
-                        <Text
-                          style={[
-                            styles.filterLabel,
-                            {
-                              color:
-                                dateFilter === f.key
-                                  ? tokens.mintText
-                                  : tokens.inkMuted,
-                            },
-                          ]}
-                        >
-                          {t(f.label)}
-                        </Text>
+                      <Text
+                        style={[
+                          styles.filterLabel,
+                          {
+                            color:
+                              dateFilter === f.key
+                                ? tokens.mintText
+                                : tokens.inkMuted,
+                          },
+                        ]}
+                      >
+                        {t(f.label)}
+                      </Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -892,7 +901,7 @@ export default function TransactionHistoryScreen() {
                           },
                         ]}
                       >
-                         {t(f.label)}
+                        {t(f.label)}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -974,7 +983,9 @@ export default function TransactionHistoryScreen() {
                 ]}
               >
                 <Text style={[styles.loadMoreText, { color: tokens.mint }]}>
-                  {historyQ.isFetching ? t("transactions.loading") : t("transactions.load_more")}
+                  {historyQ.isFetching
+                    ? t("transactions.loading")
+                    : t("transactions.load_more")}
                 </Text>
               </TouchableOpacity>
             ) : null
