@@ -764,39 +764,25 @@ async def admob_ssv_callback(
         )
 
     # ── 6a. Daily ad impression cap (global, all networks + use cases) ──
-    DAILY_CAP = settings.daily_ad_impression_cap
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    cap_result = await db.execute(
-        select(func.count(AdEvent.id))
-        .where(AdEvent.user_id == user_id)
-        .where(AdEvent.ad_type == "rewarded")
-        .where(AdEvent.credit_status == "credited")
-        .where(AdEvent.created_at >= today_start)
-    )
-    ads_watched_today = cap_result.scalar() or 0
-    if ads_watched_today >= DAILY_CAP:
+    cap_info = await ads_service.check_daily_ad_impression_cap(db, user_id)
+    if cap_info["hit"]:
         await ads_service.mark_ad_request_rejected(
             db, req, reason="daily_ad_impression_cap_hit",
-            extra_metadata={
-                "today_count": ads_watched_today,
-                "cap": DAILY_CAP,
-                "use_case": getattr(req, "use_case", "wallet_topup"),
-            },
         )
         await log_ssv_attempt(
             user_id=user_id,
             token=token,
             status="rejected_daily_ad_impression_cap",
             rejection_reason=(
-                f"daily ad impression cap {DAILY_CAP} hit "
-                f"(today={ads_watched_today})"
+                f"daily ad impression cap {cap_info['cap']} hit "
+                f"(today={cap_info['count']})"
             ),
             points_credited=0,
         )
         await db.commit()
         logger.info(
             "AdMob SSV: daily ad cap hit user=%s today=%d cap=%d use_case=%s",
-            user_id, ads_watched_today, DAILY_CAP, getattr(req, "use_case", "wallet_topup"),
+            user_id, cap_info["count"], cap_info["cap"], getattr(req, "use_case", "wallet_topup"),
         )
         return {"status": "ignored", "reason": "daily_ad_impression_cap"}
 

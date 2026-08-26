@@ -31,6 +31,7 @@ import { PremiumUpsellModal } from "@/components/PremiumUpsellModal";
 import { SocialBar } from "@/components/SocialBar";
 import { ShareSheet, type ShareTarget } from "@/components/ShareSheet";
 import { CommentsSection } from "@/components/CommentsSection";
+import { MultiplierBadge } from "@/components/MultiplierBadge";
 import {
   useWorkSocial,
   useLogWorkShare,
@@ -163,6 +164,8 @@ export default function ReaderScreen() {
       if (!res.ok) throw new Error("Failed to load profile");
       return (await res.json()) as {
         id: number;
+        service_credit_balance: number;
+        cashable_balance: number;
         points_balance: number;
         is_premium?: boolean;
       };
@@ -588,6 +591,9 @@ export default function ReaderScreen() {
                 : t("reader.active")
               : t("reader.waiting")}
           </Text>
+          {isPremium && (
+            <MultiplierBadge activityType="reading" size="small" showLabel={false} />
+          )}
           <Text style={[styles.timerText, { color: tokens.ink }]}>
             {formatTime(elapsedSeconds)}
           </Text>

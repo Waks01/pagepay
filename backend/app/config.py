@@ -403,16 +403,27 @@ class Settings(BaseSettings):
     topic_slice_max_chars: int = 3_600
     topic_slice_single_unit_threshold: int = 3_000
 
-    # ── TTS (edge-tts) ───────────────────────────────────────────────
-    # Default voice and rate applied to every TTS generation. Voice
-    # can be any edge-tts 6.x voice — see
-    # https://github.com/rany2/edge-tts#voices. Rate is the edge-tts
-    # rate string ("+0%", "+10%", "-25%", etc.). The batch concurrency
-    # bounds parallel TTS calls so we don't get rate-limited by
-    # Microsoft (5 is the sweet spot for free tier).
+    # ── TTS (hybrid) ───────────────────────────────────────────────
+    # Provider order for on-demand study TTS. First available provider
+    # wins. Free tiers:
+    #   NVIDIA Magpie TTS: free prototype tier, ~40 RPM
+    #   OpenRouter: free :free models, ~20 RPM
+    #   Gemini 3.1 Flash TTS: free tier input+output
+    #   edge-tts: free, no key required, Microsoft neural voices
+    tts_default_provider: str = "nvidia"
     tts_default_voice: str = "en-US-AriaNeural"
     tts_default_rate: str = "+0%"
     tts_batch_concurrency: int = 5
+
+    # Provider API keys (all optional — missing keys skip that provider).
+    nvidia_nim_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    gemini_api_key: str | None = None
+
+    # NVIDIA NIM TTS endpoint (Magpie TTS Multilingual).
+    # Override via env NVIDIA_NIM_TTS_URL if you host it yourself.
+    nvidia_nim_tts_url: str = "https://integrate.api.nvidia.com/v1/audio/synthesize_online"
+    nvidia_nim_tts_voice: str = "Magpie-ZeroShot-Multilingual"
 
     # ── Content fetcher User-Agents ──────────────────────────────────
     # Both Gutendex and OpenStax require an identifying UA — the
@@ -614,6 +625,12 @@ class Settings(BaseSettings):
     # Whether premium users can skip feed ads in catalog.
     # Override via env PREMIUM_CAN_SKIP_FEED_ADS.
     premium_can_skip_feed_ads: bool = True
+
+    # ── Premium subscription grace period ────────────────────────────
+    # Number of days after subscription_expires_at before the user is
+    # downgraded to FREE. During this window the user keeps premium
+    # benefits. Override via env PREMIUM_GRACE_PERIOD_DAYS.
+    premium_grace_period_days: int = 3
 
     # ── Tier benefits JSON configuration ─────────────────────────────
     # Path to tier_benefits.json file (relative to backend/app or absolute).

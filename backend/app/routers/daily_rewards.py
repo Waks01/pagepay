@@ -36,21 +36,24 @@ async def _get_or_create_default_rewards(db: AsyncSession) -> List[DailyReward]:
     if rewards:
         return [r[0] for r in rewards]
     
-    # Create default reward structure
+    # Create default reward structure per reward-system-migration.md §5
     default_rewards = [
-        # Daily rewards (Days 1-7)
-        DailyReward(day_number=1, reward_type="points", reward_value=100, title="Welcome Back!", description="Great to see you again", icon_emoji="🎯"),
-        DailyReward(day_number=2, reward_type="points", reward_value=150, title="Getting Started", description="Building momentum", icon_emoji="⚡"),
-        DailyReward(day_number=3, reward_type="points", reward_value=200, title="On a Roll", description="Keep it going", icon_emoji="🚀"),
-        DailyReward(day_number=4, reward_type="points", reward_value=300, title="Consistency Pays", description="Four days strong", icon_emoji="💪"),
-        DailyReward(day_number=5, reward_type="points", reward_value=400, title="Dedication", description="Five days in a row", icon_emoji="🔥"),
-        DailyReward(day_number=6, reward_type="points", reward_value=500, title="Almost There", description="One more for the week", icon_emoji="⭐"),
-        DailyReward(day_number=7, reward_type="points", reward_value=750, title="Week Complete!", description="Seven day streak bonus", icon_emoji="🏆"),
-        
-        # Weekly bonuses (Days 8-14, 15-21, etc.)
-        DailyReward(day_number=14, reward_type="multiplier", reward_value=120, title="Two Week Warrior", description="20% bonus multiplier", icon_emoji="🛡️"),
-        DailyReward(day_number=21, reward_type="points", reward_value=1500, title="Three Week Legend", description="Major milestone bonus", icon_emoji="👑"),
-        DailyReward(day_number=30, reward_type="multiplier", reward_value=150, title="Monthly Master", description="50% bonus multiplier", icon_emoji="💎"),
+        # Daily drip (small) — Days 1-6: 10 sv each
+        DailyReward(day_number=1, reward_type="points", reward_value=10, title="Welcome Back!", description="Great to see you again", icon_emoji="🎯"),
+        DailyReward(day_number=2, reward_type="points", reward_value=10, title="Getting Started", description="Building momentum", icon_emoji="⚡"),
+        DailyReward(day_number=3, reward_type="points", reward_value=10, title="On a Roll", description="Keep it going", icon_emoji="🚀"),
+        DailyReward(day_number=4, reward_type="points", reward_value=10, title="Consistency Pays", description="Four days strong", icon_emoji="💪"),
+        DailyReward(day_number=5, reward_type="points", reward_value=10, title="Dedication", description="Five days in a row", icon_emoji="🔥"),
+        DailyReward(day_number=6, reward_type="points", reward_value=10, title="Almost There", description="One more for the week", icon_emoji="⭐"),
+
+        # Milestones — no premium multiplier on milestone rewards
+        DailyReward(day_number=7, reward_type="points", reward_value=200, title="Week Warrior", description="7-day streak milestone", icon_emoji="🏆"),
+        DailyReward(day_number=14, reward_type="points", reward_value=350, title="Two Week Champion", description="14-day streak milestone", icon_emoji="🛡️"),
+        DailyReward(day_number=21, reward_type="points", reward_value=500, title="Three Week Legend", description="21-day streak milestone", icon_emoji="👑"),
+        DailyReward(day_number=30, reward_type="points", reward_value=800, title="Monthly Master", description="30-day streak milestone", icon_emoji="💎"),
+        DailyReward(day_number=60, reward_type="points", reward_value=1500, title="Diamond Streak", description="60-day streak milestone", icon_emoji="💍"),
+        DailyReward(day_number=100, reward_type="points", reward_value=3000, title="Centurion", description="100-day streak milestone", icon_emoji="🎖️"),
+        DailyReward(day_number=365, reward_type="points", reward_value=15000, title="Yearly Legend", description="365-day streak milestone", icon_emoji="👑"),
     ]
     
     for reward in default_rewards:
@@ -80,26 +83,27 @@ async def _get_claimable_reward(user_streak: UserStreak, rewards: List[DailyRewa
     reward_day = user_streak.reward_streak + 1  # Next reward day to claim
     
     # Find the appropriate reward for the reward day
-    # For days beyond 7, we use special milestone rewards or cycle back
-    if reward_day <= 7:
-        # Days 1-7: direct mapping
+    # Per reward-system-migration.md §5: milestones at 7, 14, 21, 30, 60, 100, 365.
+    # Days 1-6 are the daily drip (10 sv). Between milestones the user cycles
+    # through days 1-6.
+    MILESTONE_DAYS = {7, 14, 21, 30, 60, 100, 365}
+
+    if reward_day in MILESTONE_DAYS:
         for reward in rewards:
             if reward.day_number == reward_day:
                 return reward
-    else:
-        # Beyond day 7: check for milestone rewards or cycle through days 1-7
-        # Check if we're at a milestone day (14, 21, 30)
-        if reward_day in [14, 21, 30]:
-            for reward in rewards:
-                if reward.day_number == reward_day:
-                    return reward
-        
-        # Otherwise, cycle through days 1-7
-        cycle_day = ((reward_day - 1) % 7) + 1  # Maps 8->1, 9->2, etc.
+        return None
+
+    if reward_day <= 6:
         for reward in rewards:
-            if reward.day_number == cycle_day:
+            if reward.day_number == reward_day:
                 return reward
-    
+        return None
+
+    cycle_day = ((reward_day - 1) % 6) + 1
+    for reward in rewards:
+        if reward.day_number == cycle_day:
+            return reward
     return None
 
 
@@ -160,7 +164,45 @@ async def get_daily_reward_status(
         .limit(7)
     )
     recent_claims = history_query.fetchall()
-    
+
+    # Build full milestone ladder per §3.14
+    MILESTONE_LADDER = [
+        {"day": 7,   "reward_sv": 200},
+        {"day": 14,  "reward_sv": 350},
+        {"day": 21,  "reward_sv": 500},
+        {"day": 30,  "reward_sv": 800},
+        {"day": 60,  "reward_sv": 1500},
+        {"day": 100, "reward_sv": 3000},
+        {"day": 365, "reward_sv": 15000},
+    ]
+    milestone_days = [m["day"] for m in MILESTONE_LADDER]
+
+    # Fetch which milestones the user has already claimed
+    claimed_milestones_query = await db.execute(
+        select(UserRewardClaim.streak_day)
+        .where(
+            UserRewardClaim.user_id == current_user.id,
+            UserRewardClaim.streak_day.in_(milestone_days),
+        )
+    )
+    milestones_claimed = sorted(set(row[0] for row in claimed_milestones_query.fetchall()))
+
+    # Find next unclaimed milestone
+    current = streak.reward_streak
+    next_m = next(
+        (m for m in MILESTONE_LADDER if m["day"] > current),
+        None,
+    )
+    next_milestone_obj = None
+    if next_m:
+        days_away = max(0, next_m["day"] - current)
+        next_milestone_obj = {
+            "day": next_m["day"],
+            "reward_sv": next_m["reward_sv"],
+            "celebration_component": f"milestone_day{next_m['day']}",
+            "next_milestone_in_days": days_away,
+        }
+
     # IMPORTANT: Return reward_streak (claim-based), NOT current_streak (login-based)
     # reward_streak only increments when user actually claims a reward
     # current_streak increments every time user opens the app
@@ -178,15 +220,24 @@ async def get_daily_reward_status(
             icon_emoji=claimable_reward.icon_emoji
         ) if claimable_reward else None,
         last_claim_date=streak.last_reward_claim_date,
-        next_milestone_day=next((r.day_number for r in sorted(rewards, key=lambda x: x.day_number) 
-                               if r.day_number > streak.reward_streak), None),
+        next_milestone_day=next_m["day"] if next_m else None,
         recent_claims=[
             {
                 "date": claim[0].claim_date,
                 "points_earned": claim[0].points_earned,
                 "streak_day": claim[0].streak_day
             } for claim in recent_claims
-        ]
+        ],
+        milestones_claimed=milestones_claimed,
+        ladder=[
+            {
+                "day": m["day"],
+                "reward_sv": m["reward_sv"],
+                "celebration_component": f"milestone_day{m['day']}",
+            }
+            for m in MILESTONE_LADDER
+        ],
+        next_milestone=next_milestone_obj,
     )
 
 
@@ -284,8 +335,8 @@ async def claim_daily_reward(
         },
     )
     
-    # Check for streak milestones (Phase 6)
-    milestone_days = [7, 14, 30, 60, 90, 180, 365]
+    # Check for streak milestones per reward-system-migration.md §5.2
+    milestone_days = [7, 14, 21, 30, 60, 100, 365]
     if updated_streak.reward_streak in milestone_days:
         from app.services.premium_notifications import notify_streak_milestone
         await notify_streak_milestone(

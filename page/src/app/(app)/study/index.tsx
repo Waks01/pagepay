@@ -586,7 +586,7 @@ export default function StudyScreen() {
   };
 
   const materials = materialsQ.data ?? [];
-  const balance = meQ?.points_balance ?? 0;
+  const balance = meQ?.service_credit_balance ?? 0;
   const isLoading = materialsQ.isLoading;
   const totalAssets = selectedMaterial?.assets.length ?? 0;
 

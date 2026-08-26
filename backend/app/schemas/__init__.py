@@ -106,8 +106,13 @@ class UserUpdate(BaseModel):
 class AirtimePurchaseRequest(BaseModel):
     """POST /bills/airtime - Buy airtime and earn points."""
     phone: str = Field(min_length=10, max_length=15)
-    network: str = Field(..., description="mtn, airtel, glo")
+    network: str = Field(..., description="mtn, airtel, glo, 9mobile")
     amount_naira: int = Field(ge=25, le=50000)
+    apply_sv_discount: int = Field(
+        default=0,
+        ge=0,
+        description="Service credits (sv) to apply as discount (capped at 25% of amount)",
+    )
 
 
 class DataPurchaseRequest(BaseModel):
@@ -127,6 +132,13 @@ class AirtimePurchaseResponse(BaseModel):
     points_earned: int
     new_balance: int
     status: str
+    # SV discount payment breakdown (added Phase 4)
+    payment_breakdown: dict | None = Field(
+        default=None,
+        description="Payment split: cashable_paid_kobo, sv_discount_kobo, sv_discount_pts, commission_earned_sv",
+    )
+    new_service_credit_balance: int | None = Field(default=None)
+    new_cashable_balance: int | None = Field(default=None)
 
 
 class ElectricityPurchaseRequest(BaseModel):
@@ -1098,6 +1110,19 @@ class DailyRewardInfo(BaseModel):
     icon_emoji: str
 
 
+class MilestoneLadderEntry(BaseModel):
+    day: int
+    reward_sv: int
+    celebration_component: str
+
+
+class NextMilestone(BaseModel):
+    day: int
+    reward_sv: int
+    celebration_component: str
+    next_milestone_in_days: int
+
+
 class DailyRewardStatus(BaseModel):
     current_streak: int
     longest_streak: int
@@ -1106,6 +1131,10 @@ class DailyRewardStatus(BaseModel):
     last_claim_date: str | None
     next_milestone_day: int | None
     recent_claims: list[dict]
+    # Section 3.14 additions: full milestone ladder + claimed set
+    milestones_claimed: list[int]
+    ladder: list[MilestoneLadderEntry]
+    next_milestone: NextMilestone | None
 
 
 class DailyRewardClaim(BaseModel):

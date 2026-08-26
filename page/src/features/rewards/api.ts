@@ -14,6 +14,19 @@ export type DailyRewardInfo = {
   icon_emoji: string;
 };
 
+export type MilestoneLadderEntry = {
+  day: number;
+  reward_sv: number;
+  celebration_component: string;
+};
+
+export type NextMilestone = {
+  day: number;
+  reward_sv: number;
+  celebration_component: string;
+  next_milestone_in_days: number;
+};
+
 export type DailyRewardStatus = {
   current_streak: number;
   longest_streak: number;
@@ -26,6 +39,21 @@ export type DailyRewardStatus = {
     points_earned: number;
     streak_day: number;
   }>;
+  // Section 3.14: full milestone ladder
+  milestones_claimed: number[];
+  ladder: MilestoneLadderEntry[];
+  next_milestone: NextMilestone | null;
+};
+
+export type StreakFreezeByAdResponse = {
+  recovered: boolean;
+  next_claim_available_at: string;
+};
+
+export type StreakFreezeByPointsResponse = {
+  recovered: boolean;
+  sv_spent: number;
+  new_balance: number;
 };
 
 export type DailyRewardClaim = {
@@ -107,7 +135,9 @@ export async function fetchDailyRewardStatus(): Promise<DailyRewardStatus> {
   return res.json();
 }
 
-export async function claimDailyReward(deviceId?: string): Promise<DailyRewardClaim> {
+export async function claimDailyReward(
+  deviceId?: string,
+): Promise<DailyRewardClaim> {
   const body: Record<string, string | undefined> = {};
   if (deviceId) {
     body.device_id = deviceId;
@@ -153,6 +183,54 @@ export async function fetchDailyRewardHistory(): Promise<DailyRewardHistory> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || "Failed to load daily reward history");
+  }
+  return res.json();
+}
+
+export async function freezeStreakByAd(
+  deviceId?: string,
+): Promise<StreakFreezeByAdResponse> {
+  const body: Record<string, string | undefined> = {};
+  if (deviceId) body.device_id = deviceId;
+  const res = await apiFetch("/api/v1/rewards/daily/freeze-by-ad", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let errorMessage = `Failed to recover streak by ad (HTTP ${res.status})`;
+    try {
+      const err = await res.json();
+      if (typeof err.detail === "string") errorMessage = err.detail;
+      else if (typeof err.message === "string") errorMessage = err.message;
+    } catch {
+      errorMessage = res.statusText || errorMessage;
+    }
+    throw new Error(errorMessage);
+  }
+  return res.json();
+}
+
+export async function freezeStreakByPoints(
+  deviceId?: string,
+): Promise<StreakFreezeByPointsResponse> {
+  const body: Record<string, string | undefined> = {};
+  if (deviceId) body.device_id = deviceId;
+  const res = await apiFetch("/api/v1/rewards/daily/freeze-by-points", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let errorMessage = `Failed to recover streak by points (HTTP ${res.status})`;
+    try {
+      const err = await res.json();
+      if (typeof err.detail === "string") errorMessage = err.detail;
+      else if (typeof err.message === "string") errorMessage = err.message;
+    } catch {
+      errorMessage = res.statusText || errorMessage;
+    }
+    throw new Error(errorMessage);
   }
   return res.json();
 }

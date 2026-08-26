@@ -462,3 +462,30 @@ async def list_recent_credits_for_user(
         )
     ).scalars().all()
     return list(rows)
+
+
+async def check_daily_ad_impression_cap(db: AsyncSession, user_id: int) -> dict:
+    """Check whether `user_id` has hit the global 200-ads/day cap.
+
+    Returns a dict with:
+      - `hit: bool` — True if the cap is reached/exceeded
+      - `count: int` — ads credited today before this request
+      - `cap: int` — the configured cap
+
+    This helper is shared across all ad-network SSV callbacks
+    (AdMob, AppLovin, Unity, …) so the cap is enforced globally
+    regardless of which network served the ad.
+    """
+    from app.config import settings
+
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    cap_result = await db.execute(
+        select(func.count(AdEvent.id))
+        .where(AdEvent.user_id == user_id)
+        .where(AdEvent.ad_type == "rewarded")
+        .where(AdEvent.credit_status == "credited")
+        .where(AdEvent.created_at >= today_start)
+    )
+    ads_watched_today = cap_result.scalar() or 0
+    cap = settings.daily_ad_impression_cap
+    return {"hit": ads_watched_today >= cap, "count": ads_watched_today, "cap": cap}

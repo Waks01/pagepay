@@ -11,14 +11,20 @@ from app.config import settings
 from app.models import User, UserTier
 
 
+GRACE_PERIOD = timedelta(days=settings.premium_grace_period_days)
+
+
 def is_premium(user: User) -> bool:
     """Check if user has an active premium subscription.
+
+    Includes a grace period after subscription_expires_at so users keep
+    premium benefits for `premium_grace_period_days` after expiry.
 
     Args:
         user: User model instance
 
     Returns:
-        True if user has active premium subscription, False otherwise
+        True if user has active premium subscription (including grace), False otherwise
     """
     if user.tier == UserTier.FREE:
         return False
@@ -26,8 +32,8 @@ def is_premium(user: User) -> bool:
     if user.subscription_expires_at is None:
         return False
 
-    # Check if subscription is still valid
-    return user.subscription_expires_at > datetime.utcnow()
+    # Check if subscription is still valid (including grace period)
+    return user.subscription_expires_at + GRACE_PERIOD > datetime.utcnow()
 
 
 def get_points_multiplier(user: User, activity_type: str = "reading") -> float:
@@ -163,8 +169,10 @@ def get_subscription_status(user: User) -> dict:
         "tier": user.tier.value,
         "tier_name": format_tier_name(user.tier),
         "is_premium": is_active,
+        "in_grace_period": is_active and user.subscription_expires_at is not None and user.subscription_expires_at <= datetime.utcnow(),
         "expires_at": user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
         "days_remaining": days_remaining,
+        "grace_period_days": settings.premium_grace_period_days,
         "points_multiplier": get_points_multiplier(user),
         "benefits": {
             "ad_free_study": is_active,

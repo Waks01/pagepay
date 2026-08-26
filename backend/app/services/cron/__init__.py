@@ -30,31 +30,34 @@ from app.models import User, UserTier, ContentCatalog, UserStreak
 from app.services.content.gutendex import import_gutendex
 from app.services.content.gnews import import_gnews
 from app.services.content.slicing import slice_all_books
+from app.services.subscription import GRACE_PERIOD
 
 logger = logging.getLogger("uvicorn.error")
 
 
 async def expire_subscriptions(db: AsyncSession) -> int:
     """Revert expired premium subscriptions back to free tier.
-    
-    Called daily to check if any user's subscription_expires_at has passed.
+
+    Only downgrades users whose subscription_expires_at + grace_period
+    has passed. Users keep premium benefits for the full grace period.
     """
     now = datetime.utcnow()
-    
+    grace_cutoff = now - GRACE_PERIOD
+
     result = await db.execute(
         update(User)
         .where(
             (User.tier != UserTier.FREE) &
-            (User.subscription_expires_at <= now)
+            (User.subscription_expires_at <= grace_cutoff)
         )
         .values(tier=UserTier.FREE)
     )
-    
+
     count = result.rowcount
     if count > 0:
         await db.commit()
-        logger.info("Expired %d premium subscriptions", count)
-    
+        logger.info("Expired %d premium subscriptions (grace period: %d days)", count, settings.premium_grace_period_days)
+
     return count
 
 

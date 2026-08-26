@@ -466,11 +466,40 @@ export default function WalletScreen() {
                   marginVertical: 16,
                 }}
               />
-              <Text
-                style={{ fontSize: 13, color: c.inkMuted, marginBottom: 14 }}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                }}
               >
-                {getTierLabel(tier)}
-              </Text>
+                <Text
+                  style={{ fontSize: 13, color: c.inkMuted }}
+                >
+                  {getTierLabel(tier)}
+                </Text>
+                {tier !== "free" && (
+                  <View
+                    style={{
+                      backgroundColor: c.mint,
+                      borderRadius: 12,
+                      paddingHorizontal: 10,
+                      paddingVertical: 2,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: c.mintText,
+                        fontWeight: "700",
+                        letterSpacing: 0.3,
+                      }}
+                    >
+                      PREMIUM
+                    </Text>
+                  </View>
+                )}
+              </View>
 
               {userLoading || payoutQ.isLoading ? (
                 <ActivityIndicator

@@ -36,6 +36,8 @@ import {
   fetchDailyRewardStatus,
   claimDailyReward,
   fetchDailyRewardConfig,
+  freezeStreakByAd,
+  freezeStreakByPoints,
   DailyRewardStatus,
   DailyRewardInfo,
 } from "@/src/features/rewards/api";
@@ -80,7 +82,9 @@ export default function DailyRewardsScreen() {
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
   useEffect(() => {
-    getDeviceFingerprint().then(setDeviceId).catch(() => setDeviceId(null));
+    getDeviceFingerprint()
+      .then(setDeviceId)
+      .catch(() => setDeviceId(null));
   }, []);
 
   const {
@@ -127,6 +131,26 @@ export default function DailyRewardsScreen() {
     },
   });
 
+  const freezeByAdMutation = useMutation({
+    mutationFn: (deviceId?: string) => freezeStreakByAd(deviceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["daily-reward-status"] });
+    },
+    onError: (error: Error) => {
+      console.error("Streak freeze by ad error:", error.message);
+    },
+  });
+
+  const freezeByPointsMutation = useMutation({
+    mutationFn: (deviceId?: string) => freezeStreakByPoints(deviceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["daily-reward-status"] });
+    },
+    onError: (error: Error) => {
+      console.error("Streak freeze by points error:", error.message);
+    },
+  });
+
   const handleClaimReward = async () => {
     if (!rewardStatus?.can_claim_today) return;
     setClaimingReward(true);
@@ -135,6 +159,21 @@ export default function DailyRewardsScreen() {
     } finally {
       setClaimingReward(false);
     }
+  };
+
+  // Streak is considered broken when streak is 0 and user hasn't claimed today
+  // (meaning they missed yesterday and lost their streak)
+  const streakBroken =
+    !rewardStatus?.can_claim_today &&
+    currentStreak === 0 &&
+    !!rewardStatus?.last_claim_date;
+
+  const handleFreezeByAd = async () => {
+    await freezeByAdMutation.mutateAsync(deviceId || undefined);
+  };
+
+  const handleFreezeByPoints = async () => {
+    await freezeByPointsMutation.mutateAsync(deviceId || undefined);
   };
 
   const currentStreak = rewardStatus?.current_streak || 0;
@@ -163,6 +202,8 @@ export default function DailyRewardsScreen() {
 
   const strokeDashOffset = RING_CIRCUMFERENCE * (1 - weekProgress);
 
+  const MILESTONE_DAYS = new Set<number>([7, 14, 21, 30, 60, 100, 365]);
+
   const fallbackRewards: Record<
     number,
     {
@@ -172,142 +213,184 @@ export default function DailyRewardsScreen() {
       title: string;
     }
   > = {
-    8: {
-      icon_emoji: "💎",
+    1: {
+      icon_emoji: "🎯",
       reward_type: "points",
-      reward_value: 1000,
+      reward_value: 10,
+      title: "Welcome Back!",
+    },
+    2: {
+      icon_emoji: "⚡",
+      reward_type: "points",
+      reward_value: 10,
+      title: "Getting Started",
+    },
+    3: {
+      icon_emoji: "🚀",
+      reward_type: "points",
+      reward_value: 10,
+      title: "On a Roll",
+    },
+    4: {
+      icon_emoji: "💪",
+      reward_type: "points",
+      reward_value: 10,
+      title: "Consistency Pays",
+    },
+    5: {
+      icon_emoji: "🔥",
+      reward_type: "points",
+      reward_value: 10,
+      title: "Dedication",
+    },
+    6: {
+      icon_emoji: "⭐",
+      reward_type: "points",
+      reward_value: 10,
+      title: "Almost There",
+    },
+    7: {
+      icon_emoji: "🏆",
+      reward_type: "points",
+      reward_value: 200,
+      title: "Week Warrior",
+    },
+    8: {
+      icon_emoji: "🎯",
+      reward_type: "points",
+      reward_value: 10,
       title: "Day 8",
     },
     9: {
-      icon_emoji: "🌟",
+      icon_emoji: "⚡",
       reward_type: "points",
-      reward_value: 1200,
+      reward_value: 10,
       title: "Day 9",
     },
     10: {
-      icon_emoji: "🎁",
+      icon_emoji: "🚀",
       reward_type: "points",
-      reward_value: 1500,
+      reward_value: 10,
       title: "Day 10",
     },
     11: {
-      icon_emoji: "💫",
+      icon_emoji: "💪",
       reward_type: "points",
-      reward_value: 2000,
+      reward_value: 10,
       title: "Day 11",
     },
     12: {
-      icon_emoji: "🏅",
+      icon_emoji: "🔥",
       reward_type: "points",
-      reward_value: 2500,
+      reward_value: 10,
       title: "Day 12",
     },
     13: {
-      icon_emoji: "👑",
+      icon_emoji: "⭐",
       reward_type: "points",
-      reward_value: 3000,
+      reward_value: 10,
       title: "Day 13",
     },
     14: {
       icon_emoji: "🛡️",
-      reward_type: "multiplier",
-      reward_value: 20,
-      title: "Two Week Warrior",
+      reward_type: "points",
+      reward_value: 350,
+      title: "Two Week Champion",
     },
     15: {
-      icon_emoji: "🎪",
+      icon_emoji: "🎯",
       reward_type: "points",
-      reward_value: 3500,
+      reward_value: 10,
       title: "Day 15",
     },
     16: {
-      icon_emoji: "🎨",
+      icon_emoji: "⚡",
       reward_type: "points",
-      reward_value: 4000,
+      reward_value: 10,
       title: "Day 16",
     },
     17: {
-      icon_emoji: "🎭",
+      icon_emoji: "🚀",
       reward_type: "points",
-      reward_value: 4500,
+      reward_value: 10,
       title: "Day 17",
     },
     18: {
-      icon_emoji: "🎪",
+      icon_emoji: "💪",
       reward_type: "points",
-      reward_value: 5000,
+      reward_value: 10,
       title: "Day 18",
     },
     19: {
-      icon_emoji: "🎨",
+      icon_emoji: "🔥",
       reward_type: "points",
-      reward_value: 5500,
+      reward_value: 10,
       title: "Day 19",
     },
     20: {
-      icon_emoji: "🎭",
+      icon_emoji: "⭐",
       reward_type: "points",
-      reward_value: 6000,
+      reward_value: 10,
       title: "Day 20",
     },
     21: {
       icon_emoji: "👑",
       reward_type: "points",
-      reward_value: 1500,
+      reward_value: 500,
       title: "Three Week Legend",
     },
     22: {
-      icon_emoji: "💎",
+      icon_emoji: "🎯",
       reward_type: "points",
-      reward_value: 7000,
+      reward_value: 10,
       title: "Day 22",
     },
     23: {
-      icon_emoji: "🌟",
+      icon_emoji: "⚡",
       reward_type: "points",
-      reward_value: 7500,
+      reward_value: 10,
       title: "Day 23",
     },
     24: {
-      icon_emoji: "🎁",
+      icon_emoji: "🚀",
       reward_type: "points",
-      reward_value: 8000,
+      reward_value: 10,
       title: "Day 24",
     },
     25: {
-      icon_emoji: "💫",
+      icon_emoji: "💪",
       reward_type: "points",
-      reward_value: 8500,
+      reward_value: 10,
       title: "Day 25",
     },
     26: {
-      icon_emoji: "🏅",
+      icon_emoji: "🔥",
       reward_type: "points",
-      reward_value: 9000,
+      reward_value: 10,
       title: "Day 26",
     },
     27: {
-      icon_emoji: "🎯",
+      icon_emoji: "⭐",
       reward_type: "points",
-      reward_value: 9500,
+      reward_value: 10,
       title: "Day 27",
     },
     28: {
-      icon_emoji: "⚡",
+      icon_emoji: "🎯",
       reward_type: "points",
-      reward_value: 10000,
+      reward_value: 10,
       title: "Day 28",
     },
     29: {
-      icon_emoji: "🚀",
+      icon_emoji: "⚡",
       reward_type: "points",
-      reward_value: 15000,
+      reward_value: 10,
       title: "Day 29",
     },
     30: {
       icon_emoji: "🏆",
-      reward_type: "multiplier",
-      reward_value: 50,
+      reward_type: "points",
+      reward_value: 800,
       title: "Monthly Master",
     },
   };
@@ -315,7 +398,52 @@ export default function DailyRewardsScreen() {
   const getRewardForDay = (dayNumber: number): DailyRewardInfo | null => {
     const dbReward = rewards.find((r) => r.day_number === dayNumber) || null;
     if (dbReward) return dbReward;
-    const fallback = fallbackRewards[dayNumber];
+
+    if (MILESTONE_DAYS.has(dayNumber)) {
+      const fallback = fallbackRewards[dayNumber];
+      if (fallback) {
+        const fallbackTitleKey = `daily_rewards.fallback_titles.day_${dayNumber}`;
+        const fallbackTitle = t(fallbackTitleKey);
+        return {
+          id: dayNumber,
+          day_number: dayNumber,
+          reward_type: fallback.reward_type as "points" | "multiplier",
+          reward_value: fallback.reward_value,
+          title:
+            fallbackTitle !== fallbackTitleKey ? fallbackTitle : fallback.title,
+          description: "",
+          icon_emoji: fallback.icon_emoji,
+        };
+      }
+      return null;
+    }
+
+    if (dayNumber <= 6) {
+      const fallback = fallbackRewards[dayNumber];
+      if (fallback) {
+        const fallbackTitleKey = `daily_rewards.fallback_titles.day_${dayNumber}`;
+        const fallbackTitle = t(fallbackTitleKey);
+        return {
+          id: dayNumber,
+          day_number: dayNumber,
+          reward_type: fallback.reward_type as "points" | "multiplier",
+          reward_value: fallback.reward_value,
+          title:
+            fallbackTitle !== fallbackTitleKey ? fallbackTitle : fallback.title,
+          description: "",
+          icon_emoji: fallback.icon_emoji,
+        };
+      }
+      return null;
+    }
+
+    const cycleDay = ((dayNumber - 1) % 6) + 1;
+    const cycleDbReward =
+      rewards.find((r) => r.day_number === cycleDay) || null;
+    if (cycleDbReward) {
+      return { ...cycleDbReward, day_number: dayNumber };
+    }
+    const fallback = fallbackRewards[cycleDay];
     if (fallback) {
       const fallbackTitleKey = `daily_rewards.fallback_titles.day_${dayNumber}`;
       const fallbackTitle = t(fallbackTitleKey);
@@ -324,7 +452,8 @@ export default function DailyRewardsScreen() {
         day_number: dayNumber,
         reward_type: fallback.reward_type as "points" | "multiplier",
         reward_value: fallback.reward_value,
-        title: fallbackTitle !== fallbackTitleKey ? fallbackTitle : fallback.title,
+        title:
+          fallbackTitle !== fallbackTitleKey ? fallbackTitle : fallback.title,
         description: "",
         icon_emoji: fallback.icon_emoji,
       };
@@ -485,7 +614,7 @@ export default function DailyRewardsScreen() {
 
           {[...Array(5)].map((_, weekIdx) => (
             <View key={weekIdx} style={{ marginBottom: 24 }}>
-               <Skeleton width={120} height={20} marginBottom={12} />
+              <Skeleton width={120} height={20} marginBottom={12} />
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View
                   style={{
@@ -555,9 +684,9 @@ export default function DailyRewardsScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={tokens.ink} />
         </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: tokens.ink }]}>
-            {t("daily_rewards.title")}
-          </Text>
+        <Text style={[styles.headerTitle, { color: tokens.ink }]}>
+          {t("daily_rewards.title")}
+        </Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -621,6 +750,99 @@ export default function DailyRewardsScreen() {
           </Text>
         </View>
 
+        {/* Streak Recovery Banner - When streak is broken */}
+        {streakBroken && (
+          <View
+            style={[
+              styles.recoveryBanner,
+              {
+                backgroundColor: tokens.signalSoft,
+                borderColor: tokens.signal,
+              },
+            ]}
+          >
+            <View style={styles.recoveryHeader}>
+              <Ionicons name="warning" size={24} color={tokens.signal} />
+              <View style={styles.recoveryHeaderText}>
+                <Text style={[styles.recoveryTitle, { color: tokens.ink }]}>
+                  {t("daily_rewards.streak_broken")}
+                </Text>
+                <Text
+                  style={[styles.recoverySubtitle, { color: tokens.inkMuted }]}
+                >
+                  {t("daily_rewards.recovery_message")}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.recoveryActions}>
+              <TouchableOpacity
+                style={[
+                  styles.recoveryButton,
+                  {
+                    backgroundColor: tokens.mint,
+                    opacity: freezeByAdMutation.isPending ? 0.7 : 1,
+                  },
+                ]}
+                onPress={handleFreezeByAd}
+                disabled={freezeByAdMutation.isPending}
+              >
+                {freezeByAdMutation.isPending ? (
+                  <PagePaySpinner size={16} />
+                ) : (
+                  <Ionicons name="videocam" size={18} color={tokens.mintText} />
+                )}
+                <Text
+                  style={[
+                    styles.recoveryButtonText,
+                    { color: tokens.mintText },
+                  ]}
+                >
+                  {t("daily_rewards.recovery_watch_ad")}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.recoveryButton,
+                  {
+                    backgroundColor: tokens.gold,
+                    opacity: freezeByPointsMutation.isPending ? 0.7 : 1,
+                  },
+                ]}
+                onPress={handleFreezeByPoints}
+                disabled={freezeByPointsMutation.isPending}
+              >
+                {freezeByPointsMutation.isPending ? (
+                  <PagePaySpinner size={16} />
+                ) : (
+                  <Ionicons name="star" size={18} color={tokens.mintText} />
+                )}
+                <Text
+                  style={[
+                    styles.recoveryButtonText,
+                    { color: tokens.mintText },
+                  ]}
+                >
+                  {t("daily_rewards.recovery_spend_points")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {(freezeByAdMutation.isError || freezeByPointsMutation.isError) && (
+              <View style={styles.recoveryError}>
+                <Text
+                  style={[styles.recoveryErrorText, { color: tokens.signal }]}
+                >
+                  {freezeByAdMutation.error?.message ||
+                    freezeByPointsMutation.error?.message ||
+                    t("daily_rewards.recovery_failed")}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Claim Button - Pill Shape */}
         {canClaim && todayReward && (
           <TouchableOpacity
@@ -643,8 +865,11 @@ export default function DailyRewardsScreen() {
                   : t("daily_rewards.claim_button")}
               </Text>
               <Text style={[styles.claimSubtitle, { color: tokens.mintText }]}>
-                {t("daily_rewards.day_label", { day: currentStreak + 1 })} • +{todayReward.reward_value}{" "}
-                {todayReward.reward_type === "points" ? t("daily_rewards.reward_points") : t("daily_rewards.reward_multiplier")}
+                {t("daily_rewards.day_label", { day: currentStreak + 1 })} • +
+                {todayReward.reward_value}{" "}
+                {todayReward.reward_type === "points"
+                  ? t("daily_rewards.reward_points")
+                  : t("daily_rewards.reward_multiplier")}
               </Text>
             </View>
             {claimingReward ? (
@@ -702,11 +927,11 @@ export default function DailyRewardsScreen() {
                 <Text
                   style={[styles.weekBadgeText, { color: tokens.inkMuted }]}
                 >
-                    {week.weekNum === 1
-                      ? currentStreak >= 7
-                        ? t("daily_rewards.completed")
-                        : t("daily_rewards.in_progress")
-                      : t("daily_rewards.locked")}
+                  {week.weekNum === 1
+                    ? currentStreak >= 7
+                      ? t("daily_rewards.completed")
+                      : t("daily_rewards.in_progress")
+                    : t("daily_rewards.locked")}
                 </Text>
               </View>
             </View>
@@ -736,104 +961,65 @@ export default function DailyRewardsScreen() {
             {t("daily_rewards.milestones")}
           </Text>
 
-          {currentStreak < 14 && (
-            <View
-              style={[
-                styles.milestoneItem,
-                { backgroundColor: tokens.paper, borderLeftColor: tokens.mint },
-              ]}
-            >
-              <View style={styles.milestoneContent}>
-                <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
-                  {t("daily_rewards.two_week_warrior")}
-                </Text>
-                <Text
-                  style={[styles.milestoneSubtitle, { color: tokens.inkMuted }]}
-                >
-                  {t("daily_rewards.milestone_day_14")}
-                </Text>
-                <Text
-                  style={[styles.milestoneProgress, { color: tokens.mint }]}
-                >
-                  {t("daily_rewards.days_to_go", { days: 14 - currentStreak })}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.milestoneIcon,
-                  { backgroundColor: tokens.border },
-                ]}
-              >
-                <Text style={styles.milestoneIconEmoji}>🛡️</Text>
-              </View>
-            </View>
-          )}
+          {rewardStatus?.ladder &&
+            rewardStatus.ladder
+              .filter((milestone) => milestone.day > currentStreak)
+              .slice(0, 3)
+              .map((milestone) => {
+                const daysToGo = milestone.day - currentStreak;
+                const milestoneEmoji = milestone.celebration_component || "🎯";
 
-          {currentStreak < 21 && (
-            <View
-              style={[
-                styles.milestoneItem,
-                { backgroundColor: tokens.paper, borderLeftColor: tokens.mint },
-              ]}
-            >
-              <View style={styles.milestoneContent}>
-                <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
-                  {t("daily_rewards.three_week_legend")}
-                </Text>
-                <Text
-                  style={[styles.milestoneSubtitle, { color: tokens.inkMuted }]}
-                >
-                  {t("daily_rewards.milestone_day_21")}
-                </Text>
-                <Text
-                  style={[styles.milestoneProgress, { color: tokens.mint }]}
-                >
-                  {t("daily_rewards.days_to_go", { days: 21 - currentStreak })}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.milestoneIcon,
-                  { backgroundColor: tokens.border },
-                ]}
-              >
-                <Text style={styles.milestoneIconEmoji}>👑</Text>
-              </View>
-            </View>
-          )}
-
-          {currentStreak < 30 && (
-            <View
-              style={[
-                styles.milestoneItem,
-                { backgroundColor: tokens.paper, borderLeftColor: tokens.mint },
-              ]}
-            >
-              <View style={styles.milestoneContent}>
-                <Text style={[styles.milestoneTitle, { color: tokens.ink }]}>
-                  {t("daily_rewards.monthly_master")}
-                </Text>
-                <Text
-                  style={[styles.milestoneSubtitle, { color: tokens.inkMuted }]}
-                >
-                  {t("daily_rewards.milestone_day_30")}
-                </Text>
-                <Text
-                  style={[styles.milestoneProgress, { color: tokens.mint }]}
-                >
-                  {t("daily_rewards.days_to_go", { days: 30 - currentStreak })}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.milestoneIcon,
-                  { backgroundColor: tokens.border },
-                ]}
-              >
-                <Text style={styles.milestoneIconEmoji}>💎</Text>
-              </View>
-            </View>
-          )}
+                return (
+                  <View
+                    key={milestone.day}
+                    style={[
+                      styles.milestoneItem,
+                      {
+                        backgroundColor: tokens.paper,
+                        borderLeftColor: tokens.mint,
+                      },
+                    ]}
+                  >
+                    <View style={styles.milestoneContent}>
+                      <Text
+                        style={[styles.milestoneTitle, { color: tokens.ink }]}
+                      >
+                        {t("daily_rewards.milestone_day_n", {
+                          day: milestone.day,
+                        })}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.milestoneSubtitle,
+                          { color: tokens.inkMuted },
+                        ]}
+                      >
+                        {t("daily_rewards.milestone_reward", {
+                          reward: milestone.reward_sv,
+                        })}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.milestoneProgress,
+                          { color: tokens.mint },
+                        ]}
+                      >
+                        {t("daily_rewards.days_to_go", { days: daysToGo })}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.milestoneIcon,
+                        { backgroundColor: tokens.border },
+                      ]}
+                    >
+                      <Text style={styles.milestoneIconEmoji}>
+                        {milestoneEmoji}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -1062,5 +1248,57 @@ const styles = {
     borderWidth: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
+  },
+  recoveryBanner: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+    marginBottom: 24,
+    gap: 16,
+  },
+  recoveryHeader: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+    gap: 12,
+  },
+  recoveryHeaderText: {
+    flex: 1,
+  },
+  recoveryTitle: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    marginBottom: 4,
+  },
+  recoverySubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  recoveryActions: {
+    flexDirection: "row" as const,
+    gap: 12,
+  },
+  recoveryButton: {
+    flex: 1,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  recoveryButtonText: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+  },
+  recoveryError: {
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.1)",
+  },
+  recoveryErrorText: {
+    fontSize: 13,
+    fontWeight: "500" as const,
+    textAlign: "center" as const,
   },
 };
