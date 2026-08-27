@@ -27,6 +27,53 @@ def hash_device_id(device_id: str) -> str:
     return hashlib.sha256(device_id.encode()).hexdigest()
 
 
+async def _reconstruct_reward_streak_from_history(
+    user_id: int, db: AsyncSession, streak: UserStreak
+) -> UserStreak:
+    """Reconstruct reward_streak from UserRewardClaim history.
+
+    Handles the case where migration 018 zeroed reward_streak but
+    preserved last_reward_claim_date, leaving an inconsistent state
+    for users with historical claims.
+    """
+    if streak.reward_streak > 0 or not streak.last_reward_claim_date:
+        return streak
+
+    claims_query = await db.execute(
+        select(UserRewardClaim)
+        .where(UserRewardClaim.user_id == user_id)
+        .order_by(desc(UserRewardClaim.claimed_at))
+    )
+    claims = claims_query.fetchall()
+
+    if not claims:
+        return streak
+
+    max_streak_day = max(c.streak_day for c in claims)
+    most_recent_claim = claims[0][0]
+    utc_now = datetime.utcnow()
+
+    if (utc_now - most_recent_claim.claimed_at).total_seconds() <= 48 * 3600:
+        streak.reward_streak = max_streak_day
+        streak.longest_reward_streak = max(streak.longest_reward_streak, max_streak_day)
+        streak.last_reward_claim_date = most_recent_claim.claim_date
+        streak.reward_streak_expires_at = utc_now + timedelta(hours=48)
+        streak.last_claim_date = most_recent_claim.claim_date
+        await db.commit()
+        await db.refresh(streak)
+        logger.info(
+            "Reconstructed reward_streak for user=%d from history: streak=%d",
+            user_id, max_streak_day
+        )
+    else:
+        streak.last_reward_claim_date = None
+        streak.last_claim_date = None
+        await db.commit()
+        await db.refresh(streak)
+
+    return streak
+
+
 async def _get_or_create_default_rewards(db: AsyncSession) -> List[DailyReward]:
     """Ensure default daily rewards exist in the database."""
     # Check if rewards already exist
@@ -126,6 +173,7 @@ async def get_daily_reward_status(
     reward_streak_before = streak_before_obj.reward_streak if streak_before_obj else 0
     
     streak = await _update_reward_streak(current_user.id, db, request)
+    streak = await _reconstruct_reward_streak_from_history(current_user.id, db, streak)
     
     # Verify reward_streak only changes due to expiration, not due to login
     if reward_streak_before > 0 and streak.reward_streak == 0:
@@ -207,8 +255,10 @@ async def get_daily_reward_status(
     # reward_streak only increments when user actually claims a reward
     # current_streak increments every time user opens the app
     return DailyRewardStatus(
-        current_streak=streak.reward_streak,  # This is the REWARD claim streak, not login streak
+        current_streak=streak.reward_streak,
         longest_streak=streak.longest_reward_streak,
+        login_streak=streak.consecutive_login_days,
+        longest_login_streak=streak.longest_login_streak,
         can_claim_today=claimable_reward is not None,
         todays_reward=DailyRewardInfo(
             id=claimable_reward.id,
@@ -260,6 +310,7 @@ async def claim_daily_reward(
                 detail="Streak is bound to a different device.",
             )
     streak = await _update_reward_streak(current_user.id, db, request)
+    streak = await _reconstruct_reward_streak_from_history(current_user.id, db, streak)
     rewards = await _get_or_create_default_rewards(db)
 
     client_date = request.headers.get("X-Client-Date")
@@ -287,12 +338,19 @@ async def claim_daily_reward(
     points_to_award = claimable_reward.reward_value
     if claimable_reward.reward_type == "multiplier":
         points_to_award = 500
-    
-    # Apply premium multiplier to daily rewards (Phase 2)
-    from app.services.subscription import get_points_multiplier
-    base_points = points_to_award
-    multiplier = get_points_multiplier(current_user, "daily")
-    points_to_award = int(base_points * multiplier)
+
+    # Milestones are NOT premium-multiplied per reward-system-migration.md §5.2
+    MILESTONE_DAYS = {7, 14, 21, 30, 60, 100, 365}
+    is_milestone = claimable_reward.day_number in MILESTONE_DAYS
+
+    if not is_milestone:
+        from app.services.subscription import get_points_multiplier
+        base_points = points_to_award
+        multiplier = get_points_multiplier(current_user, "daily")
+        points_to_award = int(base_points * multiplier)
+    else:
+        multiplier = 1.0
+        base_points = points_to_award
     
     claim = UserRewardClaim(
         user_id=current_user.id,

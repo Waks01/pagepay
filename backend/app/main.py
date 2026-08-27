@@ -36,6 +36,7 @@ from app.services.task_processor import task_processor
 from app.services.ai_verification import verification_service
 from app.services.fcm import initialize_firebase
 from app.services.scheduler import register_daily_reminder_job
+from app.services.scheduled_bills import initialize_scheduler
 from app.websocket import sio
 
 logging.basicConfig(

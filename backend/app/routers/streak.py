@@ -179,7 +179,9 @@ async def _claim_daily_reward_increment_streak(user_id: int, db: AsyncSession, r
     yesterday = today - timedelta(days=1)
     yesterday_str = yesterday.isoformat()
 
-    expiration_time = utc_now + timedelta(hours=24)
+    # Give users 48 hours (2 days) to claim without losing streak
+    # This prevents streak reset if user claims day 2 and then opens app >24h later on day 3
+    expiration_time = utc_now + timedelta(hours=48)
     last_claim = streak.last_reward_claim_date
 
     if last_claim == today_str:

@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
-import Slider from "@react-native-community/slider";
+import { View, Text, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
+import Slider from "@react-native-community/slider";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
@@ -23,7 +23,9 @@ export function DiscountSlider({
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
 
-  const maxDiscountSv = Math.ceil((productPriceKobo / 10) * (maxDiscountPercent / 100));
+  const maxDiscountSv = Math.ceil(
+    (productPriceKobo / 10) * (maxDiscountPercent / 100),
+  );
   const [selectedSv, setSelectedSv] = useState(0);
 
   const handleSliderChange = (value: number) => {
@@ -46,26 +48,32 @@ export function DiscountSlider({
         </Text>
         {selectedSv > 0 && (
           <Text style={[styles.saveAmount, { color: tokens.mint }]}>
-            {t("sv_discount.save_amount", { amount: nairaSaved.toFixed(2), sv: selectedSv })}
+            {t("sv_discount.save_amount", {
+              amount: nairaSaved.toFixed(2),
+              sv: selectedSv,
+            })}
           </Text>
         )}
       </View>
 
       <Slider
         value={(selectedSv / maxDiscountSv) * 100}
-        onValueChange={handleSliderChange}
+        onValueChange={(value) => handleSliderChange(value)}
         minimumValue={0}
         maximumValue={100}
         step={1}
+        style={styles.slider}
         minimumTrackTintColor={tokens.mint}
         maximumTrackTintColor={tokens.border}
         thumbTintColor={tokens.mint}
-        style={styles.slider}
       />
 
       <View style={styles.info}>
         <Text style={[styles.infoText, { color: tokens.inkMuted }]}>
-          {t("sv_discount.max_discount", { sv: maxDiscountSv, percent: maxDiscountPercent })}
+          {t("sv_discount.max_discount", {
+            sv: maxDiscountSv,
+            percent: maxDiscountPercent,
+          })}
         </Text>
       </View>
 
@@ -73,7 +81,10 @@ export function DiscountSlider({
         <View style={[styles.warning, { backgroundColor: tokens.signalSoft }]}>
           <Ionicons name="warning-outline" size={16} color={tokens.signal} />
           <Text style={[styles.warningText, { color: tokens.signal }]}>
-            {t("sv_discount.insufficient_sv", { sv: shortfallSv, ads: adsNeeded })}
+            {t("sv_discount.insufficient_sv", {
+              sv: shortfallSv,
+              ads: adsNeeded,
+            })}
           </Text>
         </View>
       )}

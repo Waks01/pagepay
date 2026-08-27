@@ -26,6 +26,8 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { UserAvatar } from "@/components/UserAvatar";
 import { PremiumBenefitsComparison } from "@/components/PremiumBenefitsComparison";
 import { PremiumBenefitsList } from "@/components/PremiumBenefitsList";
+import { EmptyState } from "@/components/EmptyState";
+import { NetworkError } from "@/components/NetworkError";
 
 type Tier = {
   tier: string;
@@ -104,13 +106,7 @@ export default function PremiumScreen() {
     return (
       <SafeAreaView
         edges={["top"]}
-        style={{
-          flex: 1,
-          backgroundColor: tokens.paper,
-          justifyContent: "center",
-          alignItems: "center",
-          padding: 24,
-        }}
+        style={{ flex: 1, backgroundColor: tokens.paper }}
       >
         <View
           style={[
@@ -131,23 +127,16 @@ export default function PremiumScreen() {
             <NotificationBell />
           </View>
         </View>
-        <Ionicons name="alert-circle-outline" size={48} color={tokens.error} />
-        <Text style={[styles.errorTitle, { color: tokens.ink }]}>
-          {t("premium.load_error")}
-        </Text>
-        <Text style={[styles.errorText, { color: tokens.inkMuted }]}>
-          {tiersQ.error instanceof Error
-            ? tiersQ.error.message
-            : t("premium.connection_error")}
-        </Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={() => tiersQ.refetch()}
-        >
-          <Text style={[styles.retryText, { color: tokens.mint }]}>
-            {t("premium.retry")}
-          </Text>
-        </TouchableOpacity>
+        <NetworkError
+          title={t("premium.load_error")}
+          message={
+            tiersQ.error instanceof Error
+              ? tiersQ.error.message
+              : t("premium.connection_error")
+          }
+          retryLabel={t("premium.retry")}
+          onRetry={() => tiersQ.refetch()}
+        />
       </SafeAreaView>
     );
   }

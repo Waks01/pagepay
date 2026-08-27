@@ -1142,6 +1142,8 @@ class NextMilestone(BaseModel):
 class DailyRewardStatus(BaseModel):
     current_streak: int
     longest_streak: int
+    login_streak: int
+    longest_login_streak: int
     can_claim_today: bool
     todays_reward: DailyRewardInfo | None
     last_claim_date: str | None

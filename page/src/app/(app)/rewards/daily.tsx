@@ -393,6 +393,24 @@ export default function DailyRewardsScreen() {
       reward_value: 800,
       title: "Monthly Master",
     },
+    60: {
+      icon_emoji: "💍",
+      reward_type: "points",
+      reward_value: 1500,
+      title: "Diamond Streak",
+    },
+    100: {
+      icon_emoji: "🎖️",
+      reward_type: "points",
+      reward_value: 3000,
+      title: "Centurion",
+    },
+    365: {
+      icon_emoji: "👑",
+      reward_type: "points",
+      reward_value: 15000,
+      title: "Yearly Legend",
+    },
   };
 
   const getRewardForDay = (dayNumber: number): DailyRewardInfo | null => {

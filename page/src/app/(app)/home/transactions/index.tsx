@@ -372,77 +372,22 @@ export default function TransactionHistoryScreen() {
 
   const transactions: TxItem[] = useMemo(() => {
     return (historyQ.data ?? []).map((tx: any, index: number) => {
-      const typeMap: Record<string, TxType> = {
-        bill: "airtime",
-        payment: "wallet",
-        withdrawal: "withdraw",
-        session: "read",
-        ad: "ad",
-        study: "study",
-        premium: "premium",
-        bonus: "bonus",
-        history: "earn",
-      };
-      const rawType = tx.tx_type || tx.type || "history";
-      const mappedType =
-        (typeMap[rawType] as TxType) || (rawType as TxType) || "earn";
-
-      const service = tx.service || mappedType;
-      const amount =
-        tx.amount !== undefined ? Math.abs(tx.amount) : tx.points_earned || 0;
-
-      let description = "";
-      if (rawType === "bill") {
-        description = t(
-          SERVICE_LABEL_MAP[service] || "transaction_detail.default",
-          { service: service.replace("_", " ") },
-        );
-      } else if (rawType === "session") {
-        description = t("transactions.filter_read");
-      } else if (rawType === "ad") {
-        description = t("transactions.filter_ad");
-      } else if (rawType === "study") {
-        description = t("study.title");
-      } else if (rawType === "premium") {
-        description = t("premium.title");
-      } else if (rawType === "bonus") {
-        description = t("transactions.filter_bonus");
-      } else if (rawType === "payment") {
-        description = t("wallet.fund_wallet");
-      } else if (rawType === "withdrawal") {
-        description = t("wallet.withdraw");
-      } else if (rawType === "history") {
-        description = t("transactions.filter_earned");
-      } else {
-        description = t("transactions.filter_earned");
-      }
+      // Backend returns: kind, type, txId, ref, description, points, amount, date, status, ledger, details
+      const service = tx.type || "earn";
+      const amount = Math.abs(tx.amount || tx.points || 0);
+      const description = tx.description || t("transactions.filter_earned");
 
       return {
-        id: tx.id?.toString() || `tx-${index}`,
-        type: mappedType,
+        id: tx.txId || tx.id?.toString() || `tx-${index}`,
+        type: service as TxType,
         description,
         amount,
         status: tx.status || "success",
-        date:
-          typeof tx.created_at === "string"
-            ? tx.created_at
-            : new Date(tx.created_at).toISOString(),
-        txId: tx.reference || tx.id?.toString() || "",
-        ref: tx.reference || tx.id?.toString() || "",
+        date: tx.date || tx.created_at || new Date().toISOString(),
+        txId: tx.txId || tx.ref || "",
+        ref: tx.ref || tx.txId || "",
         ledger: tx.ledger ?? null,
-        details: {
-          phone: tx.phone,
-          meter_number: tx.meter_number,
-          smartcard_number: tx.smartcard_number,
-          amount_naira: tx.amount_naira,
-          commission_naira: tx.commission_naira,
-          provider: tx.provider,
-          external_ref: tx.external_ref,
-          error_message: tx.error_message,
-          tx_type: tx.tx_type,
-          service: tx.service,
-          description: tx.description,
-        },
+        details: tx.details || {},
       };
     });
   }, [historyQ.data, t]);

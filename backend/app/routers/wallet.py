@@ -509,6 +509,7 @@ async def get_wallet_history(
     sessions = (
         await db.execute(
             select(ReadingSession, ContentCatalog.title)
+            .join(ContentCatalog, ContentCatalog.id == ReadingSession.content_id)
             .where(ReadingSession.user_id == current_user.id)
             .where(ReadingSession.end_time.is_not(None))
             .where(ReadingSession.points_earned > 0)
