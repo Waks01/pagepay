@@ -78,6 +78,9 @@ def register_daily_reminder_job(scheduler: AsyncIOScheduler) -> None:
         id="daily_study_reminder",
         replace_existing=True,
     )
+    logger.info(
+        "Scheduled job registered: id=daily_study_reminder trigger=cron hour=8 minute=0 misfire_grace_time=3600"
+    )
 
 
 async def cleanup_old_reading_sessions() -> None:
@@ -118,6 +121,9 @@ def register_reading_session_cleanup_job(scheduler: AsyncIOScheduler) -> None:
         id="reading_session_cleanup",
         replace_existing=True,
     )
+    logger.info(
+        "Scheduled job registered: id=reading_session_cleanup trigger=cron hour=3 minute=0 misfire_grace_time=7200"
+    )
 
 
 async def expire_premium_subscriptions() -> None:
@@ -144,4 +150,7 @@ def register_subscription_expiry_job(scheduler: AsyncIOScheduler) -> None:
         coalesce=True,
         id="subscription_expiry_check",
         replace_existing=True,
+    )
+    logger.info(
+        "Scheduled job registered: id=subscription_expiry_check trigger=cron hour=4 minute=0 misfire_grace_time=7200"
     )

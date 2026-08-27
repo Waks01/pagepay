@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { CustomSlider } from "./CustomSlider";
@@ -11,6 +11,7 @@ interface DiscountSliderProps {
   userServiceCreditBalance: number;
   maxDiscountPercent?: number;
   onDiscountChange: (svAmount: number) => void;
+  onWatchAds?: () => void;
 }
 
 export function DiscountSlider({
@@ -18,6 +19,7 @@ export function DiscountSlider({
   userServiceCreditBalance,
   maxDiscountPercent = 25,
   onDiscountChange,
+  onWatchAds,
 }: DiscountSliderProps) {
   const { t } = useTranslation();
   const scheme = useEffectiveScheme();
@@ -48,17 +50,14 @@ export function DiscountSlider({
         </Text>
         {selectedSv > 0 && (
           <Text style={[styles.saveAmount, { color: tokens.mint }]}>
-            {t("sv_discount.save_amount", {
-              amount: nairaSaved.toFixed(2),
-              sv: selectedSv,
-            })}
+            Save ₦{nairaSaved.toFixed(2)}
           </Text>
         )}
       </View>
 
       <CustomSlider
         value={(selectedSv / maxDiscountSv) * 100}
-        onValueChange={(value) => handleSliderChange(value)}
+        onValueChange={handleSliderChange}
         minimumValue={0}
         maximumValue={100}
         step={1}
@@ -70,22 +69,33 @@ export function DiscountSlider({
 
       <View style={styles.info}>
         <Text style={[styles.infoText, { color: tokens.inkMuted }]}>
-          {t("sv_discount.max_discount", {
-            sv: maxDiscountSv,
-            percent: maxDiscountPercent,
-          })}
+          Max: {maxDiscountSv} SV ({maxDiscountPercent}%)
         </Text>
       </View>
 
       {shortfallSv > 0 && (
-        <View style={[styles.warning, { backgroundColor: tokens.signalSoft }]}>
-          <Ionicons name="warning-outline" size={16} color={tokens.signal} />
-          <Text style={[styles.warningText, { color: tokens.signal }]}>
-            {t("sv_discount.insufficient_sv", {
-              sv: shortfallSv,
-              ads: adsNeeded,
-            })}
-          </Text>
+        <View
+          style={[styles.shortfall, { backgroundColor: tokens.signalSoft }]}
+        >
+          <View style={styles.shortfallContent}>
+            <Ionicons name="warning-outline" size={16} color={tokens.signal} />
+            <Text style={[styles.shortfallText, { color: tokens.signal }]}>
+              Need {shortfallSv} more SV (watch {adsNeeded} ads)
+            </Text>
+          </View>
+          {onWatchAds && (
+            <TouchableOpacity
+              style={[styles.watchAdsBtn, { backgroundColor: tokens.mint }]}
+              onPress={onWatchAds}
+            >
+              <Ionicons name="play-circle" size={16} color={tokens.mintText} />
+              <Text
+                style={[styles.watchAdsBtnText, { color: tokens.mintText }]}
+              >
+                Watch Ads
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -103,14 +113,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
+    flexWrap: "wrap",
+    gap: 8,
   },
   label: {
     fontSize: 14,
     fontWeight: "600",
+    flex: 1,
+    minWidth: 120,
   },
   saveAmount: {
     fontSize: 14,
     fontWeight: "700",
+    flexShrink: 0,
   },
   slider: {
     width: "100%",
@@ -122,17 +137,33 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 12,
   },
-  warning: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 8,
+  shortfall: {
+    padding: 12,
     borderRadius: 8,
     marginTop: 8,
+    gap: 8,
+  },
+  shortfallContent: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
-  warningText: {
+  shortfallText: {
     flex: 1,
     fontSize: 12,
     fontWeight: "500",
+  },
+  watchAdsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
+  },
+  watchAdsBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

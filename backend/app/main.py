@@ -265,6 +265,11 @@ async def lifespan(app: FastAPI):
         from app.services.scheduler import register_subscription_expiry_job
         register_subscription_expiry_job(_scheduled_bills.scheduler)
         logger.info("Daily study reminder, reading session cleanup, and subscription expiry jobs registered")
+        try:
+            jobs = _scheduled_bills.scheduler.get_jobs()
+            logger.info("APScheduler loaded %d job(s): %s", len(jobs), ", ".join(j.id for j in jobs))
+        except Exception as exc:
+            logger.error("APScheduler job listing failed: %s", exc)
     else:
         logger.warning("Scheduler not available; scheduled jobs not registered")
     

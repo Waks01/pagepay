@@ -147,7 +147,9 @@ export function CustomSlider({
         style={styles.trackContainer}
         onLayout={handleLayout}
         onStartShouldSetResponder={() => !disabled}
+        onStartShouldSetResponderCapture={() => !disabled}
         onMoveShouldSetResponder={() => !disabled}
+        onMoveShouldSetResponderCapture={() => !disabled}
         onResponderGrant={handleTouchStart}
         onResponderMove={handleTouchMove}
         onResponderRelease={handleTouchEnd}

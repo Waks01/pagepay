@@ -974,14 +974,27 @@ export default function BuyAirtimeScreen() {
 
         {/* SV Discount Slider */}
         {finalAmount >= 25 && (
-          <DiscountSlider
-            productPriceKobo={finalAmount * 100}
-            userServiceCreditBalance={userServiceCreditBalance}
-            maxDiscountPercent={25}
-            onDiscountChange={(svAmount) => {
-              setApplySvDiscountAmount(svAmount);
-            }}
-          />
+          <View
+            onStartShouldSetResponderCapture={() => true}
+            onMoveShouldSetResponderCapture={() => true}
+          >
+            <DiscountSlider
+              productPriceKobo={finalAmount * 100}
+              userServiceCreditBalance={userServiceCreditBalance}
+              maxDiscountPercent={25}
+              onDiscountChange={(svAmount) => {
+                setApplySvDiscountAmount(svAmount);
+              }}
+              onWatchAds={() => {
+                // TODO: Navigate to ad watching screen or show ad modal
+                Alert.alert(
+                  "Watch Ads",
+                  "Watch ads to earn more Service Credits (SV) and get bigger discounts!",
+                  [{ text: "OK" }],
+                );
+              }}
+            />
+          </View>
         )}
 
         {/* Rate Limit Display */}
