@@ -1498,7 +1498,7 @@
     "claim_button": "Claim Today's Reward",
     "claiming": "Claiming...",
     "day_label": "Day {{day}}",
-    "reward_points": "sv",
+    "reward_points": "sp",
     "reward_multiplier": "% bonus",
     "claim_failed": "Failed to claim reward",
     "notification_title": "Reward Claimed!",
@@ -1545,13 +1545,13 @@
     "diamond_streak": "Diamond Streak",
     "centurion": "Centurion",
     "yearly_legend": "Yearly Legend",
-    "milestone_day_7": "Day 7 • 200 bonus sv",
-    "milestone_day_14": "Day 14 • 350 bonus sv",
-    "milestone_day_21": "Day 21 • 500 bonus sv",
-    "milestone_day_30": "Day 30 • 800 bonus sv",
-    "milestone_day_60": "Day 60 • 1500 bonus sv",
-    "milestone_day_100": "Day 100 • 3000 bonus sv",
-    "milestone_day_365": "Day 365 • 15000 bonus sv",
+    "milestone_day_7": "Day 7 • 200 bonus sp",
+    "milestone_day_14": "Day 14 • 350 bonus sp",
+    "milestone_day_21": "Day 21 • 500 bonus sp",
+    "milestone_day_30": "Day 30 • 800 bonus sp",
+    "milestone_day_60": "Day 60 • 1500 bonus sp",
+    "milestone_day_100": "Day 100 • 3000 bonus sp",
+    "milestone_day_365": "Day 365 • 15000 bonus sp",
     "days_to_go": "{{days}} days to go",
     "load_failed": "Failed to load daily rewards",
     "streak_broken": "Streak Broken!",
@@ -1560,7 +1560,7 @@
     "recovery_spend_points": "Use Service Credits",
     "recovery_failed": "Recovery failed. Please try again.",
     "milestone_day_n": "Day {{day}} Milestone",
-    "milestone_reward": "{{reward}} bonus sv reward"
+    "milestone_reward": "{{reward}} bonus sp reward"
   },
   "transaction_detail": {
     "sections": {

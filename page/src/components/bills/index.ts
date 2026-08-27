@@ -15,3 +15,6 @@ export { RateLimitDisplay } from "./RateLimitDisplay";
 export { BulkAirtimeModal } from "./BulkAirtimeModal";
 export { DisputeModal } from "./DisputeModal";
 export { ScheduleModal } from "./ScheduleModal";
+
+// Custom components (pure JS, no native deps)
+export { CustomSlider } from "./CustomSlider";

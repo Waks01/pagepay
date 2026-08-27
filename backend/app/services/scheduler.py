@@ -14,7 +14,7 @@ logger = logging.getLogger("uvicorn.error")
 
 
 def register_daily_reminder_job(scheduler: AsyncIOScheduler) -> None:
-    @scheduler.async_job(
+    @scheduler.scheduled_job(
         "cron",
         hour=8,
         minute=0,
@@ -76,7 +76,7 @@ def register_daily_reminder_job(scheduler: AsyncIOScheduler) -> None:
 
 
 def register_reading_session_cleanup_job(scheduler: AsyncIOScheduler) -> None:
-    @scheduler.async_job(
+    @scheduler.scheduled_job(
         "cron",
         hour=3,
         minute=0,
@@ -111,7 +111,7 @@ def register_reading_session_cleanup_job(scheduler: AsyncIOScheduler) -> None:
 
 
 def register_subscription_expiry_job(scheduler: AsyncIOScheduler) -> None:
-    @scheduler.async_job(
+    @scheduler.scheduled_job(
         "cron",
         hour=4,
         minute=0,

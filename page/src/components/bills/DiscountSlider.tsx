@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import Slider from "@react-native-community/slider";
+import { CustomSlider } from "./CustomSlider";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
@@ -56,7 +56,7 @@ export function DiscountSlider({
         )}
       </View>
 
-      <Slider
+      <CustomSlider
         value={(selectedSv / maxDiscountSv) * 100}
         onValueChange={(value) => handleSliderChange(value)}
         minimumValue={0}
