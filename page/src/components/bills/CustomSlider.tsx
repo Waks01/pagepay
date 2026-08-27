@@ -1,19 +1,19 @@
 /**
  * CustomSlider - Pure JavaScript slider component
  * No native dependencies, works in any Expo dev client
- * 
- * Drop-in replacement for @react-native-community/slider
+ *
+ * Uses Responder system for direct touch handling
  */
 
 import React, { useRef, useState } from "react";
 import {
   View,
   StyleSheet,
-  PanResponder,
   Animated,
   LayoutChangeEvent,
   StyleProp,
   ViewStyle,
+  GestureResponderEvent,
 } from "react-native";
 
 interface CustomSliderProps {
@@ -42,70 +42,81 @@ export function CustomSlider({
   disabled = false,
 }: CustomSliderProps) {
   const [sliderWidth, setSliderWidth] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const thumbPosition = useRef(new Animated.Value(0)).current;
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !disabled,
-      onMoveShouldSetPanResponder: () => !disabled,
-      onPanResponderGrant: () => {
-        // User started touching - add haptic feedback if available
-        try {
-          const Haptics = require("expo-haptics");
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        } catch {
-          // Haptics not available, ignore
-        }
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (disabled) return;
-        
-        // Calculate new position
-        let newPosition = gestureState.dx + valueToPosition(value);
-        
-        // Clamp to slider bounds
-        newPosition = Math.max(0, Math.min(sliderWidth, newPosition));
-        
-        // Update thumb position
-        thumbPosition.setValue(newPosition);
-        
-        // Calculate and emit new value
-        const newValue = positionToValue(newPosition);
-        const steppedValue = Math.round(newValue / step) * step;
-        const clampedValue = Math.max(
-          minimumValue,
-          Math.min(maximumValue, steppedValue),
-        );
-        
-        onValueChange(clampedValue);
-      },
-      onPanResponderRelease: () => {
-        // Animation to snap to final position (optional smooth animation)
-        const finalPosition = valueToPosition(value);
-        Animated.spring(thumbPosition, {
-          toValue: finalPosition,
-          useNativeDriver: false,
-          tension: 100,
-          friction: 10,
-        }).start();
-      },
-    }),
-  ).current;
 
-  // Convert value (0-100) to pixel position
+  // Convert value to pixel position
   const valueToPosition = (val: number): number => {
-    const normalizedValue = (val - minimumValue) / (maximumValue - minimumValue);
+    if (sliderWidth === 0) return 0;
+    const normalizedValue =
+      (val - minimumValue) / (maximumValue - minimumValue);
     return normalizedValue * sliderWidth;
   };
 
-  // Convert pixel position to value (0-100)
+  // Convert pixel position to value
   const positionToValue = (position: number): number => {
-    const normalizedPosition = position / sliderWidth;
-    return minimumValue + normalizedPosition * (maximumValue - minimumValue);
+    if (sliderWidth === 0) return minimumValue;
+    const clampedPosition = Math.max(0, Math.min(sliderWidth, position));
+    const normalizedPosition = clampedPosition / sliderWidth;
+    const rawValue =
+      minimumValue + normalizedPosition * (maximumValue - minimumValue);
+    const steppedValue = Math.round(rawValue / step) * step;
+    return Math.max(minimumValue, Math.min(maximumValue, steppedValue));
+  };
+
+  // Update value and position from touch event
+  const updateFromEvent = (event: GestureResponderEvent) => {
+    if (disabled || sliderWidth === 0) return;
+
+    const locationX = event.nativeEvent.locationX;
+    const newValue = positionToValue(locationX);
+
+    onValueChange(newValue);
+
+    // Update thumb position immediately
+    const newPosition = valueToPosition(newValue);
+    thumbPosition.setValue(newPosition);
+  };
+
+  // Handle touch start
+  const handleTouchStart = (event: GestureResponderEvent) => {
+    if (disabled) return;
+    setIsDragging(true);
+    updateFromEvent(event);
+
+    // Haptic feedback
+    try {
+      const Haptics = require("expo-haptics");
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      // Ignore
+    }
+  };
+
+  // Handle touch move (dragging)
+  const handleTouchMove = (event: GestureResponderEvent) => {
+    if (disabled) return;
+    updateFromEvent(event);
+  };
+
+  // Handle touch end
+  const handleTouchEnd = () => {
+    if (disabled) return;
+    setIsDragging(false);
+
+    // Animate to final position
+    const finalPosition = valueToPosition(value);
+    Animated.spring(thumbPosition, {
+      toValue: finalPosition,
+      useNativeDriver: false,
+      tension: 100,
+      friction: 10,
+    }).start();
   };
 
   // Update thumb position when value changes externally
   React.useEffect(() => {
-    if (sliderWidth > 0) {
+    if (sliderWidth > 0 && !isDragging) {
       const newPosition = valueToPosition(value);
       Animated.timing(thumbPosition, {
         toValue: newPosition,
@@ -117,8 +128,8 @@ export function CustomSlider({
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const { width } = event.nativeEvent.layout;
-    setSliderWidth(width - THUMB_SIZE); // Subtract thumb size to prevent overflow
-    
+    setSliderWidth(width);
+
     // Initialize thumb position
     const initialPosition = valueToPosition(value);
     thumbPosition.setValue(initialPosition);
@@ -135,39 +146,40 @@ export function CustomSlider({
       <View
         style={styles.trackContainer}
         onLayout={handleLayout}
+        onStartShouldSetResponder={() => !disabled}
+        onMoveShouldSetResponder={() => !disabled}
+        onResponderGrant={handleTouchStart}
+        onResponderMove={handleTouchMove}
+        onResponderRelease={handleTouchEnd}
+        onResponderTerminate={handleTouchEnd}
       >
-        {/* Background track (unfilled) */}
+        {/* Background track */}
         <View
-          style={[
-            styles.track,
-            { backgroundColor: maximumTrackTintColor },
-          ]}
+          style={[styles.track, { backgroundColor: maximumTrackTintColor }]}
         />
 
-        {/* Progress track (filled) */}
+        {/* Progress track */}
         <Animated.View
           style={[
             styles.progressTrack,
-            {
-              backgroundColor: minimumTrackTintColor,
-              width: progressWidth,
-            },
+            { backgroundColor: minimumTrackTintColor, width: progressWidth },
           ]}
         />
 
-        {/* Thumb (draggable handle) */}
+        {/* Thumb */}
         <Animated.View
           style={[
             styles.thumb,
             {
               backgroundColor: thumbTintColor,
-              transform: [{ translateX: thumbPosition }],
               opacity: disabled ? 0.5 : 1,
+              transform: [
+                { translateX: thumbPosition },
+                { scale: isDragging ? 1.2 : 1 },
+              ],
             },
           ]}
-          {...panResponder.panHandlers}
         >
-          {/* Inner shadow for depth */}
           <View style={styles.thumbInner} />
         </Animated.View>
       </View>
@@ -175,7 +187,7 @@ export function CustomSlider({
   );
 }
 
-const THUMB_SIZE = 24;
+const THUMB_SIZE = 28;
 const TRACK_HEIGHT = 4;
 
 const styles = StyleSheet.create({
@@ -184,9 +196,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   trackContainer: {
-    height: TRACK_HEIGHT,
-    position: "relative",
+    height: 40,
     justifyContent: "center",
+    position: "relative",
   },
   track: {
     height: TRACK_HEIGHT,
@@ -206,7 +218,8 @@ const styles = StyleSheet.create({
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
     position: "absolute",
-    top: -10, // Center vertically on track
+    top: (40 - THUMB_SIZE) / 2,
+    marginLeft: -THUMB_SIZE / 2,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
