@@ -26,6 +26,9 @@ import {
   EarnBadge,
   BuyScreenSkeleton,
 } from "@/src/components/bills";
+import { DiscountSlider } from "@/src/components/bills/DiscountSlider";
+import { ConfirmPurchaseModal } from "@/src/components/bills/ConfirmPurchaseModal";
+import { ShortfallModal } from "@/src/components/bills/ShortfallModal";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
 import { Skeleton } from "@/components/Skeleton";
 
@@ -103,6 +106,11 @@ export default function BuyElectricityScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
 
+  // SV Discount states
+  const [applySvDiscountAmount, setApplySvDiscountAmount] = useState(0);
+  const [showShortfallModal, setShowShortfallModal] = useState(false);
+  const [shortfallSv, setShortfallSv] = useState(0);
+
   const discosQ = useQuery({
     queryKey: ["electricity-plans"],
     queryFn: async () => {
@@ -118,6 +126,20 @@ export default function BuyElectricityScreen() {
       const res = await apiFetch("/api/v1/bills/electricity/beneficiaries");
       if (!res.ok) throw new Error("Failed to load beneficiaries");
       return (await res.json()) as Beneficiary[];
+    },
+  });
+
+  // Fetch user profile for service credit balance
+  const profileQ = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const res = await apiFetch("/api/v1/me");
+      if (!res.ok) throw new Error("Failed to load profile");
+      return (await res.json()) as {
+        service_credit_balance: number;
+        cashable_balance: number;
+        points_balance: number;
+      };
     },
   });
 
@@ -268,6 +290,7 @@ export default function BuyElectricityScreen() {
           meter_type: meterType,
           amount_naira: finalAmount,
           phone: phone,
+          apply_sv_discount: applySvDiscountAmount,
         }),
       });
       if (!res.ok) {
@@ -296,6 +319,18 @@ export default function BuyElectricityScreen() {
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
+
+    // Check if user has enough SV if they applied discount
+    if (
+      applySvDiscountAmount > 0 &&
+      applySvDiscountAmount > userServiceCreditBalance
+    ) {
+      const shortfall = applySvDiscountAmount - userServiceCreditBalance;
+      setShortfallSv(shortfall);
+      setShowShortfallModal(true);
+      return;
+    }
+
     setShowConfirmModal(true);
   };
 
@@ -346,13 +381,16 @@ export default function BuyElectricityScreen() {
   ];
 
   // Initial-load gate: the form needs the disco catalog and beneficiaries
-  if (discosQ.isLoading || beneficiariesQ.isLoading) {
+  if (discosQ.isLoading || beneficiariesQ.isLoading || profileQ.isLoading) {
     return (
       <View style={{ flex: 1, paddingTop: insets.top }}>
         <BuyScreenSkeleton sections={3} />
       </View>
     );
   }
+
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
+  const userCashableBalance = profileQ.data?.cashable_balance || 0;
 
   // Pull-to-refresh callback
   const onRefresh = useCallback(() => {
@@ -930,6 +968,18 @@ export default function BuyElectricityScreen() {
           />
         </SectionCard>
 
+        {/* SV Discount Slider */}
+        {finalAmount >= 1000 && (
+          <DiscountSlider
+            productPriceKobo={finalAmount * 100}
+            userServiceCreditBalance={userServiceCreditBalance}
+            maxDiscountPercent={25}
+            onDiscountChange={(svAmount) => {
+              setApplySvDiscountAmount(svAmount);
+            }}
+          />
+        )}
+
         {/* Pay button */}
         <TouchableOpacity
           onPress={handleBuyPress}
@@ -950,47 +1000,38 @@ export default function BuyElectricityScreen() {
           </Text>
         </TouchableOpacity>
 
-        <ConfirmModal
+        <ConfirmPurchaseModal
           visible={showConfirmModal}
-          title={t("bills.electricity.confirm_title")}
-          confirming={purchaseMutation.isPending}
-          rows={[
-            {
-              key: "meter",
-              label: t("bills.electricity.confirm_meter"),
-              value: meterNumber,
-              valueStyle: { fontFamily: "monospace" },
-            },
-            ...(validatedName
-              ? [
-                  {
-                    key: "cust",
-                    label: t("bills.electricity.confirm_customer"),
-                    value: validatedName,
-                  },
-                ]
-              : []),
-            {
-              key: "type",
-              label: t("bills.electricity.confirm_type"),
-              value: t(`bills.electricity.${meterType}`),
-            },
-            { key: "phone", label: t("bills.electricity.phone"), value: phone },
-            {
-              key: "amt",
-              label: t("bills.electricity.confirm_amount"),
-              value: `₦${finalAmount.toLocaleString()}`,
-              valueColor: "mint" as const,
-            },
-            {
-              key: "earn",
-              label: t("bills.electricity.confirm_earn_label"),
-              value: `+${estPoints} pts`,
-              valueColor: "mint" as const,
-            },
-          ]}
-          onCancel={() => setShowConfirmModal(false)}
+          productType="Electricity"
+          productDetails={`${meterType.toUpperCase()} · ${meterNumber}`}
+          totalKobo={finalAmount * 100}
+          cashPaymentKobo={finalAmount * 100 - applySvDiscountAmount * 10}
+          svDiscountSv={applySvDiscountAmount}
+          commissionSv={estPoints}
+          newCashableBalance={
+            userCashableBalance -
+            (finalAmount * 100 - applySvDiscountAmount * 10)
+          }
+          newServiceCreditBalance={
+            userServiceCreditBalance - applySvDiscountAmount + estPoints
+          }
           onConfirm={handleConfirmPurchase}
+          onCancel={() => setShowConfirmModal(false)}
+        />
+
+        {/* Shortfall Modal */}
+        <ShortfallModal
+          visible={showShortfallModal}
+          shortfallSv={shortfallSv}
+          adsNeeded={Math.ceil(shortfallSv / 16)}
+          onWatchAds={() => {
+            setShowShortfallModal(false);
+            // TODO: Navigate to ad watching flow
+          }}
+          onCancel={() => {
+            setShowShortfallModal(false);
+            setApplySvDiscountAmount(0);
+          }}
         />
       </ScrollView>
     </View>

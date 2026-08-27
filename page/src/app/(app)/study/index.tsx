@@ -15,8 +15,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
+import { useAudioPlayer } from "expo-audio";
 
-import { apiFetch } from "@/src/shared/api/client";
+import { apiFetch, API_URL } from "@/src/shared/api/client";
 import { pollSowJob } from "@/src/features/study/api";
 import {
   useMaterials,
@@ -39,6 +40,7 @@ import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import NotificationBell from "@/components/NotificationBell";
 import { SkeletonPage } from "@/components/skeletons";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
+import AudioUnlockModal from "@/components/AudioUnlockModal";
 import { cacheAsset, getCachedAsset } from "@/src/features/study/storage";
 import { saveLastRoute, getLastRoute } from "@/src/shared/lib/screen-memory";
 
@@ -152,6 +154,12 @@ export default function StudyScreen() {
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [generateCount, setGenerateCount] = useState<number>(15);
   const [showReader, setShowReader] = useState(false);
+  const [ttsUrl, setTtsUrl] = useState<string | null>(null);
+  const [ttsPlaying, setTtsPlaying] = useState(false);
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const player = useAudioPlayer(ttsUrl);
+  const [audioUnlockVisible, setAudioUnlockVisible] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   // Load cached assets on mount
   useEffect(() => {
@@ -246,6 +254,55 @@ export default function StudyScreen() {
       }
     } catch (error) {
       if (__DEV__) console.error("Failed to end study session:", error);
+    }
+  };
+
+  const handleTtsPress = async () => {
+    if (!selectedMaterial?.content) return;
+    if (ttsPlaying) {
+      player.pause();
+      setTtsPlaying(false);
+      return;
+    }
+    if (ttsUrl) {
+      player.play();
+      setTtsPlaying(true);
+      return;
+    }
+
+    if (!audioUnlocked) {
+      setAudioUnlockVisible(true);
+      return;
+    }
+
+    try {
+      setTtsLoading(true);
+      const res = await apiFetch("/api/v1/study/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: selectedMaterial.content,
+          voice: "en-US-AriaNeural",
+          material_id: selectedMaterial.id,
+        }),
+      });
+      if (!res.ok) {
+        if (res.status === 403) {
+          setAudioUnlockVisible(true);
+          return;
+        }
+        throw new Error("TTS request failed");
+      }
+      const data = (await res.json()) as { url: string };
+      const fullUrl = data.url.startsWith("http")
+        ? data.url
+        : `${API_URL}${data.url}`;
+      setTtsUrl(fullUrl);
+      setTtsPlaying(true);
+    } catch (error) {
+      if (__DEV__) console.error("TTS failed:", error);
+    } finally {
+      setTtsLoading(false);
     }
   };
 
@@ -955,12 +1012,38 @@ export default function StudyScreen() {
                   <Text style={[styles.readerTitle, { color: tokens.ink }]}>
                     {selectedMaterial.title}
                   </Text>
-                  <TouchableOpacity
-                    onPress={() => setShowReader(false)}
-                    style={styles.readerCloseBtn}
-                  >
-                    <Ionicons name="close" size={22} color={tokens.ink} />
-                  </TouchableOpacity>
+                  <View style={styles.readerHeaderActions}>
+                    <TouchableOpacity
+                      onPress={handleTtsPress}
+                      disabled={ttsLoading}
+                      style={styles.readerTtsBtn}
+                    >
+                      <Ionicons
+                        name={ttsPlaying ? "pause" : "play"}
+                        size={20}
+                        color={tokens.mint}
+                      />
+                      <Text
+                        style={[styles.readerTtsText, { color: tokens.mint }]}
+                      >
+                        {ttsLoading
+                          ? t("common.loading")
+                          : ttsPlaying
+                            ? t("study.tts.pause")
+                            : t("study.tts.listen")}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        player.pause();
+                        setTtsPlaying(false);
+                        setShowReader(false);
+                      }}
+                      style={styles.readerCloseBtn}
+                    >
+                      <Ionicons name="close" size={22} color={tokens.ink} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <ScrollView style={styles.readerContent}>
                   <Text style={[styles.readerText, { color: tokens.ink }]}>
@@ -969,6 +1052,18 @@ export default function StudyScreen() {
                 </ScrollView>
               </View>
             )}
+
+            <AudioUnlockModal
+              visible={audioUnlockVisible}
+              materialId={selectedMaterial.id}
+              materialTitle={selectedMaterial.title}
+              contentLength={selectedMaterial.content?.length ?? 0}
+              onClose={() => setAudioUnlockVisible(false)}
+              onUnlocked={() => {
+                setAudioUnlocked(true);
+                setAudioUnlockVisible(false);
+              }}
+            />
 
             <AssetBrowser
               assets={selectedMaterial.assets}
@@ -1738,6 +1833,24 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: "center",
     justifyContent: "center",
+  },
+  readerHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  readerTtsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  readerTtsText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   readerContent: {
     flex: 1,

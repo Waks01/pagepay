@@ -3,6 +3,7 @@ from sqlalchemy import (
     String, Integer, BigInteger, Boolean, Text, DateTime, Time, Enum, Float,
     SmallInteger, JSON, UniqueConstraint, ForeignKey, Index, text,
 )
+from sqlalchemy import event as sa_event
 from datetime import datetime, time
 import enum
 
@@ -767,8 +768,30 @@ class StudyProgress(Base):
     last_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-# ── Phase 4: Payments (Premium Subscription) ─────────────────────────────
 
+class AudioUnlock(Base):
+    """Permanent per-user, per-material audio unlock.
+
+    Once a user unlocks audio for a material, they can listen forever.
+    Unlock methods: 'sv' (spent service credits) or 'ad' (watched rewarded ads).
+    """
+
+    __tablename__ = "audio_unlocks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    material_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    method: Mapped[str] = mapped_column(String(20), nullable=False)  # 'sv' | 'ad'
+    cost_sv: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ad_event_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("uq_audio_unlock_user_material", "user_id", "material_id", unique=True),
+    )
+
+
+# ── Phase 4: Payments (Premium Subscription) ─────────────────────────────
 
 class Payment(Base):
     """Premium subscription payment transaction.
@@ -948,13 +971,7 @@ class StreakFreezeLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     __table_args__ = (
-        Index(
-            "uq_streak_freeze_one_ad_per_day",
-            "user_id",
-            text("(created_at::date)"),
-            unique=True,
-            postgresql_where=text("method = 'ad'"),
-        ),
+        Index("uq_streak_freeze_one_ad_per_day", "user_id", unique=True),
     )
 
 
@@ -1825,3 +1842,20 @@ class ScheduledBill(Base):
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+@sa_event.listens_for(Base.metadata, "after_create")
+def _create_postgres_indexes(target, connection, **kw):
+    """Create PostgreSQL-only expression indexes after table creation.
+
+    SQLite (used in tests) does not support expression indexes like
+    `(created_at::date)`, so we emit them only when the target dialect
+    is PostgreSQL.
+    """
+    if connection.dialect.name != "postgresql":
+        return
+    connection.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_streak_freeze_one_ad_per_day "
+        "ON streak_freeze_log (user_id, (created_at::date)) "
+        "WHERE method = 'ad'"
+    ))

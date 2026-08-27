@@ -190,19 +190,61 @@ async def buy_airtime(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # SV Discount eligibility check (Phase 4)
+    actual_sv_discount = 0
+    if payload.apply_sv_discount > 0:
+        from app.services.discount import check_discount_eligibility, SvShortfallError
+        try:
+            actual_sv_discount = await check_discount_eligibility(
+                user=user_row,
+                product_type="airtime",
+                price_kobo=amount_kobo,
+                sv_requested=payload.apply_sv_discount,
+                db=db,
+            )
+        except SvShortfallError as e:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_sv",
+                    "shortfall_sv": e.shortfall_sv,
+                    "ads_needed": e.ads_needed,
+                    "ads_remaining": e.ads_remaining,
+                    "user_balance": e.user_balance,
+                    "requested_sv": e.requested_sv,
+                    "earn_route": "watch_ads",
+                },
+            )
+
+    # Calculate cash payment after SV discount
+    sv_discount_kobo = actual_sv_discount * 10  # 1 sv = ₦0.10
+    cash_payment_kobo = amount_kobo - sv_discount_kobo
+
     if settings.wallet_split_enabled:
-        if user_row.cashable_balance < kobo_to_points(amount_kobo):
-            raise HTTPException(status_code=402, detail="Insufficient balance")
+        if user_row.cashable_balance < kobo_to_points(cash_payment_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient cashable balance")
+        if actual_sv_discount > 0 and user_row.service_credit_balance < actual_sv_discount:
+            raise HTTPException(status_code=402, detail="Insufficient service credits")
     else:
         if user_row.points_balance < kobo_to_points(amount_kobo):
             raise HTTPException(status_code=402, detail="Insufficient balance")
 
+
+    # Debit cashable for cash portion and service credits for discount
     if settings.wallet_split_enabled:
+        # Debit cashable balance for cash payment
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(cash_payment_kobo))
         )
+        # Debit service credits if discount applied
+        if actual_sv_discount > 0:
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(service_credit_balance=User.service_credit_balance - actual_sv_discount)
+            )
     else:
         await db.execute(
             update(User)
@@ -237,8 +279,8 @@ async def buy_airtime(
     points = _compute_points(commission_kobo, full_user)
     
     logger.info(
-        "Bills cashback: user=%d tier=%s service=airtime commission=%d points=%d",
-        current_user.id, full_user.tier.value, commission_kobo, points
+        "Bills cashback: user=%d tier=%s service=airtime commission=%d points=%d sv_discount=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points, actual_sv_discount
     )
 
     # 4. Record transaction and credit points
@@ -256,20 +298,29 @@ async def buy_airtime(
     )
     db.add(tx)
 
-    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
-    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    # Credit commission as service credits (not cashable)
     if settings.wallet_split_enabled:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance + points)
+            .values(service_credit_balance=User.service_credit_balance + points)
         )
+        # Get new balances for response
+        user_result = await db.execute(select(User).where(User.id == current_user.id))
+        updated_user = user_result.scalar_one()
+        new_cashable = updated_user.cashable_balance
+        new_service_credit = updated_user.service_credit_balance
     else:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
             .values(points_balance=User.points_balance + points)
         )
+        user_result = await db.execute(select(User).where(User.id == current_user.id))
+        updated_user = user_result.scalar_one()
+        new_cashable = updated_user.points_balance
+        new_service_credit = 0
+    
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -290,6 +341,16 @@ async def buy_airtime(
         category="wallet_updates",
     ))
 
+    # Build payment breakdown for response
+    payment_breakdown = None
+    if actual_sv_discount > 0:
+        payment_breakdown = {
+            "cashable_paid_kobo": cash_payment_kobo,
+            "sv_discount_kobo": sv_discount_kobo,
+            "sv_discount_pts": actual_sv_discount,
+            "commission_earned_sv": points,
+        }
+
     return AirtimePurchaseResponse(
         reference=reference,
         phone=payload.phone,
@@ -297,8 +358,11 @@ async def buy_airtime(
         network=payload.network,
         commission_naira=commission_kobo,
         points_earned=points,
-        new_balance=new_balance,
+        new_balance=new_cashable if not settings.wallet_split_enabled else new_cashable + new_service_credit,
         status="success",
+        payment_breakdown=payment_breakdown,
+        new_service_credit_balance=new_service_credit if settings.wallet_split_enabled else None,
+        new_cashable_balance=new_cashable if settings.wallet_split_enabled else None,
     )
 
 
@@ -570,19 +634,60 @@ async def buy_data(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # SV Discount eligibility check (Phase 4)
+    actual_sv_discount = 0
+    if payload.apply_sv_discount > 0:
+        from app.services.discount import check_discount_eligibility, SvShortfallError
+        try:
+            actual_sv_discount = await check_discount_eligibility(
+                user=user_row,
+                product_type="data",
+                price_kobo=amount_kobo,
+                sv_requested=payload.apply_sv_discount,
+                db=db,
+            )
+        except SvShortfallError as e:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_sv",
+                    "shortfall_sv": e.shortfall_sv,
+                    "ads_needed": e.ads_needed,
+                    "ads_remaining": e.ads_remaining,
+                    "user_balance": e.user_balance,
+                    "requested_sv": e.requested_sv,
+                    "earn_route": "watch_ads",
+                },
+            )
+
+    # Calculate cash payment after SV discount
+    sv_discount_kobo = actual_sv_discount * 10  # 1 sv = ₦0.10
+    cash_payment_kobo = amount_kobo - sv_discount_kobo
+
     if settings.wallet_split_enabled:
-        if user_row.cashable_balance < kobo_to_points(amount_kobo):
-            raise HTTPException(status_code=402, detail="Insufficient balance")
+        if user_row.cashable_balance < kobo_to_points(cash_payment_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient cashable balance")
+        if actual_sv_discount > 0 and user_row.service_credit_balance < actual_sv_discount:
+            raise HTTPException(status_code=402, detail="Insufficient service credits")
     else:
         if user_row.points_balance < kobo_to_points(amount_kobo):
             raise HTTPException(status_code=402, detail="Insufficient balance")
 
+    # Debit cashable for cash portion and service credits for discount
     if settings.wallet_split_enabled:
+        # Debit cashable balance for cash payment
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(cash_payment_kobo))
         )
+        # Debit service credits if discount applied
+        if actual_sv_discount > 0:
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(service_credit_balance=User.service_credit_balance - actual_sv_discount)
+            )
     else:
         await db.execute(
             update(User)
@@ -616,8 +721,8 @@ async def buy_data(
     points = _compute_points(commission_kobo, full_user)
     
     logger.info(
-        "Bills cashback: user=%d tier=%s service=data commission=%d points=%d",
-        current_user.id, full_user.tier.value, commission_kobo, points
+        "Bills cashback: user=%d tier=%s service=data commission=%d points=%d sv_discount=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points, actual_sv_discount
     )
 
     tx = BillTransaction(
@@ -634,20 +739,29 @@ async def buy_data(
     )
     db.add(tx)
 
-    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
-    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    # Credit commission as service credits (not cashable)
     if settings.wallet_split_enabled:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance + points)
+            .values(service_credit_balance=User.service_credit_balance + points)
         )
+        # Get new balances for response
+        user_result = await db.execute(select(User).where(User.id == current_user.id))
+        updated_user = user_result.scalar_one()
+        new_cashable = updated_user.cashable_balance
+        new_service_credit = updated_user.service_credit_balance
     else:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
             .values(points_balance=User.points_balance + points)
         )
+        user_result = await db.execute(select(User).where(User.id == current_user.id))
+        updated_user = user_result.scalar_one()
+        new_cashable = updated_user.points_balance
+        new_service_credit = 0
+    
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -668,14 +782,27 @@ async def buy_data(
         category="wallet_updates",
     ))
 
+    # Build payment breakdown for response
+    payment_breakdown = None
+    if actual_sv_discount > 0:
+        payment_breakdown = {
+            "cashable_paid_kobo": cash_payment_kobo,
+            "sv_discount_kobo": sv_discount_kobo,
+            "sv_discount_pts": actual_sv_discount,
+            "commission_earned_sv": points,
+        }
+
     return BillsPurchaseResponse(
         reference=reference,
         commission_naira=commission_kobo,
         points_earned=points,
-        new_balance=new_balance,
+        new_balance=new_cashable if not settings.wallet_split_enabled else new_cashable + new_service_credit,
         status="success",
         phone=payload.phone,
         customer_name=result.plan,
+        payment_breakdown=payment_breakdown,
+        new_service_credit_balance=new_service_credit if settings.wallet_split_enabled else None,
+        new_cashable_balance=new_cashable if settings.wallet_split_enabled else None,
     )
 
 
@@ -708,19 +835,60 @@ async def buy_electricity(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # SV Discount eligibility check (Phase 4)
+    actual_sv_discount = 0
+    if payload.apply_sv_discount > 0:
+        from app.services.discount import check_discount_eligibility, SvShortfallError
+        try:
+            actual_sv_discount = await check_discount_eligibility(
+                user=user_row,
+                product_type="electricity",
+                price_kobo=amount_kobo,
+                sv_requested=payload.apply_sv_discount,
+                db=db,
+            )
+        except SvShortfallError as e:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_sv",
+                    "shortfall_sv": e.shortfall_sv,
+                    "ads_needed": e.ads_needed,
+                    "ads_remaining": e.ads_remaining,
+                    "user_balance": e.user_balance,
+                    "requested_sv": e.requested_sv,
+                    "earn_route": "watch_ads",
+                },
+            )
+
+    # Calculate cash payment after SV discount
+    sv_discount_kobo = actual_sv_discount * 10  # 1 sv = ₦0.10
+    cash_payment_kobo = amount_kobo - sv_discount_kobo
+
     if settings.wallet_split_enabled:
-        if user_row.cashable_balance < kobo_to_points(amount_kobo):
-            raise HTTPException(status_code=402, detail="Insufficient balance")
+        if user_row.cashable_balance < kobo_to_points(cash_payment_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient cashable balance")
+        if actual_sv_discount > 0 and user_row.service_credit_balance < actual_sv_discount:
+            raise HTTPException(status_code=402, detail="Insufficient service credits")
     else:
         if user_row.points_balance < kobo_to_points(amount_kobo):
             raise HTTPException(status_code=402, detail="Insufficient balance")
 
+    # Debit cashable for cash portion and service credits for discount
     if settings.wallet_split_enabled:
+        # Debit cashable balance for cash payment
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(cash_payment_kobo))
         )
+        # Debit service credits if discount applied
+        if actual_sv_discount > 0:
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(service_credit_balance=User.service_credit_balance - actual_sv_discount)
+            )
     else:
         await db.execute(
             update(User)
@@ -763,8 +931,8 @@ async def buy_electricity(
     points = _compute_points(commission_kobo, full_user)
     
     logger.info(
-        "Bills cashback: user=%d tier=%s service=electricity commission=%d points=%d",
-        current_user.id, full_user.tier.value, commission_kobo, points
+        "Bills cashback: user=%d tier=%s service=electricity commission=%d points=%d sv_discount=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points, actual_sv_discount
     )
 
     tx = BillTransaction(
@@ -781,20 +949,26 @@ async def buy_electricity(
     )
     db.add(tx)
 
-    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
-    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    # Credit commission as service credits (not cashable)
     if settings.wallet_split_enabled:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance + points)
+            .values(service_credit_balance=User.service_credit_balance + points)
         )
+        # Get new balances for response
+        user_result = await db.execute(select(User).where(User.id == current_user.id))
+        updated_user = user_result.scalar_one()
+        new_cashable = updated_user.cashable_balance
+        new_sv = updated_user.service_credit_balance
     else:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
             .values(points_balance=User.points_balance + points)
         )
+        new_cashable = None
+        new_sv = None
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -815,6 +989,19 @@ async def buy_electricity(
         category="wallet_updates",
     ))
 
+    # Build payment breakdown for response (Phase 4)
+    payment_breakdown = None
+    if actual_sv_discount > 0:
+        payment_breakdown = {
+            "cashable_paid_kobo": cash_payment_kobo,
+            "sv_discount_kobo": sv_discount_kobo,
+            "sv_discount_pts": actual_sv_discount,
+            "commission_earned_sv": points,
+        }
+
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(cash_payment_kobo if actual_sv_discount > 0 else amount_kobo) + points
+
     return {
         "reference": reference,
         "commission_naira": commission_kobo,
@@ -825,6 +1012,9 @@ async def buy_electricity(
         "token": result.get("token", ""),
         "units": result.get("units", ""),
         "customer_name": result.get("customer_name", ""),
+        "payment_breakdown": payment_breakdown,
+        "new_service_credit_balance": new_sv if actual_sv_discount > 0 else None,
+        "new_cashable_balance": new_cashable if actual_sv_discount > 0 else None,
     }
 
 
@@ -876,19 +1066,60 @@ async def buy_tv(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # SV Discount eligibility check (Phase 4)
+    actual_sv_discount = 0
+    if payload.apply_sv_discount > 0:
+        from app.services.discount import check_discount_eligibility, SvShortfallError
+        try:
+            actual_sv_discount = await check_discount_eligibility(
+                user=user_row,
+                product_type="tv",
+                price_kobo=amount_kobo,
+                sv_requested=payload.apply_sv_discount,
+                db=db,
+            )
+        except SvShortfallError as e:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_sv",
+                    "shortfall_sv": e.shortfall_sv,
+                    "ads_needed": e.ads_needed,
+                    "ads_remaining": e.ads_remaining,
+                    "user_balance": e.user_balance,
+                    "requested_sv": e.requested_sv,
+                    "earn_route": "watch_ads",
+                },
+            )
+
+    # Calculate cash payment after SV discount
+    sv_discount_kobo = actual_sv_discount * 10  # 1 sv = ₦0.10
+    cash_payment_kobo = amount_kobo - sv_discount_kobo
+
     if settings.wallet_split_enabled:
-        if user_row.cashable_balance < kobo_to_points(amount_kobo):
-            raise HTTPException(status_code=402, detail="Insufficient balance")
+        if user_row.cashable_balance < kobo_to_points(cash_payment_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient cashable balance")
+        if actual_sv_discount > 0 and user_row.service_credit_balance < actual_sv_discount:
+            raise HTTPException(status_code=402, detail="Insufficient service credits")
     else:
         if user_row.points_balance < kobo_to_points(amount_kobo):
             raise HTTPException(status_code=402, detail="Insufficient balance")
 
+    # Debit cashable for cash portion and service credits for discount
     if settings.wallet_split_enabled:
+        # Debit cashable balance for cash payment
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(cash_payment_kobo))
         )
+        # Debit service credits if discount applied
+        if actual_sv_discount > 0:
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(service_credit_balance=User.service_credit_balance - actual_sv_discount)
+            )
     else:
         await db.execute(
             update(User)
@@ -931,8 +1162,8 @@ async def buy_tv(
     points = _compute_points(commission_kobo, full_user)
     
     logger.info(
-        "Bills cashback: user=%d tier=%s service=tv commission=%d points=%d",
-        current_user.id, full_user.tier.value, commission_kobo, points
+        "Bills cashback: user=%d tier=%s service=tv commission=%d points=%d sv_discount=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points, actual_sv_discount
     )
 
     tx = BillTransaction(
@@ -949,20 +1180,26 @@ async def buy_tv(
     )
     db.add(tx)
 
-    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
-    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    # Credit commission as service credits (not cashable)
     if settings.wallet_split_enabled:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance + points)
+            .values(service_credit_balance=User.service_credit_balance + points)
         )
+        # Get new balances for response
+        user_result = await db.execute(select(User).where(User.id == current_user.id))
+        updated_user = user_result.scalar_one()
+        new_cashable = updated_user.cashable_balance
+        new_sv = updated_user.service_credit_balance
     else:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
             .values(points_balance=User.points_balance + points)
         )
+        new_cashable = None
+        new_sv = None
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -983,6 +1220,19 @@ async def buy_tv(
         category="wallet_updates",
     ))
 
+    # Build payment breakdown for response (Phase 4)
+    payment_breakdown = None
+    if actual_sv_discount > 0:
+        payment_breakdown = {
+            "cashable_paid_kobo": cash_payment_kobo,
+            "sv_discount_kobo": sv_discount_kobo,
+            "sv_discount_pts": actual_sv_discount,
+            "commission_earned_sv": points,
+        }
+
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(cash_payment_kobo if actual_sv_discount > 0 else amount_kobo) + points
+
     return {
         "reference": reference,
         "commission_naira": commission_kobo,
@@ -991,6 +1241,9 @@ async def buy_tv(
         "status": "success",
         "smartcard_number": payload.smartcard_number,
         "customer_name": result.get("customer_name", ""),
+        "payment_breakdown": payment_breakdown,
+        "new_service_credit_balance": new_sv if actual_sv_discount > 0 else None,
+        "new_cashable_balance": new_cashable if actual_sv_discount > 0 else None,
     }
 
 
@@ -1194,19 +1447,59 @@ async def buy_recharge_pin(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # SV Discount eligibility check (Phase 4)
+    actual_sv_discount = 0
+    apply_sv_discount = payload.get("apply_sv_discount", 0)
+    if apply_sv_discount > 0:
+        from app.services.discount import check_discount_eligibility, SvShortfallError
+        try:
+            actual_sv_discount = await check_discount_eligibility(
+                user=user_row,
+                product_type="recharge_pin",
+                price_kobo=amount_kobo,
+                sv_requested=apply_sv_discount,
+                db=db,
+            )
+        except SvShortfallError as e:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_sv",
+                    "shortfall_sv": e.shortfall_sv,
+                    "ads_needed": e.ads_needed,
+                    "ads_remaining": e.ads_remaining,
+                    "user_balance": e.user_balance,
+                    "requested_sv": e.requested_sv,
+                    "earn_route": "watch_ads",
+                },
+            )
+
+    # Calculate cash payment after SV discount
+    sv_discount_kobo = actual_sv_discount * 10
+    cash_payment_kobo = amount_kobo - sv_discount_kobo
+
     if settings.wallet_split_enabled:
-        if user_row.cashable_balance < kobo_to_points(amount_kobo):
-            raise HTTPException(status_code=402, detail="Insufficient balance")
+        if user_row.cashable_balance < kobo_to_points(cash_payment_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient cashable balance")
+        if actual_sv_discount > 0 and user_row.service_credit_balance < actual_sv_discount:
+            raise HTTPException(status_code=402, detail="Insufficient service credits")
     else:
         if user_row.points_balance < kobo_to_points(amount_kobo):
             raise HTTPException(status_code=402, detail="Insufficient balance")
 
+    # Debit cashable for cash portion and service credits for discount
     if settings.wallet_split_enabled:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(cash_payment_kobo))
         )
+        if actual_sv_discount > 0:
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(service_credit_balance=User.service_credit_balance - actual_sv_discount)
+            )
     else:
         await db.execute(
             update(User)
@@ -1235,8 +1528,8 @@ async def buy_recharge_pin(
     points = _compute_points(commission_kobo, full_user)
     
     logger.info(
-        "Bills cashback: user=%d tier=%s service=recharge_pin commission=%d points=%d",
-        current_user.id, full_user.tier.value, commission_kobo, points
+        "Bills cashback: user=%d tier=%s service=recharge_pin commission=%d points=%d sv_discount=%d",
+        current_user.id, full_user.tier.value, commission_kobo, points, actual_sv_discount
     )
 
     tx = BillTransaction(
@@ -1252,20 +1545,25 @@ async def buy_recharge_pin(
     )
     db.add(tx)
 
-    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
-    new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
+    # Credit commission as service credits (not cashable)
     if settings.wallet_split_enabled:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance + points)
+            .values(service_credit_balance=User.service_credit_balance + points)
         )
+        user_result = await db.execute(select(User).where(User.id == current_user.id))
+        updated_user = user_result.scalar_one()
+        new_cashable = updated_user.cashable_balance
+        new_sv = updated_user.service_credit_balance
     else:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
             .values(points_balance=User.points_balance + points)
         )
+        new_cashable = None
+        new_sv = None
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -1286,6 +1584,19 @@ async def buy_recharge_pin(
         category="wallet_updates",
     ))
 
+    # Build payment breakdown for response
+    payment_breakdown = None
+    if actual_sv_discount > 0:
+        payment_breakdown = {
+            "cashable_paid_kobo": cash_payment_kobo,
+            "sv_discount_kobo": sv_discount_kobo,
+            "sv_discount_pts": actual_sv_discount,
+            "commission_earned_sv": points,
+        }
+
+    balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
+    new_balance = balance_for_calc - kobo_to_points(cash_payment_kobo if actual_sv_discount > 0 else amount_kobo) + points
+
     return {
         "reference": reference,
         "commission_naira": commission_kobo,
@@ -1293,6 +1604,9 @@ async def buy_recharge_pin(
         "new_balance": new_balance,
         "status": "success",
         "pins": result.get("pins", []),
+        "payment_breakdown": payment_breakdown,
+        "new_service_credit_balance": new_sv if actual_sv_discount > 0 else None,
+        "new_cashable_balance": new_cashable if actual_sv_discount > 0 else None,
     }
 
 
@@ -1347,19 +1661,59 @@ async def fund_betting(
     if user_row is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # SV Discount eligibility check (Phase 4)
+    actual_sv_discount = 0
+    apply_sv_discount = payload.get("apply_sv_discount", 0)
+    if apply_sv_discount > 0:
+        from app.services.discount import check_discount_eligibility, SvShortfallError
+        try:
+            actual_sv_discount = await check_discount_eligibility(
+                user=user_row,
+                product_type="betting",
+                price_kobo=amount_kobo,
+                sv_requested=apply_sv_discount,
+                db=db,
+            )
+        except SvShortfallError as e:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_sv",
+                    "shortfall_sv": e.shortfall_sv,
+                    "ads_needed": e.ads_needed,
+                    "ads_remaining": e.ads_remaining,
+                    "user_balance": e.user_balance,
+                    "requested_sv": e.requested_sv,
+                    "earn_route": "watch_ads",
+                },
+            )
+
+    # Calculate cash payment after SV discount
+    sv_discount_kobo = actual_sv_discount * 10
+    cash_payment_kobo = amount_kobo - sv_discount_kobo
+
     if settings.wallet_split_enabled:
-        if user_row.cashable_balance < kobo_to_points(amount_kobo):
-            raise HTTPException(status_code=402, detail="Insufficient balance")
+        if user_row.cashable_balance < kobo_to_points(cash_payment_kobo):
+            raise HTTPException(status_code=402, detail="Insufficient cashable balance")
+        if actual_sv_discount > 0 and user_row.service_credit_balance < actual_sv_discount:
+            raise HTTPException(status_code=402, detail="Insufficient service credits")
     else:
         if user_row.points_balance < kobo_to_points(amount_kobo):
             raise HTTPException(status_code=402, detail="Insufficient balance")
 
+    # Debit cashable for cash portion and service credits for discount
     if settings.wallet_split_enabled:
         await db.execute(
             update(User)
             .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance - kobo_to_points(amount_kobo))
+            .values(cashable_balance=User.cashable_balance - kobo_to_points(cash_payment_kobo))
         )
+        if actual_sv_discount > 0:
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(service_credit_balance=User.service_credit_balance - actual_sv_discount)
+            )
     else:
         await db.execute(
             update(User)

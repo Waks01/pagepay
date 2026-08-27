@@ -372,7 +372,22 @@
       "generic": "❌ {{operation}} failed: {{message}}"
     },
     "retry": "Retry",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "tts": {
+      "listen": "Listen",
+      "pause": "Pause"
+    },
+    "audio_unlock": {
+      "title": "Unlock Audio",
+      "cost_label": "Unlock cost",
+      "cost_sub": "~{{count}} ads",
+      "slider_label": "Equivalent ads",
+      "hint": "Watch rewarded ads or spend service credits to unlock audio permanently.",
+      "cta": "Unlock Audio",
+      "unlocking": "Unlocking...",
+      "unlocked_title": "Audio Unlocked",
+      "unlocked_body": "You can now listen to this material anytime."
+    }
   },
   "auth": {
     "divider_or": "or",
@@ -1452,6 +1467,28 @@
       "pending": "Pending",
       "failed": "Failed"
     }
+  },
+  "sv_discount": {
+    "slider_label": "Apply Service Credits (max {{percent}}% off)",
+    "save_amount": "Save ₦{{amount}} (-{{sv}} sv)",
+    "max_discount": "Max {{sv}} sv ({{percent}}% off)",
+    "insufficient_sv": "You need {{sv}} more sv. Watch {{ads}} ads to earn enough.",
+    "confirm_title": "Confirm Purchase",
+    "payment_breakdown": "Payment Breakdown",
+    "cash_payment": "Cash Payment",
+    "from_cashable": "from Cashable Balance",
+    "sv_discount_label": "SV Discount",
+    "from_service_credits": "from Service Credits",
+    "commission_earned": "Commission Earned",
+    "earned_after": "earned after purchase",
+    "new_balances": "New Balances After Purchase",
+    "cashable_balance": "Cashable: ₦{{amount}}",
+    "service_credit_balance": "Service Credits: {{sv}} sv",
+    "shortfall_title": "Not Enough Service Credits",
+    "shortfall_description": "You need {{sv}} more sv to apply this discount.",
+    "watch_ads_prompt": "Watch {{ads}} ads to earn {{sv}} sv",
+    "cancel": "Cancel",
+    "watch_ads": "Watch {{count}} Ads"
   },
   "daily_rewards": {
     "title": "Daily Rewards",

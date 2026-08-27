@@ -8,6 +8,7 @@ from app.database import AsyncSessionLocal
 from app.models import User, UserStreak, UserNotificationPreference, Notification, ReadingSession
 from app.services.fcm import send_push_notification, is_in_quiet_hours
 from app.services.notifications import create_notification
+from app.services.cron import expire_subscriptions
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -107,3 +108,25 @@ def register_reading_session_cleanup_job(scheduler: AsyncIOScheduler) -> None:
             unverified_deleted.rowcount,
             verified_deleted.rowcount,
         )
+
+
+def register_subscription_expiry_job(scheduler: AsyncIOScheduler) -> None:
+    @scheduler.async_job(
+        "cron",
+        hour=4,
+        minute=0,
+        misfire_grace_time=7200,
+        coalesce=True,
+    )
+    async def expire_premium_subscriptions():
+        count = 0
+        async with AsyncSessionLocal() as db:
+            try:
+                count = await expire_subscriptions(db)
+            except Exception as exc:
+                logger.error("Subscription expiry APScheduler job failed: %s", exc)
+
+        if count:
+            logger.info("APScheduler expired %d premium subscriptions", count)
+        else:
+            logger.info("APScheduler subscription expiry check: none expired")

@@ -32,6 +32,9 @@ import {
   DisputeModal,
   ScheduleModal,
 } from "@/src/components/bills";
+import { DiscountSlider } from "@/src/components/bills/DiscountSlider";
+import { ConfirmPurchaseModal } from "@/src/components/bills/ConfirmPurchaseModal";
+import { ShortfallModal } from "@/src/components/bills/ShortfallModal";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
 import { Skeleton } from "@/components/Skeleton";
 
@@ -107,6 +110,11 @@ export default function BuyAirtimeScreen() {
     details: any;
   } | null>(null);
 
+  // SV Discount states
+  const [applySvDiscountAmount, setApplySvDiscountAmount] = useState(0);
+  const [showShortfallModal, setShowShortfallModal] = useState(false);
+  const [shortfallSv, setShortfallSv] = useState(0);
+
   const networksQ = useQuery({
     queryKey: ["airtime-networks"],
     queryFn: async () => {
@@ -122,6 +130,20 @@ export default function BuyAirtimeScreen() {
       const res = await apiFetch("/api/v1/bills/beneficiaries");
       if (!res.ok) throw new Error("Failed to load beneficiaries");
       return (await res.json()) as Beneficiary[];
+    },
+  });
+
+  // Fetch user profile for service credit balance
+  const profileQ = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const res = await apiFetch("/api/v1/me");
+      if (!res.ok) throw new Error("Failed to load profile");
+      return (await res.json()) as {
+        service_credit_balance: number;
+        cashable_balance: number;
+        points_balance: number;
+      };
     },
   });
 
@@ -278,6 +300,7 @@ export default function BuyAirtimeScreen() {
           phone,
           network: selectedNetworkId,
           amount_naira: finalAmount,
+          apply_sv_discount: applySvDiscountAmount,
         }),
       });
       if (!res.ok) {
@@ -301,6 +324,18 @@ export default function BuyAirtimeScreen() {
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
+
+    // Check if user has enough SV if they applied discount
+    if (
+      applySvDiscountAmount > 0 &&
+      applySvDiscountAmount > userServiceCreditBalance
+    ) {
+      const shortfall = applySvDiscountAmount - userServiceCreditBalance;
+      setShortfallSv(shortfall);
+      setShowShortfallModal(true);
+      return;
+    }
+
     setShowConfirmModal(true);
   };
 
@@ -387,13 +422,16 @@ export default function BuyAirtimeScreen() {
   // saved beneficiaries before the recipient/network sections are usable.
   // Show a skeleton placeholder so the user gets immediate visual feedback
   // instead of an empty form while the queries are in flight.
-  if (networksQ.isLoading || beneficiariesQ.isLoading) {
+  if (networksQ.isLoading || beneficiariesQ.isLoading || profileQ.isLoading) {
     return (
       <View style={{ flex: 1, paddingTop: insets.top }}>
         <BuyScreenSkeleton sections={3} />
       </View>
     );
   }
+
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
+  const userCashableBalance = profileQ.data?.cashable_balance || 0;
 
   if (purchaseState === "success" && successData) {
     return (
@@ -933,6 +971,18 @@ export default function BuyAirtimeScreen() {
           />
         </SectionCard>
 
+        {/* SV Discount Slider */}
+        {finalAmount >= 25 && (
+          <DiscountSlider
+            productPriceKobo={finalAmount * 100}
+            userServiceCreditBalance={userServiceCreditBalance}
+            maxDiscountPercent={25}
+            onDiscountChange={(svAmount) => {
+              setApplySvDiscountAmount(svAmount);
+            }}
+          />
+        )}
+
         {/* Rate Limit Display */}
         <RateLimitDisplay service="airtime" />
 
@@ -985,35 +1035,23 @@ export default function BuyAirtimeScreen() {
         </TouchableOpacity>
 
         {/* Confirm Modal */}
-        <ConfirmModal
+        <ConfirmPurchaseModal
           visible={showConfirmModal}
-          title={t("bills.airtime.confirm_title")}
-          rows={[
-            {
-              key: "net",
-              label: t("bills.airtime.confirm_network"),
-              value: selectedNetwork?.name ?? "",
-            },
-            {
-              key: "amt",
-              label: t("bills.airtime.confirm_amount"),
-              value: `₦${finalAmount.toLocaleString()}`,
-              valueColor: "mint" as const,
-            },
-            {
-              key: "phone",
-              label: t("bills.airtime.confirm_phone"),
-              value: phone,
-            },
-            {
-              key: "pts",
-              label: t("bills.airtime.confirm_points"),
-              value: `+${estPoints} pts`,
-              valueColor: "mint" as const,
-            },
-          ]}
-          onCancel={() => setShowConfirmModal(false)}
+          productType="Airtime"
+          productDetails={`${selectedNetwork?.name || ""} · ${phone}`}
+          totalKobo={finalAmount * 100}
+          cashPaymentKobo={finalAmount * 100 - applySvDiscountAmount * 10}
+          svDiscountSv={applySvDiscountAmount}
+          commissionSv={estPoints}
+          newCashableBalance={
+            userCashableBalance -
+            (finalAmount * 100 - applySvDiscountAmount * 10)
+          }
+          newServiceCreditBalance={
+            userServiceCreditBalance - applySvDiscountAmount + estPoints
+          }
           onConfirm={handleConfirmPurchase}
+          onCancel={() => setShowConfirmModal(false)}
         />
 
         {/* Bulk Airtime Modal */}
@@ -1053,6 +1091,22 @@ export default function BuyAirtimeScreen() {
             transactionDetails={disputeTransaction.details}
           />
         )}
+
+        {/* Shortfall Modal */}
+        <ShortfallModal
+          visible={showShortfallModal}
+          shortfallSv={shortfallSv}
+          adsNeeded={Math.ceil(shortfallSv / 16)}
+          onWatchAds={() => {
+            setShowShortfallModal(false);
+            // TODO: Navigate to ad watching flow
+            // For now, just close the modal
+          }}
+          onCancel={() => {
+            setShowShortfallModal(false);
+            setApplySvDiscountAmount(0);
+          }}
+        />
       </ScrollView>
     </View>
   );

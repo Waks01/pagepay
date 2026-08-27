@@ -98,22 +98,13 @@ async def end_session(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Stop the timer and settle the slice-completion bonus (if verified).
+    """Stop the timer and stage pending points for post-read ad claim.
 
-    A verified session (scroll_events > 0) is one where the user genuinely
-    engaged with the slice — they scrolled, didn't background the app, and
-    the duration floor was met. For those sessions we credit the
-    env-overridable `READING_SLICE_BONUS_POINTS` (default 2) directly to
-    the user's wallet.
-
-    Ad rewards (pre-read and post-read) are settled by the SSV webhook
-    and are independent of this endpoint — they land as their own wallet
-    entries when the user finishes watching each ad.
-
-    Sessions that didn't pass anti-cheat (no scroll events, too short,
-    etc.) get `bonus_eligible=False, slice_bonus_credited=0`. The session
-    row is still updated with `end_time` for audit, but no wallet credit
-    is issued.
+    A verified session (scroll_events > 0, effective_duration >= min)
+    earns points calculated as `max(0, (effective_duration // 600) * 5)`.
+    These points are staged as `pending_points` on the session row. The
+    actual wallet credit happens in POST /session/claim after the user
+    watches the post-read ad and the SSV webhook confirms.
     """
     result = await db.execute(
         select(ReadingSession).where(ReadingSession.id == payload.session_id)
@@ -129,63 +120,29 @@ async def end_session(
 
     effective_duration = max(0, session.duration_seconds - session.total_paused_seconds)
 
-    # Default: no bonus. Verified sessions below.
-    bonus_credited = 0
+    pending_points = 0
     bonus_eligible = False
 
     if not session.verified and session.scroll_events > 0 and effective_duration >= settings.session_verified_min_seconds:
         session.verified = True
-        
-        # Apply premium multiplier to reading bonus (Phase 2)
-        from app.services.subscription import get_points_multiplier
-        base_bonus = settings.reading_slice_bonus_points
-        multiplier = get_points_multiplier(current_user, "reading")
-        bonus_credited = int(base_bonus * multiplier)
-        
-        if settings.wallet_split_enabled:
-            current_user.cashable_balance += bonus_credited
-        else:
-            current_user.points_balance += bonus_credited
-        session.points_earned = bonus_credited
+        pending_points = max(0, (effective_duration // 600) * 5)
+        session.pending_points = pending_points
         bonus_eligible = True
         logger.info(
-            "session %d settled: user=%d tier=%s verified=True base=%d multiplier=%.1fx bonus=%d new_balance=%d",
-            session.id, current_user.id, current_user.tier.value,
-            base_bonus, multiplier, bonus_credited,
-            current_user.cashable_balance if settings.wallet_split_enabled else current_user.points_balance,
+            "session %d ended: user=%d verified=True effective_duration=%ds pending_points=%d",
+            session.id, current_user.id, effective_duration, pending_points,
         )
 
     await db.commit()
     await db.refresh(current_user)
     await db.refresh(session)
 
-    if bonus_credited > 0 and session.verified and session.points_earned == bonus_credited:
-        bonus_naira = bonus_credited / max(1, settings.points_per_naira)
-        from app.services.fcm import send_wallet_update_background
-        from app.services.notifications import create_notification_background
-        asyncio.create_task(
-            send_wallet_update_background(
-                current_user.id,
-                amount_naira=bonus_naira,
-                transaction_type="credit",
-                reason="slice_bonus",
-            )
-        )
-        asyncio.create_task(
-            create_notification_background(
-                current_user.id,
-                title="Reading Reward",
-                body=f"You earned {bonus_credited} points for finishing this slice!",
-                category="reading_rewards",
-                data={"type": "reading_reward", "points": str(bonus_credited)},
-            )
-        )
-
     return SessionEndResponse(
         session_id=session.id,
         verified=session.verified,
         bonus_eligible=bonus_eligible,
-        slice_bonus_credited=bonus_credited,
+        pending_points=pending_points,
+        requires_claim=bonus_eligible and pending_points > 0,
         new_balance=current_user.points_balance,
         new_cashable_balance=current_user.cashable_balance,
     )
@@ -197,16 +154,10 @@ async def claim_session(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """DEPRECATED no-op for back-compat.
+    """Credit staged pending_points to the user's wallet.
 
-    Slice points are settled at /session/end (see SessionEndResponse). Ad
-    rewards are settled by the SSV webhook. New clients should not call
-    this endpoint. We return `already_claimed=True, points_earned=0` so
-    old clients that still POST to /session/claim don't crash.
-
-    We still verify the session exists and belongs to the caller before
-    returning — that way guessing another user's session id still 404s
-    instead of silently leaking a wallet balance.
+    Idempotent: if the session has already been claimed, returns
+    `already_claimed=True, points_earned=0` without double-crediting.
     """
     result = await db.execute(
         select(ReadingSession).where(ReadingSession.id == payload.session_id)
@@ -215,11 +166,24 @@ async def claim_session(
     if not session or session.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    me = (await db.execute(
-        select(User.points_balance).where(User.id == current_user.id)
-    )).scalar_one()
+    if session.claimed_at is not None:
+        return SessionClaimResponse(
+            points_earned=0,
+            new_balance=current_user.points_balance,
+            already_claimed=True,
+        )
+
+    points_to_credit = session.pending_points or 0
+    if points_to_credit > 0:
+        current_user.points_balance += points_to_credit
+        session.points_earned = points_to_credit
+        session.claimed_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(current_user)
+        await db.refresh(session)
+
     return SessionClaimResponse(
-        points_earned=0,
-        new_balance=me,
-        already_claimed=True,
+        points_earned=points_to_credit,
+        new_balance=current_user.points_balance,
+        already_claimed=False,
     )

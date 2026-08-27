@@ -31,7 +31,6 @@ import { PremiumUpsellModal } from "@/components/PremiumUpsellModal";
 import { SocialBar } from "@/components/SocialBar";
 import { ShareSheet, type ShareTarget } from "@/components/ShareSheet";
 import { CommentsSection } from "@/components/CommentsSection";
-import { MultiplierBadge } from "@/components/MultiplierBadge";
 import {
   useWorkSocial,
   useLogWorkShare,
@@ -44,6 +43,7 @@ import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { useAdSlot } from "@/src/shared/contexts/AdSlot";
 import { SkeletonDetailPage } from "@/components/skeletons";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
+import { useAudioPlayer } from "expo-audio";
 
 type ContentDetail = {
   id: number;
@@ -592,7 +592,27 @@ export default function ReaderScreen() {
               : t("reader.waiting")}
           </Text>
           {isPremium && (
-            <MultiplierBadge activityType="reading" size="small" showLabel={false} />
+            <View
+              style={{
+                backgroundColor: tokens.mint,
+                borderRadius: 12,
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 2,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 10,
+                  color: tokens.mintText,
+                  fontFamily: "SpaceGrotesk_700Bold",
+                }}
+              >
+                2x
+              </Text>
+            </View>
           )}
           <Text style={[styles.timerText, { color: tokens.ink }]}>
             {formatTime(elapsedSeconds)}

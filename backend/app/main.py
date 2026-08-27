@@ -261,7 +261,9 @@ async def lifespan(app: FastAPI):
         register_daily_reminder_job(_scheduled_bills.scheduler)
         from app.services.scheduler import register_reading_session_cleanup_job
         register_reading_session_cleanup_job(_scheduled_bills.scheduler)
-        logger.info("Daily study reminder and reading session cleanup jobs registered")
+        from app.services.scheduler import register_subscription_expiry_job
+        register_subscription_expiry_job(_scheduled_bills.scheduler)
+        logger.info("Daily study reminder, reading session cleanup, and subscription expiry jobs registered")
     else:
         logger.warning("Scheduler not available; scheduled jobs not registered")
     

@@ -10,7 +10,8 @@ import asyncio
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +33,7 @@ from app.ai.prompts import (
 )
 from app.ai.router import route_ai
 from app.models import (
+    AudioUnlock,
     SowUploadJob,
     StudyAsset,
     StudyMaterial,
@@ -47,6 +49,7 @@ from app.services.sanitize import (
     safe_filename,
     sanitize_for_display,
 )
+from app.services.tts_hybrid import AUDIO_CACHE_DIR, synthesize_study_audio
 from app.schemas import (
     ChatRequest,
     ChatResponse,
@@ -1178,6 +1181,192 @@ async def unlock_asset(
     raise HTTPException(status_code=400, detail="Invalid method")
 
 
+# ── POST /study/materials/{material_id}/unlock-audio ───────────────────
+
+AUDIO_UNLOCK_BASE_SV = 20
+AUDIO_UNLOCK_CHAR_STEP = 500
+
+
+def _audio_unlock_cost_sv(content: str | None) -> int:
+    length = len(content or "")
+    return AUDIO_UNLOCK_BASE_SV + max(0, (length // AUDIO_UNLOCK_CHAR_STEP) * 10)
+
+
+class AudioUnlockResponse(BaseModel):
+    unlocked: bool
+    material_id: int
+    cost_sv: int
+    method: str
+    new_balance: int
+    url: str | None = None
+    provider: str | None = None
+
+
+@router.post("/materials/{material_id}/unlock-audio", response_model=AudioUnlockResponse)
+async def unlock_material_audio(
+    material_id: int,
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    method = str(payload.get("method") or "sv").lower()
+    if method not in {"sv", "ad"}:
+        raise HTTPException(status_code=400, detail="method must be 'sv' or 'ad'")
+
+    material_result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = material_result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    existing_result = await db.execute(
+        select(AudioUnlock).where(
+            AudioUnlock.user_id == current_user.id,
+            AudioUnlock.material_id == material_id,
+        )
+    )
+    if existing_result.scalar_one_or_none():
+        return AudioUnlockResponse(
+            unlocked=True,
+            material_id=material_id,
+            cost_sv=0,
+            method="existing",
+            new_balance=(
+                current_user.service_credit_balance
+                if settings.wallet_split_enabled
+                else current_user.points_balance
+            ),
+            url=f"/api/v1/study/tts/audio/{material_id}_cached.mp3",
+            provider="cached",
+        )
+
+    cost_sv = _audio_unlock_cost_sv(material.content)
+
+    if method == "sv":
+        if settings.wallet_split_enabled:
+            balance_result = await db.execute(
+                select(User.service_credit_balance).where(User.id == current_user.id)
+            )
+            balance = balance_result.scalar_one() or 0
+            if balance < cost_sv:
+                raise HTTPException(
+                    status_code=402,
+                    detail=f"Need {cost_sv} sv to unlock audio. You have {balance}.",
+                )
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(service_credit_balance=User.service_credit_balance - cost_sv)
+            )
+        else:
+            balance_result = await db.execute(
+                select(User.points_balance).where(User.id == current_user.id)
+            )
+            balance = balance_result.scalar_one() or 0
+            if balance < cost_sv:
+                raise HTTPException(
+                    status_code=402,
+                    detail=f"Need {cost_sv} pts to unlock audio. You have {balance}.",
+                )
+            await db.execute(
+                update(User)
+                .where(User.id == current_user.id)
+                .values(points_balance=User.points_balance - cost_sv)
+            )
+
+        unlock = AudioUnlock(
+            user_id=current_user.id,
+            material_id=material_id,
+            method="sv",
+            cost_sv=cost_sv,
+        )
+        db.add(unlock)
+        await db.commit()
+
+        new_balance = (
+            current_user.service_credit_balance
+            if settings.wallet_split_enabled
+            else current_user.points_balance
+        )
+        return AudioUnlockResponse(
+            unlocked=True,
+            material_id=material_id,
+            cost_sv=cost_sv,
+            method="sv",
+            new_balance=new_balance,
+            url=f"/api/v1/study/tts/audio/{material_id}_cached.mp3",
+            provider="unlocked",
+        )
+
+    if method == "ad":
+        unlock = AudioUnlock(
+            user_id=current_user.id,
+            material_id=material_id,
+            method="ad",
+            cost_sv=cost_sv,
+        )
+        db.add(unlock)
+        await db.commit()
+        await db.refresh(unlock)
+
+        return AudioUnlockResponse(
+            unlocked=True,
+            material_id=material_id,
+            cost_sv=0,
+            method="ad",
+            new_balance=(
+                current_user.service_credit_balance
+                if settings.wallet_split_enabled
+                else current_user.points_balance
+            ),
+            url=f"/api/v1/study/tts/audio/{material_id}_cached.mp3",
+            provider="ad_unlock",
+        )
+
+
+class AudioUnlockStatusResponse(BaseModel):
+    unlocked: bool
+    material_id: int
+    method: str | None = None
+    cost_sv: int = 0
+
+
+@router.get("/materials/{material_id}/audio-status", response_model=AudioUnlockStatusResponse)
+async def get_audio_unlock_status(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    material_result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    if not material_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    from app.services.subscription import is_premium
+    if is_premium(current_user):
+        return AudioUnlockStatusResponse(unlocked=True, material_id=material_id, method="premium")
+
+    unlock_result = await db.execute(
+        select(AudioUnlock).where(
+            AudioUnlock.user_id == current_user.id,
+            AudioUnlock.material_id == material_id,
+        )
+    )
+    unlock = unlock_result.scalar_one_or_none()
+    if unlock:
+        return AudioUnlockStatusResponse(unlocked=True, material_id=material_id, method=unlock.method, cost_sv=unlock.cost_sv)
+
+    return AudioUnlockStatusResponse(unlocked=False, material_id=material_id, cost_sv=_audio_unlock_cost_sv(material.content))
+
+
 # ── POST /study/quiz/complete ────────────────────────────────────────
 
 
@@ -1444,3 +1633,82 @@ async def end_study_session(
         duration_seconds=session["duration_seconds"],
         ended_at=session["ended_at"].isoformat(),
     )
+
+
+# ── POST /study/tts ───────────────────────────────────────────────────
+class TtsResponse(BaseModel):
+    url: str
+    provider: str
+    cached: bool
+
+
+@router.post("/tts", response_model=TtsResponse)
+async def synthesize_study_tts(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """On-demand TTS for study material text.
+
+    Body: { "text": str, "voice"?: str, "provider"?: str, "material_id"?: int }
+    Returns: { "url": str, "provider": str, "cached": bool }
+
+    Uses the hybrid provider chain in services/tts_hybrid.py.
+    Audio is cached to disk; repeat reads return the cached URL.
+    Gated on premium or audio_unlock for the material.
+    """
+    text = payload.get("text") or ""
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="text is required")
+    if len(text) > 4000:
+        text = text[:4000]
+
+    material_id = payload.get("material_id")
+    if material_id is not None:
+        from app.services.subscription import is_premium
+        if not is_premium(current_user):
+            unlock_result = await db.execute(
+                select(AudioUnlock).where(
+                    AudioUnlock.user_id == current_user.id,
+                    AudioUnlock.material_id == int(material_id),
+                )
+            )
+            if not unlock_result.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=403,
+                    detail="Audio locked. Unlock this material to listen.",
+                )
+
+    voice = payload.get("voice") or settings.tts_default_voice
+    provider = payload.get("provider") or settings.tts_default_provider
+
+    try:
+        audio, used_provider = await tts_hybrid.synthesize_study_audio(text, voice, provider=provider)
+    except Exception as exc:
+        logger.error("TTS synthesis failed for user=%s: %s", current_user.id, exc)
+        raise HTTPException(status_code=502, detail=f"TTS synthesis failed: {exc}")
+
+    cache = tts_hybrid._cache_path(text, voice, used_provider)
+    return TtsResponse(
+        url=f"/api/v1/study/tts/audio/{cache.name}",
+        provider=used_provider,
+        cached=True,
+    )
+
+
+# ── GET /study/tts/audio/{filename} ──────────────────────────────────
+@router.get("/tts/audio/{filename}")
+async def serve_study_tts_audio(filename: str):
+    """Serve cached TTS audio files. Public, cached 1 day."""
+    safe_name = filename.replace("..", "_").replace("/", "_")
+    candidate = AUDIO_CACHE_DIR / "tts" / "*" / safe_name
+    matches = list(AUDIO_CACHE_DIR.glob(f"tts/*/{safe_name}"))
+    if not matches:
+        raise HTTPException(status_code=404, detail="Audio not found")
+    path = matches[0]
+    return FileResponse(
+        path,
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+

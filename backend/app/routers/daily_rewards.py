@@ -16,7 +16,7 @@ from app.database import get_db
 from app.models import User, UserStreak, DailyReward, UserRewardClaim, StreakFreezeLog, AdEvent
 from app.routers.auth import get_current_user
 from app.routers.streak import _update_reward_streak, _claim_daily_reward_increment_streak, _get_timezone_offset_minutes, _user_local_date
-from app.schemas import DailyRewardInfo, DailyRewardStatus, DailyRewardClaim, DailyRewardHistory, StreakFreezeByAdRequest, StreakFreezeByAdResponse, StreakFreezeByPointsRequest, StreakFreezeByPointsResponse
+from app.schemas import DailyRewardInfo, DailyRewardStatus, DailyRewardClaim, DailyRewardHistory, StreakFreezeByAdRequest, StreakFreezeByAdResponse, StreakFreezeByPointsRequest, StreakFreezeByPointsResponse, DailyRewardClaimRequest
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/rewards", tags=["daily_rewards"])

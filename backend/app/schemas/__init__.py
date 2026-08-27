@@ -120,6 +120,11 @@ class DataPurchaseRequest(BaseModel):
     phone: str = Field(min_length=10, max_length=15)
     network: str = Field(..., description="Data network identifier: mtn, glo, airtel, 9mobile")
     plan_code: str = Field(..., description="Data plan code from provider")
+    apply_sv_discount: int = Field(
+        default=0,
+        ge=0,
+        description="Service credits (sv) to apply as discount (capped at 25% of amount)",
+    )
 
 
 class AirtimePurchaseResponse(BaseModel):
@@ -148,6 +153,11 @@ class ElectricityPurchaseRequest(BaseModel):
     meter_type: str = Field(default="prepaid", pattern="^(prepaid|postpaid)$")
     amount_naira: int = Field(ge=500, le=100000)
     phone: str = Field(min_length=10, max_length=15)
+    apply_sv_discount: int = Field(
+        default=0,
+        ge=0,
+        description="Service credits (sv) to apply as discount (capped at 25% of amount)",
+    )
 
 
 class TelevisionPurchaseRequest(BaseModel):
@@ -156,6 +166,11 @@ class TelevisionPurchaseRequest(BaseModel):
     provider: str = Field(..., description="dstv, gotv, startimes, showmax")
     plan_code: str = Field(..., description="Bouquet plan code from provider")
     phone: str = Field(min_length=10, max_length=15)
+    apply_sv_discount: int = Field(
+        default=0,
+        ge=0,
+        description="Service credits (sv) to apply as discount (capped at 25% of amount)",
+    )
 
 
 class BillsPurchaseResponse(BaseModel):
@@ -177,6 +192,13 @@ class BillsPurchaseResponse(BaseModel):
     status_detail: str | None = None
     job_id: str | None = None
     total_cost: int | None = None
+    # SV discount payment breakdown (Phase 4)
+    payment_breakdown: dict | None = Field(
+        default=None,
+        description="Payment split: cashable_paid_kobo, sv_discount_kobo, sv_discount_pts, commission_earned_sv",
+    )
+    new_service_credit_balance: int | None = Field(default=None)
+    new_cashable_balance: int | None = Field(default=None)
 
 
 class BillTransactionOut(BaseModel):
@@ -309,21 +331,18 @@ class SessionEnd(BaseModel):
 class SessionEndResponse(BaseModel):
     """Return shape of POST /session/end.
 
-    Points are credited IMMEDIATELY at /session/end (slice-completion
-    bonus, env `READING_SLICE_BONUS_POINTS`, default 2 pts). Ad rewards
-    are credited independently by the SSV webhook when the user finishes
-    watching them — they don't depend on this endpoint.
+    Points are NOT credited directly. They are staged as `pending_points`
+    on the session row for the client to collect via POST /session/claim
+    after the post-read ad watch. Ad rewards are settled by the SSV
+    webhook independently.
 
-    `slice_bonus_credited` is the integer points added to the wallet for
-    finishing this slice. `new_balance` is the post-credit balance.
-    `verified` reflects the server-side anti-cheat verdict (scroll
-    events > 0). `bonus_eligible` is true when the bonus was actually
-    credited; a non-verified session returns false with bonus_credited=0.
+    `requires_claim` tells the client whether to surface the claim CTA.
     """
     session_id: int
     verified: bool
     bonus_eligible: bool
-    slice_bonus_credited: int
+    pending_points: int
+    requires_claim: bool
     new_balance: int
     new_cashable_balance: int
 
@@ -331,12 +350,9 @@ class SessionEndResponse(BaseModel):
 class SessionClaimResponse(BaseModel):
     """Return shape of POST /session/claim.
 
-    Deprecated no-op for back-compat. Slice points are now settled at
-    /session/end (see SessionEndResponse). Ad rewards are settled by
-    the SSV webhook independently. This endpoint is kept so old clients
-    don't crash if they still call it; new clients should ignore it.
-
-    Idempotent: re-claiming returns `already_claimed=True, points_earned=0`.
+    Credits the staged `pending_points` from the session to the user's
+    wallet. Idempotent: re-claiming returns `already_claimed=True,
+    points_earned=0`.
     """
     points_earned: int
     new_balance: int
