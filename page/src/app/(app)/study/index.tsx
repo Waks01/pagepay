@@ -44,39 +44,21 @@ import AudioUnlockModal from "@/components/AudioUnlockModal";
 import { cacheAsset, getCachedAsset } from "@/src/features/study/storage";
 import { saveLastRoute, getLastRoute } from "@/src/shared/lib/screen-memory";
 
-// Error categorization helper
+// Pass the server's actual error message through unchanged so the user
+// can see exactly what failed. Only translate when the message is empty
+// or looks like a useless fall-through ("Failed", "Upload failed", etc.).
+// Categorization by string-substring matching is fragile (it collapses
+// real backend `detail` strings into a generic bucket) and is being
+// phased out per developer feedback — see study/index.tsx history.
 function categorizeError(
   message: string,
   operation: string,
   t: (key: string, params?: Record<string, unknown>) => string,
 ): string {
-  if (message.includes("Network") || message.includes("fetch")) {
-    return t("study.errors.server_starting");
+  if (message && message.length > 0) {
+    return message;
   }
-  if (message.includes("401") || message.includes("Unauthorized")) {
-    return t("study.errors.session_expired");
-  }
-  if (
-    message.includes("413") ||
-    message.includes("too large") ||
-    message.includes("size")
-  ) {
-    return t("study.errors.file_too_large");
-  }
-  if (
-    message.includes("format") ||
-    message.includes("type") ||
-    message.includes("invalid")
-  ) {
-    return t("study.errors.invalid_format");
-  }
-  if (message.includes("quota") || message.includes("limit")) {
-    return t("study.errors.rate_limit");
-  }
-  if (message.includes("500") || message.includes("Internal")) {
-    return t("study.errors.server_error");
-  }
-  return t("study.errors.generic", { operation, message });
+  return t("study.errors.generic", { operation, message: "(no detail)" });
 }
 
 type TopicInfo = {

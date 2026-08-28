@@ -81,7 +81,7 @@ router = APIRouter(prefix="/study", tags=["study"])
 # SOW image blows up the base64 payload (2× RAM) and the Gemini
 # Vision bill. Documents (PDF/DOCX/TXT) get a slightly larger cap.
 MAX_SOW_IMAGE_BYTES: int = 5 * 1024 * 1024   # 5 MB
-MAX_SOW_DOC_BYTES: int = 10 * 1024 * 1024    # 10 MB
+MAX_SOW_DOC_BYTES: int = 7 * 1024 * 1024     # 7 MB
 
 # Content-type allowlist for the image route. The browser-supplied
 # `file.content_type` is attacker-controlled and was previously
@@ -149,6 +149,7 @@ async def upload_sow(
 async def upload_sow_image(
     file: UploadFile = File(...),
     exam_type: str | None = Form(default=None),
+    request: Request = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -159,8 +160,19 @@ async def upload_sow_image(
     `GET /api/v1/study/sow/jobs/{job_id}` to drive its progress bar
     through the 80→100 window.
     """
+    content_length = request.headers.get("content-length") if request else None
+    logger.info(
+        "[sow/upload-image] HIT user=%s exam_type=%s filename=%s ctype=%s length=%s",
+        current_user.id,
+        exam_type,
+        file.filename,
+        file.content_type,
+        content_length,
+    )
+
     api_key = settings.gemini_api_key
     if not api_key:
+        logger.error("[sow/upload-image] Gemini API key not configured")
         raise HTTPException(status_code=503, detail="Gemini not configured for image upload")
 
     # Content-type allowlist — `file.content_type` is set by the
@@ -168,6 +180,7 @@ async def upload_sow_image(
     # the types Gemini Vision actually accepts.
     ctype = (file.content_type or "").lower().split(";", 1)[0].strip()
     if ctype not in ALLOWED_IMAGE_TYPES:
+        logger.warning("[sow/upload-image] unsupported ctype: %s", ctype)
         raise HTTPException(
             status_code=415,
             detail=f"Unsupported image type: {ctype!r}. Use JPEG, PNG, WEBP, or HEIC.",
@@ -176,11 +189,28 @@ async def upload_sow_image(
     # Sanitize the filename BEFORE we read the body so a hostile
     # path-traversal filename never touches the DB or the log.
     safe_name = safe_filename(file.filename, fallback="upload.jpg")
+    logger.info("[sow/upload-image] safe_name=%s", safe_name)
 
-    contents = await file.read()
+    try:
+        contents = await file.read()
+    except Exception as e:
+        logger.exception("[sow/upload-image] file.read() failed: %s", e)
+        raise HTTPException(status_code=400, detail=f"Could not read uploaded file: {e}")
+
+    logger.info(
+        "[sow/upload-image] read %s bytes (limit=%s)",
+        len(contents),
+        MAX_SOW_IMAGE_BYTES,
+    )
     if not contents:
+        logger.warning("[sow/upload-image] empty file")
         raise HTTPException(status_code=400, detail="Empty file")
     if len(contents) > MAX_SOW_IMAGE_BYTES:
+        logger.warning(
+            "[sow/upload-image] too large: %s > %s",
+            len(contents),
+            MAX_SOW_IMAGE_BYTES,
+        )
         raise HTTPException(
             status_code=413,
             detail=f"Image too large (max {MAX_SOW_IMAGE_BYTES // (1024*1024)} MB)",
@@ -191,6 +221,12 @@ async def upload_sow_image(
     db.add(job)
     await db.commit()
     await db.refresh(job)
+
+    logger.info(
+        "[sow/upload-image] job queued id=%s user=%s dispatching background worker",
+        job.id,
+        current_user.id,
+    )
 
     asyncio.create_task(
         _process_sow_image_job(
@@ -210,6 +246,7 @@ async def upload_sow_image(
 async def upload_sow_document(
     file: UploadFile = File(...),
     exam_type: str | None = Form(default=None),
+    request: Request = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -219,15 +256,45 @@ async def upload_sow_document(
     polls `GET /api/v1/study/sow/jobs/{job_id}` to drive its progress
     bar through the 80→100 window.
     """
+    content_length = request.headers.get("content-length") if request else None
+    logger.info(
+        "[sow/upload-document] HIT user=%s exam_type=%s filename=%s ctype=%s length=%s",
+        current_user.id,
+        exam_type,
+        file.filename,
+        file.content_type,
+        content_length,
+    )
+
     # Sanitize filename before we read the body — the path-traversal
     # filename is the most likely attack vector, the body size is
     # secondary.
     safe_name = safe_filename(file.filename, fallback="document")
+    logger.info("[sow/upload-document] safe_name=%s", safe_name)
 
-    contents = await file.read()
+    try:
+        contents = await file.read()
+    except Exception as e:
+        logger.exception(
+            "[sow/upload-document] file.read() failed: %s", e,
+        )
+        raise HTTPException(status_code=400, detail=f"Could not read uploaded file: {e}")
+
+    logger.info(
+        "[sow/upload-document] read %s bytes (limit=%s)",
+        len(contents),
+        MAX_SOW_DOC_BYTES,
+    )
+
     if not contents:
+        logger.warning("[sow/upload-document] empty file")
         raise HTTPException(status_code=400, detail="Empty file")
     if len(contents) > MAX_SOW_DOC_BYTES:
+        logger.warning(
+            "[sow/upload-document] too large: %s > %s",
+            len(contents),
+            MAX_SOW_DOC_BYTES,
+        )
         raise HTTPException(
             status_code=413,
             detail=f"Document too large (max {MAX_SOW_DOC_BYTES // (1024*1024)} MB)",
@@ -243,6 +310,9 @@ async def upload_sow_document(
         or filename_lower.endswith(".doc")
         or filename_lower.endswith(".txt")
     ):
+        logger.warning(
+            "[sow/upload-document] unsupported extension: %s", safe_name,
+        )
         raise HTTPException(
             status_code=400,
             detail="Unsupported file type. Upload PDF, DOCX, or TXT.",
@@ -252,6 +322,12 @@ async def upload_sow_document(
     db.add(job)
     await db.commit()
     await db.refresh(job)
+
+    logger.info(
+        "[sow/upload-document] job queued id=%s user=%s dispatching background worker",
+        job.id,
+        current_user.id,
+    )
 
     asyncio.create_task(
         _process_sow_document_job(
@@ -427,6 +503,10 @@ async def _process_sow_image_job(
     ends in a `failed` row so the polling endpoint has something to
     report.
     """
+    logger.info(
+        "[sow/upload-image worker] START job=%s user=%s bytes=%s",
+        job_id, user_id, len(contents),
+    )
     try:
         await _mark_job_status(job_id, "processing")
 
@@ -436,6 +516,10 @@ async def _process_sow_image_job(
 
         try:
             extracted_text = await _ocr_image_with_gemini(contents, content_type, api_key)
+            logger.info(
+                "[sow/upload-image worker] OCR done job=%s text_len=%s",
+                job_id, len(extracted_text or ""),
+            )
         except Exception as exc:
             logger.error("Gemini Vision OCR failed for job %s: %s", job_id, exc)
             raise RuntimeError("image_ocr_failed") from exc
@@ -445,6 +529,10 @@ async def _process_sow_image_job(
 
         try:
             parsed, provider, _ = await _run_sow_parser(extracted_text)
+            logger.info(
+                "[sow/upload-image worker] parser done job=%s provider=%s keys=%s",
+                job_id, provider, list((parsed or {}).keys()) if isinstance(parsed, dict) else None,
+            )
         except Exception as exc:
             logger.error("SOW parser AI failed for job %s: %s", job_id, exc)
             raise RuntimeError("ai_parser_failed") from exc
@@ -466,6 +554,10 @@ async def _process_sow_image_job(
             await db.refresh(material)
             material_id = material.id
 
+        logger.info(
+            "[sow/upload-image worker] DONE job=%s material_id=%s",
+            job_id, material_id,
+        )
         await _mark_job_status(job_id, "completed", material_id=material_id)
     except Exception as exc:
         logger.exception("SOW image job %s failed", job_id)
@@ -483,28 +575,48 @@ async def _process_sow_document_job(
     the image worker — runs extraction + AI parse, writes the
     material, updates the job row.
     """
+    logger.info(
+        "[sow/upload-document worker] START job=%s user=%s bytes=%s",
+        job_id, user_id, len(contents),
+    )
     try:
         await _mark_job_status(job_id, "processing")
 
         try:
             extracted_text = await _extract_document_text(contents, safe_name)
+            logger.info(
+                "[sow/upload-document worker] extract done job=%s text_len=%s",
+                job_id, len(extracted_text or ""),
+            )
         except ValueError as exc:
             # Already a user-safe category from the extractor.
+            logger.warning(
+                "[sow/upload-document worker] extract ValueError job=%s err=%s",
+                job_id, exc,
+            )
             await _mark_job_status(job_id, "failed", error=str(exc))
             return
         except Exception as exc:
-            logger.error("Document extraction crashed for job %s: %s", job_id, exc)
+            logger.exception("Document extraction crashed for job %s: %s", job_id, exc)
             await _mark_job_status(job_id, "failed", error="document_extraction_failed")
             return
 
         if not extracted_text.strip():
+            logger.warning(
+                "[sow/upload-document worker] empty text job=%s",
+                job_id,
+            )
             await _mark_job_status(job_id, "failed", error="empty_extracted_text")
             return
 
         try:
             parsed, provider, _ = await _run_sow_parser(extracted_text)
+            logger.info(
+                "[sow/upload-document worker] parser done job=%s provider=%s",
+                job_id, provider,
+            )
         except Exception as exc:
-            logger.error("SOW parser AI failed for job %s: %s", job_id, exc)
+            logger.exception("SOW parser AI failed for job %s: %s", job_id, exc)
             await _mark_job_status(job_id, "failed", error="ai_parser_failed")
             return
 
@@ -525,6 +637,10 @@ async def _process_sow_document_job(
             await db.refresh(material)
             material_id = material.id
 
+        logger.info(
+            "[sow/upload-document worker] DONE job=%s material_id=%s",
+            job_id, material_id,
+        )
         await _mark_job_status(job_id, "completed", material_id=material_id)
     except Exception as exc:
         logger.exception("SOW document job %s failed", job_id)

@@ -191,6 +191,7 @@ export type ApiUploadOptions = {
 export type ApiUploadResult = {
   ok: boolean;
   status: number;
+  statusText: string;
   json: () => Promise<any>;
   text: () => Promise<string>;
 };
@@ -245,6 +246,28 @@ export async function apiUpload(
     };
 
     xhr.onerror = (e) => {
+      // xhr.onerror fires for transport-level failures (DNS, TLS, CORS,
+      // connection reset) AND for some non-2xx responses on Android where
+      // RN's XHR treats them as a network error. Distinguish by status:
+      //   - status > 0: we got a response, just not a success one
+      //   - status === 0: real network failure
+      if (xhr.status > 0) {
+        if (__DEV__) {
+          console.error(
+            `[apiUpload] HTTP ${xhr.status} ${path} responseText=${xhr.responseText?.slice(0, 500)}`,
+          );
+        }
+        const body = xhr.responseText || "";
+        const detail = extractErrorDetail(body, xhr.statusText);
+        reject(
+          new Error(
+            detail
+              ? `HTTP ${xhr.status} ${path}: ${detail}`
+              : `HTTP ${xhr.status} ${path}: ${xhr.statusText || "(no status text)"}`,
+          ),
+        );
+        return;
+      }
       if (__DEV__) {
         console.error(
           `[apiUpload] NETWORK ERROR ${API_URL}${path}`,
@@ -259,7 +282,7 @@ export async function apiUpload(
       }
       reject(
         new Error(
-          `Can't reach the server at ${API_URL}. Check your connection and try again.`,
+          `Network error reaching ${API_URL}${path} (readyState=${xhr.readyState}, status=0)`,
         ),
       );
     };
@@ -283,6 +306,7 @@ export async function apiUpload(
       const result: ApiUploadResult = {
         ok: xhr.status >= 200 && xhr.status < 300,
         status: xhr.status,
+        statusText: xhr.statusText || "",
         json: () => Promise.resolve().then(() => JSON.parse(xhr.responseText || "null")),
         text: () => Promise.resolve(xhr.responseText || ""),
       };
@@ -297,11 +321,31 @@ export async function apiUpload(
       }
       reject(
         new Error(
-          `Can't reach the server at ${API_URL}. Check your connection and try again.`,
+          `xhr.send threw for ${API_URL}${path}: ${e instanceof Error ? e.message : String(e)}`,
         ),
       );
     }
   });
+}
+
+/**
+ * Best-effort extraction of an error detail from a server response body.
+ * Returns the raw text if the body is not JSON, so the caller always sees
+ * something useful instead of a generic fallback.
+ */
+function extractErrorDetail(body: string, statusText: string): string {
+  if (!body) return statusText || "";
+  try {
+    const parsed = JSON.parse(body);
+    if (typeof parsed === "string") return parsed;
+    if (parsed?.detail) {
+      if (typeof parsed.detail === "string") return parsed.detail;
+      return JSON.stringify(parsed.detail);
+    }
+    return JSON.stringify(parsed).slice(0, 500);
+  } catch {
+    return body.slice(0, 500);
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────
