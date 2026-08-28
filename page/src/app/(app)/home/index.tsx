@@ -26,7 +26,10 @@ import {
 } from "@/src/shared/lib/current-user";
 import { useStreak } from "@/src/features/community/hooks/use-community";
 import { displayName } from "@/src/shared/lib/display-name";
-import { formatPointsCompact, POINTS_PER_NAIRA_VALUE } from "@/src/shared/lib/money";
+import {
+  formatPointsCompact,
+  POINTS_PER_NAIRA_VALUE,
+} from "@/src/shared/lib/money";
 import { CategoryChip } from "@/components/CategoryChip";
 import { ContentCard, ContentItem } from "@/components/ContentCard";
 import { ResumeCard } from "@/components/ResumeCard";
@@ -185,7 +188,7 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       void useCurrentUserStore.getState().refresh();
-    }, [])
+    }, []),
   );
 
   const greeting = useMemo(() => {
@@ -251,7 +254,13 @@ export default function HomeScreen() {
           <TouchableOpacity
             onPress={() => router.push("/wallet")}
             accessibilityRole="button"
-            accessibilityLabel={t("home.wallet_access", { sp: serviceCreditPoints, cash: cashableNaira.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) })}
+            accessibilityLabel={t("home.wallet_access", {
+              sp: serviceCreditPoints,
+              cash: cashableNaira.toLocaleString(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              }),
+            })}
             style={[
               styles.balanceChip,
               { backgroundColor: tokens.card, borderColor: tokens.border },
@@ -280,7 +289,12 @@ export default function HomeScreen() {
               ]}
               numberOfLines={1}
             >
-              ₦{cashableNaira.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} C
+              ₦
+              {cashableNaira.toLocaleString(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              })}{" "}
+              C
             </Text>
           </TouchableOpacity>
 
@@ -487,43 +501,6 @@ export default function HomeScreen() {
             />
           </ScrollView>
         </View>
-
-        {/* Transaction History Quick Access */}
-        <TouchableOpacity
-          onPress={() => router.push("/home/transactions")}
-          style={[
-            styles.transactionCard,
-            { backgroundColor: tokens.card, borderColor: tokens.border },
-          ]}
-          activeOpacity={0.7}
-        >
-          <View style={styles.transactionLeft}>
-            <View
-              style={[
-                styles.transactionIcon,
-                { backgroundColor: tokens.mintSoft },
-              ]}
-            >
-              <Ionicons name="receipt-outline" size={22} color={tokens.mint} />
-            </View>
-            <View style={styles.transactionText}>
-              <Text
-                style={[
-                  styles.transactionTitle,
-                  { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
-                ]}
-              >
-                {t("home.transaction_history")}
-              </Text>
-              <Text
-                style={[styles.transactionSubtitle, { color: tokens.inkMuted }]}
-              >
-                {t("home.transaction_history_subtitle")}
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={tokens.inkMuted} />
-        </TouchableOpacity>
 
         {/* Browse by category */}
         <View style={styles.section}>
@@ -782,41 +759,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
-  },
-  transactionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 12,
-  },
-  transactionLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  transactionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  transactionText: {
-    flex: 1,
-    gap: 4,
-  },
-  transactionTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-    letterSpacing: -0.2,
-  },
-  transactionSubtitle: {
-    fontSize: 12,
-    lineHeight: 16,
   },
   shareBtn: {
     flexDirection: "row",

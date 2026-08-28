@@ -23,14 +23,12 @@ type Transaction = {
 type Props = {
   transactions: Transaction[];
   onRetry: (tx: Transaction) => void;
-  onViewAll?: () => void;
   onDispute?: (tx: Transaction) => void;
 };
 
 export function RecentTransactionsList({
   transactions,
   onRetry,
-  onViewAll,
   onDispute,
 }: Props) {
   const scheme = useEffectiveScheme();
@@ -59,25 +57,16 @@ export function RecentTransactionsList({
         <Text style={[styles.title, { color: tokens.ink }]}>
           Recent Transactions
         </Text>
-        {onViewAll && (
-          <TouchableOpacity onPress={onViewAll}>
-            <Text style={[styles.viewAll, { color: tokens.mint }]}>
-              View All
-            </Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       <View style={styles.list}>
         {transactions.map((tx) => (
-          <TouchableOpacity
+          <View
             key={tx.id}
-            onPress={() => onRetry(tx)}
             style={[
               styles.txCard,
               { backgroundColor: tokens.card, borderColor: tokens.border },
             ]}
-            activeOpacity={0.7}
           >
             <View style={styles.txLeft}>
               <View
@@ -121,10 +110,7 @@ export function RecentTransactionsList({
 
                 {onDispute && tx.status === "success" && (
                   <TouchableOpacity
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      onDispute(tx);
-                    }}
+                    onPress={() => onDispute(tx)}
                     style={styles.actionBtn}
                   >
                     <Ionicons
@@ -139,7 +125,7 @@ export function RecentTransactionsList({
                 )}
               </View>
             </View>
-          </TouchableOpacity>
+          </View>
         ))}
       </View>
     </View>

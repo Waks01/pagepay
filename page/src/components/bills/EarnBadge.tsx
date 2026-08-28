@@ -26,7 +26,7 @@ export function EarnBadge({ points, label }: EarnBadgeProps) {
     >
       <Ionicons name="gift-outline" size={14} color={tokens.mint} />
       <Text style={[styles.text, { color: tokens.mint }]}>
-        {label ? `${label} ` : ''}+{points} pts
+        {label ? `${label} ` : ''}+{points} sp
       </Text>
     </View>
   );

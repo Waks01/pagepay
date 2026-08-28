@@ -171,7 +171,7 @@ export function RewardedAd(props: RewardedAdProps) {
       return;
     }
 
-    if (Platform.OS === 'web' || !adUnit || !userId || !sessionId) {
+    if (Platform.OS === 'web' || !adUnit || !userId) {
       return;
     }
 

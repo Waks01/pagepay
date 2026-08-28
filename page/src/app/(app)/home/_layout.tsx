@@ -13,7 +13,6 @@ export default function HomeTabLayout() {
       <Stack.Screen name="buy-isp" />
       <Stack.Screen name="buy-education" />
       <Stack.Screen name="buy-sms" />
-      <Stack.Screen name="transactions" />
       <Stack.Screen name="bills-history" />
       <Stack.Screen name="beneficiaries" />
       <Stack.Screen name="payment-history" />

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   RefreshControl,
   Alert,
+  Platform,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,10 +16,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
-import { apiFetch } from "@/src/shared/api/client";
-import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import { useCurrentUser } from "@/src/shared/lib/current-user";
+import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
+import { RewardedAd } from "@/components/ads/RewardedAd";
 import { queryClient } from "@/src/shared/lib/queryClient";
 import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import {
   SectionCard,
   NetworkPicker,
@@ -115,6 +118,11 @@ export default function BuyAirtimeScreen() {
   const [applySvDiscountAmount, setApplySvDiscountAmount] = useState(0);
   const [showShortfallModal, setShowShortfallModal] = useState(false);
   const [shortfallSv, setShortfallSv] = useState(0);
+
+  // Ad modal state for earning SP via rewarded ads
+  const [showAdModal, setShowAdModal] = useState(false);
+  const adsConfigQ = useAdsConfig();
+  const user = useCurrentUser();
 
   const networksQ = useQuery({
     queryKey: ["airtime-networks"],
@@ -486,7 +494,7 @@ export default function BuyAirtimeScreen() {
               {t("bills.airtime.points_earned_label")}
             </Text>
             <Text style={[styles.summaryValue, { color: tokens.mint }]}>
-              +{successData.points_earned} pts
+              +{successData.points_earned} sp
             </Text>
           </View>
           <View style={[styles.divider, { backgroundColor: tokens.border }]} />
@@ -757,7 +765,6 @@ export default function BuyAirtimeScreen() {
           <RecentTransactionsList
             transactions={recentTxQ.data}
             onRetry={handleRetryTransaction}
-            onViewAll={() => router.push("/(app)/home/transactions/" as any)}
             onDispute={(tx) => {
               setDisputeTransaction({
                 reference: tx.id.toString(),
@@ -943,7 +950,7 @@ export default function BuyAirtimeScreen() {
                     ₦{a.toLocaleString()}
                   </Text>
                   <Text style={[styles.amountPoints, { color: tokens.mint }]}>
-                    +{Math.floor(a * 0.018 * 0.67 * 10)} pts
+                    +{Math.floor(a * 0.018 * 0.67 * 10)} sp
                   </Text>
                 </TouchableOpacity>
               );
@@ -974,10 +981,7 @@ export default function BuyAirtimeScreen() {
 
         {/* SV Discount Slider */}
         {finalAmount >= 25 && (
-          <View
-            onStartShouldSetResponderCapture={() => true}
-            onMoveShouldSetResponderCapture={() => true}
-          >
+          <View>
             <DiscountSlider
               productPriceKobo={finalAmount * 100}
               userServiceCreditBalance={userServiceCreditBalance}
@@ -986,12 +990,7 @@ export default function BuyAirtimeScreen() {
                 setApplySvDiscountAmount(svAmount);
               }}
               onWatchAds={() => {
-                // TODO: Navigate to ad watching screen or show ad modal
-                Alert.alert(
-                  "Watch Ads",
-                  "Watch ads to earn more Service Credits (SV) and get bigger discounts!",
-                  [{ text: "OK" }],
-                );
+                setShowAdModal(true);
               }}
             />
           </View>
@@ -1075,7 +1074,7 @@ export default function BuyAirtimeScreen() {
           onSuccess={(result) => {
             Alert.alert(
               "Bulk Purchase Complete",
-              `${result.total_successful} of ${result.total_successful + result.total_failed} purchases succeeded.\n\nTotal: ₦${result.total_amount.toLocaleString()}\nPoints Earned: ${result.total_points_earned}`,
+              `${result.total_successful} of ${result.total_successful + result.total_failed} purchases succeeded.\n\nTotal: ₦${result.total_amount.toLocaleString()}\nSP Earned: ${result.total_points_earned}`,
             );
             queryClient.invalidateQueries({ queryKey: ["me"] });
           }}
@@ -1113,12 +1112,44 @@ export default function BuyAirtimeScreen() {
           adsNeeded={Math.ceil(shortfallSv / 16)}
           onWatchAds={() => {
             setShowShortfallModal(false);
-            // TODO: Navigate to ad watching flow
-            // For now, just close the modal
+            setShowAdModal(true);
           }}
           onCancel={() => {
             setShowShortfallModal(false);
             setApplySvDiscountAmount(0);
+          }}
+        />
+
+        {/* Rewarded Ad Modal for earning SP */}
+        <RewardedAd
+          key="airtime-shortfall"
+          visible={showAdModal}
+          adUnit={
+            adsConfigQ.data?.rewarded_android ||
+            adsConfigQ.data?.rewarded_ios ||
+            ""
+          }
+          adUnitName={
+            Platform.OS === "android" ? "rewarded_android" : "rewarded_ios"
+          }
+          userId={user?.id ?? 0}
+          title={t("sv_discount.ad_title", "Watch Ad")}
+          body={t(
+            "sv_discount.ad_body",
+            "Watch this ad to earn service points",
+          )}
+          claimLabel={t("sv_discount.watch_ads", "Watch Ad")}
+          allowSkip
+          skipLabel={t("common.skip", "Skip")}
+          onClaimed={(_info) => {
+            setShowAdModal(false);
+            queryClient.invalidateQueries({ queryKey: ["me"] });
+          }}
+          onSkipped={() => {
+            setShowAdModal(false);
+          }}
+          onClose={() => {
+            setShowAdModal(false);
           }}
         />
       </ScrollView>

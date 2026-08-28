@@ -60,43 +60,10 @@ export default function FundWalletScreen() {
         await qc.refetchQueries({ queryKey: ["me"] });
         console.log("✅ [PAYMENT] User data refetched");
 
-        console.log("💰 [PAYMENT] Fetching transaction history...");
-        const txRes = await apiFetch("/api/v1/wallet/transactions?limit=1", {
-          method: "GET",
-        });
-        console.log(
-          "📥 [PAYMENT] Transaction API response status:",
-          txRes.status,
-        );
-
-        if (txRes.ok) {
-          const transactions = await txRes.json();
-          console.log("📋 [PAYMENT] Transactions received:", transactions);
-
-          if (transactions.length > 0) {
-            const latestTx = transactions[0];
-            const txDate = new Date(latestTx.date);
-            const secondsAgo = (new Date().getTime() - txDate.getTime()) / 1000;
-
-            console.log("🕐 [PAYMENT] Latest transaction:", {
-              id: latestTx.id,
-              type: latestTx.type,
-              points: latestTx.points,
-              secondsAgo: secondsAgo.toFixed(1),
-            });
-
-            if (secondsAgo < 60) {
-              console.log(
-                "✅ [PAYMENT] Payment CONFIRMED! Recent transaction found",
-              );
-              return true;
-            }
-            console.log("⏰ [PAYMENT] Transaction too old, continuing...");
-          } else {
-            console.log("❌ [PAYMENT] No transactions found yet");
-          }
-        } else {
-          console.error("❌ [PAYMENT] Transaction API error:", txRes.status);
+        const me = useCurrentUserStore.getState().user;
+        if (me) {
+          console.log("✅ [PAYMENT] User data refreshed after deposit");
+          return true;
         }
 
         if (attempts < 10) {

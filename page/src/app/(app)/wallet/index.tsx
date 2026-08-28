@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   RefreshControl,
   ActivityIndicator,
   StyleSheet,
@@ -42,17 +42,8 @@ import {
 } from "@/components/LinkPayoutAccountModal";
 import {
   SkeletonBalanceCard,
-  SkeletonTransactionRow,
 } from "@/components/skeletons";
 import { NativeAdBanner } from "@/components/ads/NativeAdBanner";
-
-type Transaction = {
-  id: number;
-  type: "earn" | "pending" | "bonus";
-  points: number;
-  description: string;
-  date: string;
-};
 
 type WithdrawalRecord = {
   reference: string;
@@ -155,15 +146,6 @@ export default function WalletScreen() {
   const meQ = useCurrentUser();
   const userLoading = useCurrentUser((s) => !s.loaded);
 
-  const txQ = useQuery({
-    queryKey: ["wallet", "transactions"],
-    queryFn: async () => {
-      const res = await apiFetch("/api/v1/wallet/transactions?limit=10");
-      if (!res.ok) throw new Error("Failed to load transactions");
-      return (await res.json()) as Transaction[];
-    },
-  });
-
   const pinStatusQ = useQuery({
     queryKey: ["pin", "status"],
     queryFn: async () => {
@@ -208,7 +190,6 @@ export default function WalletScreen() {
     (_resp: WithdrawalResponse) => {
       void qc.invalidateQueries({ queryKey: ["me"] });
       void qc.invalidateQueries({ queryKey: ["payouts", "transactions"] });
-      void qc.invalidateQueries({ queryKey: ["wallet", "transactions"] });
     },
     [qc],
   );
@@ -221,7 +202,6 @@ export default function WalletScreen() {
     const key = tier as "free" | "premium_monthly" | "premium_yearly";
     return t(`wallet.tier.${key}`, { defaultValue: tier });
   };
-  const transactions = txQ.data ?? [];
   const withdrawals = withdrawalsQ.data ?? [];
   const belowMin = cashableBalance < MIN_WITHDRAWAL_POINTS;
 
@@ -231,7 +211,6 @@ export default function WalletScreen() {
     // doesn't know about the store). The other wallet queries below
     // are still TanStack-Query-managed and use invalidation.
     void useCurrentUserStore.getState().refresh();
-    qc.invalidateQueries({ queryKey: ["wallet", "transactions"] });
     qc.invalidateQueries({ queryKey: ["payout", "account"] });
     qc.invalidateQueries({ queryKey: ["payouts", "transactions"] });
     qc.invalidateQueries({ queryKey: ["payments", "history"] });
@@ -264,26 +243,11 @@ export default function WalletScreen() {
 
   const handleLinkClose = useCallback(() => {
     setShowLink(false);
-    // If the user backed out of the link flow, drop the pending intent
-    // so a future visit to Wallet doesn't auto-open Withdraw.
-    setPendingWithdraw(false);
-  }, []);
-
-  const combinedItems: ListItem[] = [];
-  for (const t of transactions)
-    combinedItems.push({ kind: "session", data: t });
-  for (const p of paymentsQ.data ?? [])
-    combinedItems.push({ kind: "payment", data: p });
-  for (const w of withdrawals)
-    combinedItems.push({ kind: "withdrawal", data: w });
-  combinedItems.sort((a, b) => {
-    const da = a.kind === "session" ? a.data.date : (a.data.created_at ?? "");
-    const db = b.kind === "session" ? b.data.date : (b.data.created_at ?? "");
-    return db.localeCompare(da);
-  });
-
-  // Limit to first 10 transactions for wallet overview
-  const limitedItems = combinedItems.slice(0, 10);
+    if (pendingWithdraw) {
+      setPendingWithdraw(false);
+      setShowLink(false);
+    }
+  }, [pendingWithdraw]);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.paper }}>
@@ -310,364 +274,231 @@ export default function WalletScreen() {
           <NotificationBell />
         </View>
       </View>
-      <FlatList
-        data={limitedItems}
-        keyExtractor={(item, index) => {
-          if (item.kind === "session") return `s-${item.data.id}`;
-          if (item.kind === "payment") return `p-${item.data.id}-${index}`;
-          return `w-${item.data.reference}-${index}`;
-        }}
+      <ScrollView
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 48 }}
         refreshControl={
           <RefreshControl
-            refreshing={txQ.isFetching || paymentsQ.isFetching}
+            refreshing={false}
             onRefresh={onRefresh}
             tintColor={c.mint}
           />
         }
-        ListHeaderComponent={
-          <View>
-            {/* One-time welcome bonus banner — appears after a fresh
-                signup+verification lands on this tab. Driven by the
-                `welcomeBonus` route param set by verify-email-code.tsx.
-                `welcomeNaira` is computed from EXPO_PUBLIC_POINTS_PER_NAIRA
-                via pointsToNairaString so the value is in lockstep with
-                the backend at POINTS_PER_NAIRA env var. */}
-            {welcomeBonus > 0 ? (
-              <View
-                style={{
-                  backgroundColor: c.mintSoft,
-                  borderColor: c.mint,
-                  borderWidth: 1,
-                  borderRadius: 14,
-                  padding: 16,
-                  marginBottom: 16,
-                  gap: 8,
-                }}
-              >
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-                >
-                  <Ionicons name="gift" size={22} color={c.mint} />
-                  <Text
-                    style={{
-                      fontFamily: Fonts.display,
-                      fontSize: 16,
-                      color: c.ink,
-                      flex: 1,
-                    }}
-                  >
-                    {t("verify_email.welcome_title")}
-                  </Text>
-                </View>
-                <Text
-                  style={{ fontSize: 14, color: c.inkMuted, lineHeight: 20 }}
-                >
-                  {t("verify_email.welcome_bonus", {
-                    points: welcomeBonus.toLocaleString(),
-                    naira: pointsToNairaString(welcomeBonus).replace(/^₦/, ""),
-                  })}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Balance card */}
+      >
+        {/* One-time welcome bonus banner */}
+        {welcomeBonus > 0 ? (
+          <View
+            style={{
+              backgroundColor: c.mintSoft,
+              borderColor: c.mint,
+              borderWidth: 1,
+              borderRadius: 14,
+              padding: 16,
+              marginBottom: 16,
+              gap: 8,
+            }}
+          >
             <View
-              style={{
-                backgroundColor: c.card,
-                borderRadius: 20,
-                padding: 28,
-                borderWidth: 1,
-                borderColor: c.border,
-                marginBottom: 16,
-              }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: c.inkMuted,
-                  letterSpacing: 1.4,
-                  textTransform: "uppercase",
-                  marginBottom: 8,
-                }}
-              >
-                {t("wallet.balance_label")}
-              </Text>
-              {userLoading ? (
-                <SkeletonBalanceCard />
-              ) : (
-                <View style={{ gap: 6 }}>
-                  <View style={{ flexDirection: "row", gap: 12 }}>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          color: c.inkMuted,
-                          textTransform: "uppercase",
-                          letterSpacing: 1.2,
-                          marginBottom: 4,
-                        }}
-                      >
-                        {t("wallet.service_credits_label")}
-                      </Text>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "baseline",
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontFamily: Fonts.display,
-                            fontSize: 32,
-                            color: c.ink,
-                            lineHeight: 36,
-                          }}
-                        >
-                          {formatPoints(serviceCreditBalance)}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color: c.inkMuted,
-                            marginLeft: 4,
-                            fontWeight: "600",
-                          }}
-                        >
-                          {t("wallet.points_suffix")}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          color: c.inkMuted,
-                          textTransform: "uppercase",
-                          letterSpacing: 1.2,
-                          marginBottom: 4,
-                        }}
-                      >
-                        {t("wallet.cashable_label")}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: Fonts.display,
-                          fontSize: 32,
-                          color: c.mint,
-                          lineHeight: 36,
-                        }}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.7}
-                      >
-                        {pointsToNairaString(cashableBalance)}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              )}
-              <View
-                style={{
-                  height: 1,
-                  backgroundColor: c.border,
-                  marginVertical: 16,
-                }}
-              />
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <Text style={{ fontSize: 13, color: c.inkMuted }}>
-                  {getTierLabel(tier)}
-                </Text>
-                {tier !== "free" && (
-                  <View
-                    style={{
-                      backgroundColor: c.mint,
-                      borderRadius: 12,
-                      paddingHorizontal: 10,
-                      paddingVertical: 2,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        color: c.mintText,
-                        fontWeight: "700",
-                        letterSpacing: 0.3,
-                      }}
-                    >
-                      PREMIUM
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {userLoading || payoutQ.isLoading ? (
-                <ActivityIndicator
-                  color={c.mint}
-                  style={{ alignSelf: "flex-start" }}
-                />
-              ) : (
-                <View style={{ gap: 10 }}>
-                  {/* Fund Wallet Button */}
-                  <PrimaryButton
-                    title={t("wallet.fund_wallet")}
-                    onPress={() => router.push("/fund-wallet")}
-                  />
-
-                  {/* Withdraw Button */}
-                  {belowMin ? (
-                    <View style={{ gap: 4 }}>
-                      <PrimaryButton
-                        title={t("wallet.withdraw")}
-                        onPress={handleWithdrawPress}
-                        disabled
-                      />
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color: c.inkMuted,
-                          textAlign: "center",
-                        }}
-                      >
-                        {t("wallet.min_withdraw")}
-                      </Text>
-                    </View>
-                  ) : (
-                    <PrimaryButton
-                      title={t("wallet.withdraw")}
-                      onPress={handleWithdrawPress}
-                    />
-                  )}
-                </View>
-              )}
-            </View>
-
-            {/* Section title */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: Fonts.display,
-                  fontSize: 18,
-                  color: c.ink,
-                  marginTop: 16,
-                  marginBottom: 12,
-                  letterSpacing: -0.3,
-                }}
-              >
-                {t("wallet.history_title")}
-              </Text>
-              <TouchableOpacity
-                onPress={() => router.push("/home/transactions")}
-                hitSlop={8}
-              >
-                <Text
-                  style={{
-                    color: c.mint,
-                    fontFamily: "SpaceGrotesk_700Bold",
-                    fontSize: 13,
-                  }}
-                >
-                  {t("wallet.view_all")}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        }
-        renderItem={({ item, index }) => {
-          // Inject native ad every 4th transaction
-          const shouldShowAd = (index + 1) % 4 === 0 && nativeAdUnit;
-
-          const handlePress = () => {
-            const serialized = JSON.stringify(item);
-            const txType =
-              item.kind === "withdrawal"
-                ? "withdrawal"
-                : item.kind === "payment"
-                  ? "payment"
-                  : "session";
-            const txId =
-              item.kind === "withdrawal"
-                ? item.data.reference
-                : String(item.data.id);
-            router.push({
-              pathname: "/(app)/wallet/[id]",
-              params: {
-                id: txId,
-                kind: txType,
-                item: serialized,
-              },
-            });
-          };
-
-          return (
-            <View>
-              {item.kind === "withdrawal" ? (
-                <WithdrawalRow
-                  row={item.data}
-                  tokens={c}
-                  onPress={handlePress}
-                />
-              ) : item.kind === "payment" ? (
-                <PaymentRow item={item.data} tokens={c} onPress={handlePress} />
-              ) : (
-                <SessionRow item={item.data} tokens={c} onPress={handlePress} />
-              )}
-              {shouldShowAd && (
-                <NativeAdBanner adUnit={nativeAdUnit} sessionId={null} />
-              )}
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          txQ.isLoading || withdrawalsQ.isLoading || paymentsQ.isLoading ? (
-            <View>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <SkeletonTransactionRow key={i} />
-              ))}
-            </View>
-          ) : (
-            <View
-              style={{
-                backgroundColor: c.card,
-                borderRadius: 14,
-                padding: 28,
-                borderWidth: 1,
-                borderColor: c.border,
-                alignItems: "center",
-              }}
-            >
+              <Ionicons name="gift" size={22} color={c.mint} />
               <Text
                 style={{
                   fontFamily: Fonts.display,
                   fontSize: 16,
                   color: c.ink,
-                  marginBottom: 4,
+                  flex: 1,
                 }}
               >
-                {t("wallet.no_transactions")}
-              </Text>
-              <Text
-                style={{ fontSize: 13, color: c.inkMuted, textAlign: "center" }}
-              >
-                {t("wallet.no_transactions_hint")}
+                {t("verify_email.welcome_title")}
               </Text>
             </View>
-          )
-        }
-      />
+            <Text style={{ fontSize: 14, color: c.inkMuted, lineHeight: 20 }}>
+              {t("verify_email.welcome_bonus", {
+                points: welcomeBonus.toLocaleString(),
+                naira: pointsToNairaString(welcomeBonus).replace(/^₦/, ""),
+              })}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Balance card */}
+        <View
+          style={{
+            backgroundColor: c.card,
+            borderRadius: 20,
+            padding: 28,
+            borderWidth: 1,
+            borderColor: c.border,
+            marginBottom: 16,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 11,
+              color: c.inkMuted,
+              letterSpacing: 1.4,
+              textTransform: "uppercase",
+              marginBottom: 8,
+            }}
+          >
+            {t("wallet.balance_label")}
+          </Text>
+          {userLoading ? (
+            <SkeletonBalanceCard />
+          ) : (
+            <View style={{ gap: 6 }}>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: c.inkMuted,
+                      textTransform: "uppercase",
+                      letterSpacing: 1.2,
+                      marginBottom: 4,
+                    }}
+                  >
+                    {t("wallet.service_credits_label")}
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "baseline",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: Fonts.display,
+                        fontSize: 32,
+                        color: c.ink,
+                        lineHeight: 36,
+                      }}
+                    >
+                      {formatPoints(serviceCreditBalance)}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: c.inkMuted,
+                        marginLeft: 4,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {t("wallet.points_suffix")}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: c.inkMuted,
+                      textTransform: "uppercase",
+                      letterSpacing: 1.2,
+                      marginBottom: 4,
+                    }}
+                  >
+                    {t("wallet.cashable_label")}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: Fonts.display,
+                      fontSize: 32,
+                      color: c.mint,
+                      lineHeight: 36,
+                    }}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >
+                    {pointsToNairaString(cashableBalance)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+          <View
+            style={{
+              height: 1,
+              backgroundColor: c.border,
+              marginVertical: 16,
+            }}
+          />
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Text style={{ fontSize: 13, color: c.inkMuted }}>
+              {getTierLabel(tier)}
+            </Text>
+            {tier !== "free" && (
+              <View
+                style={{
+                  backgroundColor: c.mint,
+                  borderRadius: 12,
+                  paddingHorizontal: 10,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: c.mintText,
+                    fontWeight: "700",
+                    letterSpacing: 0.3,
+                  }}
+                >
+                  PREMIUM
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {userLoading || payoutQ.isLoading ? (
+            <ActivityIndicator
+              color={c.mint}
+              style={{ alignSelf: "flex-start" }}
+            />
+          ) : (
+            <View style={{ gap: 10 }}>
+              {/* Fund Wallet Button */}
+              <PrimaryButton
+                title={t("wallet.fund_wallet")}
+                onPress={() => router.push("/fund-wallet")}
+              />
+
+              {/* Withdraw Button */}
+              {belowMin ? (
+                <View style={{ gap: 4 }}>
+                  <PrimaryButton
+                    title={t("wallet.withdraw")}
+                    onPress={handleWithdrawPress}
+                    disabled
+                  />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: c.inkMuted,
+                      textAlign: "center",
+                    }}
+                  >
+                    {t("wallet.min_withdraw")}
+                  </Text>
+                </View>
+              ) : (
+                <PrimaryButton
+                  title={t("wallet.withdraw")}
+                  onPress={handleWithdrawPress}
+                />
+              )}
+            </View>
+          )}
+        </View>
+      </ScrollView>
 
       <WithdrawModal
         visible={showWithdraw}
@@ -691,291 +522,6 @@ export default function WalletScreen() {
         }}
       />
     </View>
-  );
-}
-
-// ── Row components ──────────────────────────────────────────────────
-
-type ListItem =
-  | { kind: "session"; data: Transaction }
-  | { kind: "payment"; data: PaymentRecord }
-  | { kind: "withdrawal"; data: WithdrawalRecord };
-
-function PaymentRow({
-  item,
-  tokens,
-  onPress,
-}: {
-  item: PaymentRecord;
-  tokens: (typeof PagePay)["light"];
-  onPress?: () => void;
-}) {
-  const { t } = useTranslation();
-  const isSuccess = item.status === "success";
-  const isPending = item.status === "pending";
-  const isFailed = item.status === "failed";
-
-  const iconName = isSuccess
-    ? "checkmark-circle"
-    : isPending
-      ? "time"
-      : "close-circle";
-  const iconColor = isSuccess
-    ? tokens.mint
-    : isPending
-      ? tokens.inkMuted
-      : tokens.signal;
-
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-      <View
-        style={[
-          rowStyles.row,
-          { backgroundColor: tokens.card, borderColor: tokens.border },
-        ]}
-      >
-        <View
-          style={[
-            rowStyles.icon,
-            {
-              backgroundColor: isSuccess ? tokens.mintSoft : tokens.mintSoft,
-            },
-          ]}
-        >
-          <Ionicons name={iconName as any} size={16} color={iconColor} />
-        </View>
-        <View style={{ flex: 1, marginRight: 12 }}>
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "500",
-              color: tokens.ink,
-              marginBottom: 2,
-            }}
-            numberOfLines={1}
-          >
-            {item.tier_name}
-          </Text>
-          <Text style={{ fontSize: 12, color: tokens.inkMuted }}>
-            {formatDate(item.created_at)}
-          </Text>
-        </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text
-            style={{
-              fontSize: 15,
-              fontWeight: "600",
-              color: isSuccess
-                ? tokens.mint
-                : isPending
-                  ? tokens.inkMuted
-                  : tokens.signal,
-            }}
-          >
-            {isSuccess ? "+" : ""}₦{item.amount_naira.toLocaleString()}
-          </Text>
-          {isPending ? (
-            <Text
-              style={{
-                fontSize: 10,
-                color: tokens.inkMuted,
-                letterSpacing: 1,
-                textTransform: "uppercase",
-                marginTop: 2,
-              }}
-            >
-              {t("wallet.status_pending")}
-            </Text>
-          ) : null}
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function SessionRow({
-  item,
-  tokens,
-  onPress,
-}: {
-  item: Transaction;
-  tokens: (typeof PagePay)["light"];
-  onPress?: () => void;
-}) {
-  const { t } = useTranslation();
-
-  const showPending = item.type === "pending" && item.points > 0;
-  const isEarn = item.type === "earn";
-
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-      <View
-        style={[
-          rowStyles.row,
-          { backgroundColor: tokens.card, borderColor: tokens.border },
-        ]}
-      >
-        <View
-          style={[
-            rowStyles.icon,
-            {
-              backgroundColor: tokens.mintSoft,
-            },
-          ]}
-        >
-          <Ionicons name="book-outline" size={16} color={tokens.mint} />
-        </View>
-        <View style={{ flex: 1, marginRight: 12 }}>
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "500",
-              color: tokens.ink,
-              marginBottom: 2,
-            }}
-            numberOfLines={1}
-          >
-            {item.description}
-          </Text>
-          <Text style={{ fontSize: 12, color: tokens.inkMuted }}>
-            {formatDate(item.date)}
-          </Text>
-        </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text
-            style={{
-              fontSize: 15,
-              fontWeight: "600",
-              color: showPending
-                ? tokens.signal
-                : isEarn
-                  ? tokens.mint
-                  : tokens.inkMuted,
-            }}
-          >
-            {item.points > 0 ? "+" : ""}
-            {item.points} {t("wallet.points_suffix")}
-          </Text>
-          {showPending ? (
-            <Text
-              style={{
-                fontSize: 10,
-                color: tokens.inkMuted,
-                letterSpacing: 1,
-                textTransform: "uppercase",
-                marginTop: 2,
-              }}
-            >
-              {t("wallet.session_pending")}
-            </Text>
-          ) : null}
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function WithdrawalRow({
-  row,
-  tokens,
-  onPress,
-}: {
-  row: WithdrawalRecord;
-  tokens: (typeof PagePay)["light"];
-  onPress?: () => void;
-}) {
-  const { t } = useTranslation();
-
-  const isPending = row.status === "pending";
-  const isSuccess = row.status === "success";
-  const isFailed = row.status === "failed";
-
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-      <View
-        style={[
-          rowStyles.row,
-          { backgroundColor: tokens.card, borderColor: tokens.border },
-        ]}
-      >
-        <View
-          style={[
-            rowStyles.icon,
-            {
-              backgroundColor: isFailed ? tokens.signalSoft : tokens.mintSoft,
-            },
-          ]}
-        >
-          <Ionicons
-            name={
-              isFailed
-                ? "alert-circle"
-                : isSuccess
-                  ? "checkmark-circle"
-                  : "paper-plane"
-            }
-            size={16}
-            color={isFailed ? tokens.signal : tokens.mint}
-          />
-        </View>
-        <View style={{ flex: 1, marginRight: 12 }}>
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "500",
-              color: tokens.ink,
-              marginBottom: 2,
-            }}
-            numberOfLines={1}
-          >
-            {isFailed
-              ? t("wallet.withdrawal_failed")
-              : isPending
-                ? t("wallet.withdrawal_pending")
-                : t("wallet.withdrawal_success")}
-          </Text>
-          <Text style={{ fontSize: 12, color: tokens.inkMuted }}>
-            {formatDate(row.settled_at ?? row.created_at)}
-          </Text>
-        </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text
-            style={{
-              fontSize: 15,
-              fontWeight: "600",
-              color: isFailed ? tokens.signal : tokens.mint,
-            }}
-          >
-            −{formatPoints(row.amount_kobo)} {t("wallet.points_suffix")}
-          </Text>
-          {row.fee_kobo > 0 ? (
-            <Text
-              style={{
-                fontSize: 10,
-                color: tokens.inkMuted,
-                letterSpacing: 0.4,
-                marginTop: 2,
-              }}
-            >
-              {t("wallet.fee_label", { amount: formatKobo(row.fee_kobo) })}
-            </Text>
-          ) : null}
-          {isPending ? (
-            <Text
-              style={{
-                fontSize: 10,
-                color: tokens.inkMuted,
-                letterSpacing: 1,
-                textTransform: "uppercase",
-                marginTop: 2,
-              }}
-            >
-              {t("wallet.session_pending")}
-            </Text>
-          ) : null}
-        </View>
-      </View>
-    </TouchableOpacity>
   );
 }
 
