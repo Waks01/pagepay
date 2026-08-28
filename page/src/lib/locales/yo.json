@@ -317,7 +317,8 @@
                                         "submitting":  "\\u0143 fi s\\u00fan...",
                                         "score":  "Am\\u00ec: {{percent}}%",
                                         "section_flashcard":  "Kaadi \\u00ecr\\u00e1nt\\u00ed",
-                                        "section_video":  "Aw\\u1ecdn \\u1eb8k\\u1ecd F\\u00edd\\u00ed\\u00f2"
+                                        "section_video":  "Aw\\u1ecdn \\u1eb8k\\u1ecd F\\u00edd\\u00ed\\u00f2",
+                                        "bookmarked":  "A f\\u1ecdr\\u1ecd ami"
                                     },
                   "sow_upload":  {
                                      "input_hint":  "T\\u1eb9 tabi l\\u1eb9 \\u1ecdr\\u1ecd eto i\\u1e63\\u1eb9 r\\u1eb9",
@@ -348,8 +349,68 @@
                                      "doc_a11y":  "Gbe iwe (PDF tabi Word)",
                                      "processing":  "\\u0143 \\u1e63i\\u1e63\\u1eb9 {{percent}}%",
                                      "char_exceeds":  "(k\\u1ecdj\\u00e1 \\u00ecl\\u00e0)",
-                                     "success":  "Gbigbe y\\u1ecdr\\u00ed s\\u00ed \\u00ect\\u1eb9\\u0301l\\u00e9ra!"
-                                 }
+                                     "success":  "Gbigbe y\\u1ecdr\\u00ed s\\u00ed \\u00ect\\u1eb9\\u0301l\\u00e9ra!",
+                                     "exam_type_custom":  "A\\u1e63a"
+                                 },
+                  "materials_count_one":  "{{count}} ohun elo",
+                  "materials_count_other":  "{{count}} ohun elo",
+                  "active_count_one":  "{{count}} ti n\\u1e63i\\u1e63\\u1eb9",
+                  "active_count_other":  "{{count}} ti n\\u1e63i\\u1e63\\u1eb9",
+                  "assets_generated_other":  "{{count}} ohun elo ti \\u1e63\\u1eb9da",
+                  "srs":  {
+                              "no_cards_today":  "Ko si kaadi l\\u1ecdn\\u00ec. T\\u1eb9siwaju!",
+                              "due_for_review":  "\\u00c0y\\u1eb9\\u0300w\\u00f2 on\\u00ec",
+                              "cards_ready_one":  "{{count}} kaadi ti o p\\u1eb9\\u0300s\\u1eb9",
+                              "title":  "\\u00c0y\\u1eb9\\u0300w\\u00f2 Akoko",
+                              "loading_review_data":  "\\u0143 koj\\u1ecd d\\u00e0t\\u00e0 \\u00e0y\\u1eb9\\u0300w\\u00f2\\u2026",
+                              "cards_ready_other":  "{{count}} kaadi ti o p\\u1eb9\\u0300s\\u1eb9",
+                              "all_caught_up":  "A ti pari gbogbo",
+                              "due_today":  "Ti on\\u00ec",
+                              "reviews_label":  "{{count}} \\u00e0y\\u1eb9\\u0300w\\u00f2 \\u00b7 {{percent}}% aá¹£eyá»ri",
+                              "loading":  "\\u0143 koj\\u1ecd\\u2026",
+                              "learning":  "\\u0143 k\\u1ecd",
+                              "mastered":  "Ti K\\u1ecd",
+                              "box_label":  "Apoti {{n}}"
+                          },
+                  "exam_mode":  {
+                                    "you_passed":  "O k\\u1ecdja!",
+                                    "pick_exam_type":  "Yan iru idanwo",
+                                    "preparing_exam":  "\\u0143 p\\u1eb9\\u0300s\\u1eb9 fun idanwo\\u2026",
+                                    "exit_exam":  "J\\u1ecd kuro ninu idanwo",
+                                    "dismiss":  "Pa \\u00e1",
+                                    "almost_there":  "O sunm\\u1ecd.",
+                                    "wrong":  "A\\u1e63i\\u1e63e",
+                                    "retry":  "Gb\\u00ecy\\u00e0nj\\u00fa l\\u1eb9\\u0301\\u1eb9\\u0300k\\u00e0ns\\u00ed",
+                                    "total":  "\\u00c0pap\\u1ecd",
+                                    "choose_material":  "Yan ohun elo",
+                                    "done":  "Pari",
+                                    "title":  "Ipo Idanwo",
+                                    "subtitle":  "Idanwo akoko, a á¹£e iá¹£iro laifetiti",
+                                    "next":  "Ti nb\\u1ecd",
+                                    "previous":  "Ti t\\u1ecdl\\u1eb9",
+                                    "back_to_setup":  "Pada s\\u00ed \\u1eb8\\u0300t\\u1ecd",
+                                    "pass_requirement":  "A n\\u00e0 be\\u1eb9 60% l\\u1ecd\\u0301 k\\u1ecdja \\u00b7 akoko, áº¹yá»kan",
+                                    "final_score":  "AM\\u00cc IK\\u1eb8Y\\u1eb8N",
+                                    "start_exam":  "B\\u1eb9r\\u1eb9 Idanwo",
+                                    "correct":  "T\\u1ecd\\u1ecd",
+                                    "submit":  "Fi s\\u00fan",
+                                    "exam_result":  "\\u00c8b\\u00e8t Idanwo"
+                                },
+                  "tts":  {
+                              "pause":  "D\\u1ecbr\\u1ecd w\\u00e0\\u00e0l",
+                              "listen":  "T\\u1eb9t\\u00ed s\\u1ecd\\u1ecdr\\u1ecd"
+                          },
+                  "audio_unlock":  {
+                                       "hint":  "Wo ipolongo ti a sanwo tabi lo kir\\u1eb9di i\\u1e63\\u1eb9 lati \\u1e63i ohun lailai.",
+                                       "cta":  "\\u1e62i Ohun",
+                                       "unlocked_title":  "A \\u1e62i Ohun",
+                                       "cost_sub":  "~{{count}} ipolongo",
+                                       "unlocked_body":  "O l\\u1ecd wo ohun elo yii nigbakugba b\\u00e1y\\u00ec\\u00ec.",
+                                       "cost_label":  "Iye \\u1e63iá¹£e",
+                                       "unlocking":  "\\u0143 \\u1e63i...",
+                                       "title":  "\\u1e62i Ohun",
+                                       "slider_label":  "Ipolongo to baamu"
+                                   }
               },
     "auth":  {
                  "login":  {

@@ -148,6 +148,8 @@ export default function StudyScreen() {
   );
   const studySessionIdRef = useRef<number | null>(null);
   const [examType, setExamType] = useState<string | null>(null);
+  const [materialLoading, setMaterialLoading] = useState(false);
+  const materialFetchIdRef = useRef(0);
   const [generateMode, setGenerateMode] = useState<"topic" | "all">("all");
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [generateCount, setGenerateCount] = useState<number>(15);
@@ -614,28 +616,62 @@ export default function StudyScreen() {
   };
 
   const handleMaterialPress = async (materialId: number) => {
-    setSelectedMaterialId(materialId);
-    const res = await apiFetch(`/api/v1/study/materials/${materialId}`);
-    if (res.ok) {
-      const materialData = await res.json();
-      setSelectedMaterial(materialData);
+    // De-dup: tapping the already-open material is a no-op.
+    if (
+      selectedMaterialId === materialId &&
+      selectedMaterial?.id === materialId
+    ) {
+      return;
+    }
 
-      // Load already unlocked assets from backend response
-      const unlockedFromBackend: Record<number, unknown> = {};
-      for (const asset of materialData.assets) {
-        if (asset.unlocked && asset.content) {
-          unlockedFromBackend[asset.id] = asset.content;
+    setError(null);
+    setRetryAction(null);
+    setSelectedMaterialId(materialId);
+    setMaterialLoading(true);
+
+    // Token incremented on every fetch; the resolver checks the token and
+    // bails out if a newer fetch has started. Prevents late responses from
+    // clobbering the current material.
+    const fetchId = ++materialFetchIdRef.current;
+
+    try {
+      const res = await apiFetch(`/api/v1/study/materials/${materialId}`);
+      if (fetchId !== materialFetchIdRef.current) return;
+      if (res.ok) {
+        const materialData = (await res.json()) as MaterialDetail;
+        if (fetchId !== materialFetchIdRef.current) return;
+
+        setSelectedMaterial(materialData);
+
+        const unlockedFromBackend: Record<number, unknown> = {};
+        for (const asset of materialData.assets) {
+          if (asset.unlocked && (asset as AssetInfo & { content?: unknown }).content) {
+            unlockedFromBackend[asset.id] = (asset as AssetInfo & { content?: unknown }).content;
+          }
         }
+        setUnlockedAssets(unlockedFromBackend);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        if (fetchId !== materialFetchIdRef.current) return;
+        setSelectedMaterial(null);
+        const message =
+          typeof data?.detail === "string"
+            ? data.detail
+            : "Failed to load material.";
+        const specific = categorizeError(message, "load material", t);
+        setError(specific);
+        setRetryAction(() => () => handleMaterialPress(materialId));
       }
-      setUnlockedAssets(unlockedFromBackend);
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setSelectedMaterial(null);
-      setError(
-        typeof data?.detail === "string"
-          ? data.detail
-          : "Failed to load material.",
-      );
+    } catch (err) {
+      if (fetchId !== materialFetchIdRef.current) return;
+      const message = err instanceof Error ? err.message : "Failed to load material.";
+      const specific = categorizeError(message, "load material", t);
+      setError(specific);
+      setRetryAction(() => () => handleMaterialPress(materialId));
+    } finally {
+      if (fetchId === materialFetchIdRef.current) {
+        setMaterialLoading(false);
+      }
     }
   };
 
@@ -653,20 +689,42 @@ export default function StudyScreen() {
       edges={["top"]}
       style={{ flex: 1, backgroundColor: tokens.paper }}
     >
-      {selectedMaterial ? (
+      {selectedMaterialId != null ? (
         <PageHeader
-          title={selectedMaterial.title}
-          subtitle={t("study.assets_generated", { count: totalAssets })}
+          title={
+            selectedMaterial?.title ?? t("study.loading_material_title")
+          }
+          subtitle={
+            selectedMaterial
+              ? t("study.assets_generated", { count: totalAssets })
+              : t("study.loading_material_subtitle")
+          }
           showBack
           onBack={handleBack}
           backgroundColor={tokens.card}
           borderBottomColor={tokens.border}
           tokens={tokens}
-          left={<UserAvatar size={28} />}
+          left={
+            <View style={styles.headerLeft}>
+              <Pressable
+                onPress={handleBack}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t("common.back")}
+                style={({ pressed }) => [
+                  styles.headerBackBtn,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
+              >
+                <Ionicons name="chevron-back" size={22} color={tokens.ink} />
+              </Pressable>
+              <UserAvatar size={28} />
+            </View>
+          }
           right={
             <View style={styles.headerRight}>
               <Pressable
-                onPress={() => handleChatPress(selectedMaterial.id)}
+                onPress={() => handleChatPress(selectedMaterialId)}
                 accessibilityRole="button"
                 accessibilityLabel={t("study.chat_ai")}
                 style={({ pressed }) => [
@@ -877,7 +935,17 @@ export default function StudyScreen() {
           </Animated.View>
         )}
 
-        {selectedMaterial ? (
+        {selectedMaterialId != null && !selectedMaterial ? (
+          <View
+            style={[styles.stateBlock, { borderColor: tokens.border }]}
+            accessibilityLabel={t("study.loading_material_a11y")}
+          >
+            <PagePaySpinner size={32} />
+            <Text style={[styles.stateText, { color: tokens.inkMuted }]}>
+              {t("study.loading_material_title")}
+            </Text>
+          </View>
+        ) : selectedMaterial ? (
           <View style={styles.detailView}>
             {selectedMaterial.parsed_structure && (
               <Animated.View
@@ -1619,6 +1687,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
   },
   detailHero: {
     borderRadius: 14,

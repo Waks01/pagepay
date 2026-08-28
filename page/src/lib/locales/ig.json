@@ -317,7 +317,8 @@
                                         "submitting":  "Na- nyefe...",
                                         "score":  "Akara: {{percent}}%",
                                         "section_flashcard":  "Kaad\\u1ecb \\u1ecdm\\u1ee5m\\u1ee5",
-                                        "section_video":  "Ihe \\u1ecdm\\u1ee5m\\u1ee5 Vidio"
+                                        "section_video":  "Ihe \\u1ecdm\\u1ee5m\\u1ee5 Vidio",
+                                        "bookmarked":  "Ebe akara"
                                     },
                   "sow_upload":  {
                                      "input_hint":  "Tinye ma \\u1ecd b\\u1ee5 mado ederede at\\u1ee5mat\\u1ee5 \\u1ecdm\\u1ee5m\\u1ee5 g\\u1ecb",
@@ -348,8 +349,68 @@
                                      "doc_a11y":  "Bulite akw\\u1ee5kw\\u1ecd (PDF ma \\u1ecd b\\u1ee5 Word)",
                                      "processing":  "Na-ahazi {{percent}}%",
                                      "char_exceeds":  "(kar\\u1ecbr\\u1ecb oke)",
-                                     "success":  "Bulite gara nke \\u1ecdma!"
-                                 }
+                                     "success":  "Bulite gara nke \\u1ecdma!",
+                                     "exam_type_custom":  "Omenala"
+                                 },
+                  "materials_count_one":  "{{count}} ihe",
+                  "materials_count_other":  "{{count}} ihe",
+                  "active_count_one":  "{{count}} na-ar\\u1ee5",
+                  "active_count_other":  "{{count}} na-ar\\u1ee5",
+                  "assets_generated_other":  "{{count}} ihe emep\\u1ee5tara",
+                  "srs":  {
+                              "no_cards_today":  "Enwegh\\u1ecb kaad\\u1ecb taa. Gaa n\\u1ecd nke oma!",
+                              "due_for_review":  "Nyocha Taa",
+                              "cards_ready_one":  "{{count}} kaad\\u1ecb d\\u1ecb njikere",
+                              "title":  "Nyocha Nka Ugbu a",
+                              "loading_review_data":  "Na-ebugo data nyocha\\u2026",
+                              "cards_ready_other":  "{{count}} kaad\\u1ecb d\\u1ecb njikere",
+                              "all_caught_up":  "Agw\\u1ee5la ihe niile",
+                              "due_today":  "Taa",
+                              "reviews_label":  "{{count}} nyocha \\u00b7 {{percent}}% ihe ga nke oma",
+                              "loading":  "Na-ebugo\\u2026",
+                              "learning":  "Na-am\\u1ee5",
+                              "mastered":  "Am\\u1ee5tala",
+                              "box_label":  "Igbe {{n}}"
+                          },
+                  "exam_mode":  {
+                                    "you_passed":  "I gafere!",
+                                    "pick_exam_type":  "H\\u1ecdr\\u1ecd \\u1ee5d\\u1ecb ule",
+                                    "preparing_exam":  "Na-akwadebe ule\\u2026",
+                                    "exit_exam":  "P\\u1ee5\\u1ecd ap\\u1ee5 ule",
+                                    "dismiss":  "Wep\\u1ee5",
+                                    "almost_there":  "I d\\u1ecb nso.",
+                                    "wrong":  "Njehie",
+                                    "retry":  "Gbal\\u1ecba \\u1ecddz\\u1ecd",
+                                    "total":  "Mkpok\\u1ecdta",
+                                    "choose_material":  "H\\u1ecdr\\u1ecd ihe",
+                                    "done":  "Mere",
+                                    "title":  "\\u1ecdn\\u1ecdd\\u1ee5 Ule",
+                                    "subtitle":  "Ule oge, na-emere ya na akpaka",
+                                    "next":  "Osote",
+                                    "previous":  "Gara aga",
+                                    "back_to_setup":  "Laghachi az\\u1ee5",
+                                    "pass_requirement":  "Ach\\u1ecbr\\u1ecd 60% iji gafere \\u00b7 oge, nwa nke otu",
+                                    "final_score":  "AKARA MME",
+                                    "start_exam":  "Malite Ule",
+                                    "correct":  "Ziri ezi",
+                                    "submit":  "Nyefee",
+                                    "exam_result":  "Nsonaaz\\u1ee5 Ule"
+                                },
+                  "tts":  {
+                              "pause":  "Kw\\u1ee5s\\u1ecb",
+                              "listen":  "Gee nt\\u1ecb"
+                          },
+                  "audio_unlock":  {
+                                       "hint":  "Lelee mgbasa ozi akara ma \\u1ecb kw\\u1ee5 kredit iji mepee á»¥da mgbe niile.",
+                                       "cta":  "Mepee á»¤da",
+                                       "unlocked_title":  "Emepere á»¤da",
+                                       "cost_sub":  "~{{count}} mgbasa ozi",
+                                       "unlocked_body":  "á»Š nwere ike ige ntá»‹ ihe a n\u0027oge á» bá»¥la.",
+                                       "cost_label":  "Uru imepe",
+                                       "unlocking":  "Na- emepe...",
+                                       "title":  "Mepee á»¤da",
+                                       "slider_label":  "Mgbasa ozi hara"
+                                   }
               },
     "auth":  {
                  "login":  {

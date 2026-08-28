@@ -293,7 +293,7 @@
                   "diagram":  "Diagram",
                   "generate_mode_label":  "Generation Mode",
                   "exam_mode_a11y":  "Start exam mode",
-                  "assets_generated_one":  "{{count}} thing don generate",
+                  "assets_generated_one":  "{{count}} asset don generate",
                   "generate_topic":  "By Topic \\u00b7 15",
                   "assets_chip":  "{{count}} assets",
                   "generate_topic_meta":  "15 / topic",
@@ -317,7 +317,8 @@
                                         "submitting":  "Submitting...",
                                         "score":  "Score: {{percent}}%",
                                         "section_flashcard":  "Flashcards",
-                                        "section_video":  "Video Lessons"
+                                        "section_video":  "Video Lessons",
+                                        "bookmarked":  "Bookmarked"
                                     },
                   "sow_upload":  {
                                      "input_hint":  "Enter or paste your scheme of work text",
@@ -348,8 +349,68 @@
                                      "doc_a11y":  "Upload document (PDF or Word)",
                                      "processing":  "Processing {{percent}}%",
                                      "char_exceeds":  "(too much)",
-                                     "success":  "Upload don work!"
-                                 }
+                                     "success":  "Upload don work!",
+                                     "exam_type_custom":  "CUSTOM"
+                                 },
+                  "materials_count_one":  "{{count}} material",
+                  "materials_count_other":  "{{count}} materials",
+                  "active_count_one":  "{{count}} active",
+                  "active_count_other":  "{{count}} active",
+                  "assets_generated_other":  "{{count}} things don generate",
+                  "srs":  {
+                              "no_cards_today":  "No cards due today. Keep am up!",
+                              "due_for_review":  "Due for Review",
+                              "cards_ready_one":  "{{count}} card ready",
+                              "title":  "Review Due",
+                              "loading_review_data":  "Loading review data\\u2026",
+                              "cards_ready_other":  "{{count}} cards ready",
+                              "all_caught_up":  "All caught up",
+                              "due_today":  "Due Today",
+                              "reviews_label":  "{{count}} reviews \\u00b7 {{percent}}% success",
+                              "loading":  "Loading\\u2026",
+                              "learning":  "Learning",
+                              "mastered":  "Mastered",
+                              "box_label":  "Box {{n}}"
+                          },
+                  "exam_mode":  {
+                                    "you_passed":  "You pass!",
+                                    "pick_exam_type":  "Pick exam type",
+                                    "preparing_exam":  "Dey prepare exam\\u2026",
+                                    "exit_exam":  "Comot for exam",
+                                    "dismiss":  "Close am",
+                                    "almost_there":  "Almost there.",
+                                    "wrong":  "Wrong",
+                                    "retry":  "Try again",
+                                    "total":  "Total",
+                                    "choose_material":  "Choose material",
+                                    "done":  "Done",
+                                    "title":  "Exam Mode",
+                                    "subtitle":  "Timed mock test, scored automatic",
+                                    "next":  "Next",
+                                    "previous":  "Previous",
+                                    "back_to_setup":  "Back to Setup",
+                                    "pass_requirement":  "60% needed to pass \\u00b7 timed, one try",
+                                    "final_score":  "FINAL SCORE",
+                                    "start_exam":  "Start Exam",
+                                    "correct":  "Correct",
+                                    "submit":  "Submit",
+                                    "exam_result":  "Exam Result"
+                                },
+                  "tts":  {
+                              "pause":  "Pause am",
+                              "listen":  "Listen"
+                          },
+                  "audio_unlock":  {
+                                       "hint":  "Watch rewarded ads or use service credits make you unlock audio for good.",
+                                       "cta":  "Unlock Audio",
+                                       "unlocked_title":  "Audio don Unlock",
+                                       "cost_sub":  "~{{count}} ads",
+                                       "unlocked_body":  "You fit listen to this material anytime now.",
+                                       "cost_label":  "Unlock cost",
+                                       "unlocking":  "Dey unlock...",
+                                       "title":  "Unlock Audio",
+                                       "slider_label":  "How many ads"
+                                   }
               },
     "auth":  {
                  "login":  {

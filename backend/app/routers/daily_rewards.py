@@ -6,7 +6,7 @@ Supports daily rewards (days 1-7), weekly bonuses, and monthly rewards.
 
 import hashlib
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, time, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, and_, desc

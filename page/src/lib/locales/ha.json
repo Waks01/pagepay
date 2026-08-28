@@ -317,7 +317,8 @@
                                         "submitting":  "Ana mika...",
                                         "score":  "Maki: {{percent}}%",
                                         "section_flashcard":  "Katin Nazari",
-                                        "section_video":  "Darussan Bidiyo"
+                                        "section_video":  "Darussan Bidiyo",
+                                        "bookmarked":  "An yi alama"
                                     },
                   "sow_upload":  {
                                      "input_hint":  "Shigar da ko li\\u021ba rubutun tsarin aikin ku",
@@ -348,8 +349,68 @@
                                      "doc_a11y":  "Loda takarda (PDF ko Word)",
                                      "processing":  "Ana aiki {{percent}}%",
                                      "char_exceeds":  "(ya wuce iyaka)",
-                                     "success":  "Loda ya yi nasara!"
-                                 }
+                                     "success":  "Loda ya yi nasara!",
+                                     "exam_type_custom":  "NA AL\u0027ADA"
+                                 },
+                  "materials_count_one":  "{{count}} abu",
+                  "materials_count_other":  "{{count}} abubuwa",
+                  "active_count_one":  "{{count}} mai aiki",
+                  "active_count_other":  "{{count}} masu aiki",
+                  "assets_generated_other":  "{{count}} abubuwa da aka \\u0199ir\\u0199ira",
+                  "srs":  {
+                              "no_cards_today":  "Babu katunan yau. Ci gaba da aiki mai kyau!",
+                              "due_for_review":  "Bita ya Yau",
+                              "cards_ready_one":  "{{count}} katin da ya shirya",
+                              "title":  "Lokacin Bita",
+                              "loading_review_data":  "Ana loda bayanan bita\\u2026",
+                              "cards_ready_other":  "{{count}} katunan da suka shirya",
+                              "all_caught_up":  "Duk an kammala",
+                              "due_today":  "Na Yau",
+                              "reviews_label":  "{{count}} bita \\u00b7 {{percent}}% nasara",
+                              "loading":  "Ana loda\\u2026",
+                              "learning":  "Ana Koyo",
+                              "mastered":  "An Mallaka",
+                              "box_label":  "Akwatin {{n}}"
+                          },
+                  "exam_mode":  {
+                                    "you_passed":  "An ci nasara!",
+                                    "pick_exam_type":  "Za\\u0257i nau\u0027in jarrabawa",
+                                    "preparing_exam":  "Ana shirya jarrabawa\\u2026",
+                                    "exit_exam":  "Fita daga jarrabawa",
+                                    "dismiss":  "Soke",
+                                    "almost_there":  "Kusa.",
+                                    "wrong":  "Kuskure",
+                                    "retry":  "Sake gwadawa",
+                                    "total":  "Jimilla",
+                                    "choose_material":  "Za\\u0257i kayan",
+                                    "done":  "Anyi",
+                                    "title":  "Yanayin Jarrabawa",
+                                    "subtitle":  "Jarrabawar lokaci, ana yin ta atomatik",
+                                    "next":  "Na gaba",
+                                    "previous":  "Baya",
+                                    "back_to_setup":  "Koma Baya",
+                                    "pass_requirement":  "Ana bu\\u0257atar 60% don ci nasara \\u00b7 Æ™ayyadadden lokaci, gwaji É—aya",
+                                    "final_score":  "MAKI NA KARSHE",
+                                    "start_exam":  "Fara Jarrabawa",
+                                    "correct":  "Daidai",
+                                    "submit":  "Mika",
+                                    "exam_result":  "Sakamakon Jarrabawa"
+                                },
+                  "tts":  {
+                              "pause":  "Tsayar da",
+                              "listen":  "Saurara"
+                          },
+                  "audio_unlock":  {
+                                       "hint":  "Kalli tallace-tallacen da aka biya ko kashe kudaden sabis don bu\\u0257e sautin har abada.",
+                                       "cta":  "Bu\\u0257e Sauti",
+                                       "unlocked_title":  "An Bu\\u0257e Sauti",
+                                       "cost_sub":  "~{{count}} talla",
+                                       "unlocked_body":  "Yanzu za ka iya saurare wannan kayan a kowane lokaci.",
+                                       "cost_label":  "Farashin bu\\u0257ewa",
+                                       "unlocking":  "Ana bu\\u0257ewa...",
+                                       "title":  "Bu\\u0257e Sauti",
+                                       "slider_label":  "Tallace-tallacen daidai"
+                                   }
               },
     "auth":  {
                  "login":  {
