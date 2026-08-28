@@ -1,5 +1,4 @@
 import { apiFetch, apiUpload } from "@/src/shared/api/client";
-import { File } from "expo-file-system";
 
 export type MaterialSummary = {
   id: number;
