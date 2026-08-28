@@ -27,7 +27,9 @@ const plugins = (baseConfig.plugins || []).map((plugin) => {
     return [
       "react-native-google-mobile-ads",
       {
-        androidAppId: isProdAds ? PROD_ADMOB_APP_ID_ANDROID : TEST_ADMOB_APP_ID_ANDROID,
+        androidAppId: isProdAds
+          ? PROD_ADMOB_APP_ID_ANDROID
+          : TEST_ADMOB_APP_ID_ANDROID,
         iosAppId: isProdAds ? PROD_ADMOB_APP_ID_IOS : TEST_ADMOB_APP_ID_IOS,
       },
     ];
@@ -38,7 +40,11 @@ const plugins = (baseConfig.plugins || []).map((plugin) => {
 // Ensure expo-asset is registered as a plugin. expo-audio requires it,
 // and it must appear explicitly in the plugins array for native module
 // resolution on bare/development builds.
-if (!plugins.some((p) => p === "expo-asset" || (Array.isArray(p) && p[0] === "expo-asset"))) {
+if (
+  !plugins.some(
+    (p) => p === "expo-asset" || (Array.isArray(p) && p[0] === "expo-asset"),
+  )
+) {
   plugins.push("expo-asset");
 }
 
@@ -51,7 +57,9 @@ module.exports = ({ config }) => {
       extra: {
         ...baseConfig.extra,
         // Dynamic environment-specific values
-        apiUrl: process.env.EXPO_PUBLIC_API_URL || "https://pagepay-fff6.onrender.com",
+        apiUrl:
+          process.env.EXPO_PUBLIC_API_URL ||
+          "https://pagepay-fff6.onrender.com",
         adsEnv,
         paystackPublicKey: process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY || "",
       },

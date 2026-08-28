@@ -502,6 +502,31 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
+        {/* Transaction History */}
+        <TouchableOpacity
+          onPress={() => router.push("/home/transactions")}
+          style={[
+            styles.transactionHistoryCard,
+            { backgroundColor: tokens.card, borderColor: tokens.border },
+          ]}
+          activeOpacity={0.7}
+        >
+          <View style={styles.transactionHistoryLeft}>
+            <View style={[styles.transactionHistoryIcon, { backgroundColor: `${tokens.mint}20` }]}>
+              <Ionicons name="document-text-outline" size={22} color={tokens.mint} />
+            </View>
+            <View>
+              <Text style={[styles.transactionHistoryTitle, { color: tokens.ink }]}>
+                {t("home.transaction_history", { defaultValue: "Transaction History" })}
+              </Text>
+              <Text style={[styles.transactionHistorySubtitle, { color: tokens.inkMuted }]}>
+                {t("home.transaction_history_subtitle", { defaultValue: "View all your transactions" })}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={tokens.inkMuted} />
+        </TouchableOpacity>
+
         {/* Browse by category */}
         <View style={styles.section}>
           <Text
@@ -650,6 +675,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 14,
     marginHorizontal: 2,
+  },
+  transactionHistoryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 12,
+  },
+  transactionHistoryLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  transactionHistoryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  transactionHistoryTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    fontFamily: "SpaceGrotesk_700Bold",
+  },
+  transactionHistorySubtitle: {
+    fontSize: 12,
+    marginTop: 2,
   },
   balanceAmount: {
     fontSize: 15,

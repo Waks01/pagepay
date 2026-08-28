@@ -380,6 +380,12 @@ export default function BuyElectricityScreen() {
     },
   ];
 
+  // Pull-to-refresh callback - must be before any early returns
+  const onRefresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ["electricity-plans"] });
+    qc.invalidateQueries({ queryKey: ["electricity-beneficiaries"] });
+  }, [qc]);
+
   // Initial-load gate: the form needs the disco catalog and beneficiaries
   if (discosQ.isLoading || beneficiariesQ.isLoading || profileQ.isLoading) {
     return (
@@ -391,12 +397,6 @@ export default function BuyElectricityScreen() {
 
   const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
   const userCashableBalance = profileQ.data?.cashable_balance || 0;
-
-  // Pull-to-refresh callback
-  const onRefresh = useCallback(() => {
-    qc.invalidateQueries({ queryKey: ["electricity-plans"] });
-    qc.invalidateQueries({ queryKey: ["electricity-beneficiaries"] });
-  }, [qc]);
 
   // Success screen
   if (purchaseState === "success" && successData) {

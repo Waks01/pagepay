@@ -31,17 +31,25 @@
  * client trust the server for everything credit-related.
  */
 
-import { useCallback, useRef, useEffect, useState } from 'react';
-import { Modal, View, Text, StyleSheet, ActivityIndicator, Pressable, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useRef, useEffect, useState } from "react";
+import {
+  Modal,
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  Pressable,
+  Platform,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-import { requestAdToken, pollRecentCredits } from '@/src/shared/lib/ads';
-import { PagePay } from '@/constants/theme';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
-import { useAdSlot } from '@/src/shared/contexts/AdSlot';
-import type { AdSlotName } from '@/src/shared/contexts/AdSlot';
+import { requestAdToken, pollRecentCredits } from "@/src/shared/lib/ads";
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import { useAdSlot } from "@/src/shared/contexts/AdSlot";
+import type { AdSlotName } from "@/src/shared/contexts/AdSlot";
 
-type AdState = 'loading' | 'ready' | 'showing' | 'error';
+type AdState = "loading" | "ready" | "showing" | "error";
 
 /** Slot name (e.g. "rewarded_android") used as the `ad_unit`
  *  argument to /api/v1/ads/request-token. The actual AdMob
@@ -104,9 +112,9 @@ export function RewardedAd(props: RewardedAdProps) {
     title,
     eyebrow,
     body,
-    claimLabel = 'Watch Ad',
+    claimLabel = "Watch Ad",
     allowSkip = false,
-    skipLabel = 'Skip',
+    skipLabel = "Skip",
     onClaimed,
     onSkipped,
     onClose,
@@ -117,7 +125,7 @@ export function RewardedAd(props: RewardedAdProps) {
   const tokens = PagePay[scheme];
   const slot = useAdSlot();
 
-  const [adState, setAdState] = useState<AdState>('loading');
+  const [adState, setAdState] = useState<AdState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const rewardedRef = useRef<any>(null);
   const rewardDataRef = useRef<{ type: string; amount: number } | null>(null);
@@ -171,7 +179,7 @@ export function RewardedAd(props: RewardedAdProps) {
       return;
     }
 
-    if (Platform.OS === 'web' || !adUnit || !userId) {
+    if (Platform.OS === "web" || !adUnit || !userId) {
       return;
     }
 
@@ -189,7 +197,7 @@ export function RewardedAd(props: RewardedAdProps) {
     if (acquired) {
       acquiredRef.current = acquired;
       tokenIssuedAtRef.current = acquired.tokenIssuedAt;
-      setAdState('ready');
+      setAdState("ready");
       setErrorMessage(null);
       rewardDataRef.current = null;
       return;
@@ -200,8 +208,8 @@ export function RewardedAd(props: RewardedAdProps) {
     // acquire it then. Falling through to a fresh network load here
     // would create a second ad instance while the slot's load is
     // still in flight, which is the double-load bug.
-    if (slot.state === 'loading') {
-      setAdState('loading');
+    if (slot.state === "loading") {
+      setAdState("loading");
       setErrorMessage(null);
       rewardDataRef.current = null;
       return;
@@ -211,6 +219,7 @@ export function RewardedAd(props: RewardedAdProps) {
     let unsubLoaded: (() => void) | null = null;
     let unsubEarned: (() => void) | null = null;
     let unsubClosed: (() => void) | null = null;
+    let unsubError: (() => void) | null = null;
 
     // Tear down any ad from a previous show before loading a fresh one.
     if (rewardedRef.current) {
@@ -224,30 +233,36 @@ export function RewardedAd(props: RewardedAdProps) {
 
     // Reset UI state so a prior 'ready'/'error' (from the previous ad)
     // can't block the new load or the show button.
-    setAdState('loading');
+    setAdState("loading");
     setErrorMessage(null);
     rewardDataRef.current = null;
     acquiredRef.current = null;
 
     if (__DEV__) {
-      console.log('[RewardedAd] Loading ad...', { visible, preload });
+      console.log("[RewardedAd] Loading ad...", { visible, preload });
     }
 
     (async () => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const sdk = require('react-native-google-mobile-ads');
-        const { RewardedAd: RealRewardedAd, RewardedAdEventType, AdEventType } = sdk;
+        const sdk = require("react-native-google-mobile-ads");
+        const {
+          RewardedAd: RealRewardedAd,
+          RewardedAdEventType,
+          AdEventType,
+        } = sdk;
 
         tokenIssuedAtRef.current = new Date().toISOString();
         const { custom_data } = await requestAdToken(adUnitName, sessionId);
 
         if (__DEV__) {
-          console.log('[RewardedAd] requestAdToken result:', {
+          console.log("[RewardedAd] requestAdToken result:", {
             adUnitName,
             sessionId,
             custom_data_length: custom_data?.length ?? 0,
-            custom_data_preview: custom_data ? `${custom_data.slice(0, 20)}...` : 'EMPTY',
+            custom_data_preview: custom_data
+              ? `${custom_data.slice(0, 20)}...`
+              : "EMPTY",
           });
         }
 
@@ -257,11 +272,13 @@ export function RewardedAd(props: RewardedAdProps) {
         };
 
         if (__DEV__) {
-          console.log('[RewardedAd] createForAdRequest SSV options:', {
+          console.log("[RewardedAd] createForAdRequest SSV options:", {
             adUnit,
             userId: ssvOptions.userId,
             customData_length: ssvOptions.customData?.length ?? 0,
-            customData_preview: ssvOptions.customData ? `${ssvOptions.customData.slice(0, 20)}...` : 'EMPTY',
+            customData_preview: ssvOptions.customData
+              ? `${ssvOptions.customData.slice(0, 20)}...`
+              : "EMPTY",
           });
         }
 
@@ -270,25 +287,42 @@ export function RewardedAd(props: RewardedAdProps) {
         });
         (ad as any)._adUnit = adUnit;
 
+        // Add error listener FIRST before any other listeners
+        const unsubError = ad.addAdEventListener(
+          AdEventType.ERROR,
+          (error: any) => {
+            if (__DEV__) {
+              console.error("[RewardedAd] Ad load error:", error);
+            }
+            if (isActive) {
+              setAdState("error");
+              setErrorMessage(error?.message || "Failed to load ad");
+            }
+          },
+        );
+
         unsubLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
           if (__DEV__) {
-            console.log('[RewardedAd] Ad ready');
+            console.log("[RewardedAd] Ad ready");
           }
           if (isActive) {
-            setAdState('ready');
+            setAdState("ready");
           }
         });
 
-        unsubEarned = ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward: { type: string; amount: number }) => {
-          if (__DEV__) {
-            console.log('[RewardedAd] Reward earned:', reward);
-          }
-          rewardDataRef.current = reward;
-        });
+        unsubEarned = ad.addAdEventListener(
+          RewardedAdEventType.EARNED_REWARD,
+          (reward: { type: string; amount: number }) => {
+            if (__DEV__) {
+              console.log("[RewardedAd] Reward earned:", reward);
+            }
+            rewardDataRef.current = reward;
+          },
+        );
 
         unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, async () => {
           if (__DEV__) {
-            console.log('[RewardedAd] Ad closed');
+            console.log("[RewardedAd] Ad closed");
           }
 
           if (unsubLoaded) unsubLoaded();
@@ -309,14 +343,15 @@ export function RewardedAd(props: RewardedAdProps) {
 
         rewardedRef.current = ad;
         ad.load();
-
       } catch (err) {
         if (__DEV__) {
-          console.error('[RewardedAd] Load failed:', err);
+          console.error("[RewardedAd] Load failed:", err);
         }
         if (isActive) {
-          setAdState('error');
-          setErrorMessage(err instanceof Error ? err.message : 'Ad service unavailable');
+          setAdState("error");
+          setErrorMessage(
+            err instanceof Error ? err.message : "Ad service unavailable",
+          );
         }
       }
     })();
@@ -328,6 +363,7 @@ export function RewardedAd(props: RewardedAdProps) {
       if (unsubLoaded) unsubLoaded();
       if (unsubEarned) unsubEarned();
       if (unsubClosed) unsubClosed();
+      if (unsubError) unsubError();
       if (rewardedRef.current) {
         try {
           rewardedRef.current.destroy?.();
@@ -341,7 +377,8 @@ export function RewardedAd(props: RewardedAdProps) {
       // state changed (ready → busy) after acquire(). It gets cleared
       // when the modal closes (visible becomes false) above.
     };
-  }, [preload, visible, adUnit, userId, sessionId, adUnitName, slot]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preload, visible, adUnit, userId, sessionId, adUnitName]);
 
   // Step 4-6: poll for the credit. This is the core of the
   // server-authoritative flow — the AdMob SDK has already
@@ -350,12 +387,15 @@ export function RewardedAd(props: RewardedAdProps) {
   // actually landed. We poll /recent-credits until it shows
   // up or 15s elapses.
   const handleRewardClaimed = useCallback(async () => {
-    const since = tokenIssuedAtRef.current ?? new Date(Date.now() - 60_000).toISOString();
+    const since =
+      tokenIssuedAtRef.current ?? new Date(Date.now() - 60_000).toISOString();
     const controller = new AbortController();
     pollAbortRef.current = controller;
 
     try {
-      const credit = await pollRecentCredits(since, { signal: controller.signal });
+      const credit = await pollRecentCredits(since, {
+        signal: controller.signal,
+      });
       if (credit) {
         onClaimedRef.current({
           pointsCredited: credit.points_credited,
@@ -363,13 +403,19 @@ export function RewardedAd(props: RewardedAdProps) {
         });
       } else {
         if (__DEV__) {
-          console.log('[RewardedAd] pollRecentCredits returned null — credit may still be in flight');
+          console.log(
+            "[RewardedAd] pollRecentCredits returned null — credit may still be in flight",
+          );
         }
-        onClaimedRef.current({ pointsCredited: 0, newBalance: 0, pending: true });
+        onClaimedRef.current({
+          pointsCredited: 0,
+          newBalance: 0,
+          pending: true,
+        });
       }
     } catch (err) {
       if (__DEV__) {
-        console.error('[RewardedAd] pollRecentCredits threw', err);
+        console.error("[RewardedAd] pollRecentCredits threw", err);
       }
       onClaimedRef.current({ pointsCredited: 0, newBalance: 0, pending: true });
     } finally {
@@ -395,66 +441,107 @@ export function RewardedAd(props: RewardedAdProps) {
         // CLOSED handler via /recent-credits.
       };
       acquired.onClosed = async () => {
+        if (__DEV__) {
+          console.log(
+            "[RewardedAd] acquired.onClosed callback fired, watchedToCompletion:",
+            watchedToCompletion,
+          );
+        }
+
         const since = acquired.tokenIssuedAt;
-        // Dismiss the pre-read gate immediately so the reading
-        // timer can start without waiting for the credit poll.
-        onCloseRef.current();
-        slot.release();
+
+        // CRITICAL FIX: Poll for credits BEFORE closing modal/releasing slot
+        // If we close the modal first, the component may unmount and prevent
+        // the credit polling from completing
         if (watchedToCompletion) {
+          if (__DEV__) {
+            console.log(
+              "[RewardedAd] pollRecentCredits starting, since:",
+              since,
+            );
+          }
           try {
-            const { pollRecentCredits } = await import('@/src/shared/lib/ads');
+            const { pollRecentCredits } = await import("@/src/shared/lib/ads");
             const credit = await pollRecentCredits(since);
             if (credit) {
+              if (__DEV__) {
+                console.log("[RewardedAd] pollRecentCredits success:", credit);
+              }
               onClaimedRef.current({
                 pointsCredited: credit.points_credited,
                 newBalance: credit.new_balance,
               });
             } else {
-              onClaimedRef.current({ pointsCredited: 0, newBalance: 0, pending: true });
+              if (__DEV__) {
+                console.log(
+                  "[RewardedAd] pollRecentCredits returned null (pending)",
+                );
+              }
+              onClaimedRef.current({
+                pointsCredited: 0,
+                newBalance: 0,
+                pending: true,
+              });
             }
-          } catch {
-            onClaimedRef.current({ pointsCredited: 0, newBalance: 0, pending: true });
+          } catch (err) {
+            if (__DEV__) {
+              console.error("[RewardedAd] pollRecentCredits error:", err);
+            }
+            onClaimedRef.current({
+              pointsCredited: 0,
+              newBalance: 0,
+              pending: true,
+            });
           }
         } else {
+          if (__DEV__) {
+            console.log(
+              "[RewardedAd] User skipped ad without watching to completion",
+            );
+          }
           onSkippedRef.current?.();
         }
+
+        // NOW close modal and release slot AFTER credit polling completes
+        onCloseRef.current();
+        slot.release();
       };
       try {
-        setAdState('showing');
+        setAdState("showing");
         acquired.show();
         if (__DEV__) {
-          console.log('[RewardedAd] Slot-acquired ad showing');
+          console.log("[RewardedAd] Slot-acquired ad showing");
         }
       } catch (err) {
         if (__DEV__) {
-          console.error('[RewardedAd] Failed to show slot ad:', err);
+          console.error("[RewardedAd] Failed to show slot ad:", err);
         }
-        setAdState('error');
-        setErrorMessage('Failed to display ad');
+        setAdState("error");
+        setErrorMessage("Failed to display ad");
       }
       return;
     }
 
-    if (!rewardedRef.current || adState !== 'ready') {
+    if (!rewardedRef.current || adState !== "ready") {
       if (__DEV__) {
-        console.warn('[RewardedAd] Cannot show ad - state:', adState);
+        console.warn("[RewardedAd] Cannot show ad - state:", adState);
       }
       return;
     }
 
     try {
-      setAdState('showing');
+      setAdState("showing");
       rewardedRef.current.show();
 
       if (__DEV__) {
-        console.log('[RewardedAd] Ad showing');
+        console.log("[RewardedAd] Ad showing");
       }
     } catch (err) {
       if (__DEV__) {
-        console.error('[RewardedAd] Failed to show ad:', err);
+        console.error("[RewardedAd] Failed to show ad:", err);
       }
-      setAdState('error');
-      setErrorMessage('Failed to display ad');
+      setAdState("error");
+      setErrorMessage("Failed to display ad");
     }
   }, [adState, slot]);
 
@@ -465,18 +552,28 @@ export function RewardedAd(props: RewardedAdProps) {
 
   const handleRetry = useCallback(() => {
     setErrorMessage(null);
-    setAdState('loading');
+    setAdState("loading");
   }, []);
 
   // Don't render modal when not visible or when showing fullscreen ad
-  if (!visible || adState === 'showing') {
+  if (!visible || adState === "showing") {
     return null;
   }
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={allowSkip ? handleSkip : undefined}>
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={allowSkip ? handleSkip : undefined}
+    >
       <View style={styles.overlay}>
-        <View style={[styles.modal, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+        <View
+          style={[
+            styles.modal,
+            { backgroundColor: tokens.card, borderColor: tokens.border },
+          ]}
+        >
           {/* Eyebrow */}
           {eyebrow && (
             <Text style={[styles.eyebrow, { color: tokens.inkMuted }]}>
@@ -495,7 +592,7 @@ export function RewardedAd(props: RewardedAdProps) {
           )}
 
           {/* State-specific content */}
-          {adState === 'loading' && (
+          {adState === "loading" && (
             <View style={styles.content}>
               <ActivityIndicator size="large" color={tokens.mint} />
               <Text style={[styles.statusText, { color: tokens.inkMuted }]}>
@@ -504,9 +601,14 @@ export function RewardedAd(props: RewardedAdProps) {
             </View>
           )}
 
-          {adState === 'ready' && (
+          {adState === "ready" && (
             <View style={styles.content}>
-              <View style={[styles.iconContainer, { backgroundColor: tokens.mintSoft }]}>
+              <View
+                style={[
+                  styles.iconContainer,
+                  { backgroundColor: tokens.mintSoft },
+                ]}
+              >
                 <Ionicons name="play-circle" size={48} color={tokens.mint} />
               </View>
               <Text style={[styles.statusText, { color: tokens.mint }]}>
@@ -515,13 +617,18 @@ export function RewardedAd(props: RewardedAdProps) {
             </View>
           )}
 
-          {adState === 'error' && (
+          {adState === "error" && (
             <View style={styles.content}>
-              <View style={[styles.iconContainer, { backgroundColor: tokens.signalSoft }]}>
+              <View
+                style={[
+                  styles.iconContainer,
+                  { backgroundColor: tokens.signalSoft },
+                ]}
+              >
                 <Ionicons name="alert-circle" size={48} color={tokens.signal} />
               </View>
               <Text style={[styles.statusText, { color: tokens.signal }]}>
-                {errorMessage || 'Ad temporarily unavailable'}
+                {errorMessage || "Ad temporarily unavailable"}
               </Text>
             </View>
           )}
@@ -529,15 +636,25 @@ export function RewardedAd(props: RewardedAdProps) {
           {/* Actions */}
           <View style={styles.actions}>
             {/* Loading state - show disabled button */}
-            {adState === 'loading' && (
-              <View style={[styles.button, styles.primaryButton, { backgroundColor: tokens.inkMuted, opacity: 0.5 }]}>
-                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+            {adState === "loading" && (
+              <View
+                style={[
+                  styles.button,
+                  styles.primaryButton,
+                  { backgroundColor: tokens.inkMuted, opacity: 0.5 },
+                ]}
+              >
+                <ActivityIndicator
+                  size="small"
+                  color="#fff"
+                  style={{ marginRight: 8 }}
+                />
                 <Text style={styles.buttonText}>Loading ad...</Text>
               </View>
             )}
 
             {/* Ready state - show enabled button */}
-            {adState === 'ready' && (
+            {adState === "ready" && (
               <Pressable
                 onPress={handleWatchAd}
                 style={({ pressed }) => [
@@ -546,13 +663,18 @@ export function RewardedAd(props: RewardedAdProps) {
                   { backgroundColor: tokens.mint, opacity: pressed ? 0.8 : 1 },
                 ]}
               >
-                <Ionicons name="play" size={20} color="#fff" style={{ marginRight: 8 }} />
+                <Ionicons
+                  name="play"
+                  size={20}
+                  color="#fff"
+                  style={{ marginRight: 8 }}
+                />
                 <Text style={styles.buttonText}>{claimLabel}</Text>
               </Pressable>
             )}
 
             {/* Error state - show retry button */}
-            {adState === 'error' && (
+            {adState === "error" && (
               <Pressable
                 onPress={handleRetry}
                 style={({ pressed }) => [
@@ -561,7 +683,12 @@ export function RewardedAd(props: RewardedAdProps) {
                   { backgroundColor: tokens.mint, opacity: pressed ? 0.8 : 1 },
                 ]}
               >
-                <Ionicons name="refresh" size={20} color="#fff" style={{ marginRight: 8 }} />
+                <Ionicons
+                  name="refresh"
+                  size={20}
+                  color="#fff"
+                  style={{ marginRight: 8 }}
+                />
                 <Text style={styles.buttonText}>Try Again</Text>
               </Pressable>
             )}
@@ -576,7 +703,9 @@ export function RewardedAd(props: RewardedAdProps) {
                   { borderColor: tokens.border, opacity: pressed ? 0.7 : 1 },
                 ]}
               >
-                <Text style={[styles.buttonText, { color: tokens.inkMuted }]}>{skipLabel}</Text>
+                <Text style={[styles.buttonText, { color: tokens.inkMuted }]}>
+                  {skipLabel}
+                </Text>
               </Pressable>
             )}
           </View>
@@ -589,57 +718,57 @@ export function RewardedAd(props: RewardedAdProps) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 24,
   },
   modal: {
-    width: '100%',
+    width: "100%",
     maxWidth: 360,
     borderRadius: 20,
     borderWidth: 1,
     padding: 24,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
   },
   eyebrow: {
-    fontFamily: 'SpaceGrotesk_500Medium',
+    fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 8,
   },
   title: {
-    fontFamily: 'SpaceGrotesk_700Bold',
+    fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 20,
     marginBottom: 8,
   },
   body: {
-    fontFamily: 'SpaceGrotesk_500Medium',
+    fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 24,
   },
   content: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 24,
   },
   iconContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 16,
   },
   statusText: {
-    fontFamily: 'SpaceGrotesk_500Medium',
+    fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   actions: {
     gap: 12,
@@ -648,21 +777,21 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
   },
   primaryButton: {
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   secondaryButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 1,
   },
   buttonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'SpaceGrotesk_500Medium',
+    fontWeight: "600",
+    fontFamily: "SpaceGrotesk_500Medium",
   },
 });

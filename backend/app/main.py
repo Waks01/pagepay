@@ -24,6 +24,7 @@ from app.routers.community import router as community_router
 from app.routers.streak import router as streak_router
 from app.routers.daily_rewards import router as daily_rewards_router
 from app.routers.analytics import router as analytics_router
+from app.routers.transactionHistory import router as transaction_history_router
 from app.routers.payouts import router as payouts_router
 from app.routers.payments import router as payments_router
 from app.routers.admin import router as admin_router
@@ -463,6 +464,9 @@ app.include_router(pin.router, prefix=API_PREFIX)
 
 # Phase 8: Bills & Earn
 app.include_router(bills.router, prefix=API_PREFIX)
+
+# Transaction history
+app.include_router(transaction_history_router, prefix=API_PREFIX)
 
 # OpenStax + work-level social (Phase: OpenStax integration)
 app.include_router(works_social_router, prefix=API_PREFIX)

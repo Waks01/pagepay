@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
+import { apiFetch } from "@/src/shared/api/client";
 import { useCurrentUser } from "@/src/shared/lib/current-user";
 import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
 import { RewardedAd } from "@/components/ads/RewardedAd";
