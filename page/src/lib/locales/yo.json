@@ -276,7 +276,7 @@
                   "topics_chip":  "{{count}} koko-\\u1ecdr\\u1ecd",
                   "try_it_yourself":  "Gb\\u00ecy\\u00e0nj\\u00fa ara r\\u1eb9",
                   "video":  "F\\u00edd\\u00ed\\u00f2",
-                  "read_material":  "Ka Ohun Elo",
+                  "read_material":  "Ka ohun elo ni kikun",
                   "review_a11y":  "P\\u1eb9p\\u1eb9 \\u00e0y\\u1eb9\\u0300w\\u00f2",
                   "materials_count":  "{{count}} ohun elo",
                   "exam_type_custom":  "A\\u1e63a",
@@ -410,7 +410,13 @@
                                        "unlocking":  "\\u0143 \\u1e63i...",
                                        "title":  "\\u1e62i Ohun",
                                        "slider_label":  "Ipolongo to baamu"
-                                   }
+                                   },
+                  "loading_material_title":  null,
+                  "loading_material_subtitle":  null,
+                  "loading_material_a11y":  null,
+                  "material_preview_meta":  "{{words}} \\u1ecdr\\u1ecd",
+                  "read_material_a11y":  "\\u1e62ii oluka ohun elo ni kikun",
+                  "material_preview_title":  "Ohun elo r\\u1eb9"
               },
     "auth":  {
                  "login":  {

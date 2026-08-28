@@ -276,7 +276,7 @@
                   "topics_chip":  "{{count}} isiokwu",
                   "try_it_yourself":  "Gbal\\u1ecba Onwe G\\u1ecb",
                   "video":  "Vidio",
-                  "read_material":  "G\\u1ee5\\u1ecd Ihe",
+                  "read_material":  "G\\u1ee5\\u1ecd ihe zuru ezu",
                   "review_a11y":  "Ebe nyocha",
                   "materials_count":  "{{count}} ihe",
                   "exam_type_custom":  "Omenala",
@@ -410,7 +410,13 @@
                                        "unlocking":  "Na- emepe...",
                                        "title":  "Mepee á»¤da",
                                        "slider_label":  "Mgbasa ozi hara"
-                                   }
+                                   },
+                  "loading_material_title":  null,
+                  "loading_material_subtitle":  null,
+                  "loading_material_a11y":  null,
+                  "material_preview_meta":  "{{words}} okwu",
+                  "read_material_a11y":  "Mepee onye na-ag\\u1ee5 ihe zuru ezu",
+                  "material_preview_title":  "Ihe g\\u1ecb"
               },
     "auth":  {
                  "login":  {

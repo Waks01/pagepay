@@ -276,7 +276,7 @@
                   "topics_chip":  "{{count}} batutuwa",
                   "try_it_yourself":  "Gwada Kanka",
                   "video":  "Bidiyo",
-                  "read_material":  "Karanta Kayan",
+                  "read_material":  "Karanta kayan gaba daya",
                   "review_a11y":  "Allon bita",
                   "materials_count":  "{{count}} kayan",
                   "exam_type_custom":  "NA AL\u0027ADA",
@@ -410,7 +410,13 @@
                                        "unlocking":  "Ana bu\\u0257ewa...",
                                        "title":  "Bu\\u0257e Sauti",
                                        "slider_label":  "Tallace-tallacen daidai"
-                                   }
+                                   },
+                  "loading_material_title":  null,
+                  "loading_material_subtitle":  null,
+                  "loading_material_a11y":  null,
+                  "material_preview_meta":  "{{words}} kalmomi",
+                  "read_material_a11y":  "Bu\\u0257e mai karanta kayan gaba daya",
+                  "material_preview_title":  "Kayan ku"
               },
     "auth":  {
                  "login":  {

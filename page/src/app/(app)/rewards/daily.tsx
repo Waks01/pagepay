@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
   Dimensions,
   Platform,
 } from "react-native";
@@ -113,6 +114,18 @@ export default function DailyRewardsScreen() {
     queryFn: fetchDailyRewardConfig,
     staleTime: 60 * 60 * 1000,
   });
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+      await queryClient.invalidateQueries({ queryKey: ["daily-reward-config"] });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (error) {
@@ -580,10 +593,9 @@ export default function DailyRewardsScreen() {
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.contentContainer}
-        >
+      <ScrollView
+        contentContainerStyle={styles.contentContainer}
+      >
           <View style={[styles.streakHero, { backgroundColor: tokens.paper }]}>
             <Skeleton
               width={RING_SIZE}
@@ -670,21 +682,32 @@ export default function DailyRewardsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: tokens.paper }]}>
-      <View style={[styles.header, { borderBottomColor: tokens.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={tokens.ink} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: tokens.ink }]}>
-          {t("daily_rewards.title")}
-        </Text>
-        <View style={{ width: 24 }} />
-      </View>
-
       <ScrollView
-        style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={tokens.mint}
+            colors={[tokens.mint]}
+            progressViewOffset={Platform.OS === "android" ? 0 : undefined}
+          />
+        }
+        overScrollMode="always"
+        nestedScrollEnabled={false}
       >
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: tokens.border }]}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={tokens.ink} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: tokens.ink }]}>
+            {t("daily_rewards.title")}
+          </Text>
+          <View style={{ width: 24 }} />
+        </View>
+
         {/* Streak Hero with Circular Progress */}
         <View style={styles.streakHero}>
           <View style={styles.progressRingContainer}>

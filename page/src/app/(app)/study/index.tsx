@@ -38,7 +38,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import NotificationBell from "@/components/NotificationBell";
-import { SkeletonPage } from "@/components/skeletons";
+import { SkeletonPage, SkeletonDetailPage } from "@/components/skeletons";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
 import AudioUnlockModal from "@/components/AudioUnlockModal";
 import { cacheAsset, getCachedAsset } from "@/src/features/study/storage";
@@ -90,6 +90,9 @@ type AssetInfo = {
   material_id: number;
   type: string;
   points_to_unlock: number;
+  // Optional fields that the backend includes for already-unlocked assets.
+  unlocked?: boolean;
+  content?: unknown;
 };
 
 function getTopicNames(parsed: Record<string, unknown> | null): string[] {
@@ -109,6 +112,13 @@ function getTopicCount(
   const topic = topics.find((t) => t.name === topicName);
   if (!topic) return 0;
   return topic.subtopics.length + topic.key_concepts.length;
+}
+
+function getWordCount(text: string | null | undefined): number {
+  if (!text) return 0;
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
 }
 
 type MaterialDetail = {
@@ -645,8 +655,8 @@ export default function StudyScreen() {
 
         const unlockedFromBackend: Record<number, unknown> = {};
         for (const asset of materialData.assets) {
-          if (asset.unlocked && (asset as AssetInfo & { content?: unknown }).content) {
-            unlockedFromBackend[asset.id] = (asset as AssetInfo & { content?: unknown }).content;
+          if (asset.unlocked && asset.content) {
+            unlockedFromBackend[asset.id] = asset.content;
           }
         }
         setUnlockedAssets(unlockedFromBackend);
@@ -936,15 +946,7 @@ export default function StudyScreen() {
         )}
 
         {selectedMaterialId != null && !selectedMaterial ? (
-          <View
-            style={[styles.stateBlock, { borderColor: tokens.border }]}
-            accessibilityLabel={t("study.loading_material_a11y")}
-          >
-            <PagePaySpinner size={32} />
-            <Text style={[styles.stateText, { color: tokens.inkMuted }]}>
-              {t("study.loading_material_title")}
-            </Text>
-          </View>
+          <SkeletonDetailPage />
         ) : selectedMaterial ? (
           <View style={styles.detailView}>
             {selectedMaterial.parsed_structure && (
@@ -1032,27 +1034,80 @@ export default function StudyScreen() {
             )}
 
             {selectedMaterial.content && (
-              <Pressable
-                onPress={() => setShowReader(true)}
-                style={({ pressed }) => [
-                  styles.readBtn,
-                  {
-                    backgroundColor: tokens.paper,
-                    borderColor: tokens.border,
-                    opacity: pressed ? 0.85 : 1,
-                  },
-                ]}
+              <Animated.View
+                entering={FadeInDown.delay(60).duration(240).springify()}
               >
-                <Ionicons name="book-outline" size={18} color={tokens.mint} />
-                <Text style={[styles.readBtnText, { color: tokens.ink }]}>
-                  {t("study.read_material")}
-                </Text>
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={tokens.inkMuted}
-                />
-              </Pressable>
+                <View
+                  style={[
+                    styles.materialPreviewCard,
+                    {
+                      backgroundColor: tokens.card,
+                      borderColor: tokens.border,
+                    },
+                  ]}
+                >
+                  <View style={styles.sectionHeaderRow}>
+                    <Text
+                      style={[
+                        styles.outlineTitle,
+                        {
+                          color: tokens.ink,
+                          fontFamily: Fonts.editorialSemiBold as string,
+                        },
+                      ]}
+                    >
+                      {t("study.material_preview_title")}
+                    </Text>
+                    <Text
+                      style={[styles.outlineMeta, { color: tokens.inkMuted }]}
+                    >
+                      {t("study.material_preview_meta", {
+                        words: getWordCount(selectedMaterial.content),
+                      })}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.materialPreviewText,
+                      { color: tokens.ink },
+                    ]}
+                    numberOfLines={6}
+                  >
+                    {selectedMaterial.content}
+                  </Text>
+                  <Pressable
+                    onPress={() => setShowReader(true)}
+                    style={({ pressed }) => [
+                      styles.readBtn,
+                      {
+                        backgroundColor: tokens.mint,
+                        opacity: pressed ? 0.85 : 1,
+                      },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("study.read_material_a11y")}
+                  >
+                    <Ionicons
+                      name="book-outline"
+                      size={18}
+                      color={tokens.mintText}
+                    />
+                    <Text
+                      style={[
+                        styles.readBtnText,
+                        { color: tokens.mintText },
+                      ]}
+                    >
+                      {t("study.read_material")}
+                    </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={tokens.mintText}
+                    />
+                  </Pressable>
+                </View>
+              </Animated.View>
             )}
 
             {showReader && selectedMaterial.content && (
@@ -1904,7 +1959,18 @@ const styles = StyleSheet.create({
   readBtnText: {
     flex: 1,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: -0.1,
+  },
+  materialPreviewCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+  },
+  materialPreviewText: {
+    fontSize: 14,
+    lineHeight: 21,
   },
   readerHeader: {
     flexDirection: "row",

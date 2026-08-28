@@ -104,6 +104,20 @@ export async function apiFetch(
     ...options.headers,
   };
 
+  if (__DEV__) {
+    const method = options.method || "GET";
+    const bodyKind = isFormData
+      ? "FormData"
+      : options.body
+        ? typeof options.body === "string"
+          ? `json(${options.body.length}b)`
+          : "body"
+        : "none";
+    console.log(
+      `[apiFetch] → ${method} ${API_URL}${path} auth=${token ? "yes" : "no"} body=${bodyKind}`,
+    );
+  }
+
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
@@ -112,11 +126,18 @@ export async function apiFetch(
     });
   } catch (e) {
     if (__DEV__) {
-      console.error(`[apiFetch] network error: ${API_URL}${path}`, e);
+      console.error(
+        `[apiFetch] NETWORK ERROR ${API_URL}${path}`,
+        e instanceof Error ? `${e.name}: ${e.message}` : e,
+      );
     }
     throw new Error(
       `Can't reach the server at ${API_URL}. Check your connection and try again.`,
     );
+  }
+
+  if (__DEV__) {
+    console.log(`[apiFetch] ← ${res.status} ${API_URL}${path}`);
   }
 
   if (res.status === 401 && path !== "/api/v1/auth/refresh") {
@@ -183,6 +204,12 @@ export async function apiUpload(
   const token = await getToken();
   const clientDate = new Date().toISOString().split("T")[0];
 
+  if (__DEV__) {
+    console.log(
+      `[apiUpload] → POST ${API_URL}${path} auth=${token ? "yes" : "no"} timeoutMs=${timeoutMs}`,
+    );
+  }
+
   return new Promise<ApiUploadResult>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API_URL}${path}`, true);
@@ -198,12 +225,38 @@ export async function apiUpload(
     if (onProgress) {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && e.total > 0) {
+          if (__DEV__) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            if (pct % 25 === 0) {
+              console.log(
+                `[apiUpload] progress ${pct}% (${e.loaded}/${e.total}) ${path}`,
+              );
+            }
+          }
           onProgress(e.loaded, e.total);
         }
       };
     }
 
-    xhr.onerror = () => {
+    xhr.upload.onerror = (e) => {
+      if (__DEV__) {
+        console.error(`[apiUpload] UPLOAD PHASE ERROR ${path}`, e);
+      }
+    };
+
+    xhr.onerror = (e) => {
+      if (__DEV__) {
+        console.error(
+          `[apiUpload] NETWORK ERROR ${API_URL}${path}`,
+          "readyState=",
+          xhr.readyState,
+          "status=",
+          xhr.status,
+          "responseText=",
+          xhr.responseText?.slice(0, 500),
+          e,
+        );
+      }
       reject(
         new Error(
           `Can't reach the server at ${API_URL}. Check your connection and try again.`,
@@ -211,9 +264,17 @@ export async function apiUpload(
       );
     };
     xhr.ontimeout = () => {
+      if (__DEV__) {
+        console.error(`[apiUpload] TIMEOUT ${path} after ${timeoutMs}ms`);
+      }
       reject(new Error("Upload timed out. Try again on a faster connection."));
     };
     xhr.onload = () => {
+      if (__DEV__) {
+        console.log(
+          `[apiUpload] ← ${xhr.status} ${path} responseText(${xhr.responseText?.length ?? 0}b)=${xhr.responseText?.slice(0, 500)}`,
+        );
+      }
       if (xhr.status === 401) {
         _onUnauthenticated?.();
         reject(new Error("Unauthorized"));
@@ -231,6 +292,9 @@ export async function apiUpload(
     try {
       xhr.send(formData);
     } catch (e) {
+      if (__DEV__) {
+        console.error(`[apiUpload] SEND THREW ${path}`, e);
+      }
       reject(
         new Error(
           `Can't reach the server at ${API_URL}. Check your connection and try again.`,

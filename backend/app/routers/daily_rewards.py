@@ -437,8 +437,9 @@ async def claim_daily_reward(
     await db.commit()
     await db.refresh(claim)
     
-    # Send in-app notification: Daily reward claimed (Phase 6)
+    # Send in-app notification + push notification: Daily reward claimed (Phase 6)
     from app.services.notifications import create_notification
+    from app.services.fcm import send_push_notification
     await create_notification(
         db=db,
         user_id=current_user.id,
@@ -450,6 +451,18 @@ async def claim_daily_reward(
             "points_earned": points_to_award,
             "streak_day": updated_streak.reward_streak,
             "multiplier": multiplier,
+        },
+    )
+    await send_push_notification(
+        db=db,
+        user_id=current_user.id,
+        title=f"🎁 Daily Reward Claimed!",
+        body=f"You earned {points_to_award} points! Keep your streak going - {updated_streak.reward_streak} days!",
+        category="daily_reward",
+        data={
+            "type": "daily_reward_claimed",
+            "points_earned": str(points_to_award),
+            "streak_day": str(updated_streak.reward_streak),
         },
     )
     
