@@ -59,6 +59,9 @@ export function ProgressDashboard({
   const progress = progressQ.data?.progress ?? progressProp ?? [];
 
   const pct = total > 0 ? Math.round(((mastered + reviewing) / total) * 100) : 0;
+  const masteredRatio = total > 0 ? mastered / total : 0;
+  const reviewingRatio = total > 0 ? reviewing / total : 0;
+  const notStartedRatio = Math.max(0, 1 - masteredRatio - reviewingRatio);
 
   return (
     <View
@@ -69,26 +72,43 @@ export function ProgressDashboard({
     >
       <View style={styles.headerRow}>
         <Text style={[styles.title, { color: tokens.ink }]}>
-          {t("study.progress.title") || "Progress"}
+          {t("study.progress.title")}
         </Text>
         <Text style={[styles.pct, { color: tokens.mint }]}>{pct}%</Text>
       </View>
 
       <View style={styles.barRow}>
         <View style={[styles.bar, { backgroundColor: tokens.border }]}>
-          {mastered > 0 && (
+          {total > 0 && mastered > 0 && (
             <View
               style={[
                 styles.segment,
-                { backgroundColor: tokens.mint, flex: mastered },
+                {
+                  backgroundColor: tokens.mint,
+                  width: `${masteredRatio * 100}%`,
+                },
               ]}
             />
           )}
-          {reviewing > 0 && (
+          {total > 0 && reviewing > 0 && (
             <View
               style={[
                 styles.segment,
-                { backgroundColor: tokens.mintSoft, flex: reviewing },
+                {
+                  backgroundColor: tokens.mintSoft,
+                  width: `${reviewingRatio * 100}%`,
+                },
+              ]}
+            />
+          )}
+          {total > 0 && notStartedRatio > 0 && (
+            <View
+              style={[
+                styles.segment,
+                {
+                  backgroundColor: tokens.border,
+                  width: `${notStartedRatio * 100}%`,
+                },
               ]}
             />
           )}
@@ -99,26 +119,26 @@ export function ProgressDashboard({
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: tokens.mint }]} />
           <Text style={[styles.legendText, { color: tokens.inkMuted }]}>
-            {mastered} {t("study.progress.mastered") || "mastered"}
+            {mastered} {t("study.progress.mastered")}
           </Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: tokens.mintSoft }]} />
           <Text style={[styles.legendText, { color: tokens.inkMuted }]}>
-            {reviewing} {t("study.progress.reviewing") || "reviewing"}
+            {reviewing} {t("study.progress.reviewing")}
           </Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: tokens.border }]} />
           <Text style={[styles.legendText, { color: tokens.inkMuted }]}>
-            {notStarted} {t("study.progress.not_started") || "not started"}
+            {notStarted} {t("study.progress.not_started")}
           </Text>
         </View>
       </View>
 
       {progressQ.isLoading ? (
         <Text style={[styles.statusText, { color: tokens.inkMuted }]}>
-          {t("study.progress.loading") || "Loading progress..."}
+          {t("study.progress.loading")}
         </Text>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
@@ -155,8 +175,8 @@ export function ProgressDashboard({
                 {item.status === "mastered"
                   ? `${item.mastery_score ?? 0}%`
                   : item.status === "reviewing"
-                    ? "reviewing"
-                    : "not started"}
+                    ? t("study.progress.reviewing")
+                    : t("study.progress.not_started")}
               </Text>
             </Pressable>
           ))}

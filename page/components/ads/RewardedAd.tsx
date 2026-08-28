@@ -331,21 +331,21 @@ export function RewardedAd(props: RewardedAdProps) {
             });
           }
 
-          if (unsubLoaded) unsubLoaded();
-          if (unsubEarned) unsubEarned();
-          if (unsubClosed) unsubClosed();
+           if (unsubLoaded) unsubLoaded();
+           if (unsubEarned) unsubEarned();
+           if (unsubClosed) unsubClosed();
 
-          rewardedRef.current = null;
+           rewardedRef.current = null;
 
-          onCloseRef.current();
+           if (rewardDataRef.current) {
+             await handleRewardClaimed();
+             rewardDataRef.current = null;
+           } else {
+             onSkippedRef.current?.();
+           }
 
-          if (rewardDataRef.current) {
-            await handleRewardClaimed();
-            rewardDataRef.current = null;
-          } else {
-            onSkippedRef.current?.();
-          }
-        });
+           onCloseRef.current();
+         });
 
         rewardedRef.current = ad;
         ad.load();
@@ -457,7 +457,7 @@ export function RewardedAd(props: RewardedAdProps) {
 
         const since = acquired.tokenIssuedAt;
 
-        // CRITICAL FIX: Poll for credits BEFORE closing modal/releasing slot
+        // Poll for credits BEFORE closing modal/releasing slot
         // If we close the modal first, the component may unmount and prevent
         // the credit polling from completing
         if (watchedToCompletion) {

@@ -3,6 +3,7 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
@@ -43,6 +44,7 @@ export function SowUploadCard({
   onTakePhoto,
   onUploadDocument,
 }: SowUploadCardProps) {
+  const { t } = useTranslation();
   const [text, setText] = useState('');
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
@@ -76,11 +78,11 @@ export function SowUploadCard({
   };
 
   const examTypes = [
-    { value: 'jamb', label: 'JAMB' },
-    { value: 'waec', label: 'WAEC' },
-    { value: 'neco', label: 'NECO' },
-    { value: 'nabteb', label: 'NABTEB' },
-    { value: 'custom', label: 'Custom' },
+    { value: 'jamb', label: t('study.sow_upload.exam_types.jamb') },
+    { value: 'waec', label: t('study.sow_upload.exam_types.waec') },
+    { value: 'neco', label: t('study.sow_upload.exam_types.neco') },
+    { value: 'nabteb', label: t('study.sow_upload.exam_types.nabteb') },
+    { value: 'custom', label: t('study.sow_upload.exam_types.custom') },
   ];
 
   return (
@@ -96,7 +98,7 @@ export function SowUploadCard({
           // resolves at runtime per scheme.
         },
       ]}
-      accessibilityLabel="Upload Scheme of Work"
+      accessibilityLabel={t('study.sow_upload.a11y_card')}
     >
       <View
         style={[
@@ -112,10 +114,10 @@ export function SowUploadCard({
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
-            Upload your syllabus
+            {t('study.sow_upload.title')}
           </Text>
           <Text style={[styles.subtitle, { color: tokens.inkMuted }]}>
-            Drop a photo, PDF, or paste text. We'll parse the topics, generate quizzes, and unlock spaced-repetition cards.
+            {t('study.sow_upload.subtitle')}
           </Text>
         </View>
       </View>
@@ -126,7 +128,7 @@ export function SowUploadCard({
             key={et.value}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel={`Exam type ${et.label}`}
+            accessibilityLabel={t('study.sow_upload.exam_chip_a11y', { label: et.label })}
             accessibilityState={{ selected: examType === et.value }}
             onPress={() => onExamTypeChange(examType === et.value ? null : et.value)}
             style={[
@@ -151,7 +153,7 @@ export function SowUploadCard({
 
       <TextInput
         style={[styles.textInput, { backgroundColor: tokens.card, borderColor: tokens.border, color: tokens.ink }]}
-        placeholder="Paste your scheme of work or syllabus text…"
+        placeholder={t('study.sow_upload.placeholder')}
         placeholderTextColor={tokens.inkFaint}
         multiline
         numberOfLines={3}
@@ -159,8 +161,8 @@ export function SowUploadCard({
         onChangeText={setText}
         editable={!uploading}
         textAlignVertical="top"
-        accessibilityLabel="Scheme of work text input"
-        accessibilityHint="Enter or paste your scheme of work text"
+        accessibilityLabel={t('study.sow_upload.input_a11y')}
+        accessibilityHint={t('study.sow_upload.input_hint')}
       />
 
       {text.length > 0 && (
@@ -170,34 +172,56 @@ export function SowUploadCard({
             { color: !isValid ? tokens.signal : tokens.inkMuted },
           ]}
         >
-          {charCount.toLocaleString()} / {maxChars.toLocaleString()} characters
-          {charCount < minChars && ` (min ${minChars})`}
-          {charCount > maxChars && ' (exceeds limit)'}
+          {t('study.sow_upload.char_count', {
+            count: charCount.toLocaleString(),
+            max: maxChars.toLocaleString(),
+          })}
+          {charCount < minChars && ` ${t('study.sow_upload.char_min', { min: minChars })}`}
+          {charCount > maxChars && ` ${t('study.sow_upload.char_exceeds')}`}
         </Text>
       )}
 
       {uploading && uploadProgress !== 100 && (
         <View style={styles.progressRow}>
           <UploadStatusIcon uploading={uploading} progress={uploadProgress} tokens={tokens} />
-          <Text style={[styles.progressText, { color: tokens.inkMuted }]}>
-            Processing{uploadProgress !== undefined && uploadProgress < 100 ? ` ${uploadProgress}%` : '…'}
-          </Text>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={[styles.progressText, { color: tokens.inkMuted }]}>
+              {uploadProgress !== undefined && uploadProgress < 100
+                ? t('study.sow_upload.processing', { percent: uploadProgress })
+                : t('study.sow_upload.processing_ellipsis')}
+            </Text>
+            <View
+              style={[styles.progressBarTrack, { backgroundColor: tokens.border }]}
+              accessibilityRole="progressbar"
+              accessibilityValue={{ now: uploadProgress ?? 0, min: 0, max: 100 }}
+            >
+              <View
+                style={[
+                  styles.progressBarFill,
+                  {
+                    backgroundColor: tokens.mint,
+                    width: `${Math.max(0, Math.min(100, uploadProgress ?? 0))}%`,
+                  },
+                ]}
+              />
+            </View>
+          </View>
         </View>
       )}
 
-      {uploadProgress === 100 && (
+      {uploadProgress === 100 && !uploading && (
         <View
           style={[styles.successRow, { backgroundColor: tokens.mintSoft }]}
-          accessibilityLabel="Upload successful"
+          accessibilityLabel={t('study.sow_upload.success_a11y')}
           accessibilityRole="alert"
         >
           <Ionicons name="checkmark-circle" size={16} color={tokens.mint} accessibilityLabel="" />
-          <Text style={[styles.successText, { color: tokens.mint }]}>Upload successful!</Text>
+          <Text style={[styles.successText, { color: tokens.mint }]}>{t('study.sow_upload.success')}</Text>
         </View>
       )}
 
       <PrimaryButton
-        title={uploading ? 'Processing…' : 'Upload text'}
+        title={uploading ? t('study.sow_upload.submit_busy') : t('study.sow_upload.submit')}
         onPress={handleTextSubmit}
         loading={uploading}
         disabled={!isValid || uploading}
@@ -207,24 +231,27 @@ export function SowUploadCard({
       <View style={styles.modeRow}>
         <ModeButton
           icon="document"
-          label="PDF / Doc"
+          label={t('study.sow_upload.doc')}
           onPress={() => handleIconPress(() => onUploadDocument(examType))}
           disabled={uploading}
           tokens={tokens}
+          a11y={t('study.sow_upload.doc_a11y')}
         />
         <ModeButton
           icon="images"
-          label="Image"
+          label={t('study.sow_upload.image')}
           onPress={() => handleIconPress(() => onUploadImage(examType))}
           disabled={uploading}
           tokens={tokens}
+          a11y={t('study.sow_upload.image_a11y')}
         />
         <ModeButton
           icon="camera"
-          label="Camera"
+          label={t('study.sow_upload.camera')}
           onPress={() => handleIconPress(() => onTakePhoto(examType))}
           disabled={uploading}
           tokens={tokens}
+          a11y={t('study.sow_upload.camera_a11y')}
         />
       </View>
     </Animated.View>
@@ -240,25 +267,22 @@ function ModeButton({
   onPress,
   disabled,
   tokens,
+  a11y,
 }: {
   icon: 'document' | 'images' | 'camera';
   label: string;
   onPress: () => void;
   disabled: boolean;
   tokens: any;
+  a11y: string;
 }) {
-  const accessibilityLabels: Record<string, string> = {
-    document: 'Upload document (PDF or Word)',
-    images: 'Choose image from library',
-    camera: 'Take photo with camera',
-  };
   return (
     <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
       activeOpacity={0.85}
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabels[icon] || 'Upload option'}
+      accessibilityLabel={a11y}
       accessibilityState={{ disabled }}
       style={[
         styles.modeBtn,
@@ -361,6 +385,15 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 13,
+  },
+  progressBarTrack: {
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 999,
   },
   successRow: {
     flexDirection: 'row',

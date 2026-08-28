@@ -866,71 +866,6 @@ export default function DailyRewardsScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Claim Options Modal */}
-        {showClaimModal && todayReward && (
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: tokens.card }]}>
-              <Text style={[styles.modalTitle, { color: tokens.ink }]}>
-                {t("daily_rewards.claim_options_title", { defaultValue: "Claim Reward" })}
-              </Text>
-              <Text style={[styles.modalSubtitle, { color: tokens.inkMuted }]}>
-                {t("daily_rewards.claim_options_subtitle", { defaultValue: "Choose how to claim your daily reward" })}
-              </Text>
-
-              <TouchableOpacity
-                style={[
-                  styles.claimOptionButton,
-                  { backgroundColor: tokens.mint, borderColor: tokens.mint },
-                ]}
-                onPress={() => claimMutation.mutate({ deviceId: deviceId || undefined, doubleWithAd: false })}
-                disabled={claimingReward}
-                activeOpacity={0.9}
-              >
-                <Text style={[styles.claimOptionTitle, { color: tokens.mintText }]}>
-                  {t("daily_rewards.claim_option_regular", { defaultValue: "Claim 50 SP" })}
-                </Text>
-                <Text style={[styles.claimOptionSubtitle, { color: tokens.mintText }]}>
-                  {t("daily_rewards.claim_option_regular_desc", { defaultValue: "Add to your balance" })}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.claimOptionButton,
-                  { backgroundColor: tokens.card, borderColor: tokens.mint },
-                ]}
-                onPress={() => {
-                  setShowClaimModal(false);
-                  // Show ad first, then claim with double
-                  setShowAdModal(true);
-                }}
-                disabled={claimingReward}
-                activeOpacity={0.9}
-              >
-                <Ionicons name="play-circle-outline" size={24} color={tokens.mint} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.claimOptionTitle, { color: tokens.ink }]}>
-                    {t("daily_rewards.claim_option_double", { defaultValue: "Watch Ad → Double to 100 SP" })}
-                  </Text>
-                  <Text style={[styles.claimOptionSubtitle, { color: tokens.inkMuted }]}>
-                    {t("daily_rewards.claim_option_double_desc", { defaultValue: "Watch 1 short ad to double your reward" })}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={tokens.inkMuted} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setShowClaimModal(false)}
-                style={{ padding: 12 }}
-              >
-                <Text style={[styles.cancelButton, { color: tokens.inkMuted }]}>
-                  {t("common.cancel", { defaultValue: "Cancel" })}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
         {/* Error Display */}
         {claimMutation.isError && (
           <View
@@ -1069,6 +1004,70 @@ export default function DailyRewardsScreen() {
               })}
         </View>
       </ScrollView>
+
+      {/* Claim Options Modal - outside ScrollView so it overlays correctly */}
+      {showClaimModal && todayReward && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: tokens.card }]}>
+            <Text style={[styles.modalTitle, { color: tokens.ink }]}>
+              {t("daily_rewards.claim_options_title", { defaultValue: "Claim Reward" })}
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: tokens.inkMuted }]}>
+              {t("daily_rewards.claim_options_subtitle", { defaultValue: "Choose how to claim your daily reward" })}
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.claimOptionButton,
+                { backgroundColor: tokens.mint, borderColor: tokens.mint },
+              ]}
+              onPress={() => claimMutation.mutate({ deviceId: deviceId || undefined, doubleWithAd: false })}
+              disabled={claimingReward}
+              activeOpacity={0.9}
+            >
+              <Text style={[styles.claimOptionTitle, { color: tokens.mintText }]}>
+                {t("daily_rewards.claim_option_regular", { defaultValue: "Claim 50 SP" })}
+              </Text>
+              <Text style={[styles.claimOptionSubtitle, { color: tokens.mintText }]}>
+                {t("daily_rewards.claim_option_regular_desc", { defaultValue: "Add to your balance" })}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.claimOptionButton,
+                { backgroundColor: tokens.card, borderColor: tokens.mint },
+              ]}
+              onPress={() => {
+                setShowClaimModal(false);
+                setShowAdModal(true);
+              }}
+              disabled={claimingReward}
+              activeOpacity={0.9}
+            >
+              <Ionicons name="play-circle-outline" size={24} color={tokens.mint} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.claimOptionTitle, { color: tokens.ink }]}>
+                  {t("daily_rewards.claim_option_double", { defaultValue: "Watch Ad → Double to 100 SP" })}
+                </Text>
+                <Text style={[styles.claimOptionSubtitle, { color: tokens.inkMuted }]}>
+                  {t("daily_rewards.claim_option_double_desc", { defaultValue: "Watch 1 short ad to double your reward" })}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={tokens.inkMuted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setShowClaimModal(false)}
+              style={{ padding: 12 }}
+            >
+              <Text style={[styles.cancelButton, { color: tokens.inkMuted }]}>
+                {t("common.cancel", { defaultValue: "Cancel" })}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Rewarded Ad for daily reward double */}
       <RewardedAd
@@ -1378,10 +1377,11 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     alignItems: "center" as const,
     justifyContent: "center" as const,
     padding: 24,
+    zIndex: 1000,
   },
   modalContent: {
     width: "100%",
@@ -1391,6 +1391,11 @@ const styles = {
     gap: 16,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.05)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 12,
   },
   modalTitle: {
     fontSize: 18,

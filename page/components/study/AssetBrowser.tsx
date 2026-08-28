@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { StyleSheet, Pressable, Text, View } from 'react-native';
+import { StyleSheet, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
@@ -104,10 +105,11 @@ type AccordionSection = {
 };
 
 export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, onQuizComplete }: AssetBrowserProps) {
+  const { t } = useTranslation();
   const isAssetUnlocked = (assetId: number) =>
     assetId in unlockedAssets;
   const [pendingUnlock, setPendingUnlock] = useState<AssetInfo | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [mcqState, setMcqState] = useState<Record<number, Record<number, boolean>>>({});
   const [completedQuizzes, setCompletedQuizzes] = useState<Record<number, number>>({});
   const [submittingQuiz, setSubmittingQuiz] = useState<Record<number, boolean>>({});
@@ -164,44 +166,65 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
   const sections: AccordionSection[] = useMemo(() => [
     {
       type: 'video',
-      label: 'Video Lessons',
+      label: t('study.asset_browser.section_video'),
       icon: 'play-circle-outline',
       assets: assets.filter((a) => a.type === 'video'),
     },
     {
       type: 'diagram',
-      label: 'Diagrams',
+      label: t('study.asset_browser.section_diagram'),
       icon: 'git-branch-outline',
       assets: assets.filter((a) => a.type === 'diagram'),
     },
     {
       type: 'example',
-      label: 'Try It Yourself',
+      label: t('study.asset_browser.section_example'),
       icon: 'create-outline',
       assets: assets.filter((a) => a.type === 'example'),
     },
     {
       type: 'mcq',
-      label: 'MCQs',
+      label: t('study.asset_browser.section_mcq'),
       icon: 'help-circle-outline',
       assets: assets.filter((a) => a.type === 'mcq'),
     },
     {
       type: 'flashcard',
-      label: 'Flashcards',
+      label: t('study.asset_browser.section_flashcard'),
       icon: 'albums-outline',
       assets: assets.filter((a) => a.type === 'flashcard'),
     },
     {
       type: 'essay',
-      label: 'Essay Questions',
+      label: t('study.asset_browser.section_essay'),
       icon: 'document-text-outline',
       assets: assets.filter((a) => a.type === 'essay'),
     },
-  ], [assets]);
+  ], [assets, t]);
 
   const toggleExpand = (type: string) => {
-    setExpanded((prev) => (prev === type ? null : type));
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
+
+  const handleRetake = (assetId: number) => {
+    setMcqState((prev) => {
+      const next = { ...prev };
+      delete next[assetId];
+      return next;
+    });
+    setCompletedQuizzes((prev) => {
+      const next = { ...prev };
+      delete next[assetId];
+      return next;
+    });
   };
 
   const handleUnlock = async (asset: AssetInfo, method: 'points' | 'ad') => {
@@ -245,7 +268,7 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
           })}
           {allAnswered && !completedQuizzes[asset.id] && (
             <PrimaryButton
-              title={isSubmitting ? "Submitting..." : "Submit Quiz"}
+              title={isSubmitting ? t('study.asset_browser.submitting') : t('study.asset_browser.submit_quiz')}
               onPress={() => handleSubmitQuiz(asset.id, mcq.questions)}
               loading={isSubmitting}
               disabled={isSubmitting}
@@ -259,13 +282,25 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
                 color={finalScore >= 80 ? tokens.mint : tokens.inkMuted}
               />
               <Text style={[styles.scoreText, { color: tokens.ink }]}>
-                Score: {finalScore}%
+                {t('study.asset_browser.score', { percent: finalScore })}
               </Text>
               {finalScore >= 80 && (
                 <Text style={[styles.bonusLabel, { color: tokens.mint }]}>
-                  +20 pts bonus!
+                  {t('study.asset_browser.bonus_label')}
                 </Text>
               )}
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity
+                onPress={() => handleRetake(asset.id)}
+                style={styles.retakeBtn}
+                accessibilityRole="button"
+                accessibilityLabel={t('study.asset_browser.retake')}
+              >
+                <Ionicons name="refresh-outline" size={14} color={tokens.ink} />
+                <Text style={[styles.retakeText, { color: tokens.ink }]}>
+                  {t('study.asset_browser.retake')}
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -328,7 +363,7 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
     <View style={styles.root}>
       {sections.map((section) => {
         if (section.assets.length === 0) return null;
-        const isExpanded = expanded === section.type;
+        const isExpanded = expanded.has(section.type);
 
         return (
           <View key={section.type} style={[styles.section, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
@@ -369,10 +404,10 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
                         <View style={styles.lockedState}>
                           <Ionicons name="lock-closed-outline" size={28} color={tokens.inkMuted} />
                           <Text style={[styles.lockedText, { color: tokens.inkMuted }]}>
-                            {asset.points_to_unlock} pts to unlock
+                            {t('study.asset_browser.locked_label', { points: asset.points_to_unlock })}
                           </Text>
                           <PrimaryButton
-                            title="Unlock"
+                            title={t('study.asset_browser.unlock')}
                             onPress={() => setPendingUnlock(asset)}
                             disabled={userBalance < asset.points_to_unlock}
                           />
@@ -462,5 +497,17 @@ const styles = StyleSheet.create({
   bonusLabel: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  retakeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  retakeText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

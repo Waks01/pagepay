@@ -314,16 +314,15 @@ async def claim_daily_reward(
     rewards = await _get_or_create_default_rewards(db)
 
     client_date = request.headers.get("X-Client-Date")
+    offset = _get_timezone_offset_minutes(request)
     if client_date:
         try:
             today = date.fromisoformat(client_date)
         except (TypeError, ValueError):
             utc_now = datetime.now(timezone.utc)
-            offset = _get_timezone_offset_minutes(request)
             today = _user_local_date(utc_now, offset)
     else:
         utc_now = datetime.now(timezone.utc)
-        offset = _get_timezone_offset_minutes(request)
         today = _user_local_date(utc_now, offset)
     today_str = today.isoformat()
 
@@ -356,19 +355,59 @@ async def claim_daily_reward(
         # Ad double: verify user watched an ad today, then double
         if payload.double_with_ad:
             today_start = datetime.combine(today, time.min)
+            today_start_utc = today_start - timedelta(minutes=offset)
+            logger.info(
+                "[DAILY_CLAIM_DOUBLE] user=%s checking for watched ad | local_today=%s today_start(utc)=%s offset_min=%s",
+                current_user.id, today_str, today_start_utc.isoformat(), offset,
+            )
             ad_result = await db.execute(
                 select(AdEvent)
                 .where(AdEvent.user_id == current_user.id)
                 .where(AdEvent.watched_fully == True)  # noqa: E712
-                .where(AdEvent.created_at >= today_start)
+                .where(AdEvent.created_at >= today_start_utc)
                 .order_by(AdEvent.created_at.desc())
+                .limit(1)
             )
             valid_ad = ad_result.scalar_one_or_none()
             if not valid_ad:
+                # Debug: show what AdEvents this user actually has today
+                # (any status) so we can see if the SSV callback fired at all
+                # and whether the window/offset is wrong.
+                recent_debug = (
+                    await db.execute(
+                        select(AdEvent)
+                        .where(AdEvent.user_id == current_user.id)
+                        .order_by(AdEvent.created_at.desc())
+                        .limit(5)
+                    )
+                ).scalars().all()
+                debug_info = [
+                    {
+                        "id": e.id,
+                        "created_at": e.created_at.isoformat() if e.created_at else None,
+                        "credit_status": e.credit_status,
+                        "watched_fully": e.watched_fully,
+                        "user_points_credited": e.user_points_credited,
+                        "ad_unit": e.ad_unit,
+                        "use_case": e.use_case,
+                    }
+                    for e in recent_debug
+                ]
+                logger.warning(
+                    "[DAILY_CLAIM_DOUBLE] ✗ user=%s NO valid AdEvent | today_start_utc=%s offset_min=%s. "
+                    "Most-recent AdEvents (any status): %s",
+                    current_user.id, today_start_utc.isoformat(), offset, debug_info,
+                )
                 raise HTTPException(
                     status_code=400,
                     detail="No ad watched today. Please watch an ad first to double your reward.",
                 )
+            logger.info(
+                "[DAILY_CLAIM_DOUBLE] ✓ user=%s valid ad found | ad_event_id=%s created_at=%s pts=%d",
+                current_user.id, valid_ad.id,
+                valid_ad.created_at.isoformat() if valid_ad.created_at else None,
+                valid_ad.user_points_credited,
+            )
             base_points *= 2
         multiplier = 1.0
         points_to_award = base_points

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,7 +10,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -146,8 +146,6 @@ export default function StudyScreen() {
   const [uploadProgress, setUploadProgress] = useState<number | undefined>(
     undefined,
   );
-  const [studySessionId, setStudySessionId] = useState<number | null>(null);
-  const [studyDuration, setStudyDuration] = useState<number>(0);
   const studySessionIdRef = useRef<number | null>(null);
   const [examType, setExamType] = useState<string | null>(null);
   const [generateMode, setGenerateMode] = useState<"topic" | "all">("all");
@@ -163,17 +161,35 @@ export default function StudyScreen() {
 
   // Load cached assets on mount
   useEffect(() => {
+    let cancelled = false;
     if (selectedMaterial) {
       loadCachedAssets(selectedMaterial.id);
-      startStudySession(selectedMaterial.id);
+      const begin = async () => {
+        try {
+          const res = await apiFetch("/api/v1/study/session/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ material_id: selectedMaterial.id }),
+          });
+          if (cancelled || !res.ok) return;
+          const data = await res.json();
+          if (cancelled) return;
+          studySessionIdRef.current = data.session_id;
+        } catch (error) {
+          if (__DEV__) console.error("Failed to start study session:", error);
+        }
+      };
+      begin();
+      setSelectedTopic(null);
+      setGenerateMode("all");
     }
 
     return () => {
+      cancelled = true;
       if (studySessionIdRef.current) {
         const sid = studySessionIdRef.current;
-        endStudySession(sid);
         studySessionIdRef.current = null;
-        setStudySessionId(null);
+        endStudySession(sid);
       }
     };
   }, [selectedMaterial]);
@@ -222,24 +238,6 @@ export default function StudyScreen() {
     }
   };
 
-  const startStudySession = async (materialId: number) => {
-    try {
-      const res = await apiFetch("/api/v1/study/session/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ material_id: materialId }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setStudySessionId(data.session_id);
-        studySessionIdRef.current = data.session_id;
-      }
-    } catch (error) {
-      if (__DEV__) console.error("Failed to start study session:", error);
-    }
-  };
-
   const endStudySession = async (sessionId: number) => {
     try {
       const res = await apiFetch("/api/v1/study/session/end", {
@@ -249,8 +247,9 @@ export default function StudyScreen() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setStudyDuration(data.duration_seconds);
+        // duration_seconds is returned for analytics; the value is
+        // available on the server-side session log.
+        await res.json();
       }
     } catch (error) {
       if (__DEV__) console.error("Failed to end study session:", error);
@@ -311,7 +310,6 @@ export default function StudyScreen() {
       const sid = studySessionIdRef.current;
       endStudySession(sid);
       studySessionIdRef.current = null;
-      setStudySessionId(null);
     }
     setSelectedMaterialId(null);
     setSelectedMaterial(null);
@@ -381,7 +379,10 @@ export default function StudyScreen() {
   };
 
   const handlePollTick = () => {
-    setUploadProgress((prev) => (prev >= 99 ? prev : Math.min(99, prev + 1)));
+    setUploadProgress((prev) => {
+      const current = prev ?? 0;
+      return current >= 99 ? current : Math.min(99, current + 1);
+    });
   };
 
   // Shared tail: after the SOW job is completed, fetch the full
@@ -661,32 +662,36 @@ export default function StudyScreen() {
           backgroundColor={tokens.card}
           borderBottomColor={tokens.border}
           tokens={tokens}
+          left={<UserAvatar size={28} />}
           right={
-            <Pressable
-              onPress={() => handleChatPress(selectedMaterial.id)}
-              accessibilityRole="button"
-              accessibilityLabel={t("study.chat_ai")}
-              style={({ pressed }) => [
-                styles.headerIconBtn,
-                {
-                  borderColor: tokens.border,
-                  backgroundColor: tokens.card,
-                  opacity: pressed ? 0.7 : 1,
-                },
-              ]}
-            >
-              <Ionicons
-                name="chatbubble-ellipses-outline"
-                size={18}
-                color={tokens.ink}
-              />
-            </Pressable>
+            <View style={styles.headerRight}>
+              <Pressable
+                onPress={() => handleChatPress(selectedMaterial.id)}
+                accessibilityRole="button"
+                accessibilityLabel={t("study.chat_ai")}
+                style={({ pressed }) => [
+                  styles.headerIconBtn,
+                  {
+                    borderColor: tokens.border,
+                    backgroundColor: tokens.card,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={18}
+                  color={tokens.ink}
+                />
+              </Pressable>
+              <NotificationBell />
+            </View>
           }
         />
       ) : (
         <PageHeader
           title={t("study.title")}
-          subtitle={`${materials.length} ${materials.length === 1 ? "material" : "materials"}`}
+          subtitle={t("study.materials_count", { count: materials.length })}
           backgroundColor={tokens.card}
           borderBottomColor={tokens.border}
           tokens={tokens}
@@ -707,93 +712,77 @@ export default function StudyScreen() {
         }
       >
         {selectedMaterial && (
-          <View style={styles.headerWrap}>
-            <Animated.View entering={FadeInDown.duration(240).springify()}>
-              <View
-                style={[
-                  styles.detailHero,
-                  { backgroundColor: tokens.card, borderColor: tokens.border },
-                ]}
-              >
-                {selectedMaterial.exam_type && (
-                  <View
-                    style={[
-                      styles.eyebrowPill,
-                      { backgroundColor: tokens.mintSoft },
-                    ]}
-                  >
-                    <Ionicons
-                      name="ribbon-outline"
-                      size={12}
-                      color={tokens.mint}
-                    />
-                    <Text style={[styles.eyebrowText, { color: tokens.mint }]}>
-                      MATERIAL · {selectedMaterial.exam_type.toUpperCase()}
-                    </Text>
-                  </View>
-                )}
-                <Text
+          <Animated.View
+            entering={FadeInDown.duration(240).springify()}
+            style={styles.headerWrap}
+          >
+            <View
+              style={[
+                styles.detailHero,
+                { backgroundColor: tokens.card, borderColor: tokens.border },
+              ]}
+            >
+              {selectedMaterial.exam_type && (
+                <View
                   style={[
-                    styles.heroTitle,
-                    {
-                      color: tokens.ink,
-                      fontFamily: Fonts.editorialSemiBold as string,
-                    },
+                    styles.eyebrowPill,
+                    { backgroundColor: tokens.mintSoft },
                   ]}
                 >
-                  {selectedMaterial.title.replace(/^[A-Z]+ · /, "")}
-                </Text>
-                <View style={styles.heroMetaRow}>
-                  <View
-                    style={[styles.heroChip, { borderColor: tokens.border }]}
-                  >
-                    <Ionicons
-                      name="list-outline"
-                      size={12}
-                      color={tokens.inkMuted}
-                    />
-                    <Text style={[styles.heroChipText, { color: tokens.ink }]}>
-                      {getTopicNames(selectedMaterial.parsed_structure).length}{" "}
-                      topics
-                    </Text>
-                  </View>
-                  <View
-                    style={[styles.heroChip, { borderColor: tokens.border }]}
-                  >
-                    <Ionicons
-                      name="albums-outline"
-                      size={12}
-                      color={tokens.inkMuted}
-                    />
-                    <Text style={[styles.heroChipText, { color: tokens.ink }]}>
-                      {totalAssets} assets
-                    </Text>
-                  </View>
+                  <Ionicons
+                    name="ribbon-outline"
+                    size={12}
+                    color={tokens.mint}
+                  />
+                  <Text style={[styles.eyebrowText, { color: tokens.mint }]}>
+                    {t("study.material_eyebrow", {
+                      exam: selectedMaterial.exam_type.toUpperCase(),
+                    })}
+                  </Text>
+                </View>
+              )}
+              <Text
+                style={[
+                  styles.heroTitle,
+                  {
+                    color: tokens.ink,
+                    fontFamily: Fonts.editorialSemiBold as string,
+                  },
+                ]}
+              >
+                {selectedMaterial.title.replace(/^[A-Z]+ · /, "")}
+              </Text>
+              <View style={styles.heroMetaRow}>
+                <View
+                  style={[styles.heroChip, { borderColor: tokens.border }]}
+                >
+                  <Ionicons
+                    name="list-outline"
+                    size={12}
+                    color={tokens.inkMuted}
+                  />
+                  <Text style={[styles.heroChipText, { color: tokens.ink }]}>
+                    {t("study.topics_chip", {
+                      count: getTopicNames(selectedMaterial.parsed_structure)
+                        .length,
+                    })}
+                  </Text>
+                </View>
+                <View
+                  style={[styles.heroChip, { borderColor: tokens.border }]}
+                >
+                  <Ionicons
+                    name="albums-outline"
+                    size={12}
+                    color={tokens.inkMuted}
+                  />
+                  <Text style={[styles.heroChipText, { color: tokens.ink }]}>
+                    {t("study.assets_chip", { count: totalAssets })}
+                  </Text>
                 </View>
               </View>
-            </Animated.View>
-
-            <Pressable
-              onPress={() => handleChatPress(selectedMaterial.id)}
-              style={({ pressed }) => [
-                styles.chatBtnFull,
-                { backgroundColor: tokens.mint, opacity: pressed ? 0.85 : 1 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={t("study.chat_ai")}
-            >
-              <Ionicons
-                name="chatbubble-ellipses"
-                size={18}
-                color={tokens.mintText}
-              />
-              <Text
-                style={[styles.chatBtnFullText, { color: tokens.mintText }]}
-              >
-                {t("study.chat_ai")}
-              </Text>
-            </Pressable>
-          </View>
+            </View>
+          </Animated.View>
         )}
 
         {error && (
@@ -918,8 +907,10 @@ export default function StudyScreen() {
                     <Text
                       style={[styles.outlineMeta, { color: tokens.inkMuted }]}
                     >
-                      {getTopicNames(selectedMaterial.parsed_structure).length}{" "}
-                      total
+                      {t("study.topics_total", {
+                        count: getTopicNames(selectedMaterial.parsed_structure)
+                          .length,
+                      })}
                     </Text>
                   </View>
                   <View style={styles.outlineList}>
@@ -986,7 +977,7 @@ export default function StudyScreen() {
               >
                 <Ionicons name="book-outline" size={18} color={tokens.mint} />
                 <Text style={[styles.readBtnText, { color: tokens.ink }]}>
-                  Read Material
+                  {t("study.read_material")}
                 </Text>
                 <Ionicons
                   name="chevron-forward"
@@ -997,60 +988,74 @@ export default function StudyScreen() {
             )}
 
             {showReader && selectedMaterial.content && (
-              <View
-                style={[
-                  styles.readerOverlay,
-                  { backgroundColor: tokens.paper },
-                ]}
+              <Modal
+                visible={showReader}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => {
+                  player.pause();
+                  setTtsPlaying(false);
+                  setShowReader(false);
+                }}
               >
-                <View
-                  style={[
-                    styles.readerHeader,
-                    { borderBottomColor: tokens.border },
-                  ]}
+                <SafeAreaView
+                  edges={["top", "bottom"]}
+                  style={{ flex: 1, backgroundColor: tokens.paper }}
                 >
-                  <Text style={[styles.readerTitle, { color: tokens.ink }]}>
-                    {selectedMaterial.title}
-                  </Text>
-                  <View style={styles.readerHeaderActions}>
-                    <TouchableOpacity
-                      onPress={handleTtsPress}
-                      disabled={ttsLoading}
-                      style={styles.readerTtsBtn}
+                  <View
+                    style={[
+                      styles.readerHeader,
+                      { borderBottomColor: tokens.border },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.readerTitle, { color: tokens.ink }]}
+                      numberOfLines={1}
                     >
-                      <Ionicons
-                        name={ttsPlaying ? "pause" : "play"}
-                        size={20}
-                        color={tokens.mint}
-                      />
-                      <Text
-                        style={[styles.readerTtsText, { color: tokens.mint }]}
+                      {selectedMaterial.title}
+                    </Text>
+                    <View style={styles.readerHeaderActions}>
+                      <TouchableOpacity
+                        onPress={handleTtsPress}
+                        disabled={ttsLoading}
+                        style={styles.readerTtsBtn}
                       >
-                        {ttsLoading
-                          ? t("common.loading")
-                          : ttsPlaying
-                            ? t("study.tts.pause")
-                            : t("study.tts.listen")}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        player.pause();
-                        setTtsPlaying(false);
-                        setShowReader(false);
-                      }}
-                      style={styles.readerCloseBtn}
-                    >
-                      <Ionicons name="close" size={22} color={tokens.ink} />
-                    </TouchableOpacity>
+                        <Ionicons
+                          name={ttsPlaying ? "pause" : "play"}
+                          size={20}
+                          color={tokens.mint}
+                        />
+                        <Text
+                          style={[styles.readerTtsText, { color: tokens.mint }]}
+                        >
+                          {ttsLoading
+                            ? t("common.loading")
+                            : ttsPlaying
+                              ? t("study.tts.pause")
+                              : t("study.tts.listen")}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          player.pause();
+                          setTtsPlaying(false);
+                          setShowReader(false);
+                        }}
+                        style={styles.readerCloseBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={t("study.reader_close_a11y")}
+                      >
+                        <Ionicons name="close" size={22} color={tokens.ink} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-                <ScrollView style={styles.readerContent}>
-                  <Text style={[styles.readerText, { color: tokens.ink }]}>
-                    {selectedMaterial.content}
-                  </Text>
-                </ScrollView>
-              </View>
+                  <ScrollView style={styles.readerContent}>
+                    <Text style={[styles.readerText, { color: tokens.ink }]}>
+                      {selectedMaterial.content}
+                    </Text>
+                  </ScrollView>
+                </SafeAreaView>
+              </Modal>
             )}
 
             <AudioUnlockModal
@@ -1100,10 +1105,12 @@ export default function StudyScreen() {
                     },
                   ]}
                 >
-                  Generate
+                  {t("study.generate_heading")}
                 </Text>
                 <Text style={[styles.outlineMeta, { color: tokens.inkMuted }]}>
-                  {generateMode === "topic" ? "15 / topic" : "20 / material"}
+                  {generateMode === "topic"
+                    ? t("study.generate_topic_meta")
+                    : t("study.generate_all_meta")}
                 </Text>
               </View>
               <View style={styles.generateRow}>
@@ -1162,7 +1169,7 @@ export default function StudyScreen() {
 
               <View style={styles.generateRow}>
                 <GenerateButton
-                  label="Diagram"
+                  label={t("study.diagram")}
                   icon="git-branch-outline"
                   assetType="diagram"
                   onPress={() =>
@@ -1178,7 +1185,7 @@ export default function StudyScreen() {
                   tokens={tokens}
                 />
                 <GenerateButton
-                  label="Video"
+                  label={t("study.video")}
                   icon="play-circle-outline"
                   assetType="video"
                   onPress={() =>
@@ -1197,7 +1204,7 @@ export default function StudyScreen() {
 
               <View style={styles.generateRow}>
                 <GenerateButton
-                  label="Try It Yourself"
+                  label={t("study.try_it_yourself")}
                   icon="create-outline"
                   assetType="example"
                   onPress={() => {
@@ -1227,7 +1234,7 @@ export default function StudyScreen() {
                     { color: tokens.inkMuted },
                   ]}
                 >
-                  Generation Mode
+                  {t("study.generate_mode_label")}
                 </Text>
                 <View style={styles.modeSelector}>
                   <TouchableOpacity
@@ -1257,7 +1264,7 @@ export default function StudyScreen() {
                         },
                       ]}
                     >
-                      All Topics · 20
+                      {t("study.generate_all")}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -1286,7 +1293,7 @@ export default function StudyScreen() {
                         },
                       ]}
                     >
-                      By Topic · 15
+                      {t("study.generate_topic")}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1299,7 +1306,7 @@ export default function StudyScreen() {
                         { color: tokens.inkMuted },
                       ]}
                     >
-                      Select Topic
+                      {t("study.select_topic")}
                     </Text>
                     <ScrollView
                       horizontal
@@ -1374,7 +1381,7 @@ export default function StudyScreen() {
                   { backgroundColor: tokens.mint, opacity: pressed ? 0.85 : 1 },
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel="Start exam mode"
+                accessibilityLabel={t("study.exam_mode_a11y")}
               >
                 <Ionicons
                   name="school-outline"
@@ -1384,7 +1391,7 @@ export default function StudyScreen() {
                 <Text
                   style={[styles.quickActionText, { color: tokens.mintText }]}
                 >
-                  Exam Mode
+                  {t("study.exam_mode_button")}
                 </Text>
                 <Ionicons
                   name="chevron-forward"
@@ -1403,11 +1410,11 @@ export default function StudyScreen() {
                   },
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel="Review dashboard"
+                accessibilityLabel={t("study.review_a11y")}
               >
                 <Ionicons name="repeat-outline" size={20} color={tokens.mint} />
                 <Text style={[styles.quickActionText, { color: tokens.ink }]}>
-                  Review
+                  {t("study.review_button")}
                 </Text>
                 <Ionicons
                   name="chevron-forward"
@@ -1438,7 +1445,7 @@ export default function StudyScreen() {
                   <Text
                     style={[styles.outlineMeta, { color: tokens.inkMuted }]}
                   >
-                    {materials.length} active
+                    {t("study.active_count", { count: materials.length })}
                   </Text>
                 </View>
                 {materials.map((m, idx) => (
@@ -1461,8 +1468,13 @@ export default function StudyScreen() {
                         },
                       ]}
                       accessibilityRole="button"
-                      accessibilityLabel={`${m.title}, ${m.exam_type || "custom"}, ${m.asset_types.join(", ")}, created ${new Date(m.created_at).toLocaleDateString()}`}
-                      accessibilityHint="Open this study material"
+                      accessibilityLabel={t("study.material_a11y", {
+                        title: m.title,
+                        exam: m.exam_type || t("study.exam_type_custom"),
+                        assets: m.asset_types.join(", "),
+                        date: new Date(m.created_at).toLocaleDateString(),
+                      })}
+                      accessibilityHint={t("study.material_a11y_hint")}
                     >
                       <View
                         style={[
@@ -1491,8 +1503,10 @@ export default function StudyScreen() {
                           ]}
                           numberOfLines={1}
                         >
-                          {m.exam_type ? m.exam_type.toUpperCase() : "CUSTOM"} ·{" "}
-                          {m.asset_types.join(" · ")}
+                          {m.exam_type
+                            ? m.exam_type.toUpperCase()
+                            : t("study.exam_type_custom")}{" "}
+                          · {m.asset_types.join(" · ")}
                         </Text>
                       </View>
                       <Ionicons
@@ -1600,6 +1614,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   detailHero: {
     borderRadius: 14,
@@ -1806,14 +1825,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: "600",
-  },
-  readerOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
   },
   readerHeader: {
     flexDirection: "row",

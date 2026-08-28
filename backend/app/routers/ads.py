@@ -241,15 +241,43 @@ async def list_recent_credits(
     as the freshest value and re-render the wallet.
     """
     logger.info(
-        "GET /ads/recent-credits user=%s since=%s limit=%d",
-        current_user.id, since, limit,
+        "[ADMOB_RECENT_CREDITS] poll | user=%s since=%s limit=%d",
+        current_user.id, since.isoformat() if hasattr(since, "isoformat") else since, limit,
     )
     rows = await ads_service.list_recent_credits_for_user(
         db, current_user.id, since=since, limit=limit
     )
 
     if not rows:
-        logger.info("GET /ads/recent-credits user=%s -> 0 credits (still pending or none)", current_user.id)
+        # For debugging "no credit after watching ad": show the user's most
+        # recent AdEvent rows (any status) so we can see if the SSV callback
+        # fired at all, and whether the `since` window is just too tight.
+        recent_debug = (
+            await db.execute(
+                select(AdEvent)
+                .where(AdEvent.user_id == current_user.id)
+                .order_by(AdEvent.created_at.desc())
+                .limit(5)
+            )
+        ).scalars().all()
+        debug_info = [
+            {
+                "id": e.id,
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+                "credit_status": e.credit_status,
+                "user_points_credited": e.user_points_credited,
+                "watched_fully": e.watched_fully,
+                "ad_unit": e.ad_unit,
+                "use_case": e.use_case,
+            }
+            for e in recent_debug
+        ]
+        logger.warning(
+            "[ADMOB_RECENT_CREDITS] ✗ user=%s -> 0 credits. since=%s. Most-recent AdEvents (any status): %s",
+            current_user.id,
+            since.isoformat() if hasattr(since, "isoformat") else since,
+            debug_info,
+        )
         return []
 
     # Fetch the user's CURRENT balance once, not per row. The
@@ -271,6 +299,12 @@ async def list_recent_credits(
         ).scalar_one()
 
     out: list[AdRecentCredit] = []
+    logger.info(
+        "[ADMOB_RECENT_CREDITS] ✓ user=%s -> %d credit(s). ids=%s",
+        current_user.id,
+        len(rows),
+        [e.id for e in rows],
+    )
     for event in rows:
         out.append(
             AdRecentCredit(
@@ -602,6 +636,16 @@ async def admob_ssv_callback(
         query_params.get("key_id"),
         len(query_params.get("custom_data", "") or ""),
     )
+    # Full banner so it's obvious in the logs that a callback landed
+    logger.info(
+        "[ADMOB_SSV] >>> INCOMING CALLBACK | tx=%s ad_unit=%s reward_amount=%s key_id=%s custom_data_len=%d raw_keys=%s",
+        query_params.get("transaction_id"),
+        query_params.get("ad_unit"),
+        query_params.get("reward_amount"),
+        query_params.get("key_id"),
+        len(query_params.get("custom_data", "") or ""),
+        sorted(query_params.keys()),
+    )
 
     # Helper to log SSV attempts to database
     async def log_ssv_attempt(
@@ -633,6 +677,10 @@ async def admob_ssv_callback(
             query_params.get("transaction_id", "unknown"),
             query_params,
         )
+        logger.warning(
+            "[ADMOB_SSV] ✗ SIGNATURE FAILED | tx=%s — AdMob callback will be REJECTED with 401",
+            query_params.get("transaction_id", "unknown"),
+        )
         await log_ssv_attempt(
             user_id=None,
             token=None,
@@ -642,10 +690,20 @@ async def admob_ssv_callback(
         await db.commit()
         raise HTTPException(status_code=401, detail="Invalid SSV signature")
 
+    logger.info(
+        "[ADMOB_SSV] ✓ signature OK | tx=%s",
+        query_params.get("transaction_id"),
+    )
+
     # ── 2. Parse custom_data = "user_id:token" ─────────────────────
     custom_data = query_params.get("custom_data", "")
     if ":" not in custom_data:
         logger.warning("AdMob SSV: missing or malformed custom_data: %r", custom_data)
+        logger.warning(
+            "[ADMOB_SSV] ✗ MALFORMED CUSTOM_DATA | tx=%s custom_data=%r — REJECTED",
+            query_params.get("transaction_id"),
+            custom_data,
+        )
         await log_ssv_attempt(
             user_id=None,
             token=None,
@@ -660,6 +718,12 @@ async def admob_ssv_callback(
         user_id = int(user_id_str)
     except (ValueError, AttributeError) as e:
         logger.warning("AdMob SSV: malformed custom_data: %r", custom_data)
+        logger.warning(
+            "[ADMOB_SSV] ✗ MALFORMED CUSTOM_DATA | tx=%s custom_data=%r err=%s",
+            query_params.get("transaction_id"),
+            custom_data,
+            e,
+        )
         await log_ssv_attempt(
             user_id=None,
             token=None,
@@ -669,6 +733,13 @@ async def admob_ssv_callback(
         await db.commit()
         return {"status": "ignored", "reason": "malformed_custom_data"}
 
+    logger.info(
+        "[ADMOB_SSV] parsed custom_data | user_id=%s token=%s... tx=%s",
+        user_id,
+        token[:8] if token else "EMPTY",
+        query_params.get("transaction_id"),
+    )
+
     transaction_id = query_params.get("transaction_id", "")
     ad_unit_from_callback = query_params.get("ad_unit", "")
 
@@ -676,6 +747,12 @@ async def admob_ssv_callback(
     req = await ads_service.lookup_ad_request_by_token(db, token)
     if req is None:
         logger.warning("AdMob SSV: unknown token (user=%s, tx=%s)", user_id, transaction_id)
+        logger.warning(
+            "[ADMOB_SSV] ✗ UNKNOWN TOKEN | user=%s tx=%s token=%s... — the /request-token may not have created this row, or the token expired",
+            user_id,
+            transaction_id,
+            token[:8] if token else "EMPTY",
+        )
         await log_ssv_attempt(
             user_id=user_id,
             token=token,
@@ -685,10 +762,24 @@ async def admob_ssv_callback(
         await db.commit()
         return {"status": "ignored", "reason": "unknown_token"}
 
+    logger.info(
+        "[ADMOB_SSV] found AdRequest | id=%s user=%s ad_unit=%s status=%s session=%s expires_at=%s",
+        req.id,
+        req.user_id,
+        req.ad_unit,
+        req.status,
+        req.session_id,
+        req.expires_at,
+    )
+
     # ── 4. Validate the callback matches what we issued ───────────
     if req.user_id != user_id:
         logger.warning(
             "AdMob SSV: user mismatch (token_user=%s, custom_data_user=%s, tx=%s)",
+            req.user_id, user_id, transaction_id,
+        )
+        logger.warning(
+            "[ADMOB_SSV] ✗ USER MISMATCH | token_user=%s callback_user=%s tx=%s",
             req.user_id, user_id, transaction_id,
         )
         await log_ssv_attempt(
@@ -702,6 +793,10 @@ async def admob_ssv_callback(
 
     # Already-credited: idempotent no-op
     if req.status == "credited":
+        logger.info(
+            "[ADMOB_SSV] ↻ DUPLICATE — already credited | user=%s tx=%s previous_points=%s",
+            user_id, transaction_id, req.points_credited,
+        )
         await log_ssv_attempt(
             user_id=user_id,
             token=token,
@@ -717,6 +812,10 @@ async def admob_ssv_callback(
 
     # Expired or already rejected
     if req.status != "issued" or req.expires_at < datetime.utcnow():
+        logger.warning(
+            "[ADMOB_SSV] ✗ EXPIRED OR INVALID | user=%s tx=%s status=%s expires_at=%s now=%s",
+            user_id, transaction_id, req.status, req.expires_at, datetime.utcnow(),
+        )
         await ads_service.mark_ad_request_rejected(db, req, reason="expired_or_invalid")
         await log_ssv_attempt(
             user_id=user_id,
@@ -761,6 +860,10 @@ async def admob_ssv_callback(
         logger.warning(
             "AdMob SSV: non-positive reward_amount=%r for tx=%s user=%s",
             raw_reward, transaction_id, user_id,
+        )
+        logger.warning(
+            "[ADMOB_SSV] ✗ INVALID REWARD AMOUNT | user=%s tx=%s reward_amount=%r",
+            user_id, transaction_id, raw_reward,
         )
         await ads_service.mark_ad_request_rejected(db, req, reason="invalid_reward_amount")
         await log_ssv_attempt(
@@ -877,6 +980,10 @@ async def admob_ssv_callback(
         use_case=getattr(req, "use_case", "wallet_topup") or "wallet_topup",
     )
     db.add(event)
+    logger.info(
+        "[ADMOB_SSV] + AdEvent row staged | user=%s ad_unit=%s pts=%d use_case=%s tx=%s",
+        user_id, req.ad_unit, points, getattr(req, "use_case", "wallet_topup"), transaction_id,
+    )
 
     # AD WATCHED + CLEANUP complete: the AdRequest row is now marked
     # 'credited' (consumed, cannot be reused), the wallet/session got
@@ -899,6 +1006,10 @@ async def admob_ssv_callback(
     )
 
     await db.commit()
+    logger.info(
+        "[ADMOB_SSV] ✓ CREDITED | user=%s tx=%s unit=%s pts=%d use_case=%s — AdEvent written, wallet bumped, SSV callback COMPLETE",
+        user_id, transaction_id, req.ad_unit, points, getattr(req, "use_case", "wallet_topup"),
+    )
 
     # Fire ad-reward push AFTER commit so an AdMob retry can't slip
     # through the idempotency guard and double-fire notifications.

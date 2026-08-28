@@ -186,6 +186,19 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
     (ad as any)._adUnit = adUnit;
 
     return new Promise<AcquiredAd>((resolve, reject) => {
+      if (__DEV__) {
+        console.log('[AdSlot][AdMob] register listeners', {
+          ERROR: AdEventType.ERROR,
+          OPENED: AdEventType.OPENED,
+          CLOSED: AdEventType.CLOSED,
+          LOADED: RewardedAdEventType.LOADED,
+          EARNED_REWARD: RewardedAdEventType.EARNED_REWARD,
+          ERROR_typeof: typeof AdEventType.ERROR,
+          LOADED_typeof: typeof RewardedAdEventType.LOADED,
+          now: new Date().toISOString(),
+        });
+      }
+
       const unsubError = ad.addAdEventListener(AdEventType.ERROR, (err: unknown) => {
         if (__DEV__) {
           console.error('[AdSlot][AdMob] ERROR', {
@@ -204,16 +217,6 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
       ad.addAdEventListener(AdEventType.OPENED, () => {
         if (__DEV__) {
           console.log('[AdSlot][AdMob] OPENED', {
-            adUnitName: slot,
-            tokenIssuedAt,
-            now: new Date().toISOString(),
-          });
-        }
-      });
-
-      ad.addAdEventListener(AdEventType.IMPRESSION, () => {
-        if (__DEV__) {
-          console.log('[AdSlot][AdMob] IMPRESSION', {
             adUnitName: slot,
             tokenIssuedAt,
             now: new Date().toISOString(),
