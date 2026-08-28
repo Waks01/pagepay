@@ -133,6 +133,7 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
   const pendingAcquireRef = useRef<((ad: AcquiredAd) => void) | null>(null);
   const inflightRef = useRef<boolean>(false);
   const mountedRef = useRef<boolean>(true);
+  const unsupportedSlotRef = useRef<boolean>(false);
 
   /** Tear down any loaded ad. Safe to call multiple times. */
   const destroyCurrent = useCallback(() => {
@@ -149,12 +150,16 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
   /** Internal: load a fresh ad. Returns the loaded ad (already
    *  in `ready` state) or throws on failure. */
   const loadOne = useCallback(async (): Promise<AcquiredAd> => {
+    if (unsupportedSlotRef.current) {
+      throw new Error(`unsupported ad slot: ${defaultSlot()}`);
+    }
     if (!adsConfig) {
       throw new Error('ads config not loaded yet');
     }
     const slot = defaultSlot();
     const adUnit = adsConfig[slot];
     if (!adUnit) {
+      unsupportedSlotRef.current = true;
       throw new Error(`no unit ID for slot ${slot}`);
     }
 
@@ -296,6 +301,15 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
   const triggerBackgroundLoad = useCallback(() => {
     if (inflightRef.current) return;
     if (!mountedRef.current) return;
+    if (unsupportedSlotRef.current) {
+      if (__DEV__) {
+        console.log('[AdSlot] background load skipped: unsupported slot', {
+          slot: defaultSlot(),
+          now: new Date().toISOString(),
+        });
+      }
+      return;
+    }
     inflightRef.current = true;
     if (mountedRef.current) {
       setState((s) => (s === 'busy' ? 'busy' : 'loading'));
@@ -357,10 +371,11 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
           console.log('[AdSlot] acquire missed: not ready', {
             state,
             hasInstance: Boolean(adInstanceRef.current),
+            unsupported: unsupportedSlotRef.current,
             now: new Date().toISOString(),
           });
         }
-        if (state === 'error' || state === 'uninitialized') {
+        if ((state === 'error' || state === 'uninitialized') && !unsupportedSlotRef.current) {
           triggerBackgroundLoad();
         }
         return null;
@@ -398,6 +413,7 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
   /** Public API: drop the cached ad and force a fresh load. Use on
    *  app foreground or when the user has been idle > 1 hour. */
   const invalidate = useCallback(() => {
+    unsupportedSlotRef.current = false;
     destroyCurrent();
     triggerBackgroundLoad();
   }, [destroyCurrent, triggerBackgroundLoad]);

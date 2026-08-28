@@ -85,13 +85,13 @@ async def _get_or_create_default_rewards(db: AsyncSession) -> List[DailyReward]:
     
     # Create default reward structure per reward-system-migration.md §5
     default_rewards = [
-        # Daily drip (small) — Days 1-6: 10 sv each
-        DailyReward(day_number=1, reward_type="points", reward_value=10, title="Welcome Back!", description="Great to see you again", icon_emoji="🎯"),
-        DailyReward(day_number=2, reward_type="points", reward_value=10, title="Getting Started", description="Building momentum", icon_emoji="⚡"),
-        DailyReward(day_number=3, reward_type="points", reward_value=10, title="On a Roll", description="Keep it going", icon_emoji="🚀"),
-        DailyReward(day_number=4, reward_type="points", reward_value=10, title="Consistency Pays", description="Four days strong", icon_emoji="💪"),
-        DailyReward(day_number=5, reward_type="points", reward_value=10, title="Dedication", description="Five days in a row", icon_emoji="🔥"),
-        DailyReward(day_number=6, reward_type="points", reward_value=10, title="Almost There", description="One more for the week", icon_emoji="⭐"),
+        # Daily drip — Days 1-6: 50 sp each
+        DailyReward(day_number=1, reward_type="points", reward_value=50, title="Welcome Back!", description="Great to see you again", icon_emoji="🎯"),
+        DailyReward(day_number=2, reward_type="points", reward_value=50, title="Getting Started", description="Building momentum", icon_emoji="⚡"),
+        DailyReward(day_number=3, reward_type="points", reward_value=50, title="On a Roll", description="Keep it going", icon_emoji="🚀"),
+        DailyReward(day_number=4, reward_type="points", reward_value=50, title="Consistency Pays", description="Four days strong", icon_emoji="💪"),
+        DailyReward(day_number=5, reward_type="points", reward_value=50, title="Dedication", description="Five days in a row", icon_emoji="🔥"),
+        DailyReward(day_number=6, reward_type="points", reward_value=50, title="Almost There", description="One more for the week", icon_emoji="⭐"),
 
         # Milestones — no premium multiplier on milestone rewards
         DailyReward(day_number=7, reward_type="points", reward_value=200, title="Week Warrior", description="7-day streak milestone", icon_emoji="🏆"),
@@ -343,14 +343,35 @@ async def claim_daily_reward(
     MILESTONE_DAYS = {7, 14, 21, 30, 60, 100, 365}
     is_milestone = claimable_reward.day_number in MILESTONE_DAYS
 
-    if not is_milestone:
-        from app.services.subscription import get_points_multiplier
+    if is_milestone:
+        # Milestones: fixed value, no premium bonus, no ad double
         base_points = points_to_award
-        multiplier = get_points_multiplier(current_user, "daily")
-        points_to_award = int(base_points * multiplier)
-    else:
         multiplier = 1.0
+    else:
+        # Daily drip: base 50 SP, premium gets +10 (60 SP)
         base_points = points_to_award
+        is_premium = current_user.tier in ("premium_monthly", "premium_yearly")
+        if is_premium:
+            base_points += 10
+        # Ad double: verify user watched an ad today, then double
+        if payload.double_with_ad:
+            today_start = datetime.combine(today, time.min)
+            ad_result = await db.execute(
+                select(AdEvent)
+                .where(AdEvent.user_id == current_user.id)
+                .where(AdEvent.watched_fully == True)  # noqa: E712
+                .where(AdEvent.created_at >= today_start)
+                .order_by(AdEvent.created_at.desc())
+            )
+            valid_ad = ad_result.scalar_one_or_none()
+            if not valid_ad:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No ad watched today. Please watch an ad first to double your reward.",
+                )
+            base_points *= 2
+        multiplier = 1.0
+        points_to_award = base_points
     
     claim = UserRewardClaim(
         user_id=current_user.id,
@@ -413,7 +434,9 @@ async def claim_daily_reward(
         new_total_points=current_user.service_credit_balance if settings.wallet_split_enabled else current_user.points_balance,
         streak_day=updated_streak.reward_streak,
         is_multiplier=claimable_reward.reward_type == "multiplier",
-        multiplier_value=claimable_reward.reward_value if claimable_reward.reward_type == "multiplier" else None
+        multiplier_value=claimable_reward.reward_value if claimable_reward.reward_type == "multiplier" else None,
+        doubled=payload.double_with_ad and not is_milestone,
+        base_points=base_points,
     )
 
 

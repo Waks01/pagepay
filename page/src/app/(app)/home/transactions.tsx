@@ -10,6 +10,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";

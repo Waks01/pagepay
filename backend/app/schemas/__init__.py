@@ -1165,10 +1165,13 @@ class DailyRewardClaim(BaseModel):
     streak_day: int
     is_multiplier: bool
     multiplier_value: int | None
+    doubled: bool = False
+    base_points: int = 0
 
 
 class DailyRewardClaimRequest(BaseModel):
     device_id: str | None = None
+    double_with_ad: bool = False
 
 
 class DailyRewardHistory(BaseModel):

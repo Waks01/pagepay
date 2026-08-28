@@ -16,19 +16,22 @@ async def seed_daily_rewards():
         
         # Create default reward structure
         rewards = [
-            # Daily rewards (Days 1-7)
-            DailyReward(day_number=1, reward_type="points", reward_value=100, title="Welcome Back!", description="Great to see you again", icon_emoji="🎯"),
-            DailyReward(day_number=2, reward_type="points", reward_value=150, title="Getting Started", description="Building momentum", icon_emoji="⚡"),
-            DailyReward(day_number=3, reward_type="points", reward_value=200, title="On a Roll", description="Keep it going", icon_emoji="🚀"),
-            DailyReward(day_number=4, reward_type="points", reward_value=300, title="Consistency Pays", description="Four days strong", icon_emoji="💪"),
-            DailyReward(day_number=5, reward_type="points", reward_value=400, title="Dedication", description="Five days in a row", icon_emoji="🔥"),
-            DailyReward(day_number=6, reward_type="points", reward_value=500, title="Almost There", description="One more for the week", icon_emoji="⭐"),
-            DailyReward(day_number=7, reward_type="points", reward_value=750, title="Week Complete!", description="Seven day streak bonus", icon_emoji="🏆"),
+            # Daily rewards (Days 1-6): 50 sp each
+            DailyReward(day_number=1, reward_type="points", reward_value=50, title="Welcome Back!", description="Great to see you again", icon_emoji="🎯"),
+            DailyReward(day_number=2, reward_type="points", reward_value=50, title="Getting Started", description="Building momentum", icon_emoji="⚡"),
+            DailyReward(day_number=3, reward_type="points", reward_value=50, title="On a Roll", description="Keep it going", icon_emoji="🚀"),
+            DailyReward(day_number=4, reward_type="points", reward_value=50, title="Consistency Pays", description="Four days strong", icon_emoji="💪"),
+            DailyReward(day_number=5, reward_type="points", reward_value=50, title="Dedication", description="Five days in a row", icon_emoji="🔥"),
+            DailyReward(day_number=6, reward_type="points", reward_value=50, title="Almost There", description="One more for the week", icon_emoji="⭐"),
+            DailyReward(day_number=7, reward_type="points", reward_value=200, title="Week Warrior", description="7-day streak milestone", icon_emoji="🏆"),
             
-            # Weekly bonuses
-            DailyReward(day_number=14, reward_type="multiplier", reward_value=120, title="Two Week Warrior", description="20% bonus multiplier", icon_emoji="🛡️"),
-            DailyReward(day_number=21, reward_type="points", reward_value=1500, title="Three Week Legend", description="Major milestone bonus", icon_emoji="👑"),
-            DailyReward(day_number=30, reward_type="multiplier", reward_value=150, title="Monthly Master", description="50% bonus multiplier", icon_emoji="💎"),
+            # Milestones
+            DailyReward(day_number=14, reward_type="points", reward_value=350, title="Two Week Champion", description="14-day streak milestone", icon_emoji="🛡️"),
+            DailyReward(day_number=21, reward_type="points", reward_value=500, title="Three Week Legend", description="21-day streak milestone", icon_emoji="👑"),
+            DailyReward(day_number=30, reward_type="points", reward_value=800, title="Monthly Master", description="30-day streak milestone", icon_emoji="💎"),
+            DailyReward(day_number=60, reward_type="points", reward_value=1500, title="Diamond Streak", description="60-day streak milestone", icon_emoji="💍"),
+            DailyReward(day_number=100, reward_type="points", reward_value=3000, title="Centurion", description="100-day streak milestone", icon_emoji="🎖️"),
+            DailyReward(day_number=365, reward_type="points", reward_value=15000, title="Yearly Legend", description="365-day streak milestone", icon_emoji="👑"),
         ]
         
         for reward in rewards:

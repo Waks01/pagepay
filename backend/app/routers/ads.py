@@ -372,6 +372,28 @@ def _invalidate_verifier_keys() -> None:
     _last_keys_fetch = 0
 
 
+def _reconstruct_signed_data(raw_query_string: str) -> str:
+    """Reconstruct the exact URL-encoded query string AdMob signed.
+
+    AdMob signs the raw query string (URL-encoded bytes), so we must
+    preserve the original encoding rather than decoding and re-encoding
+    through Python's query_params parser.
+    """
+    pairs = []
+    for pair in raw_query_string.split("&"):
+        if not pair:
+            continue
+        if "=" not in pair:
+            continue
+        key, _, value = pair.partition("=")
+        if key in ("signature", "key_id"):
+            continue
+        pairs.append((key, value))
+
+    pairs.sort(key=lambda x: x[0])
+    return "&".join(f"{k}={v}" for k, v in pairs)
+
+
 async def _fetch_verifier_keys() -> dict[str, str]:
     """Fetch and cache Google's ECDSA P-256 public keys for AdMob SSV.
 
@@ -440,20 +462,16 @@ async def _verify_admob_ssv_signature(
     except Exception:
         return False
 
-    # Reconstruct the signed content: all query params except
-    # `signature` and `key_id`, sorted alphabetically and URL-encoded.
+    # Reconstruct the signed content from the RAW query string.
+    # AdMob signs the URL-encoded form, so we must preserve the
+    # exact bytes AdMob saw, not the decoded query_params.
     try:
-        query_data = {}
-        for k, v in query_params.items():
-            if k in ("signature", "key_id"):
-                continue
-            query_data[k] = v
-
-        sorted_items = sorted(query_data.items())
-        sorted_query_string = "&".join(
-            f"{k}={v}" for k, v in sorted_items
+        signed_data = _reconstruct_signed_data(raw_query_string)
+        logger.info(
+            "AdMob SSV signed data (key_id=%s): %r",
+            key_id,
+            signed_data[:500],
         )
-        signed_data = sorted_query_string
     except Exception:
         return False
 

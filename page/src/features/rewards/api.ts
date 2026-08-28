@@ -66,6 +66,8 @@ export type DailyRewardClaim = {
   streak_day: number;
   is_multiplier: boolean;
   multiplier_value: number | null;
+  doubled: boolean;
+  base_points: number;
 };
 
 export type DailyRewardHistory = {
@@ -137,11 +139,13 @@ export async function fetchDailyRewardStatus(): Promise<DailyRewardStatus> {
 
 export async function claimDailyReward(
   deviceId?: string,
+  doubleWithAd: boolean = false,
 ): Promise<DailyRewardClaim> {
-  const body: Record<string, string | undefined> = {};
+  const body: Record<string, unknown> = {};
   if (deviceId) {
     body.device_id = deviceId;
   }
+  body.double_with_ad = doubleWithAd;
   const res = await apiFetch("/api/v1/rewards/daily/claim", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

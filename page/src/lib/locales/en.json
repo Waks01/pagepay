@@ -1560,7 +1560,16 @@
     "recovery_spend_points": "Use Service Credits",
     "recovery_failed": "Recovery failed. Please try again.",
     "milestone_day_n": "Day {{day}} Milestone",
-    "milestone_reward": "{{reward}} bonus sp reward"
+    "milestone_reward": "{{reward}} bonus sp reward",
+    "claim_options_title": "Claim Reward",
+    "claim_options_subtitle": "Choose how to claim your daily reward",
+    "claim_option_regular": "Claim 50 SP",
+    "claim_option_regular_desc": "Add to your balance",
+    "claim_option_double": "Watch Ad → Double to 100 SP",
+    "claim_option_double_desc": "Watch 1 short ad to double your reward",
+    "ad_title": "Watch Ad",
+    "ad_body": "Watch this ad to double your daily reward",
+    "watch_ad": "Watch Ad"
   },
   "transaction_detail": {
     "sections": {

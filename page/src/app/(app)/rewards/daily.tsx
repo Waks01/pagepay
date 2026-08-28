@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -29,9 +30,12 @@ import { getDeviceFingerprint } from "@/src/shared/lib/device-fingerprint";
 
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import { useCurrentUser } from "@/src/shared/lib/current-user";
+import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
 import { StateBlock } from "@/components/StateBlock";
 import { Skeleton } from "@/components/Skeleton";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
+import { RewardedAd } from "@/components/ads/RewardedAd";
 import {
   fetchDailyRewardStatus,
   claimDailyReward,
@@ -79,7 +83,12 @@ export default function DailyRewardsScreen() {
   const tokens = PagePay[scheme];
   const queryClient = useQueryClient();
   const [claimingReward, setClaimingReward] = useState(false);
+  const [showClaimModal, setShowClaimModal] = useState(false);
+  const [showAdModal, setShowAdModal] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
+
+  const user = useCurrentUser();
+  const adsConfigQ = useAdsConfig();
 
   useEffect(() => {
     getDeviceFingerprint()
@@ -112,9 +121,11 @@ export default function DailyRewardsScreen() {
   }, [error]);
 
   const claimMutation = useMutation({
-    mutationFn: (deviceId?: string) => claimDailyReward(deviceId),
+    mutationFn: ({ deviceId, doubleWithAd }: { deviceId?: string; doubleWithAd: boolean }) =>
+      claimDailyReward(deviceId, doubleWithAd),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["daily-reward-status"] });
+      setShowClaimModal(false);
       console.log("[DailyRewards] Claim successful, invalidating status query");
       Notifications.scheduleNotificationAsync({
         content: {
@@ -151,15 +162,20 @@ export default function DailyRewardsScreen() {
     },
   });
 
-  const handleClaimReward = async () => {
+  const handleClaimReward = async (doubleWithAd: boolean = false) => {
     if (!rewardStatus?.can_claim_today) return;
     setClaimingReward(true);
     try {
-      await claimMutation.mutateAsync(deviceId || undefined);
+      await claimMutation.mutateAsync({ deviceId: deviceId || undefined, doubleWithAd });
     } finally {
       setClaimingReward(false);
     }
   };
+
+  const currentStreak = rewardStatus?.current_streak || 0;
+  const todayReward = rewardStatus?.todays_reward;
+  const canClaim = rewardStatus?.can_claim_today;
+  const rewards = rewardConfig.length > 0 ? rewardConfig : [];
 
   // Streak is considered broken when streak is 0 and user hasn't claimed today
   // (meaning they missed yesterday and lost their streak)
@@ -175,11 +191,6 @@ export default function DailyRewardsScreen() {
   const handleFreezeByPoints = async () => {
     await freezeByPointsMutation.mutateAsync(deviceId || undefined);
   };
-
-  const currentStreak = rewardStatus?.current_streak || 0;
-  const todayReward = rewardStatus?.todays_reward;
-  const canClaim = rewardStatus?.can_claim_today;
-  const rewards = rewardConfig.length > 0 ? rewardConfig : [];
 
   // Debug: Log to ensure we're using the correct streak
   useEffect(() => {
@@ -216,37 +227,37 @@ export default function DailyRewardsScreen() {
     1: {
       icon_emoji: "🎯",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Welcome Back!",
     },
     2: {
       icon_emoji: "⚡",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Getting Started",
     },
     3: {
       icon_emoji: "🚀",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "On a Roll",
     },
     4: {
       icon_emoji: "💪",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Consistency Pays",
     },
     5: {
       icon_emoji: "🔥",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Dedication",
     },
     6: {
       icon_emoji: "⭐",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Almost There",
     },
     7: {
@@ -258,37 +269,37 @@ export default function DailyRewardsScreen() {
     8: {
       icon_emoji: "🎯",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 8",
     },
     9: {
       icon_emoji: "⚡",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 9",
     },
     10: {
       icon_emoji: "🚀",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 10",
     },
     11: {
       icon_emoji: "💪",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 11",
     },
     12: {
       icon_emoji: "🔥",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 12",
     },
     13: {
       icon_emoji: "⭐",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 13",
     },
     14: {
@@ -300,37 +311,37 @@ export default function DailyRewardsScreen() {
     15: {
       icon_emoji: "🎯",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 15",
     },
     16: {
       icon_emoji: "⚡",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 16",
     },
     17: {
       icon_emoji: "🚀",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 17",
     },
     18: {
       icon_emoji: "💪",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 18",
     },
     19: {
       icon_emoji: "🔥",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 19",
     },
     20: {
       icon_emoji: "⭐",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 20",
     },
     21: {
@@ -342,49 +353,49 @@ export default function DailyRewardsScreen() {
     22: {
       icon_emoji: "🎯",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 22",
     },
     23: {
       icon_emoji: "⚡",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 23",
     },
     24: {
       icon_emoji: "🚀",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 24",
     },
     25: {
       icon_emoji: "💪",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 25",
     },
     26: {
       icon_emoji: "🔥",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 26",
     },
     27: {
       icon_emoji: "⭐",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 27",
     },
     28: {
       icon_emoji: "🎯",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 28",
     },
     29: {
       icon_emoji: "⚡",
       reward_type: "points",
-      reward_value: 10,
+      reward_value: 50,
       title: "Day 29",
     },
     30: {
@@ -414,54 +425,11 @@ export default function DailyRewardsScreen() {
   };
 
   const getRewardForDay = (dayNumber: number): DailyRewardInfo | null => {
-    const dbReward = rewards.find((r) => r.day_number === dayNumber) || null;
-    if (dbReward) return dbReward;
-
-    if (MILESTONE_DAYS.has(dayNumber)) {
-      const fallback = fallbackRewards[dayNumber];
-      if (fallback) {
-        const fallbackTitleKey = `daily_rewards.fallback_titles.day_${dayNumber}`;
-        const fallbackTitle = t(fallbackTitleKey);
-        return {
-          id: dayNumber,
-          day_number: dayNumber,
-          reward_type: fallback.reward_type as "points" | "multiplier",
-          reward_value: fallback.reward_value,
-          title:
-            fallbackTitle !== fallbackTitleKey ? fallbackTitle : fallback.title,
-          description: "",
-          icon_emoji: fallback.icon_emoji,
-        };
-      }
-      return null;
-    }
-
-    if (dayNumber <= 6) {
-      const fallback = fallbackRewards[dayNumber];
-      if (fallback) {
-        const fallbackTitleKey = `daily_rewards.fallback_titles.day_${dayNumber}`;
-        const fallbackTitle = t(fallbackTitleKey);
-        return {
-          id: dayNumber,
-          day_number: dayNumber,
-          reward_type: fallback.reward_type as "points" | "multiplier",
-          reward_value: fallback.reward_value,
-          title:
-            fallbackTitle !== fallbackTitleKey ? fallbackTitle : fallback.title,
-          description: "",
-          icon_emoji: fallback.icon_emoji,
-        };
-      }
-      return null;
-    }
-
-    const cycleDay = ((dayNumber - 1) % 6) + 1;
-    const cycleDbReward =
-      rewards.find((r) => r.day_number === cycleDay) || null;
-    if (cycleDbReward) {
-      return { ...cycleDbReward, day_number: dayNumber };
-    }
-    const fallback = fallbackRewards[cycleDay];
+    // Source of truth: frontend fallback per reward-system-migration.md §5.
+    // The backend DailyReward rows may still contain pre-migration values,
+    // so we prefer the local §5 fallback for days 1-365 and only use API
+    // data for days not covered by the fallback.
+    const fallback = fallbackRewards[dayNumber];
     if (fallback) {
       const fallbackTitleKey = `daily_rewards.fallback_titles.day_${dayNumber}`;
       const fallbackTitle = t(fallbackTitleKey);
@@ -476,6 +444,10 @@ export default function DailyRewardsScreen() {
         icon_emoji: fallback.icon_emoji,
       };
     }
+
+    const dbReward = rewards.find((r) => r.day_number === dayNumber) || null;
+    if (dbReward) return dbReward;
+
     return null;
   };
 
@@ -861,7 +833,7 @@ export default function DailyRewardsScreen() {
           </View>
         )}
 
-        {/* Claim Button - Pill Shape */}
+        {/* Claim Button - opens options modal */}
         {canClaim && todayReward && (
           <TouchableOpacity
             style={[
@@ -871,35 +843,92 @@ export default function DailyRewardsScreen() {
                 opacity: claimingReward ? 0.7 : 1,
               },
             ]}
-            onPress={handleClaimReward}
+            onPress={() => setShowClaimModal(true)}
             disabled={claimingReward}
             activeOpacity={0.9}
           >
             <Text style={styles.claimEmoji}>{todayReward.icon_emoji}</Text>
             <View style={styles.claimContent}>
               <Text style={[styles.claimTitle, { color: tokens.mintText }]}>
-                {claimingReward
-                  ? t("daily_rewards.claiming")
-                  : t("daily_rewards.claim_button")}
+                {t("daily_rewards.claim_button")}
               </Text>
               <Text style={[styles.claimSubtitle, { color: tokens.mintText }]}>
                 {t("daily_rewards.day_label", { day: currentStreak + 1 })} • +
                 {todayReward.reward_value}{" "}
-                {todayReward.reward_type === "points"
-                  ? t("daily_rewards.reward_points")
-                  : t("daily_rewards.reward_multiplier")}
+                {t("daily_rewards.reward_points")}
               </Text>
             </View>
-            {claimingReward ? (
-              <PagePaySpinner size={20} />
-            ) : (
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={tokens.mintText}
-              />
-            )}
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={tokens.mintText}
+            />
           </TouchableOpacity>
+        )}
+
+        {/* Claim Options Modal */}
+        {showClaimModal && todayReward && (
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: tokens.card }]}>
+              <Text style={[styles.modalTitle, { color: tokens.ink }]}>
+                {t("daily_rewards.claim_options_title", { defaultValue: "Claim Reward" })}
+              </Text>
+              <Text style={[styles.modalSubtitle, { color: tokens.inkMuted }]}>
+                {t("daily_rewards.claim_options_subtitle", { defaultValue: "Choose how to claim your daily reward" })}
+              </Text>
+
+              <TouchableOpacity
+                style={[
+                  styles.claimOptionButton,
+                  { backgroundColor: tokens.mint, borderColor: tokens.mint },
+                ]}
+                onPress={() => claimMutation.mutate({ deviceId: deviceId || undefined, doubleWithAd: false })}
+                disabled={claimingReward}
+                activeOpacity={0.9}
+              >
+                <Text style={[styles.claimOptionTitle, { color: tokens.mintText }]}>
+                  {t("daily_rewards.claim_option_regular", { defaultValue: "Claim 50 SP" })}
+                </Text>
+                <Text style={[styles.claimOptionSubtitle, { color: tokens.mintText }]}>
+                  {t("daily_rewards.claim_option_regular_desc", { defaultValue: "Add to your balance" })}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.claimOptionButton,
+                  { backgroundColor: tokens.card, borderColor: tokens.mint },
+                ]}
+                onPress={() => {
+                  setShowClaimModal(false);
+                  // Show ad first, then claim with double
+                  setShowAdModal(true);
+                }}
+                disabled={claimingReward}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="play-circle-outline" size={24} color={tokens.mint} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.claimOptionTitle, { color: tokens.ink }]}>
+                    {t("daily_rewards.claim_option_double", { defaultValue: "Watch Ad → Double to 100 SP" })}
+                  </Text>
+                  <Text style={[styles.claimOptionSubtitle, { color: tokens.inkMuted }]}>
+                    {t("daily_rewards.claim_option_double_desc", { defaultValue: "Watch 1 short ad to double your reward" })}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={tokens.inkMuted} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setShowClaimModal(false)}
+                style={{ padding: 12 }}
+              >
+                <Text style={[styles.cancelButton, { color: tokens.inkMuted }]}>
+                  {t("common.cancel", { defaultValue: "Cancel" })}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
 
         {/* Error Display */}
@@ -1040,6 +1069,30 @@ export default function DailyRewardsScreen() {
               })}
         </View>
       </ScrollView>
+
+      {/* Rewarded Ad for daily reward double */}
+      <RewardedAd
+        key="daily-reward-double"
+        visible={showAdModal}
+        adUnit={adsConfigQ.data?.rewarded_android || adsConfigQ.data?.rewarded_ios || ""}
+        adUnitName={Platform.OS === "android" ? "rewarded_android" : "rewarded_ios"}
+        userId={user?.id ?? 0}
+        title={t("daily_rewards.ad_title", { defaultValue: "Watch Ad" })}
+        body={t("daily_rewards.ad_body", { defaultValue: "Watch this ad to double your daily reward" })}
+        claimLabel={t("daily_rewards.watch_ad", { defaultValue: "Watch Ad" })}
+        allowSkip
+        skipLabel={t("common.skip", { defaultValue: "Skip" })}
+        onClaimed={() => {
+          setShowAdModal(false);
+          claimMutation.mutate({ deviceId: deviceId || undefined, doubleWithAd: true });
+        }}
+        onSkipped={() => {
+          setShowAdModal(false);
+        }}
+        onClose={() => {
+          setShowAdModal(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1318,5 +1371,57 @@ const styles = {
     fontSize: 13,
     fontWeight: "500" as const,
     textAlign: "center" as const,
+  },
+  modalOverlay: {
+    position: "absolute" as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    padding: 24,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 20,
+    padding: 24,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700" as const,
+    textAlign: "center" as const,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    textAlign: "center" as const,
+    lineHeight: 18,
+  },
+  claimOptionButton: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+    gap: 12,
+  },
+  claimOptionTitle: {
+    fontSize: 15,
+    fontWeight: "700" as const,
+  },
+  claimOptionSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  cancelButton: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    textAlign: "center" as const,
+    paddingVertical: 8,
   },
 };
