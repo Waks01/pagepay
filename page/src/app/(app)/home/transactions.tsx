@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import {
   View,
   Text,
@@ -8,17 +8,15 @@ import {
   RefreshControl,
 } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useTranslation } from "react-i18next";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
+import { useTranslation } from "react-i18next";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { useCurrentUser, useCurrentUserStore } from "@/src/shared/lib/current-user";
 import { PagePay } from "@/constants/theme";
 import { StateBlock } from "@/components/StateBlock";
-import { Skeleton } from "@/components/skeletons";
+import { PageHeader } from "@/components/PageHeader";
 
 type TransactionHistoryItem = {
   id: number;
@@ -130,19 +128,12 @@ export default function TransactionHistoryScreen() {
   };
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={[styles.root, { backgroundColor: tokens.paper }]}
-    >
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={tokens.ink} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: tokens.ink }]}>
-          {t("transactions.title", { defaultValue: "Transaction History" })}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <View style={[styles.root, { backgroundColor: tokens.paper }]}>
+      <PageHeader
+        title={t("transactions.title", { defaultValue: "Transaction History" })}
+        showBack
+        tokens={tokens}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -239,31 +230,12 @@ export default function TransactionHistoryScreen() {
         )}
         <View style={{ height: 24 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
   scroll: {
     padding: 16,
     gap: 8,

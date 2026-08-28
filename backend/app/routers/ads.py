@@ -257,9 +257,18 @@ async def list_recent_credits(
     # in the AdEvent row's created_at ordering; the LAST row's
     # value is the freshest authoritative balance, but for client
     # display we also surface the live balance.
-    me = (
-        await db.execute(select(User.points_balance).where(User.id == current_user.id))
-    ).scalar_one()
+    if settings.wallet_split_enabled:
+        balance_row = (
+            await db.execute(
+                select(User.service_credit_balance).where(User.id == current_user.id)
+            )
+        ).scalar_one()
+    else:
+        balance_row = (
+            await db.execute(
+                select(User.points_balance).where(User.id == current_user.id)
+            )
+        ).scalar_one()
 
     out: list[AdRecentCredit] = []
     for event in rows:
@@ -269,7 +278,7 @@ async def list_recent_credits(
                 ad_unit=event.ad_unit or "",
                 points_credited=event.user_points_credited or 0,
                 credited_at=event.created_at,
-                new_balance=me,
+                new_balance=balance_row,
             )
         )
 
@@ -897,9 +906,16 @@ async def admob_ssv_callback(
             )
         )
 
-    me = (
-        await db.execute(select(User.points_balance).where(User.id == user_id))
-    ).scalar_one()
+    if settings.wallet_split_enabled:
+        me = (
+            await db.execute(
+                select(User.service_credit_balance).where(User.id == user_id)
+            )
+        ).scalar_one()
+    else:
+        me = (
+            await db.execute(select(User.points_balance).where(User.id == user_id))
+        ).scalar_one()
 
     logger.info(
         "AdMob SSV credit: user=%s unit=%s tx=%s pts=%d balance=%d",

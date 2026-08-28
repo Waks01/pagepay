@@ -115,15 +115,28 @@ export default function ReaderScreen() {
     if (preReadDismissedRef.current || adGatingLoading) {
       return;
     }
-    // Only show pre-read ad if ad gating says we should
     if (adGating && adGating.showPreReadAd) {
+      if (__DEV__) {
+        console.log("[Reader] Pre-read ad opening", {
+          showPreReadAd: adGating.showPreReadAd,
+          contentId: id,
+          now: new Date().toISOString(),
+        });
+      }
       setPreReadOpen(true);
     }
-  }, [adGating, adGatingLoading]);
+  }, [adGating, adGatingLoading, id]);
 
   useEffect(() => {
     if (preReadOpen) {
       setPreReadHasShown(true);
+      if (__DEV__) {
+        console.log("[Reader] Pre-read ad opened", {
+          preReadOpen,
+          preReadHasShown: true,
+          now: new Date().toISOString(),
+        });
+      }
     }
   }, [preReadOpen]);
 
@@ -312,7 +325,25 @@ export default function ReaderScreen() {
   }, [id]);
 
   useEffect(() => {
-    if (!sessionIdRef.current || preReadOpen || !preReadHasShown) return;
+    if (!sessionIdRef.current || preReadOpen || !preReadHasShown) {
+      if (__DEV__) {
+        console.log("[Reader] Timer gated", {
+          hasSession: Boolean(sessionIdRef.current),
+          preReadOpen,
+          preReadHasShown,
+          now: new Date().toISOString(),
+        });
+      }
+      return;
+    }
+
+    if (__DEV__) {
+      console.log("[Reader] Timer + heartbeat starting", {
+        sessionId: sessionIdRef.current,
+        elapsedSeconds,
+        now: new Date().toISOString(),
+      });
+    }
 
     heartbeatRef.current = setInterval(() => {
       sendHeartbeat();
@@ -326,7 +357,7 @@ export default function ReaderScreen() {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [sessionId, preReadOpen, preReadHasShown]);
+  }, [sessionId, preReadOpen, preReadHasShown, elapsedSeconds]);
 
   const sendHeartbeat = async () => {
     if (!sessionIdRef.current) return;
@@ -353,6 +384,12 @@ export default function ReaderScreen() {
   };
 
   const startSession = async () => {
+    if (__DEV__) {
+      console.log("[Reader] startSession requesting", {
+        contentId: Number(id),
+        now: new Date().toISOString(),
+      });
+    }
     const res = await apiFetch("/api/v1/session/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -361,6 +398,13 @@ export default function ReaderScreen() {
     const json = await res.json();
     setSessionId(json.session_id);
     sessionIdRef.current = json.session_id;
+    if (__DEV__) {
+      console.log("[Reader] startSession success", {
+        sessionId: json.session_id,
+        response: json,
+        now: new Date().toISOString(),
+      });
+    }
   };
 
   const endSession = async (
@@ -441,6 +485,14 @@ export default function ReaderScreen() {
     heartbeatRef.current = null;
     timerRef.current = null;
 
+    if (__DEV__) {
+      console.log("[Reader] triggerFinish", {
+        hasSession: Boolean(sessionIdRef.current),
+        elapsedSeconds,
+        now: new Date().toISOString(),
+      });
+    }
+
     if (sessionIdRef.current) {
       finishedManuallyRef.current = true;
       setPostReadAdOpen(true);
@@ -471,6 +523,14 @@ export default function ReaderScreen() {
     newBalance: number;
     pending?: boolean;
   }) => {
+    if (__DEV__) {
+      console.log("[Reader] Pre-read ad claimed", {
+        pointsCredited: _info.pointsCredited,
+        newBalance: _info.newBalance,
+        pending: _info.pending,
+        now: new Date().toISOString(),
+      });
+    }
     queryClient.invalidateQueries({ queryKey: ["me"] });
     queryClient.invalidateQueries({ queryKey: ["wallet"] });
     setPreReadOpen(false);
@@ -480,21 +540,26 @@ export default function ReaderScreen() {
     setPreReadOpen(false);
     router.replace(`/catalog/book/${workId}`);
   };
-
   const onPostReadAdClaimed = async (_info: {
     pointsCredited: number;
     newBalance: number;
     pending?: boolean;
   }) => {
-    // Idempotency: AdMob's CLOSED event can fire twice in some SDK versions,
-    // and the slot path's onClosed plus the component-level listener can
-    // race to call this. Without this guard, the user would see another
-    // post-read ad open behind the first before navigation completes.
+    if (__DEV__) {
+      console.log("[Reader] Post-read ad claimed", {
+        pointsCredited: _info.pointsCredited,
+        newBalance: _info.newBalance,
+        pending: _info.pending,
+        now: new Date().toISOString(),
+      });
+    }
+
     if (claimProcessedRef.current) return;
     claimProcessedRef.current = true;
     console.log(
       "[Reader] Post-read ad claimed, closing modal and ending session...",
     );
+
     setPostReadAdOpen(false);
     queryClient.invalidateQueries({ queryKey: ["me"] });
     queryClient.invalidateQueries({ queryKey: ["wallet"] });
@@ -516,15 +581,18 @@ export default function ReaderScreen() {
     releaseAdSlot();
     router.push(`/catalog/book/${workId}`);
   };
-
   const onPostReadAdSkipped = async () => {
-    // Same idempotency guard as onPostReadAdClaimed — a skip event that
-    // races with a closed/earned event must not retrigger the whole flow.
+    if (__DEV__) {
+      console.log("[Reader] Post-read ad skipped", {
+        now: new Date().toISOString(),
+      });
+    }
     if (claimProcessedRef.current) return;
     claimProcessedRef.current = true;
     console.log(
       "[Reader] Post-read ad skipped, closing modal and ending session...",
     );
+
     setPostReadAdOpen(false);
 
     if (!sessionIdRef.current) {

@@ -44,6 +44,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { requestAdToken, pollRecentCredits } from "@/src/shared/lib/ads";
+import { useCurrentUserStore } from "@/src/shared/lib/current-user";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { useAdSlot } from "@/src/shared/contexts/AdSlot";
@@ -263,6 +264,7 @@ export function RewardedAd(props: RewardedAdProps) {
             custom_data_preview: custom_data
               ? `${custom_data.slice(0, 20)}...`
               : "EMPTY",
+            now: new Date().toISOString(),
           });
         }
 
@@ -322,7 +324,11 @@ export function RewardedAd(props: RewardedAdProps) {
 
         unsubClosed = ad.addAdEventListener(AdEventType.CLOSED, async () => {
           if (__DEV__) {
-            console.log("[RewardedAd] Ad closed");
+            console.log("[RewardedAd] Ad closed", {
+              hasReward: Boolean(rewardDataRef.current),
+              reward: rewardDataRef.current,
+              now: new Date().toISOString(),
+            });
           }
 
           if (unsubLoaded) unsubLoaded();
@@ -401,6 +407,7 @@ export function RewardedAd(props: RewardedAdProps) {
           pointsCredited: credit.points_credited,
           newBalance: credit.new_balance,
         });
+        useCurrentUserStore.getState().refresh();
       } else {
         if (__DEV__) {
           console.log(
@@ -471,6 +478,7 @@ export function RewardedAd(props: RewardedAdProps) {
                 pointsCredited: credit.points_credited,
                 newBalance: credit.new_balance,
               });
+              useCurrentUserStore.getState().refresh();
             } else {
               if (__DEV__) {
                 console.log(
@@ -503,6 +511,13 @@ export function RewardedAd(props: RewardedAdProps) {
         }
 
         // NOW close modal and release slot AFTER credit polling completes
+        if (__DEV__) {
+          console.log("[RewardedAd] acquired.onClosed: closing modal + releasing slot", {
+            watchedToCompletion,
+            since,
+            now: new Date().toISOString(),
+          });
+        }
         onCloseRef.current();
         slot.release();
       };

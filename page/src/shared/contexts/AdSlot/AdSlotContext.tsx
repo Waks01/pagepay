@@ -182,6 +182,12 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
 
     return new Promise<AcquiredAd>((resolve, reject) => {
       const unsubError = ad.addAdEventListener(AdEventType.ERROR, (err: unknown) => {
+        if (__DEV__) {
+          console.error('[AdSlot][AdMob] ERROR', {
+            error: err instanceof Error ? err.message : String(err),
+            now: new Date().toISOString(),
+          });
+        }
         try {
           ad.destroy?.();
         } catch {
@@ -190,20 +196,41 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
         reject(err instanceof Error ? err : new Error('ad load failed'));
       });
 
-      // We capture CLOSED at load time using a ref-like local. The
-      // consumer can attach their close-handler on the resolved
-      // AcquiredAd via the `closedListener` slot. CLOSED fires once
-      // per ad (the instance is single-shot).
+      ad.addAdEventListener(AdEventType.OPENED, () => {
+        if (__DEV__) {
+          console.log('[AdSlot][AdMob] OPENED', {
+            adUnitName: slot,
+            tokenIssuedAt,
+            now: new Date().toISOString(),
+          });
+        }
+      });
+
+      ad.addAdEventListener(AdEventType.IMPRESSION, () => {
+        if (__DEV__) {
+          console.log('[AdSlot][AdMob] IMPRESSION', {
+            adUnitName: slot,
+            tokenIssuedAt,
+            now: new Date().toISOString(),
+          });
+        }
+      });
+
       const result: AcquiredAd = {
         adUnitName: slot,
         tokenIssuedAt,
         customData: tokenRes.custom_data,
         show: () => {
+          if (__DEV__) {
+            console.log('[AdSlot][AdMob] show() called', {
+              adUnitName: slot,
+              tokenIssuedAt,
+              now: new Date().toISOString(),
+            });
+          }
           try {
             ad.show();
           } catch {
-            // show() can throw if the ad expired between LOADED
-            // and now (the user was idle). Destroy + reject.
             destroyCurrent();
             if (mountedRef.current) {
               setState('error');
@@ -214,6 +241,13 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
       };
 
       ad.addAdEventListener(AdEventType.CLOSED, () => {
+        if (__DEV__) {
+          console.log('[AdSlot][AdMob] CLOSED', {
+            adUnitName: slot,
+            tokenIssuedAt,
+            now: new Date().toISOString(),
+          });
+        }
         if (result.onClosed) {
           try {
             result.onClosed();
@@ -223,11 +257,15 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
         }
       });
 
-      // Forward EARNED_REWARD so the consumer can distinguish
-      // "user watched full ad" from "user closed ad mid-watch".
-      // AdMob fires EARNED_REWARD right before CLOSED when the user
-      // meets the configured reward threshold.
-      ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
+      ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (reward: { type: string; amount: number }) => {
+        if (__DEV__) {
+          console.log('[AdSlot][AdMob] EARNED_REWARD', {
+            adUnitName: slot,
+            tokenIssuedAt,
+            reward,
+            now: new Date().toISOString(),
+          });
+        }
         if (result.onEarned) {
           try {
             result.onEarned();
@@ -239,6 +277,13 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
 
       const unsubLoaded = ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
         unsubLoaded?.();
+        if (__DEV__) {
+          console.log('[AdSlot][AdMob] LOADED', {
+            adUnitName: slot,
+            tokenIssuedAt,
+            now: new Date().toISOString(),
+          });
+        }
         resolve(result);
       });
 
@@ -255,41 +300,66 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
     if (mountedRef.current) {
       setState((s) => (s === 'busy' ? 'busy' : 'loading'));
     }
+    if (__DEV__) {
+      console.log('[AdSlot] background load starting', {
+        previousState: state,
+        now: new Date().toISOString(),
+      });
+    }
     loadOne()
       .then((ad) => {
         if (!mountedRef.current) {
-          // Provider unmounted mid-load — destroy.
-          try {
-            ad.show; // no-op; we have no instance to destroy here.
-          } catch {
-            // ignore
-          }
           return;
         }
         adInstanceRef.current = ad;
+        if (__DEV__) {
+          console.log('[AdSlot] background load ready', {
+            adUnitName: ad.adUnitName,
+            tokenIssuedAt: ad.tokenIssuedAt,
+            customDataPreview: ad.customData
+              ? `${ad.customData.slice(0, 20)}...`
+              : 'EMPTY',
+            now: new Date().toISOString(),
+          });
+        }
         setState('ready');
       })
-      .catch(() => {
+      .catch((err) => {
         if (!mountedRef.current) return;
+        if (__DEV__) {
+          console.warn('[AdSlot] background load failed', {
+            error: err instanceof Error ? err.message : String(err),
+            now: new Date().toISOString(),
+          });
+        }
         setState('error');
       })
       .finally(() => {
         inflightRef.current = false;
       });
-  }, [loadOne]);
+  }, [loadOne, state]);
 
   /** Public API: acquire the ready ad. Returns null if not ready. */
   const acquire = useCallback(
     (adSlot: AdSlotName): AcquiredAd | null => {
       if (adSlot !== defaultSlot()) {
-        // We only manage the default platform's rewarded slot. Other
-        // slots fall through to their own component-level loaders.
+        if (__DEV__) {
+          console.log('[AdSlot] acquire skipped: non-default slot', {
+            requested: adSlot,
+            defaultSlot: defaultSlot(),
+            now: new Date().toISOString(),
+          });
+        }
         return null;
       }
       if (state !== 'ready' || !adInstanceRef.current) {
-        // Not ready — kick off a load for next time, but return null
-        // so the caller can decide what to do (show a brief spinner,
-        // surface a retry button, etc.).
+        if (__DEV__) {
+          console.log('[AdSlot] acquire missed: not ready', {
+            state,
+            hasInstance: Boolean(adInstanceRef.current),
+            now: new Date().toISOString(),
+          });
+        }
         if (state === 'error' || state === 'uninitialized') {
           triggerBackgroundLoad();
         }
@@ -300,6 +370,14 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
       if (mountedRef.current) {
         setState('busy');
       }
+      if (__DEV__) {
+        console.log('[AdSlot] acquire success', {
+          state,
+          adUnitName: ad.adUnitName,
+          tokenIssuedAt: ad.tokenIssuedAt,
+          now: new Date().toISOString(),
+        });
+      }
       return ad;
     },
     [state, triggerBackgroundLoad],
@@ -307,12 +385,15 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
 
   /** Public API: called when the modal closes. */
   const release = useCallback(() => {
-    // Ad is consumed (single-shot). The modal is gone, the user is
-    // back on the reader. Start loading the next one immediately
-    // so the next tap is instant.
+    if (__DEV__) {
+      console.log('[AdSlot] release called', {
+        state,
+        now: new Date().toISOString(),
+      });
+    }
     destroyCurrent();
     triggerBackgroundLoad();
-  }, [destroyCurrent, triggerBackgroundLoad]);
+  }, [destroyCurrent, triggerBackgroundLoad, state]);
 
   /** Public API: drop the cached ad and force a fresh load. Use on
    *  app foreground or when the user has been idle > 1 hour. */
