@@ -1424,11 +1424,11 @@
     "mark_all_read": "Mark all read"
   },
   "transactions": {
-    "title": "Wallet",
+    "title": "Transaction History",
     "load_failed": "Couldn't load transactions",
     "tap_retry": "Tap to retry",
-    "no_transactions": "No transactions found",
-    "no_transactions_hint": "Try adjusting your filters or search query",
+    "no_transactions": "No transactions yet",
+    "no_transactions_hint": "Your transaction history will appear here",
     "available_balance": "Available Balance",
     "points_suffix": "pts",
     "filter_all": "All",
