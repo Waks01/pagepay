@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system';
 import { apiFetch, apiUpload } from "@/src/shared/api/client";
 
 export type MaterialSummary = {
@@ -131,8 +132,9 @@ export async function uploadSowImage(
   exam_type?: string | null,
   onProgress?: UploadProgressCallback,
 ): Promise<SowUploadJobAccepted> {
+  const expoFile = new File(file.uri);
   const form = new FormData();
-  form.append("file", { uri: file.uri, name: file.name, type: file.type } as any);
+  form.append("file", expoFile, file.name);
   if (exam_type) {
     form.append("exam_type", exam_type);
   }
@@ -154,8 +156,9 @@ export async function uploadSowDocument(
   exam_type?: string | null,
   onProgress?: UploadProgressCallback,
 ): Promise<SowUploadJobAccepted> {
+  const expoFile = new File(file.uri);
   const form = new FormData();
-  form.append("file", { uri: file.uri, name: file.name, type: file.type } as any);
+  form.append("file", expoFile, file.name);
   if (exam_type) {
     form.append("exam_type", exam_type);
   }
