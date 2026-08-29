@@ -77,9 +77,10 @@ Build, maintain, and evolve the PagePay backend API. Own database schema, API co
   - Minimum withdrawal: ₦1,000
   - Webhook: `POST /api/v1/payouts/webhook` → confirms transfer, handles failures
    
-- **Premium Subscriptions:**
+- **Study+ / Complete+ Subscriptions:**
   - `POST /api/v1/payments/initiate` → returns payment URL
-  - Monthly: ₦500, Yearly: ₦5,000
+  - Study+ Monthly: ₦1,000, Study+ Yearly: ₦10,000
+  - Complete+ Monthly: ₦2,000, Complete+ Yearly: ₦20,000
   - Webhook upgrades user tier after successful payment
 
 ### 8. Bills & VTU (Peyflex Integration)

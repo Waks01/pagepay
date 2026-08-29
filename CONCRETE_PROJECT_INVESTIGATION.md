@@ -10,7 +10,7 @@
 **PagePay** is a **read-to-earn + AI exam prep mobile platform** that:
 - Allows users to earn points by reading books, articles, and news
 - Provides AI-generated study materials (flashcards, quizzes, essays)
-- Monetizes through dual ad networks (AdMob + AppLovin) + premium subscriptions (₦500/month)
+- Monetizes through dual ad networks (AdMob + AppLovin) + premium subscriptions (Study+ ₦1,000/month, Complete+ ₦2,000/month)
 - Includes a social task platform (Phase 7) for micro-work opportunities
 - Uses a Kilo agent system to coordinate multi-phase development
 
@@ -444,7 +444,7 @@ src/
 
 **Phase 4: Payments & Premium Tier (COMPLETE)**
 - **Real** Paystack integration (not mock)
-- ₦500/month premium subscription
+- Study+ (₦1,000/month) and Complete+ (₦2,000/month) subscriptions
 - Tier-based feature gates (ad-free, 2x points)
 - Payment webhook validation
 - Subscription expiry management

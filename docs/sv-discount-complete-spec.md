@@ -380,8 +380,10 @@ Response:
 ❌ **NO SV DISCOUNT ALLOWED**
 
 Premium subscriptions remain cash-only:
-- Monthly: ₦500/month via Paystack
-- Yearly: ₦5,000/year via Paystack
+- Study+ Monthly: ₦1,000/month via Paystack
+- Study+ Yearly: ₦10,000/year via Paystack
+- Complete+ Monthly: ₦2,000/month via Paystack
+- Complete+ Yearly: ₦20,000/year via Paystack
 
 **Why?** AdMob policy: sv-for-recurring-revenue = "compensation program" violation.
 
