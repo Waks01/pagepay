@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, and_, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models import User, UserStreak, DailyReward, UserRewardClaim, StreakFreezeLog, AdEvent
 from app.routers.auth import get_current_user
