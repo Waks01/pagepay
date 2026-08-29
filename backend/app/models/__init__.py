@@ -14,8 +14,10 @@ class Base(DeclarativeBase):
 
 class UserTier(enum.Enum):
     FREE = "free"
-    PREMIUM_MONTHLY = "premium_monthly"
-    PREMIUM_YEARLY = "premium_yearly"
+    STUDY_PLUS_MONTHLY = "study_plus_monthly"
+    STUDY_PLUS_YEARLY = "study_plus_yearly"
+    COMPLETE_PLUS_MONTHLY = "complete_plus_monthly"
+    COMPLETE_PLUS_YEARLY = "complete_plus_yearly"
 
 
 class User(Base):

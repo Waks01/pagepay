@@ -75,8 +75,10 @@ class TierBenefitsConfig:
             "version": "1.0.0-fallback",
             "tiers": {
                 "free": {"multipliers": {"points_earning": 1.0}},
-                "premium_monthly": {"multipliers": {"points_earning": 1.0}},
-                "premium_yearly": {"multipliers": {"points_earning": 1.0}},
+                "study_plus_monthly": {"multipliers": {"points_earning": 1.0}},
+                "study_plus_yearly": {"multipliers": {"points_earning": 1.0}},
+                "complete_plus_monthly": {"multipliers": {"points_earning": 1.5}},
+                "complete_plus_yearly": {"multipliers": {"points_earning": 1.5}},
             }
         }
     

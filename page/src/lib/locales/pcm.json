@@ -81,8 +81,8 @@
                     "sign_out":  "Comot",
                     "tier":  {
                                  "free":  "Free",
-                                 "premium_monthly":  "Premium · Monthly",
-                                 "premium_yearly":  "Premium · Yearly"
+                                 "study_plus_monthly": "Study+ Monthly",
+                                 "study_plus_yearly": "Study+ Yearly"
                              },
                     "footer":  "PagePay v{{version}} · {{theme}}",
                     "no_contact":  "No email or phone",
@@ -130,8 +130,8 @@
                    "approx":  "≈",
                    "tier":  {
                                 "free":  "Free",
-                                "premium_monthly":  "Premium · Every month",
-                                "premium_yearly":  "Premium · Every year"
+                                "study_plus_monthly": "Study+ Monthly",
+                                "study_plus_yearly": "Study+ Yearly"
                             },
                    "fund_wallet":  "Add Money",
                    "withdraw":  "Collect Money",
@@ -917,8 +917,8 @@
                          "title":  "Subscription",
                          "current_plan":  "Current Plan",
                          "free":  "Free",
-                         "premium_monthly":  "Premium Monthly",
-                         "premium_yearly":  "Premium Yearly",
+                         "study_plus_monthly": "Study+ Monthly",
+                         "study_plus_yearly": "Study+ Yearly",
                          "benefit_unlocks":  "Free study unlocks",
                          "benefit_ad_free":  "No ads",
                          "benefit_support":  "Priority support",

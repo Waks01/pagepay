@@ -94,7 +94,12 @@ async def _handle_charge_success(payment: Payment, reference: str, db: AsyncSess
 
     if payment.tier == "wallet_deposit" and payment.payment_metadata:
         await _process_wallet_deposit(payment, reference, db, logger)
-    elif payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value):
+    elif payment.tier in (
+        UserTier.STUDY_PLUS_MONTHLY.value,
+        UserTier.STUDY_PLUS_YEARLY.value,
+        UserTier.COMPLETE_PLUS_MONTHLY.value,
+        UserTier.COMPLETE_PLUS_YEARLY.value,
+    ):
         await _process_premium_subscription(payment, db, logger)
 
 
@@ -106,7 +111,12 @@ async def _handle_charge_failed(payment: Payment, reference: str, db: AsyncSessi
     payment.confirmed_at = datetime.utcnow()
     
     # Send notification: Payment failed (Phase 6)
-    if payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value):
+    if payment.tier in (
+        UserTier.STUDY_PLUS_MONTHLY.value,
+        UserTier.STUDY_PLUS_YEARLY.value,
+        UserTier.COMPLETE_PLUS_MONTHLY.value,
+        UserTier.COMPLETE_PLUS_YEARLY.value,
+    ):
         try:
             from app.services.premium_notifications import notify_payment_failed
             tier = UserTier(payment.tier)
@@ -129,7 +139,12 @@ async def _handle_charge_abandoned(payment: Payment, reference: str, db: AsyncSe
     payment.confirmed_at = datetime.utcnow()
     
     # Send notification: Payment cancelled (Phase 6)
-    if payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value):
+    if payment.tier in (
+        UserTier.STUDY_PLUS_MONTHLY.value,
+        UserTier.STUDY_PLUS_YEARLY.value,
+        UserTier.COMPLETE_PLUS_MONTHLY.value,
+        UserTier.COMPLETE_PLUS_YEARLY.value,
+    ):
         try:
             from app.services.premium_notifications import notify_payment_cancelled
             tier = UserTier(payment.tier)
@@ -169,7 +184,12 @@ async def _handle_charge_refunded(payment: Payment, reference: str, data: dict, 
         await _reverse_wallet_deposit(payment, reference, db, logger)
     
     # If this was a successful premium subscription, downgrade user
-    elif payment.tier in (UserTier.PREMIUM_MONTHLY.value, UserTier.PREMIUM_YEARLY.value) and old_status == "success":
+    elif payment.tier in (
+        UserTier.STUDY_PLUS_MONTHLY.value,
+        UserTier.STUDY_PLUS_YEARLY.value,
+        UserTier.COMPLETE_PLUS_MONTHLY.value,
+        UserTier.COMPLETE_PLUS_YEARLY.value,
+    ) and old_status == "success":
         await _reverse_premium_subscription(payment, db, logger)
         
         # Send notification: Payment refunded (Phase 6)

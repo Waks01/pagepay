@@ -81,8 +81,8 @@
                     "sign_out":  "Fita",
                     "tier":  {
                                  "free":  "Kyauta",
-                                 "premium_monthly":  "Premium · Kowane wata",
-                                 "premium_yearly":  "Premium · Kowane shekara"
+                                 "study_plus_monthly": "Study+ Monthly",
+                                 "study_plus_yearly": "Study+ Yearly"
                              },
                     "footer":  "PagePay v{{version}} · {{theme}}",
                     "no_contact":  "Babu email ko waya",
@@ -130,8 +130,8 @@
                    "approx":  "≈",
                    "tier":  {
                                 "free":  "Kyauta",
-                                "premium_monthly":  "Premium · Kowane wata",
-                                "premium_yearly":  "Premium · Kowane shekara"
+                                "study_plus_monthly": "Study+ Monthly",
+                                "study_plus_yearly": "Study+ Yearly"
                             },
                    "fund_wallet":  "Ƙara Kuɗi",
                    "withdraw":  "Cire Kuɗi",
@@ -917,8 +917,8 @@
                          "title":  "Biyan Kuɗi na Yau da Kullun",
                          "current_plan":  "Tsarin Yanzu",
                          "free":  "Kyauta",
-                         "premium_monthly":  "Premium Kowane Wata",
-                         "premium_yearly":  "Premium Kowane Shekara",
+                         "study_plus_monthly": "Study+ Monthly",
+                         "study_plus_yearly": "Study+ Yearly",
                          "benefit_unlocks":  "Buɗe kayan karatu kyauta",
                          "benefit_ad_free":  "Babu tallace-tallace",
                          "benefit_support":  "Tallafi na farko",

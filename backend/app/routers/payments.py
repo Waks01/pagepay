@@ -36,19 +36,37 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 # Tier pricing configuration
 TIER_BENEFITS = {
-    UserTier.PREMIUM_MONTHLY: [
-        "Ad-free study materials",
-        "2x reading points (10 pts per 10 min)",
-        "Priority AI generation",
-        "Gold Premium badge",
+    UserTier.STUDY_PLUS_MONTHLY: [
+        "Free study material unlocks",
+        "Full audio narration",
+        "Skip education unit progression",
         "Monthly billing",
     ],
-    UserTier.PREMIUM_YEARLY: [
+    UserTier.STUDY_PLUS_YEARLY: [
+        "Free study material unlocks",
+        "Full audio narration",
+        "Skip education unit progression",
+        "Save ₦2,000 per year",
+    ],
+    UserTier.COMPLETE_PLUS_MONTHLY: [
         "Ad-free study materials",
-        "2x reading points (10 pts per 10 min)",
-        "Priority AI generation",
-        "Gold Premium badge",
-        "Save ₦1,000 per year",
+        "1.5x reading points",
+        "Optional ads on novels",
+        "Priority task verification",
+        "1.5x daily rewards",
+        "1.5x task rewards",
+        "1.5x cashback on bills",
+        "Monthly billing",
+    ],
+    UserTier.COMPLETE_PLUS_YEARLY: [
+        "Ad-free study materials",
+        "1.5x reading points",
+        "Optional ads on novels",
+        "Priority task verification",
+        "1.5x daily rewards",
+        "1.5x task rewards",
+        "1.5x cashback on bills",
+        "Save ₦4,000 per year",
     ],
 }
 
@@ -58,8 +76,13 @@ async def get_tier_pricing():
     """Get available subscription tiers and pricing."""
     tiers = []
     
-    for tier in [UserTier.PREMIUM_MONTHLY, UserTier.PREMIUM_YEARLY]:
-        duration_days = 30 if tier == UserTier.PREMIUM_MONTHLY else 365
+    for tier in [
+        UserTier.STUDY_PLUS_MONTHLY,
+        UserTier.STUDY_PLUS_YEARLY,
+        UserTier.COMPLETE_PLUS_MONTHLY,
+        UserTier.COMPLETE_PLUS_YEARLY,
+    ]:
+        duration_days = 30 if tier.value.endswith("_monthly") else 365
         tiers.append(TierInfo(
             tier=tier.value,
             display_name=format_tier_name(tier),

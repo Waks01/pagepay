@@ -81,8 +81,8 @@
                     "sign_out":  "Pụọ",
                     "tier":  {
                                  "free":  "N\u0027efu",
-                                 "premium_monthly":  "Premium · Kwa ọnwa",
-                                 "premium_yearly":  "Premium · Kwa afọ"
+                                 "study_plus_monthly": "Study+ Monthly",
+                                 "study_plus_yearly": "Study+ Yearly"
                              },
                     "footer":  "PagePay v{{version}} · {{theme}}",
                     "no_contact":  "Enweghị email ma ọ bụ ekwentị",
@@ -130,8 +130,8 @@
                    "approx":  "≈",
                    "tier":  {
                                 "free":  "N\u0027efu",
-                                "premium_monthly":  "Premium · Kwa ọnwa",
-                                "premium_yearly":  "Premium · Kwa afọ"
+                                "study_plus_monthly": "Study+ Monthly",
+                                "study_plus_yearly": "Study+ Yearly"
                             },
                    "fund_wallet":  "Tinye Ego",
                    "withdraw":  "Wepụ Ego",
@@ -917,8 +917,8 @@
                          "title":  "Ndenye Aha",
                          "current_plan":  "Atụmatụ Ugbu A",
                          "free":  "N\u0027efu",
-                         "premium_monthly":  "Premium Kwa Ọnwa",
-                         "premium_yearly":  "Premium Kwa Afọ",
+                         "study_plus_monthly": "Study+ Monthly",
+                         "study_plus_yearly": "Study+ Yearly",
                          "benefit_unlocks":  "Ihe ọmụmụ n\u0027efu",
                          "benefit_ad_free":  "Enweghị mgbasa ozi",
                          "benefit_support":  "Nkwado mbụ",

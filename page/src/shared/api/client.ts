@@ -356,7 +356,7 @@ function extractErrorDetail(body: string, statusText: string): string {
  * Fetch user's current tier and subscription status
  */
 export async function getUserTier(): Promise<{
-  tier: "free" | "premium_monthly" | "premium_yearly";
+  tier: "free" | "study_plus_monthly" | "study_plus_yearly" | "complete_plus_monthly" | "complete_plus_yearly";
   is_premium: boolean;
   expires_at: string | null;
 }> {
@@ -400,8 +400,10 @@ export async function getContentAdGating(contentId: number): Promise<{
  */
 export async function getTierBenefits(): Promise<{
   free: any;
-  premium_monthly: any;
-  premium_yearly: any;
+  study_plus_monthly: any;
+  study_plus_yearly: any;
+  complete_plus_monthly: any;
+  complete_plus_yearly: any;
   comparison: any;
 }> {
   const res = await publicApiFetch("/api/v1/subscription/tier-benefits");

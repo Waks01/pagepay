@@ -17,9 +17,11 @@ export default function SubscriptionManagementScreen() {
   // Read the user from the global store — loaded once at app start.
   const user = useCurrentUser();
 
-  const isPremiumMonthly = user?.tier === 'premium_monthly';
-  const isPremiumYearly = user?.tier === 'premium_yearly';
-  const isPremium = isPremiumMonthly || isPremiumYearly;
+  const isStudyPlusMonthly = user?.tier === 'study_plus_monthly';
+  const isStudyPlusYearly = user?.tier === 'study_plus_yearly';
+  const isCompletePlusMonthly = user?.tier === 'complete_plus_monthly';
+  const isCompletePlusYearly = user?.tier === 'complete_plus_yearly';
+  const isPremium = isStudyPlusMonthly || isStudyPlusYearly || isCompletePlusMonthly || isCompletePlusYearly;
 
   const handleManageSubscription = () => {
     // Open device subscription settings
@@ -64,7 +66,7 @@ export default function SubscriptionManagementScreen() {
           
           <View style={[styles.planBadge, { backgroundColor: isPremium ? tokens.mint : tokens.inkMuted }]}>
             <Text style={[styles.planText, { color: tokens.mintText }]}>
-              {isPremiumMonthly ? t('subscription.premium_monthly') : isPremiumYearly ? t('subscription.premium_yearly') : t('subscription.free')}
+              {isStudyPlusMonthly ? t('subscription.study_plus_monthly') : isStudyPlusYearly ? t('subscription.study_plus_yearly') : isCompletePlusMonthly ? t('subscription.complete_plus_monthly') : isCompletePlusYearly ? t('subscription.complete_plus_yearly') : t('subscription.free')}
             </Text>
           </View>
 

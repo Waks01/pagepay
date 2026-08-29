@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { getUserTier, getTierBenefits } from '@/src/shared/api/client';
 
-export type UserTier = 'free' | 'premium_monthly' | 'premium_yearly';
+export type UserTier = 'free' | 'study_plus_monthly' | 'study_plus_yearly' | 'complete_plus_monthly' | 'complete_plus_yearly';
 
 export interface TierStatus {
   tier: UserTier;
@@ -37,8 +37,10 @@ export interface TierConfig {
 
 export interface TierBenefitsData {
   free: TierConfig;
-  premium_monthly: TierConfig;
-  premium_yearly: TierConfig;
+  study_plus_monthly: TierConfig;
+  study_plus_yearly: TierConfig;
+  complete_plus_monthly: TierConfig;
+  complete_plus_yearly: TierConfig;
   comparison: any;
 }
 

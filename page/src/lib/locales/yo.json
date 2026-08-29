@@ -81,8 +81,8 @@
                     "sign_out":  "Jade",
                     "tier":  {
                                  "free":  "Ọfẹ",
-                                 "premium_monthly":  "Premium · Oṣooṣu",
-                                 "premium_yearly":  "Premium · Ọdun"
+                                 "study_plus_monthly": "Study+ Monthly",
+                                 "study_plus_yearly": "Study+ Yearly"
                              },
                     "footer":  "PagePay v{{version}} · {{theme}}",
                     "no_contact":  "Ko si imeeli tabi foonu",
@@ -130,8 +130,8 @@
                    "approx":  "≈",
                    "tier":  {
                                 "free":  "Ọfẹ",
-                                "premium_monthly":  "Premium · Oṣooṣu",
-                                "premium_yearly":  "Premium · Ọdun"
+                                "study_plus_monthly": "Study+ Monthly",
+                                "study_plus_yearly": "Study+ Yearly"
                             },
                    "fund_wallet":  "Fi Owo Kun",
                    "withdraw":  "Gba Owo",
@@ -829,8 +829,8 @@
                          "title":  "Alabapin",
                          "current_plan":  "Eto Lọwọlọwọ",
                          "free":  "Ọfẹ",
-                         "premium_monthly":  "Premium Oṣooṣu",
-                         "premium_yearly":  "Premium Ọdun",
+                         "study_plus_monthly": "Study+ Monthly",
+                         "study_plus_yearly": "Study+ Yearly",
                          "benefit_unlocks":  "Awọn ṣiṣi ẹkọ ọfẹ",
                          "benefit_ad_free":  "Iriri laisi ipolowo",
                          "benefit_support":  "Atilẹyin akọkọ",

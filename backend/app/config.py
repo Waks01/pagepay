@@ -573,15 +573,23 @@ class Settings(BaseSettings):
     points_per_naira: int = 10
 
     # ── Premium subscription pricing ──────────────────────────────────
-    # Stored in kobo so we never deal with floats for money. ₦500/month
-    # and ₦5,000/year are the launch prices; ops can A/B test price
-    # points by overriding either env var without a deploy. Paystack
+    # Stored in kobo so we never deal with floats for money.
+    # Override via env vars without a deploy. Paystack
     # charge amounts are derived from these via services.subscription.
     #
-    #   premium_monthly_price_kobo: env PREMIUM_MONTHLY_PRICE_KOBO
-    #   premium_yearly_price_kobo:  env PREMIUM_YEARLY_PRICE_KOBO
-    premium_monthly_price_kobo: int = 50_000    # ₦500
-    premium_yearly_price_kobo: int = 500_000    # ₦5,000
+    #   study_plus_monthly_price_kobo: env STUDY_PLUS_MONTHLY_PRICE_KOBO
+    #   study_plus_yearly_price_kobo:  env STUDY_PLUS_YEARLY_PRICE_KOBO
+    #   complete_plus_monthly_price_kobo: env COMPLETE_PLUS_MONTHLY_PRICE_KOBO
+    #   complete_plus_yearly_price_kobo:  env COMPLETE_PLUS_YEARLY_PRICE_KOBO
+    #
+    # Legacy aliases (PREMIUM_MONTHLY_PRICE_KOBO / PREMIUM_YEARLY_PRICE_KOBO)
+    # map to Study+ so existing .env files keep working.
+    study_plus_monthly_price_kobo: int = 100_000    # ₦1,000
+    study_plus_yearly_price_kobo: int = 1_000_000   # ₦10,000
+    complete_plus_monthly_price_kobo: int = 200_000  # ₦2,000
+    complete_plus_yearly_price_kobo: int = 2_000_000 # ₦20,000
+    premium_monthly_price_kobo: int = 100_000       # legacy alias → study_plus_monthly
+    premium_yearly_price_kobo: int = 1_000_000      # legacy alias → study_plus_yearly
 
     # Points multiplier granted to active premium subscribers. Premium
     # users earn `premium_points_multiplier` × the base rate on every

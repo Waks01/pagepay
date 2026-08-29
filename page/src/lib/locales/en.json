@@ -124,8 +124,10 @@
     "sign_out": "Sign out",
     "tier": {
       "free": "Free",
-      "premium_monthly": "Premium · Monthly",
-      "premium_yearly": "Premium · Yearly"
+      "study_plus_monthly": "Study+ · Monthly",
+      "study_plus_yearly": "Study+ · Yearly",
+      "complete_plus_monthly": "Complete+ · Monthly",
+      "complete_plus_yearly": "Complete+ · Yearly"
     },
     "footer": "PagePay v{{version}} · {{theme}}",
     "no_contact": "No email or phone on file",
@@ -187,8 +189,10 @@
     "cashable_label": "C",
     "tier": {
       "free": "Free",
-      "premium_monthly": "Premium · Monthly",
-      "premium_yearly": "Premium · Yearly"
+      "study_plus_monthly": "Study+ · Monthly",
+      "study_plus_yearly": "Study+ · Yearly",
+      "complete_plus_monthly": "Complete+ · Monthly",
+      "complete_plus_yearly": "Complete+ · Yearly"
     },
     "fund_wallet": "Fund Wallet",
     "withdraw": "Withdraw",
@@ -580,9 +584,9 @@
         "body": "Build a 7-day streak. Unlock bonus point multipliers the longer you read in a row."
       },
       "premium": {
-        "eyebrow": "GO PREMIUM",
-        "headline": "2× points, zero ads",
-        "body": "Unlock premium for ad-free reading, double your points, and get unlimited AI study material."
+        "eyebrow": "GO STUDY+",
+        "headline": "Free study materials, earn more",
+        "body": "Unlock Study+ for free study materials, full audio, and skip education progression. Upgrade to Complete+ for 1.5x points and ad-skip."
       }
     }
   },
@@ -1159,13 +1163,15 @@
     "title": "Subscription",
     "current_plan": "Current Plan",
     "free": "Free",
-    "premium_monthly": "Premium Monthly",
-    "premium_yearly": "Premium Yearly",
+    "study_plus_monthly": "Study+ Monthly",
+    "study_plus_yearly": "Study+ Yearly",
+    "complete_plus_monthly": "Complete+ Monthly",
+    "complete_plus_yearly": "Complete+ Yearly",
     "benefit_unlocks": "Free study unlocks",
     "benefit_ad_free": "Ad-free experience",
     "benefit_support": "Priority support",
     "manage": "Manage Subscription",
-    "upgrade": "Upgrade to Premium",
+    "upgrade": "Upgrade to Study+",
     "upgrade_yearly": "Upgrade to Yearly",
     "view_plans": "View Plans",
     "info": "Subscriptions are managed through your app store. Changes take effect immediately.",

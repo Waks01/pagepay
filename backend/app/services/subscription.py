@@ -122,8 +122,10 @@ def get_tier_price_kobo(tier: UserTier) -> int:
             before charging.
     """
     prices = {
-        UserTier.PREMIUM_MONTHLY: settings.premium_monthly_price_kobo,
-        UserTier.PREMIUM_YEARLY: settings.premium_yearly_price_kobo,
+        UserTier.STUDY_PLUS_MONTHLY: settings.study_plus_monthly_price_kobo,
+        UserTier.STUDY_PLUS_YEARLY: settings.study_plus_yearly_price_kobo,
+        UserTier.COMPLETE_PLUS_MONTHLY: settings.complete_plus_monthly_price_kobo,
+        UserTier.COMPLETE_PLUS_YEARLY: settings.complete_plus_yearly_price_kobo,
     }
 
     if tier not in prices:
@@ -143,8 +145,10 @@ def format_tier_name(tier: UserTier) -> str:
     """
     names = {
         UserTier.FREE: "Free",
-        UserTier.PREMIUM_MONTHLY: "Premium Monthly",
-        UserTier.PREMIUM_YEARLY: "Premium Yearly",
+        UserTier.STUDY_PLUS_MONTHLY: "Study+ Monthly",
+        UserTier.STUDY_PLUS_YEARLY: "Study+ Yearly",
+        UserTier.COMPLETE_PLUS_MONTHLY: "Complete+ Monthly",
+        UserTier.COMPLETE_PLUS_YEARLY: "Complete+ Yearly",
     }
     return names.get(tier, str(tier))
 
