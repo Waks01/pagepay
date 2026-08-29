@@ -132,7 +132,7 @@ export async function uploadSowImage(
   onProgress?: UploadProgressCallback,
 ): Promise<SowUploadJobAccepted> {
   const form = new FormData();
-  form.append("file", new File(file.uri));
+  form.append("file", { uri: file.uri, name: file.name, type: file.type } as any);
   if (exam_type) {
     form.append("exam_type", exam_type);
   }
@@ -155,7 +155,7 @@ export async function uploadSowDocument(
   onProgress?: UploadProgressCallback,
 ): Promise<SowUploadJobAccepted> {
   const form = new FormData();
-  form.append("file", new File(file.uri));
+  form.append("file", { uri: file.uri, name: file.name, type: file.type } as any);
   if (exam_type) {
     form.append("exam_type", exam_type);
   }
