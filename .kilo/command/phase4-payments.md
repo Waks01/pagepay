@@ -67,14 +67,21 @@ PAYSTACK_WEBHOOK_SECRET=...
 ```
 
 ## Pricing (Nigeria)
-- **Monthly**: ₦500 (~$0.33)
-- **Yearly**: ₦5,000 (~$3.30, save ₦1,000)
+- **Study+ Monthly**: ₦1,000 (~$0.65)
+- **Study+ Yearly**: ₦10,000 (~$6.50, save ₦2,000)
+- **Complete+ Monthly**: ₦2,000 (~$1.30)
+- **Complete+ Yearly**: ₦20,000 (~$13.00, save ₦4,000)
 
-## Premium Benefits
-1. **Ad-free study materials** (no unlock modals)
-2. **2x reading points** (10 pts per 10 min vs 5 pts)
-3. **Priority AI generation** (faster MCQ/flashcard creation)
-4. **Gold "Premium" badge**
+## Study+ Benefits
+1. **Free study material unlocks** (no points cost)
+2. **Full audio narration** (all units)
+3. **Skip education unit progression**
+
+## Complete+ Benefits (everything in Study+ plus)
+1. **1.5x point multipliers** on reading, tasks, daily rewards, bills cashback
+2. **Optional ads on novels** (skip for 3 pts/slice or watch for 33 pts/slice)
+3. **Priority task verification**
+4. **Gold Complete+ badge**
 5. **Billing history** access
 
 ## Test Mode

@@ -32,7 +32,7 @@ This is not a prototype, not a side project, not a learning exercise. Every line
 - All ads are explicitly labeled ("Sponsored", "Ad", "Watch to earn bonus")
 - Never trick users into clicking ads
 - Rewarded ads are opt-in: users choose to watch in exchange for points
-- Premium tier pricing is flat and clear (₦500/month), no hidden auto-renewals without consent
+- Study+ / Complete+ tier pricing is flat and clear (₦1,000/month and ₦2,000/month), no hidden auto-renewals without consent
 
 ### 2. Data Privacy Guardrails
 - Student SOW/syllabus content may use Google AI Studio free tier (data used for training opt-in acceptable)
