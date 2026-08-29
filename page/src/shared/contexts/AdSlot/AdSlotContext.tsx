@@ -184,6 +184,8 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
       },
     });
     (ad as any)._adUnit = adUnit;
+    (ad as any)._pagePayCustomData = tokenRes.custom_data;
+    (ad as any)._pagePayUserId = tokenRes.custom_data.split(':')[0] ?? '';
 
     return new Promise<AcquiredAd>((resolve, reject) => {
       if (__DEV__) {
@@ -237,7 +239,14 @@ export function AdSlotProvider({ children }: AdSlotProviderProps) {
             });
           }
           try {
-            ad.show();
+            const rawAd = ad as any;
+            if (rawAd._pagePayCustomData) {
+              rawAd.setServerSideVerificationOptions?.({
+                userId: rawAd._pagePayUserId ?? '',
+                customData: rawAd._pagePayCustomData,
+              });
+            }
+            rawAd.show();
           } catch {
             destroyCurrent();
             if (mountedRef.current) {
