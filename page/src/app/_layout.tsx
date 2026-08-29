@@ -25,6 +25,7 @@ import "@/src/lib/i18n";
 import { SplashOverlay } from "@/components/SplashOverlay";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { AdSlotProvider } from "@/src/shared/contexts/AdSlot";
+import { initializeAdMob } from "@/src/shared/lib/ads-native";
 import { PaystackProvider } from "expo-paystack";
 import Constants from "expo-constants";
 import BannerNotification, {
@@ -39,6 +40,31 @@ import {
 import { handleNotificationTap, setupNotificationListeners } from "@/src/lib/notifications";
 
 SplashScreen.preventAutoHideAsync();
+
+/** Ad SDK bootstrap. Mounts the native AdMob SDK (via
+ *  `react-native-google-mobile-ads`) and warms the
+ *  `useAdsConfig` cache so the rest of the app can resolve
+ *  unit IDs without a render-blocking fetch.
+ *
+ *  The init is fire-and-forget: a failed native init just
+ *  means ads are disabled and the MockAdModal takes over.
+ *  The config fetch is non-blocking too — the hooks return
+ *  `data = undefined` until the request resolves and the
+ *  ad components fall back to the placeholder.
+ *
+ *  This hook is mounted at the root so the SDK is warm by
+ *  the time the catalog renders its first page. The AdMob
+ *  SDK's `initialize()` is idempotent so re-mounts on
+ *  theme / auth changes are safe. */
+function AdsBootstrapComponent() {
+  // Kick off the native init. We don't await — the layout
+  // must render immediately and the SDK is happy to finish
+  // initializing in the background.
+  useEffect(() => {
+    initializeAdMob().catch(() => undefined);
+  }, []);
+  return null;
+}
 
 export const unstable_settings = {
   anchor: "/(auth)/",
@@ -155,6 +181,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <AdsBootstrapComponent />
         <AdSlotProvider>
           <PaystackProvider publicKey={PAYSTACK_PUBLIC_KEY}>
             {!isReady || !fontsLoaded ? (

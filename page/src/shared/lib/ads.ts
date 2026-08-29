@@ -155,13 +155,11 @@ export type AdRecentCredit = {
  *  Throws on 4xx (e.g. non-rewarded unit → 400) and on network
  *  failure. The RewardedAd component catches and surfaces the
  *  error to the user. */
-export type AdSlotUseCase = 'wallet_topup' | 'study_unlock' | 'streak_recovery' | 'withdrawal_fee_offset' | 'quiz_extra_life' | 'daily_bonus_boost';
-
-export async function requestAdToken(adUnit: string, sessionId?: number, useCase: AdSlotUseCase = 'wallet_topup'): Promise<AdRequestTokenResponse> {
+export async function requestAdToken(adUnit: string, sessionId?: number): Promise<AdRequestTokenResponse> {
   const res = await apiFetch('/api/v1/ads/request-token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ad_unit: adUnit, session_id: sessionId, use_case: useCase }),
+    body: JSON.stringify({ ad_unit: adUnit, session_id: sessionId }),
   });
   if (!res.ok) {
     // Read the error body for a clear message — the server
