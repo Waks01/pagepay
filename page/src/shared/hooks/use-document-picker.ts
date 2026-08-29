@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 
 export function useDocumentPicker() {
   const [picking, setPicking] = useState(false);
@@ -15,11 +16,33 @@ export function useDocumentPicker() {
         return null;
       }
       const asset = result.assets[0];
+      
+      let uri = asset.uri;
+      let name = asset.name;
+      let size = typeof asset.size === 'number' ? asset.size : null;
+      
+      if (uri.startsWith('content://')) {
+        const cachedUri = FileSystem.cacheDirectory + name;
+        try {
+          await FileSystem.copyAsync({
+            from: uri,
+            to: cachedUri,
+          });
+          uri = cachedUri;
+          const info = await FileSystem.getInfoAsync(uri, { size: true });
+          if (info.exists && info.size) {
+            size = info.size;
+          }
+        } catch (copyError) {
+          console.error('[useDocumentPicker] copy failed:', copyError);
+        }
+      }
+      
       return {
-        uri: asset.uri,
-        name: asset.name,
+        uri,
+        name,
         type: asset.mimeType || 'application/octet-stream',
-        size: typeof asset.size === 'number' ? asset.size : null,
+        size,
       };
     } finally {
       setPicking(false);
