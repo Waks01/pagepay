@@ -10,6 +10,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import type { TransactionHistoryItem } from "@/src/shared/types/transaction";
+import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 
 interface AirtimeDetailProps {
   transaction: TransactionHistoryItem;
@@ -92,12 +93,18 @@ export function AirtimeDetail({ transaction, tokens }: AirtimeDetailProps) {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
+    // Check if date is valid
+    if (isNaN(date.getTime())) return "N/A";
+
+    // The date comes from backend as UTC, JavaScript will automatically
+    // convert it to local timezone when we use toLocaleString
     return date.toLocaleString("en-NG", {
       year: "numeric",
       month: "long",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Africa/Lagos", // Nigerian timezone (WAT - UTC+1)
     });
   };
 
@@ -185,7 +192,7 @@ export function AirtimeDetail({ transaction, tokens }: AirtimeDetailProps) {
         <DetailRow
           icon="calendar-outline"
           label="Date & Time"
-          value={formatDate(transaction.timestamp)}
+          value={formatDateTime(transaction.timestamp)}
           tokens={tokens}
         />
 

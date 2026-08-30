@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { PagePay } from "@/constants/theme";
@@ -201,17 +202,7 @@ export default function NotificationDetailScreen() {
     );
   }
 
-  const formattedDate = new Date(notification.created_at).toLocaleString(
-    undefined,
-    {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    },
-  );
+  const formattedDate = formatDateTime(notification.created_at);
 
   const hasAction =
     notification.data &&

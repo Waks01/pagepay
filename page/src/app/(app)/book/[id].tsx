@@ -124,7 +124,7 @@ export default function BookDetailScreen() {
 
   const onSlicePress = (slice: SliceSummary) => {
     if (!unlockedIds.has(slice.id)) return;
-    router.push(`/catalog/reader/${slice.id}`);
+    router.push(`/reader/${slice.id}`);
   };
 
   const onRefreshAll = async () => {

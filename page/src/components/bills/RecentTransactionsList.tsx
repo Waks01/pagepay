@@ -7,6 +7,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { PagePay } from "@/constants/theme";
+import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
 type Transaction = {
@@ -48,7 +49,7 @@ export function RecentTransactionsList({
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return d.toLocaleDateString();
+    return formatDateTime(iso, { includeTime: false });
   };
 
   return (
@@ -87,7 +88,7 @@ export function RecentTransactionsList({
                   style={[styles.txDetails, { color: tokens.inkMuted }]}
                   numberOfLines={1}
                 >
-                  {tx.phone || "Unknown"} · {formatTimeAgo(tx.created_at)}
+                  {tx.phone || "Unknown"} · {getRelativeTime(tx.created_at)}
                 </Text>
               </View>
             </View>

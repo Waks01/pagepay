@@ -21,6 +21,10 @@ import {
 import { PagePay } from "@/constants/theme";
 import { StateBlock } from "@/components/StateBlock";
 import { PageHeader } from "@/components/PageHeader";
+import {
+  formatDateTime,
+  getRelativeTime,
+} from "@/src/shared/utils/dateFormatter";
 
 type TransactionHistoryItem = {
   id: number;
@@ -235,7 +239,7 @@ export default function TransactionHistoryScreen() {
                       : ""}
                   </Text>
                   <Text style={[styles.date, { color: tokens.inkMuted }]}>
-                    {new Date(item.timestamp).toLocaleString()}
+                    {formatDateTime(item.timestamp)}
                   </Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>

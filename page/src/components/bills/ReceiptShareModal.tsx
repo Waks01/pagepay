@@ -20,6 +20,7 @@ import * as Sharing from "expo-sharing";
 import { captureRef } from "react-native-view-shot";
 
 import { PagePay } from "@/constants/theme";
+import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { apiFetch } from "@/src/shared/api/client";
 
@@ -153,7 +154,7 @@ export function ReceiptShareModal({ visible, onClose, receipt }: Props) {
       `Amount: ₦${data.amount.toLocaleString()}`,
       `Points Earned: ${data.points_earned} pts`,
       `Reference: ${data.reference}`,
-      `Date: ${new Date(data.date).toLocaleString()}`,
+      `Date: ${formatDateTime(data.date)}`,
       `Status: ${data.status.toUpperCase()}`,
     ];
 
@@ -273,7 +274,7 @@ export function ReceiptShareModal({ visible, onClose, receipt }: Props) {
               />
               <ReceiptRow
                 label="Date"
-                value={new Date(receipt.date).toLocaleString()}
+                value={formatDateTime(receipt.date)}
                 tokens={tokens}
               />
               <ReceiptRow

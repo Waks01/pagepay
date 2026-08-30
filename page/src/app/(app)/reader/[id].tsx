@@ -429,10 +429,10 @@ export default function ReaderScreen() {
       } catch (e) {
         console.warn("Progress finish failed", e);
       }
-      router.push(`/catalog/book/${workId}`);
+      router.back();
     } else {
       finishedManuallyRef.current = true;
-      router.replace(`/catalog/book/${workId}`);
+      router.back();
     }
   };
 

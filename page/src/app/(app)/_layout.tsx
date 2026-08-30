@@ -19,7 +19,13 @@ export default function AppLayout() {
       lazy={false} // Keep all tab screens mounted to preserve query cache across tab switches
     >
       {TAB_ORDER.map((tab) => (
-        <Tabs.Screen key={tab.name} name={tab.name} />
+        <Tabs.Screen
+          key={tab.name}
+          name={tab.name}
+          options={{
+            unmountOnBlur: tab.name === 'catalog',
+          }}
+        />
       ))}
     </Tabs>
   );

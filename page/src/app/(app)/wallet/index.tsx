@@ -39,9 +39,7 @@ import {
   LinkPayoutAccountModal,
   type PayoutAccount,
 } from "@/components/LinkPayoutAccountModal";
-import {
-  SkeletonBalanceCard,
-} from "@/components/skeletons";
+import { SkeletonBalanceCard } from "@/components/skeletons";
 
 type WithdrawalRecord = {
   reference: string;
@@ -77,17 +75,7 @@ type WithdrawalResponse = {
 
 const MIN_WITHDRAWAL_POINTS = koboToPoints(100_000); // ₦1,000 minimum → 10,000 points at 10 pts/₦
 
-const formatDate = (iso: string | null) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
+import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 
 export default function WalletScreen() {
   const scheme = useEffectiveScheme();

@@ -10,14 +10,20 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import type { TransactionHistoryItem } from "@/src/shared/types/transaction";
-import { formatDateTime } from "@/src/shared/utils/dateFormatter";
+import {
+  formatDateTime,
+  formatDateOnly,
+} from "@/src/shared/utils/dateFormatter";
 
-interface DataDetailProps {
+interface DailyRewardDetailProps {
   transaction: TransactionHistoryItem;
   tokens: any;
 }
 
-export function DataDetail({ transaction, tokens }: DataDetailProps) {
+export function DailyRewardDetail({
+  transaction,
+  tokens,
+}: DailyRewardDetailProps) {
   const metadata = (transaction.metadata || {}) as Record<string, any>;
 
   const copyToClipboard = async (text: string, label: string) => {
@@ -25,115 +31,78 @@ export function DataDetail({ transaction, tokens }: DataDetailProps) {
     Alert.alert("Copied!", `${label} copied to clipboard`);
   };
 
-  const formatCurrency = (
-    amount: number | undefined,
-    isKobo: boolean = false,
-  ) => {
-    if (!amount && amount !== 0) return "N/A";
-    const actualAmount = isKobo ? amount / 100 : amount;
-    return `₦${actualAmount.toLocaleString("en-NG", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  };
-
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: tokens.paper }]}
       contentContainerStyle={styles.contentContainer}
     >
+      {/* Reward Icon/Emoji Section */}
+      <View style={[styles.rewardHeader, { backgroundColor: tokens.card }]}>
+        <View style={[styles.iconCircle, { backgroundColor: tokens.mintSoft }]}>
+          <Text style={styles.iconEmoji}>{metadata.icon_emoji || "🎁"}</Text>
+        </View>
+        <Text style={[styles.rewardTitle, { color: tokens.ink }]}>
+          {metadata.reward_title || "Daily Reward"}
+        </Text>
+        {metadata.reward_description && (
+          <Text style={[styles.rewardDescription, { color: tokens.inkMuted }]}>
+            {metadata.reward_description}
+          </Text>
+        )}
+      </View>
+
       <View style={[styles.section, { backgroundColor: tokens.card }]}>
         <Text style={[styles.sectionTitle, { color: tokens.inkMuted }]}>
-          DATA PURCHASE DETAILS
+          REWARD DETAILS
         </Text>
 
-        {metadata.network_name && (
+        <DetailRow
+          icon="flame-outline"
+          label="Streak Day"
+          value={`Day ${metadata.streak_day || 1}`}
+          tokens={tokens}
+          valueStyle={{ color: tokens.mint, fontWeight: "600" }}
+        />
+
+        {metadata.reward_type && (
           <DetailRow
-            icon="wifi-outline"
-            label="Network"
-            value={metadata.network_name}
+            icon="pricetag-outline"
+            label="Reward Type"
+            value={
+              metadata.reward_type.charAt(0).toUpperCase() +
+              metadata.reward_type.slice(1)
+            }
             tokens={tokens}
           />
         )}
 
-        {metadata.phone && (
+        {metadata.reward_value && (
           <DetailRow
-            icon="call-outline"
-            label="Phone Number"
-            value={metadata.phone}
-            tokens={tokens}
-            onPress={() => copyToClipboard(metadata.phone, "Phone number")}
-          />
-        )}
-
-        {metadata.plan_name && (
-          <DetailRow
-            icon="cube-outline"
-            label="Plan"
-            value={metadata.plan_name}
-            tokens={tokens}
-          />
-        )}
-
-        {metadata.size && (
-          <DetailRow
-            icon="pie-chart-outline"
-            label="Data Size"
-            value={metadata.size}
-            tokens={tokens}
-          />
-        )}
-
-        {metadata.plan_volume && (
-          <DetailRow
-            icon="cellular-outline"
-            label="Volume"
-            value={metadata.plan_volume}
-            tokens={tokens}
-          />
-        )}
-
-        {metadata.validity && (
-          <DetailRow
-            icon="time-outline"
-            label="Validity"
-            value={metadata.validity}
+            icon="gift-outline"
+            label="Reward Value"
+            value={
+              metadata.reward_type === "multiplier"
+                ? `${metadata.reward_value}x`
+                : `${metadata.reward_value} points`
+            }
             tokens={tokens}
           />
         )}
 
         <DetailRow
-          icon="cash-outline"
-          label="Amount Paid"
-          value={formatCurrency(metadata.amount_naira, false)}
+          icon="star-outline"
+          label="Points Earned"
+          value={`${(metadata.points_earned || 0).toLocaleString()} SP`}
           tokens={tokens}
+          valueStyle={{ color: tokens.mint, fontWeight: "600" }}
         />
 
-        {metadata.commission_naira !== undefined && (
+        {metadata.claim_date && (
           <DetailRow
-            icon="trending-up-outline"
-            label="Commission"
-            value={formatCurrency(metadata.commission_naira, true)}
+            icon="calendar-outline"
+            label="Claim Date"
+            value={formatDateOnly(metadata.claim_date)}
             tokens={tokens}
-          />
-        )}
-
-        {metadata.discount && (
-          <DetailRow
-            icon="pricetag-outline"
-            label="Discount"
-            value={`${metadata.discount}%`}
-            tokens={tokens}
-          />
-        )}
-
-        {metadata.points_earned !== undefined && (
-          <DetailRow
-            icon="star-outline"
-            label="Points Earned"
-            value={`${(metadata.points_earned || 0).toLocaleString()} SP`}
-            tokens={tokens}
-            valueStyle={{ color: tokens.mint, fontWeight: "600" }}
           />
         )}
       </View>
@@ -154,9 +123,16 @@ export function DataDetail({ transaction, tokens }: DataDetailProps) {
         )}
 
         <DetailRow
-          icon="calendar-outline"
-          label="Date & Time"
+          icon="time-outline"
+          label="Claimed At"
           value={formatDateTime(transaction.timestamp)}
+          tokens={tokens}
+        />
+
+        <DetailRow
+          icon="wallet-outline"
+          label="Credited To"
+          value="Service Credits"
           tokens={tokens}
         />
 
@@ -169,53 +145,23 @@ export function DataDetail({ transaction, tokens }: DataDetailProps) {
           }
           tokens={tokens}
           valueStyle={{
-            color:
-              transaction.status === "success" ? tokens.mint : tokens.error,
+            color: tokens.mint,
             fontWeight: "600",
           }}
         />
-
-        {metadata.external_ref && (
-          <DetailRow
-            icon="pricetag-outline"
-            label="Provider Reference"
-            value={metadata.external_ref}
-            tokens={tokens}
-            onPress={() =>
-              copyToClipboard(metadata.external_ref, "Provider reference")
-            }
-          />
-        )}
-
-        {metadata.error_message && (
-          <DetailRow
-            icon="alert-circle-outline"
-            label="Error"
-            value={metadata.error_message}
-            tokens={tokens}
-            valueStyle={{ color: tokens.error }}
-          />
-        )}
       </View>
 
-      {transaction.reference && (
-        <View
-          style={[
-            styles.helpSection,
-            { backgroundColor: tokens.inkMuted + "15" },
-          ]}
-        >
-          <Ionicons
-            name="help-circle-outline"
-            size={20}
-            color={tokens.inkMuted}
-          />
-          <Text style={[styles.helpText, { color: tokens.inkMuted }]}>
-            Need help with this transaction? Contact support with reference:{" "}
-            {transaction.reference}
-          </Text>
-        </View>
-      )}
+      <View style={[styles.helpSection, { backgroundColor: tokens.mintSoft }]}>
+        <Ionicons
+          name="information-circle-outline"
+          size={20}
+          color={tokens.mint}
+        />
+        <Text style={[styles.helpText, { color: tokens.ink }]}>
+          Daily rewards are credited to your Service Credits balance. Keep your
+          streak going to unlock bigger rewards! 🔥
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -271,6 +217,36 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingBottom: 24,
+  },
+  rewardHeader: {
+    alignItems: "center",
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+    marginTop: 16,
+    marginHorizontal: 16,
+    borderRadius: 14,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  iconEmoji: {
+    fontSize: 40,
+  },
+  rewardTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  rewardDescription: {
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
   },
   section: {
     marginTop: 16,

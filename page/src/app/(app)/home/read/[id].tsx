@@ -33,7 +33,7 @@ export default function ReadDeepLink() {
     // Defer one tick so the router has mounted the navigator before we
     // push — avoids a "navigator not ready" warning on cold deep-link.
     const t = setTimeout(() => {
-      (router as any).replace(`/catalog/book/${workId}`);
+      (router as any).replace(`/book/${workId}`);
     }, 0);
     return () => clearTimeout(t);
   }, [id, router]);

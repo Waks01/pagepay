@@ -10,29 +10,22 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import type { TransactionHistoryItem } from "@/src/shared/types/transaction";
+import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 
 interface ElectricityDetailProps {
   transaction: TransactionHistoryItem;
   tokens: any;
 }
 
-export function ElectricityDetail({ transaction, tokens }: ElectricityDetailProps) {
+export function ElectricityDetail({
+  transaction,
+  tokens,
+}: ElectricityDetailProps) {
   const metadata = (transaction.metadata || {}) as Record<string, any>;
 
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
     Alert.alert("Copied!", `${label} copied to clipboard`);
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString("en-NG", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   };
 
   const formatCurrency = (
@@ -81,7 +74,9 @@ export function ElectricityDetail({ transaction, tokens }: ElectricityDetailProp
             label="Meter Number"
             value={metadata.meter_number}
             tokens={tokens}
-            onPress={() => copyToClipboard(metadata.meter_number, "Meter number")}
+            onPress={() =>
+              copyToClipboard(metadata.meter_number, "Meter number")
+            }
           />
         )}
 
@@ -89,7 +84,10 @@ export function ElectricityDetail({ transaction, tokens }: ElectricityDetailProp
           <DetailRow
             icon="options-outline"
             label="Meter Type"
-            value={metadata.meter_type.charAt(0).toUpperCase() + metadata.meter_type.slice(1)}
+            value={
+              metadata.meter_type.charAt(0).toUpperCase() +
+              metadata.meter_type.slice(1)
+            }
             tokens={tokens}
           />
         )}
@@ -178,7 +176,7 @@ export function ElectricityDetail({ transaction, tokens }: ElectricityDetailProp
         <DetailRow
           icon="calendar-outline"
           label="Date & Time"
-          value={formatDate(transaction.timestamp)}
+          value={formatDateTime(transaction.timestamp)}
           tokens={tokens}
         />
 

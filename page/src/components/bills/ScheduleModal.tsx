@@ -20,6 +20,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { PagePay } from "@/constants/theme";
+import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
 type ScheduleType = "once" | "daily" | "weekly" | "monthly";
@@ -181,7 +182,7 @@ export function ScheduleModal({
         `Type: ${scheduleOption?.title}\n` +
         `Amount: ₦${amount.toLocaleString()}\n` +
         `Phone: ${phone}\n` +
-        `Next Run: ${nextRunAt.toLocaleString()}`,
+        `Next Run: ${formatDateTime(nextRunAt.toISOString())}`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -337,7 +338,7 @@ export function ScheduleModal({
                 />
                 <View style={styles.dateTimeContent}>
                   <Text style={[styles.dateTimeText, { color: tokens.ink }]}>
-                    {nextRunAt.toLocaleString()}
+                    {formatDateTime(nextRunAt.toISOString())}
                   </Text>
                   <Text
                     style={[styles.dateTimeSubtext, { color: tokens.inkMuted }]}

@@ -81,7 +81,6 @@ export default function DailyRewardsScreen() {
   const tokens = PagePay[scheme];
   const queryClient = useQueryClient();
   const [claimingReward, setClaimingReward] = useState(false);
-  const [showClaimModal, setShowClaimModal] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
   const user = useCurrentUser();
@@ -528,6 +527,11 @@ const handleFreezeByPoints = async () => {
                 ? `+${reward.reward_value}`
                 : `${reward.reward_value}%`}
             </Text>
+            {isFuture && (
+              <View style={styles.lockBadge}>
+                <Ionicons name="lock-closed" size={10} color={tokens.border} />
+              </View>
+            )}
           </>
         )}
 
@@ -820,7 +824,7 @@ const handleFreezeByPoints = async () => {
                 opacity: claimingReward ? 0.7 : 1,
               },
             ]}
-            onPress={() => setShowClaimModal(true)}
+            onPress={handleClaimReward}
             disabled={claimingReward}
             activeOpacity={0.9}
           >
@@ -1156,7 +1160,7 @@ const styles = {
     gap: 4,
   },
   dayNumber: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "700" as const,
     textTransform: "uppercase" as const,
     letterSpacing: 0.5,
@@ -1166,9 +1170,20 @@ const styles = {
     lineHeight: 24,
   },
   dayValue: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "700" as const,
     textAlign: "center" as const,
+  },
+  lockBadge: {
+    position: "absolute" as const,
+    top: 6,
+    right: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
   checkBadge: {
     position: "absolute" as const,

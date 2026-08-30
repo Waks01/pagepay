@@ -532,8 +532,8 @@ export default function CatalogScreen() {
                   onPress={() =>
                     router.push(
                       r.sliceId
-                        ? (`/catalog/reader/${r.sliceId}` as never)
-                        : (`/catalog/book/${r.workId}` as never),
+                        ? (`/reader/${r.sliceId}` as never)
+                        : (`/book/${r.workId}` as never),
                     )
                   }
                 />
@@ -608,7 +608,7 @@ export default function CatalogScreen() {
                   <ContentCard
                     item={item}
                     onPress={() =>
-                      router.push(`/catalog/book/${item.id}` as never)
+                      router.push(`/book/${item.id}` as never)
                     }
                   />
                 </View>

@@ -1,20 +1,48 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
-import { useState, useCallback } from 'react';
-import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
-import { Ionicons } from '@expo/vector-icons';
-import { useTranslation } from 'react-i18next';
-import { fetchMySubmissions, type TaskSubmission } from '@/src/features/tasks/api';
-import { SkeletonPage } from '@/components/skeletons';
-import { koboToPoints, koboToNairaString } from '@/src/shared/lib/money';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+} from "react-native";
+import { useState, useCallback } from "react";
+import { router } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { formatDateTime } from "@/src/shared/utils/dateFormatter";
+import {
+  fetchMySubmissions,
+  type TaskSubmission,
+} from "@/src/features/tasks/api";
+import { SkeletonPage } from "@/components/skeletons";
+import { koboToPoints, koboToNairaString } from "@/src/shared/lib/money";
 
-const StatusBadge = ({ status }: { status: TaskSubmission['status'] }) => {
+const StatusBadge = ({ status }: { status: TaskSubmission["status"] }) => {
   const { t } = useTranslation();
   const statusConfig = {
-    pending: { color: '#FFA500', icon: 'hourglass-outline', label: t('task_history.status.pending') },
-    validating: { color: '#00B894', icon: 'sync-outline', label: t('task_history.status.validating') },
-    approved: { color: '#00B894', icon: 'checkmark-circle', label: t('task_history.status.approved') },
-    rejected: { color: '#ff6b6b', icon: 'close-circle', label: t('task_history.status.rejected') },
+    pending: {
+      color: "#FFA500",
+      icon: "hourglass-outline",
+      label: t("task_history.status.pending"),
+    },
+    validating: {
+      color: "#00B894",
+      icon: "sync-outline",
+      label: t("task_history.status.validating"),
+    },
+    approved: {
+      color: "#00B894",
+      icon: "checkmark-circle",
+      label: t("task_history.status.approved"),
+    },
+    rejected: {
+      color: "#ff6b6b",
+      icon: "close-circle",
+      label: t("task_history.status.rejected"),
+    },
   };
 
   const config = statusConfig[status];
@@ -30,10 +58,14 @@ const StatusBadge = ({ status }: { status: TaskSubmission['status'] }) => {
 export default function SubmissionHistoryScreen() {
   const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<TaskSubmission['status'] | 'all'>('all');
+  const [filter, setFilter] = useState<TaskSubmission["status"] | "all">("all");
 
-  const { data: submissions, isLoading, refetch } = useQuery({
-    queryKey: ['submissions'],
+  const {
+    data: submissions,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ["submissions"],
     queryFn: fetchMySubmissions,
   });
 
@@ -44,7 +76,7 @@ export default function SubmissionHistoryScreen() {
   }, [refetch]);
 
   const filteredSubmissions = submissions?.filter(
-    (sub) => filter === 'all' || sub.status === filter
+    (sub) => filter === "all" || sub.status === filter,
   );
 
   const renderSubmission = ({ item }: { item: TaskSubmission }) => {
@@ -76,7 +108,7 @@ export default function SubmissionHistoryScreen() {
             <Ionicons name="cash-outline" size={20} color="#00B894" />
             <View>
               <Text style={styles.rewardText}>
-                +{points.toLocaleString()} {t('task_history.points_unit')}
+                +{points.toLocaleString()} {t("task_history.points_unit")}
               </Text>
               <Text style={styles.rewardNairaText}>≈ {naira}</Text>
             </View>
@@ -85,7 +117,9 @@ export default function SubmissionHistoryScreen() {
           <View style={styles.dateRow}>
             <Ionicons name="calendar-outline" size={16} color="#666" />
             <Text style={styles.dateText}>
-              {t('task_history.submitted', { date: `${submittedDate.toLocaleDateString()} ${submittedDate.toLocaleTimeString()}` })}
+              {t("task_history.submitted", {
+                date: formatDateTime(submittedDate.toISOString()),
+              })}
             </Text>
           </View>
 
@@ -93,7 +127,9 @@ export default function SubmissionHistoryScreen() {
             <View style={styles.dateRow}>
               <Ionicons name="checkmark-done-outline" size={16} color="#666" />
               <Text style={styles.dateText}>
-                {t('task_history.verified', { date: `${verifiedDate.toLocaleDateString()} ${verifiedDate.toLocaleTimeString()}` })}
+                {t("task_history.verified", {
+                  date: formatDateTime(verifiedDate.toISOString()),
+                })}
               </Text>
             </View>
           )}
@@ -102,7 +138,9 @@ export default function SubmissionHistoryScreen() {
             <View style={styles.confidenceRow}>
               <Ionicons name="analytics-outline" size={16} color="#6C5CE7" />
               <Text style={styles.confidenceText}>
-                {t('task_history.ai_confidence', { percent: (item.ai_confidence * 100).toFixed(1) })}
+                {t("task_history.ai_confidence", {
+                  percent: (item.ai_confidence * 100).toFixed(1),
+                })}
               </Text>
             </View>
           )}
@@ -111,10 +149,17 @@ export default function SubmissionHistoryScreen() {
             <View style={styles.rejectionBox}>
               <Ionicons name="alert-circle" size={18} color="#ff6b6b" />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.rejectionText, { fontWeight: '600', marginBottom: 4 }]}>
-                  {t('task_history.rejection_reason')}
+                <Text
+                  style={[
+                    styles.rejectionText,
+                    { fontWeight: "600", marginBottom: 4 },
+                  ]}
+                >
+                  {t("task_history.rejection_reason")}
                 </Text>
-                <Text style={styles.rejectionText}>{item.rejection_reason}</Text>
+                <Text style={styles.rejectionText}>
+                  {item.rejection_reason}
+                </Text>
               </View>
             </View>
           )}
@@ -125,7 +170,9 @@ export default function SubmissionHistoryScreen() {
           {item.proof_image_url && (
             <View style={styles.proofRow}>
               <Ionicons name="image-outline" size={16} color="#666" />
-              <Text style={styles.proofLabel}>{t('task_history.screenshot_provided')}</Text>
+              <Text style={styles.proofLabel}>
+                {t("task_history.screenshot_provided")}
+              </Text>
             </View>
           )}
           {item.proof_url && (
@@ -157,56 +204,99 @@ export default function SubmissionHistoryScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('task_history.title')}</Text>
+        <Text style={styles.headerTitle}>{t("task_history.title")}</Text>
       </View>
 
       {/* Filter Pills */}
       <View style={styles.filterContainer}>
         <TouchableOpacity
-          style={[styles.filterPill, filter === 'all' && styles.filterPillActive]}
-          onPress={() => setFilter('all')}
+          style={[
+            styles.filterPill,
+            filter === "all" && styles.filterPillActive,
+          ]}
+          onPress={() => setFilter("all")}
         >
-          <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>
-            {t('task_history.filter_all')}
+          <Text
+            style={[
+              styles.filterText,
+              filter === "all" && styles.filterTextActive,
+            ]}
+          >
+            {t("task_history.filter_all")}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterPill, filter === 'pending' && styles.filterPillActive]}
-          onPress={() => setFilter('pending')}
+          style={[
+            styles.filterPill,
+            filter === "pending" && styles.filterPillActive,
+          ]}
+          onPress={() => setFilter("pending")}
         >
-          <Text style={[styles.filterText, filter === 'pending' && styles.filterTextActive]}>
-            {t('task_history.filter_pending')}
+          <Text
+            style={[
+              styles.filterText,
+              filter === "pending" && styles.filterTextActive,
+            ]}
+          >
+            {t("task_history.filter_pending")}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterPill, filter === 'validating' && styles.filterPillActive]}
-          onPress={() => setFilter('validating')}
+          style={[
+            styles.filterPill,
+            filter === "validating" && styles.filterPillActive,
+          ]}
+          onPress={() => setFilter("validating")}
         >
-          <Text style={[styles.filterText, filter === 'validating' && styles.filterTextActive]}>
-            {t('task_history.filter_validating')}
+          <Text
+            style={[
+              styles.filterText,
+              filter === "validating" && styles.filterTextActive,
+            ]}
+          >
+            {t("task_history.filter_validating")}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterPill, filter === 'approved' && styles.filterPillActive]}
-          onPress={() => setFilter('approved')}
+          style={[
+            styles.filterPill,
+            filter === "approved" && styles.filterPillActive,
+          ]}
+          onPress={() => setFilter("approved")}
         >
-          <Text style={[styles.filterText, filter === 'approved' && styles.filterTextActive]}>
-            {t('task_history.filter_approved')}
+          <Text
+            style={[
+              styles.filterText,
+              filter === "approved" && styles.filterTextActive,
+            ]}
+          >
+            {t("task_history.filter_approved")}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterPill, filter === 'rejected' && styles.filterPillActive]}
-          onPress={() => setFilter('rejected')}
+          style={[
+            styles.filterPill,
+            filter === "rejected" && styles.filterPillActive,
+          ]}
+          onPress={() => setFilter("rejected")}
         >
-          <Text style={[styles.filterText, filter === 'rejected' && styles.filterTextActive]}>
-            {t('task_history.filter_rejected')}
+          <Text
+            style={[
+              styles.filterText,
+              filter === "rejected" && styles.filterTextActive,
+            ]}
+          >
+            {t("task_history.filter_rejected")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -223,11 +313,13 @@ export default function SubmissionHistoryScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="documents-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>{t('task_history.no_submissions')}</Text>
+            <Text style={styles.emptyText}>
+              {t("task_history.no_submissions")}
+            </Text>
             <Text style={styles.emptySubtext}>
-              {filter === 'all'
-                ? t('task_history.empty_all')
-                : t('task_history.empty_filtered', { status: filter })}
+              {filter === "all"
+                ? t("task_history.empty_all")
+                : t("task_history.empty_filtered", { status: filter })}
             </Text>
           </View>
         }
@@ -239,81 +331,81 @@ export default function SubmissionHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
   },
   centerContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: "#e0e0e0",
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#f5f5f5",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 16,
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#333",
   },
   filterContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     padding: 16,
     gap: 8,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: "#e0e0e0",
   },
   filterPill: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#f5f5f5",
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
   },
   filterPillActive: {
-    backgroundColor: '#6C5CE7',
-    borderColor: '#6C5CE7',
+    backgroundColor: "#6C5CE7",
+    borderColor: "#6C5CE7",
   },
   filterText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
+    fontWeight: "600",
+    color: "#666",
   },
   filterTextActive: {
-    color: '#fff',
+    color: "#fff",
   },
   listContent: {
     padding: 16,
   },
   submissionCard: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
   submissionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 12,
   },
   taskInfo: {
@@ -322,18 +414,18 @@ const styles = StyleSheet.create({
   },
   taskTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
     marginBottom: 4,
   },
   taskMeta: {
     fontSize: 12,
-    color: '#666',
-    textTransform: 'capitalize',
+    color: "#666",
+    textTransform: "capitalize",
   },
   statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -341,58 +433,58 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: "600",
+    color: "#fff",
   },
   submissionBody: {
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: "#f0f0f0",
     paddingTop: 12,
   },
   rewardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginBottom: 8,
   },
   rewardText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#00B894',
+    fontWeight: "bold",
+    color: "#00B894",
   },
   rewardNairaText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#00B894',
+    fontWeight: "600",
+    color: "#00B894",
     opacity: 0.8,
     marginTop: 1,
   },
   dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginBottom: 6,
   },
   dateText: {
     fontSize: 12,
-    color: '#666',
+    color: "#666",
   },
   confidenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginTop: 8,
   },
   confidenceText: {
     fontSize: 12,
-    color: '#6C5CE7',
-    fontWeight: '600',
+    color: "#6C5CE7",
+    fontWeight: "600",
   },
   rejectionBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 8,
-    backgroundColor: '#FFF0F0',
+    backgroundColor: "#FFF0F0",
     borderRadius: 8,
     padding: 12,
     marginTop: 12,
@@ -400,41 +492,41 @@ const styles = StyleSheet.create({
   rejectionText: {
     flex: 1,
     fontSize: 13,
-    color: '#ff6b6b',
+    color: "#ff6b6b",
     lineHeight: 18,
   },
   proofSection: {
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: "#f0f0f0",
     paddingTop: 12,
     marginTop: 12,
   },
   proofRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginBottom: 6,
   },
   proofLabel: {
     flex: 1,
     fontSize: 12,
-    color: '#666',
+    color: "#666",
   },
   emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 48,
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginTop: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
 });

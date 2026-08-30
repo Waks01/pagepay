@@ -16,6 +16,7 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { apiFetch } from "@/src/shared/api/client";
+import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import NotificationBell from "@/components/NotificationBell";
@@ -136,7 +137,7 @@ export default function NotificationScreen() {
   const renderItem = ({ item }: { item: NotificationItem }) => {
     const icon = getCategoryIcon(item.category);
     const iconColor = getCategoryColor(item.category);
-    const time = new Date(item.created_at).toLocaleString();
+    const time = formatDateTime(item.created_at);
 
     return (
       <TouchableOpacity
@@ -192,10 +193,14 @@ export default function NotificationScreen() {
         color={tokens.inkMuted}
       />
       <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>
-        {t("notifications_list.empty_title", { defaultValue: "No notifications yet" })}
+        {t("notifications_list.empty_title", {
+          defaultValue: "No notifications yet",
+        })}
       </Text>
       <Text style={[styles.emptySub, { color: tokens.inkMuted }]}>
-        {t("notifications_list.empty_subtitle", { defaultValue: "We'll notify you when something important happens" })}
+        {t("notifications_list.empty_subtitle", {
+          defaultValue: "We'll notify you when something important happens",
+        })}
       </Text>
     </View>
   );
@@ -228,7 +233,9 @@ export default function NotificationScreen() {
             <Text style={[styles.headerSubtitle, { color: tokens.inkMuted }]}>
               {unreadCount > 0
                 ? t("notifications_list.unread_count", { count: unreadCount })
-                : t("notifications_list.all_caught_up", { defaultValue: "All caught up" })}
+                : t("notifications_list.all_caught_up", {
+                    defaultValue: "All caught up",
+                  })}
             </Text>
           </View>
           <NotificationBell />
@@ -246,7 +253,9 @@ export default function NotificationScreen() {
             ]}
           >
             <Text style={[styles.markAllText, { color: tokens.mint }]}>
-              {t("notifications_list.mark_all_read", { defaultValue: "Mark all read" })}
+              {t("notifications_list.mark_all_read", {
+                defaultValue: "Mark all read",
+              })}
             </Text>
           </TouchableOpacity>
         </View>

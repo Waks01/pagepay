@@ -90,7 +90,7 @@ export default function HomeScreen() {
 
   const onCardPress = useCallback(
     (id: number) => {
-      router.push(`/catalog/book/${id}` as never);
+      router.push(`/book/${id}` as never);
     },
     [router],
   );
@@ -339,8 +339,8 @@ export default function HomeScreen() {
                   onPress={() =>
                     router.push(
                       r.sliceId
-                        ? (`/catalog/reader/${r.sliceId}` as never)
-                        : (`/catalog/book/${r.workId}` as never),
+                        ? (`/reader/${r.sliceId}` as never)
+                        : (`/book/${r.workId}` as never),
                     )
                   }
                 />

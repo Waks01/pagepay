@@ -1,12 +1,19 @@
-import { StyleSheet, Text, View, FlatList, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
-import { Ionicons } from '@expo/vector-icons';
-import { useTranslation } from 'react-i18next';
+import {
+  StyleSheet,
+  Text,
+  View,
+  FlatList,
+  ActivityIndicator,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useQuery } from "@tanstack/react-query";
+import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 
-import { apiFetch } from '@/src/shared/api/client';
-import { PagePay } from '@/constants/theme';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { apiFetch } from "@/src/shared/api/client";
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
 type Payment = {
   id: number;
@@ -25,11 +32,15 @@ export default function BillingHistoryScreen() {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
 
-  const { data: payments, isLoading, error } = useQuery({
-    queryKey: ['payments', 'history'],
+  const {
+    data: payments,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["payments", "history"],
     queryFn: async () => {
-      const res = await apiFetch('/api/v1/payments/history');
-      if (!res.ok) throw new Error('Failed to load payment history');
+      const res = await apiFetch("/api/v1/payments/history");
+      if (!res.ok) throw new Error("Failed to load payment history");
       return (await res.json()) as Payment[];
     },
   });
@@ -48,8 +59,14 @@ export default function BillingHistoryScreen() {
     return (
       <SafeAreaView style={[styles.root, { backgroundColor: tokens.paper }]}>
         <View style={styles.error}>
-          <Ionicons name="alert-circle-outline" size={48} color={tokens.signal} />
-          <Text style={[styles.errorText, { color: tokens.ink }]}>{t('billing_history.error')}</Text>
+          <Ionicons
+            name="alert-circle-outline"
+            size={48}
+            color={tokens.signal}
+          />
+          <Text style={[styles.errorText, { color: tokens.ink }]}>
+            {t("billing_history.error")}
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -57,14 +74,21 @@ export default function BillingHistoryScreen() {
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: tokens.paper }]}>
-      <Text style={[styles.title, { color: tokens.ink, fontFamily: 'SpaceGrotesk_700Bold' }]}>
-        {t('billing_history.title')}
+      <Text
+        style={[
+          styles.title,
+          { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+        ]}
+      >
+        {t("billing_history.title")}
       </Text>
-      
+
       {!payments || payments.length === 0 ? (
         <View style={styles.empty}>
           <Ionicons name="receipt-outline" size={64} color={tokens.inkMuted} />
-          <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>{t('billing_history.empty')}</Text>
+          <Text style={[styles.emptyText, { color: tokens.inkMuted }]}>
+            {t("billing_history.empty")}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -72,11 +96,18 @@ export default function BillingHistoryScreen() {
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <View style={[styles.card, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: tokens.card, borderColor: tokens.border },
+              ]}
+            >
               <View style={styles.cardHeader}>
                 <View>
                   <Text style={[styles.type, { color: tokens.ink }]}>
-                    {item.tier === 'wallet_deposit' ? t('billing_history.payment') : t('billing_history.subscription')}
+                    {item.tier === "wallet_deposit"
+                      ? t("billing_history.payment")
+                      : t("billing_history.subscription")}
                   </Text>
                   {item.tier_name && (
                     <Text style={[styles.tier, { color: tokens.inkMuted }]}>
@@ -84,20 +115,44 @@ export default function BillingHistoryScreen() {
                     </Text>
                   )}
                 </View>
-                <Text style={[styles.amount, { color: tokens.mint, fontFamily: 'SpaceGrotesk_700Bold' }]}>
+                <Text
+                  style={[
+                    styles.amount,
+                    { color: tokens.mint, fontFamily: "SpaceGrotesk_700Bold" },
+                  ]}
+                >
                   ₦{item.amount_naira.toLocaleString()}
                 </Text>
               </View>
               <View style={styles.cardFooter}>
                 <Text style={[styles.date, { color: tokens.inkMuted }]}>
-                  {new Date(item.created_at).toLocaleDateString('en-NG', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
+                  {formatDateTime(item.created_at, {
+                    includeTime: false,
+                    shortMonth: true,
                   })}
                 </Text>
-                <View style={[styles.statusBadge, { backgroundColor: item.status === 'success' ? tokens.mintSoft : tokens.signalSoft }]}>
-                  <Text style={[styles.status, { color: item.status === 'completed' ? tokens.mint : tokens.signal }]}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    {
+                      backgroundColor:
+                        item.status === "success"
+                          ? tokens.mintSoft
+                          : tokens.signalSoft,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.status,
+                      {
+                        color:
+                          item.status === "completed"
+                            ? tokens.mint
+                            : tokens.signal,
+                      },
+                    ]}
+                  >
                     {t(`billing_history.${item.status}`)}
                   </Text>
                 </View>
@@ -123,30 +178,30 @@ const styles = StyleSheet.create({
   },
   loading: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   error: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     gap: 12,
     paddingHorizontal: 40,
   },
   errorText: {
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   empty: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     gap: 16,
     paddingHorizontal: 40,
   },
   emptyText: {
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   list: {
     padding: 20,
@@ -159,13 +214,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   type: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   tier: {
     fontSize: 13,
@@ -176,9 +231,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   date: {
     fontSize: 13,
@@ -190,7 +245,7 @@ const styles = StyleSheet.create({
   },
   status: {
     fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
+    fontWeight: "600",
+    textTransform: "capitalize",
   },
 });
