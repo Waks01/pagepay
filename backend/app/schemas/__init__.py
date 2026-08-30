@@ -1812,6 +1812,12 @@ class UserDailyAdStat(BaseModel):
     points_earned: int
 
 
+class BillDisputeCreate(BaseModel):
+    """Create a dispute for a bill transaction."""
+    transaction_reference: str
+    reason: str
+
+
 class BillDisputeOut(BaseModel):
     reason: str
     status: str
