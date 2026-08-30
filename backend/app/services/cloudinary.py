@@ -1,5 +1,6 @@
 """Cloudinary integration for task proof and avatar image uploads."""
 
+import io
 import cloudinary
 import cloudinary.uploader
 from app.config import settings
@@ -50,6 +51,44 @@ async def upload_base64_image(base64_string: str, public_id: str | None = None) 
     
     result = cloudinary.uploader.upload(base64_string, **upload_options)
     
+    return {
+        "url": result.get("url"),
+        "secure_url": result.get("secure_url"),
+        "public_id": result.get("public_id"),
+        "format": result.get("format"),
+        "width": result.get("width"),
+        "height": result.get("height"),
+    }
+
+
+async def upload_bytes(data: bytes, public_id: str | None = None, content_type: str = "image/jpeg") -> dict:
+    """Upload raw bytes to Cloudinary.
+    
+    Args:
+        data: Raw file bytes.
+        public_id: Optional custom public ID.
+        content_type: MIME type hint for the upload.
+        
+    Returns:
+        dict with keys: url, secure_url, public_id, format, width, height
+    """
+    if not init_cloudinary():
+        raise Exception("Cloudinary not configured. Set CLOUDINARY_* env vars.")
+
+    upload_options = {
+        "folder": settings.cloudinary_upload_folder,
+        "resource_type": "auto",
+        "invalidate": True,
+    }
+
+    if public_id:
+        upload_options["public_id"] = public_id
+
+    result = cloudinary.uploader.upload(
+        io.BytesIO(data),
+        **upload_options,
+    )
+
     return {
         "url": result.get("url"),
         "secure_url": result.get("secure_url"),

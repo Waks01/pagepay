@@ -11,6 +11,8 @@ import io
 import re
 from datetime import datetime
 
+import httpx
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
@@ -542,6 +544,17 @@ async def _process_sow_image_job(
 
         title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
 
+        image_url = None
+        try:
+            from app.services.cloudinary import upload_bytes
+            uploaded = await upload_bytes(
+                contents,
+                public_id=f"study_materials/{user_id}/{job_id}",
+            )
+            image_url = uploaded.get("secure_url") or uploaded.get("url")
+        except Exception as exc:
+            logger.warning("[sow/upload-image worker] Cloudinary upload failed job=%s err=%s", job_id, exc)
+
         import json as _json
         async with AsyncSessionLocal() as db:
             material = StudyMaterial(
@@ -550,6 +563,7 @@ async def _process_sow_image_job(
                 exam_type=exam_type,
                 raw_input=f"[IMAGE: {safe_name}]\n{extracted_text}",
                 parsed_structure=_json.dumps(parsed) if parsed else None,
+                image_url=image_url,
                 ai_model_used=provider,
             )
             db.add(material)
@@ -625,6 +639,17 @@ async def _process_sow_document_job(
 
         title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
 
+        image_url = None
+        try:
+            from app.services.cloudinary import upload_bytes
+            uploaded = await upload_bytes(
+                contents,
+                public_id=f"study_materials/{user_id}/{job_id}",
+            )
+            image_url = uploaded.get("secure_url") or uploaded.get("url")
+        except Exception as exc:
+            logger.warning("[sow/upload-document worker] Cloudinary upload failed job=%s err=%s", job_id, exc)
+
         import json as _json
         async with AsyncSessionLocal() as db:
             material = StudyMaterial(
@@ -633,6 +658,7 @@ async def _process_sow_document_job(
                 exam_type=exam_type,
                 raw_input=f"[DOCUMENT: {safe_name}]\n{extracted_text}",
                 parsed_structure=_json.dumps(parsed) if parsed else None,
+                image_url=image_url,
                 ai_model_used=provider,
             )
             db.add(material)
@@ -891,6 +917,20 @@ async def export_material(
     base_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", base_name).strip() or "study_material"
 
     if format == "image":
+        if material.image_url:
+            try:
+                image_bytes = _download_image(material.image_url)
+                if image_bytes:
+                    return Response(
+                        content=image_bytes,
+                        media_type="image/png",
+                        headers={
+                            "Content-Disposition": f'attachment; filename="{base_name}.png"',
+                        },
+                    )
+            except Exception:
+                pass
+        
         from PIL import Image, ImageDraw, ImageFont
         width, height = 800, 1000
         img = Image.new("RGB", (width, height), color="white")
@@ -943,6 +983,7 @@ async def export_material(
             topic_names=topic_names,
             asset_count=len(assets),
             created_at=material.created_at,
+            image_url=material.image_url,
         )
         return Response(
             content=pdf_bytes,
@@ -960,6 +1001,17 @@ async def export_material(
             doc.add_paragraph(f"Exam: {material.exam_type.upper()}")
         doc.add_paragraph(f"Topics: {len(topic_names)}  |  Assets: {len(assets)}")
         doc.add_paragraph("")
+        
+        if material.image_url:
+            try:
+                image_bytes = _download_image(material.image_url)
+                if image_bytes:
+                    img_stream = io.BytesIO(image_bytes)
+                    doc.add_picture(img_stream, width=docx.shared.Inches(5.5))
+                    doc.add_paragraph("")
+            except Exception:
+                pass
+        
         if topic_names:
             doc.add_heading("Topics Covered", level=2)
             for idx, name in enumerate(topic_names, 1):
@@ -2054,4 +2106,15 @@ def _wrap_text(text: str, max_width: int, font) -> list[str]:
     if current:
         lines.append(current)
     return lines or [""]
+
+
+def _download_image(url: str) -> bytes | None:
+    try:
+        with httpx.Client(timeout=15) as client:
+            resp = client.get(url)
+            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image/"):
+                return resp.content
+    except Exception:
+        pass
+    return None
 

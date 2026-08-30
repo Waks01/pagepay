@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Image,
   Modal,
   Pressable,
   RefreshControl,
@@ -1158,6 +1159,13 @@ export default function StudyScreen() {
                     },
                   ]}
                 >
+                  {selectedMaterial.image_url && (
+                    <Image
+                      source={{ uri: selectedMaterial.image_url }}
+                      style={styles.materialPreviewImage}
+                      resizeMode="contain"
+                    />
+                  )}
                   <View style={styles.sectionHeaderRow}>
                     <Text
                       style={[
@@ -2269,6 +2277,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     gap: 12,
+  },
+  materialPreviewImage: {
+    width: "100%",
+    height: 220,
+    borderRadius: 10,
+    backgroundColor: tokens.paper2,
   },
   materialPreviewText: {
     fontSize: 14,
