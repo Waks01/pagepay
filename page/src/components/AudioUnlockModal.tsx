@@ -244,6 +244,8 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
+    zIndex: 9999,
+    elevation: 9999,
   },
   safeArea: {
     width: "100%",

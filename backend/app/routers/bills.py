@@ -743,6 +743,19 @@ async def buy_data(
         reference=reference,
         status="success",
         external_ref=result.reference,
+        details={
+            "network": result.network,
+            "network_name": payload.network.upper(),
+            "plan": result.plan,
+            "plan_name": plan.label,
+            "size": plan.size,
+            "plan_volume": plan.plan_volume,
+            "validity": plan.validity,
+            "amount": str(result.amount),
+            "charged": result.charged,
+            "discount": result.discount,
+            "mobile_number": result.mobile_number,
+        },
     )
     db.add(tx)
 

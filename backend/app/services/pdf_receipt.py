@@ -96,6 +96,21 @@ def generate_receipt_pdf(transaction: BillTransaction) -> bytes:
     # Add service-specific fields
     if transaction.phone:
         details_data.insert(3, ['Phone Number', transaction.phone])
+    
+    # For data transactions, show network and plan details
+    if transaction.service == "data" and transaction.details:
+        if transaction.details.get("network_name"):
+            details_data.insert(3, ['Network', transaction.details["network_name"]])
+        if transaction.details.get("plan_name"):
+            details_data.insert(4, ['Plan', transaction.details["plan_name"]])
+        if transaction.details.get("size"):
+            details_data.insert(5, ['Data Size', transaction.details["size"]])
+    
+    # For airtime transactions, show network
+    if transaction.service == "airtime" and transaction.details:
+        if transaction.details.get("network_name"):
+            details_data.insert(3, ['Network', transaction.details["network_name"]])
+    
     if transaction.meter_number:
         details_data.insert(3, ['Meter Number', transaction.meter_number])
     if transaction.smartcard_number:

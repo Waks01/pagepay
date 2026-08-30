@@ -139,6 +139,13 @@ def generate_receipt_image(transaction: BillTransaction) -> bytes:
     if transaction.details and transaction.details.get("network_name"):
         details.append(("Network", transaction.details["network_name"]))
     
+    # For data transactions, show plan name and size
+    if transaction.service == "data" and transaction.details:
+        if transaction.details.get("plan_name"):
+            details.append(("Plan", transaction.details["plan_name"]))
+        if transaction.details.get("size"):
+            details.append(("Data Size", transaction.details["size"]))
+    
     # Phone number
     if transaction.phone:
         details.append(("Phone Number", transaction.phone))
