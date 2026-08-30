@@ -267,7 +267,7 @@ class Settings(BaseSettings):
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     gemini_default_model: str = "gemini-2.5-flash"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_default_model: str = "deepseek/deepseek-chat:free"
+    openrouter_default_model: str = "openrouter/free"
     openrouter_http_referer: str = "https://pagepay.ng"
     openrouter_app_title: str = "PagePay Study"
     groq_base_url: str = "https://api.groq.com/openai/v1"
