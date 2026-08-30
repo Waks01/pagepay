@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import { useAudioPlayer } from "expo-audio";
 import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system";
 
 import { apiFetch, API_URL } from "@/src/shared/api/client";
 import { pollSowJob } from "@/src/features/study/api";
@@ -706,8 +707,25 @@ export default function StudyScreen() {
     if (!selectedMaterial) return;
     setActionMenuVisible(false);
     try {
-      const shareText = `Check out my study material: ${selectedMaterial.title}\n\nTopics: ${getTopicNames(selectedMaterial.parsed_structure).length}\nAssets: ${selectedMaterial.assets.length}`;
-      await Sharing.shareAsync(shareText, {
+      const cleanTitle = selectedMaterial.title.replace(/^[A-Z]+ · /, "").trim() || "study-material";
+      const topics = getTopicNames(selectedMaterial.parsed_structure);
+      const body = [
+        `# ${selectedMaterial.title}`,
+        `Exam: ${selectedMaterial.exam_type ? selectedMaterial.exam_type.toUpperCase() : "Custom"}`,
+        `Topics: ${topics.length}`,
+        `Assets: ${selectedMaterial.assets.length}`,
+        "",
+        "---",
+        "",
+        selectedMaterial.content || "(No content available)",
+      ].join("\n");
+
+      const filename = `${cleanTitle.replace(/[^a-zA-Z0-9_-]+/g, "_")}.txt`;
+      const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+      await FileSystem.writeAsStringAsync(fileUri, body, { encoding: FileSystem.EncodingType.UTF8 });
+
+      await Sharing.shareAsync(fileUri, {
+        mimeType: "text/plain",
         dialogTitle: selectedMaterial.title,
       });
     } catch (err) {
