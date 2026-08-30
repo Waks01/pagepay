@@ -111,7 +111,7 @@ src/
   - Sponsored entries flagged `is_sponsored: true`
   - Ad placement rotation logic: alternate between AdMob and AppLovin ad units per user session to distribute load
 - **Reward multiplier logic:**
-  - Base rate: 5 pts per 10 minutes
+  - Base rate: 2 pts for Free, 4 pts for Premium users per verified 1-min slice
   - After article: "Watch video to double to 10 pts"
   - SSV from either provider confirms full watch → server bumps reward before commit
 

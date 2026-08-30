@@ -54,8 +54,6 @@ export default function HomeScreen() {
   // state, no re-auth on tab switch.
   const user = useCurrentUser();
 
-
-
   // The feed query uses the cached user id from the store. If the
   // store hasn't populated yet (shouldn't happen — auth gate loads
   // it before the (app) group mounts), we fall back to 0 (anonymous)
@@ -198,43 +196,9 @@ export default function HomeScreen() {
       style={[styles.root, { backgroundColor: tokens.paper }]}
     >
       <View style={styles.header}>
-        {/* Row 1: avatar + daily rewards + points + bell */}
+        {/* Row 1: avatar + points + bell */}
         <View style={styles.iconsRow}>
           <UserAvatar size={32} />
-
-          {/* Daily Rewards Button - shows streak if active, otherwise gift icon */}
-          <TouchableOpacity
-            onPress={() => router.push("/rewards/daily")}
-            style={[
-              streakData && streakData.current_streak > 0
-                ? styles.streakBadge
-                : styles.rewardsButton,
-              streakData && streakData.current_streak > 0
-                ? { backgroundColor: tokens.mintSoft, borderColor: tokens.mint }
-                : { backgroundColor: tokens.card, borderColor: tokens.border },
-            ]}
-          >
-            {streakData && streakData.current_streak > 0 ? (
-              <>
-                <Text style={styles.streakEmoji}>🔥</Text>
-                <Text style={[styles.streakText, { color: tokens.mint }]}>
-                  {streakData.current_streak}d
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.rewardsEmoji}>🎁</Text>
-                {dailyRewardsQuery.data?.can_claim_today && (
-                  <View
-                    style={[
-                      styles.rewardsBadge,
-                      { backgroundColor: tokens.accent },
-                    ]}
-                  />
-                )}
-              </>
-            )}
-          </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => router.push("/wallet")}
@@ -427,7 +391,7 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 12, paddingRight: 16 }}
             decelerationRate="fast"
-            snapToInterval={140 + 12}
+            snapToInterval={110 + 12}
             snapToAlignment="start"
           >
             <VTUServiceCard
@@ -487,30 +451,69 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
-        {/* Transaction History */}
-        <TouchableOpacity
-          onPress={() => router.push("/home/transactions")}
-          style={[
-            styles.transactionHistoryCard,
-            { backgroundColor: tokens.card, borderColor: tokens.border },
-          ]}
-          activeOpacity={0.7}
-        >
-          <View style={styles.transactionHistoryLeft}>
-            <View style={[styles.transactionHistoryIcon, { backgroundColor: `${tokens.mint}20` }]}>
-              <Ionicons name="document-text-outline" size={22} color={tokens.mint} />
+        {/* Quick Actions Container */}
+        <View style={styles.quickActionsContainer}>
+          {/* Transaction History Button */}
+          <TouchableOpacity
+            onPress={() => router.push("/home/transactions")}
+            style={[
+              styles.quickActionButton,
+              { backgroundColor: tokens.card, borderColor: tokens.border },
+            ]}
+            activeOpacity={0.7}
+          >
+            <View
+              style={[
+                styles.quickActionIcon,
+                { backgroundColor: `${tokens.mint}20` },
+              ]}
+            >
+              <Ionicons
+                name="document-text-outline"
+                size={18}
+                color={tokens.mint}
+              />
             </View>
-            <View>
-              <Text style={[styles.transactionHistoryTitle, { color: tokens.ink }]}>
-                {t("home.transaction_history", { defaultValue: "Transaction History" })}
-              </Text>
-              <Text style={[styles.transactionHistorySubtitle, { color: tokens.inkMuted }]}>
-                {t("home.transaction_history_subtitle", { defaultValue: "View all your transactions" })}
-              </Text>
+            <Text
+              style={[styles.quickActionTitle, { color: tokens.ink }]}
+              numberOfLines={2}
+            >
+              {t("home.transaction_history", {
+                defaultValue: "Transaction History",
+              })}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Daily Rewards Button */}
+          <TouchableOpacity
+            onPress={() => router.push("/rewards/daily")}
+            style={[
+              styles.quickActionButton,
+              { backgroundColor: tokens.card, borderColor: tokens.border },
+            ]}
+            activeOpacity={0.7}
+          >
+            <View
+              style={[
+                styles.quickActionIcon,
+                { backgroundColor: `${tokens.accent}20` },
+              ]}
+            >
+              <Text style={styles.quickActionEmoji}>🎁</Text>
             </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={tokens.inkMuted} />
-        </TouchableOpacity>
+            {dailyRewardsQuery.data?.can_claim_today && (
+              <View
+                style={[styles.claimDot, { backgroundColor: tokens.accent }]}
+              />
+            )}
+            <Text
+              style={[styles.quickActionTitle, { color: tokens.ink }]}
+              numberOfLines={2}
+            >
+              {t("home.daily_rewards", { defaultValue: "Daily Rewards" })}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Browse by category */}
         <View style={styles.section}>
@@ -654,6 +657,42 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 14,
     marginHorizontal: 2,
+  },
+  quickActionsContainer: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  quickActionButton: {
+    flex: 1,
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 6,
+  },
+  quickActionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickActionEmoji: {
+    fontSize: 18,
+  },
+  quickActionTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    fontFamily: "SpaceGrotesk_700Bold",
+    textAlign: "center",
+  },
+  claimDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    position: "absolute",
+    top: 10,
+    right: 10,
   },
   transactionHistoryCard: {
     flexDirection: "row",

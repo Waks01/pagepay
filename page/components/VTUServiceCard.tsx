@@ -46,7 +46,7 @@ export const VTUServiceCard = React.memo(function VTUServiceCard({
           { backgroundColor: ICON_BG[icon] || "#f3f4f6" },
         ]}
       >
-        <Ionicons name={icon} size={24} color={tokens.mint} />
+        <Ionicons name={icon} size={20} color={tokens.mint} />
       </View>
       <Text style={[styles.name, { color: tokens.ink }]} numberOfLines={1}>
         {label}
@@ -62,32 +62,32 @@ export const VTUServiceCard = React.memo(function VTUServiceCard({
 
 const styles = StyleSheet.create({
   card: {
-    width: 140,
+    width: 110,
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 12,
+    padding: 12,
     alignItems: "center",
-    gap: 10,
+    gap: 8,
   },
   iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   name: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     textAlign: "center",
   },
   earnBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   earnText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
   },
 });

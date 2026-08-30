@@ -38,7 +38,7 @@ Build, maintain, and evolve the PagePay backend API. Own database schema, API co
 
 ### 4. Reading Engine
 - Timer logic: server tracks slice start/end timestamps; client reads remaining time from `/progress/continue`
-- Points formula: `base_points = max(0, (effective_duration // 600) * 5)` — uses floor division as implemented in `sessions.py:144`
+- Points formula: credits slice completion bonus (2 pts Free / 4 pts Premium) immediately upon verification (dwell time >= 60s per slice)
 - Anti-cheat: server-side only — validate dwell time >= 60s per slice before awarding points; flag users with >3 suspicious sessions for admin review
 
 ### 5. AI Router

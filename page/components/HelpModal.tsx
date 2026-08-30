@@ -52,7 +52,7 @@ export function HelpModal({ visible, onClose }: HelpModalProps) {
             <QA
               tokens={tokens}
               q="How does earning work?"
-              a="A verified 1-minute read credits 5 points. Ads you watch between sessions add a small bonus on top, paid out per impression. Points appear in your wallet after the post-read ad claim."
+              a="A verified 1-minute read credits 2 points (or 4 for Premium users). Ads you watch between sessions add a small bonus on top, paid out per impression. Points appear in your wallet after the post-read ad claim."
             />
             <QA
               tokens={tokens}

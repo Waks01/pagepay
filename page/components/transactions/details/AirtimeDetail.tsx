@@ -26,8 +26,64 @@ const NETWORK_MAP: Record<string, string> = {
 export function AirtimeDetail({ transaction, tokens }: AirtimeDetailProps) {
   const metadata = (transaction.metadata || {}) as Record<string, any>;
 
-  const networkName =
-    NETWORK_MAP[transaction.subtype || "1"] || "Unknown Network";
+  // Detect network from phone number prefix
+  const getNetworkFromPhone = (phone: string): string => {
+    if (!phone) return "Unknown Network";
+    const prefix = phone.substring(0, 4);
+
+    // MTN prefixes
+    if (
+      [
+        "0803",
+        "0806",
+        "0703",
+        "0706",
+        "0813",
+        "0816",
+        "0810",
+        "0814",
+        "0903",
+        "0906",
+        "0913",
+        "0916",
+      ].includes(prefix)
+    ) {
+      return "MTN";
+    }
+    // Glo prefixes
+    if (
+      ["0805", "0807", "0705", "0815", "0811", "0905", "0915"].includes(prefix)
+    ) {
+      return "Glo";
+    }
+    // Airtel prefixes
+    if (
+      [
+        "0802",
+        "0808",
+        "0708",
+        "0812",
+        "0701",
+        "0902",
+        "0907",
+        "0901",
+        "0904",
+        "0912",
+      ].includes(prefix)
+    ) {
+      return "Airtel";
+    }
+    // 9mobile prefixes
+    if (["0809", "0817", "0818", "0909", "0908"].includes(prefix)) {
+      return "9mobile";
+    }
+
+    return "Unknown Network";
+  };
+
+  const networkName = metadata.phone
+    ? getNetworkFromPhone(metadata.phone)
+    : "Unknown Network";
 
   const copyToClipboard = async (text: string, label: string) => {
     await Clipboard.setStringAsync(text);
@@ -45,9 +101,13 @@ export function AirtimeDetail({ transaction, tokens }: AirtimeDetailProps) {
     });
   };
 
-  const formatCurrency = (amountKobo: number | undefined) => {
-    if (!amountKobo && amountKobo !== 0) return "N/A";
-    return `₦${amountKobo.toLocaleString("en-NG", {
+  const formatCurrency = (
+    amount: number | undefined,
+    isKobo: boolean = false,
+  ) => {
+    if (!amount && amount !== 0) return "N/A";
+    const actualAmount = isKobo ? amount / 100 : amount;
+    return `₦${actualAmount.toLocaleString("en-NG", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
@@ -83,7 +143,7 @@ export function AirtimeDetail({ transaction, tokens }: AirtimeDetailProps) {
         <DetailRow
           icon="cash-outline"
           label="Amount Paid"
-          value={formatCurrency(metadata.amount_naira)}
+          value={formatCurrency(metadata.amount_naira, false)}
           tokens={tokens}
         />
 
@@ -91,7 +151,7 @@ export function AirtimeDetail({ transaction, tokens }: AirtimeDetailProps) {
           <DetailRow
             icon="trending-up-outline"
             label="Commission"
-            value={formatCurrency(metadata.commission_naira)}
+            value={formatCurrency(metadata.commission_naira, true)}
             tokens={tokens}
           />
         )}

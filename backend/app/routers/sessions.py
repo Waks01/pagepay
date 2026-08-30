@@ -155,14 +155,22 @@ async def end_session(
 
     if not session.verified and session.scroll_events > 0 and effective_duration >= settings.session_verified_min_seconds:
         session.verified = True
-        pending_points = max(0, (effective_duration // 600) * 5)
-        session.pending_points = pending_points
+
+        # Credit slice completion bonus immediately upon verification
+        # Free: 2 pts, Premium: 4 pts
+        base_bonus = settings.reading_slice_bonus_points
+        multiplier = 2.0 if current_user.tier != UserTier.FREE else 1.0
+        total_points = int(base_bonus * multiplier)
+
+        session.pending_points = total_points
         bonus_eligible = True
-        await _credit_reading_reward(db, current_user, session, pending_points)
+
+        await _credit_reading_reward(db, current_user, session, total_points)
         logger.info(
-            "session %d ended: user=%d verified=True effective_duration=%ds pending_points=%d",
-            session.id, current_user.id, effective_duration, pending_points,
+            "session %d ended: user=%d verified=True. Credited slice bonus: %d pts",
+            session.id, current_user.id, total_points,
         )
+        pending_points = total_points
 
     await db.commit()
     await db.refresh(current_user)

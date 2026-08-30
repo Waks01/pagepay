@@ -338,3 +338,83 @@ async def get_transaction_history(
         page=page,
         limit=limit,
     )
+
+
+@router.get("/receipt/{transaction_id}/pdf")
+async def download_receipt_pdf(
+    transaction_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download transaction receipt as PDF.
+    
+    Only supports bill transactions for now.
+    """
+    from fastapi.responses import Response
+    from app.services.pdf_receipt import generate_receipt_pdf
+    
+    # Get bill transaction
+    result = await db.execute(
+        select(BillTransaction)
+        .where(
+            BillTransaction.id == transaction_id,
+            BillTransaction.user_id == current_user.id
+        )
+    )
+    transaction = result.scalar_one_or_none()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Generate PDF
+    pdf_bytes = generate_receipt_pdf(transaction)
+    
+    # Return as downloadable file
+    filename = f"pagepay_receipt_{transaction.reference}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+@router.get("/receipt/{transaction_id}/image")
+async def download_receipt_image(
+    transaction_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download transaction receipt as PNG image.
+    
+    Only supports bill transactions for now.
+    """
+    from fastapi.responses import Response
+    from app.services.image_receipt import generate_receipt_image
+    
+    # Get bill transaction
+    result = await db.execute(
+        select(BillTransaction)
+        .where(
+            BillTransaction.id == transaction_id,
+            BillTransaction.user_id == current_user.id
+        )
+    )
+    transaction = result.scalar_one_or_none()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Generate image
+    image_bytes = generate_receipt_image(transaction)
+    
+    # Return as downloadable file
+    filename = f"pagepay_receipt_{transaction.reference}.png"
+    return Response(
+        content=image_bytes,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )

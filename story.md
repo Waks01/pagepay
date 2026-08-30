@@ -66,7 +66,7 @@ Instead of writing your own articles, you aggregate content. You can connect you
 **The Logic You'll Need to Build:**
 You cannot just reward users for clicking a link, or they will use bots to click 1,000 links a minute. You need to build tracking logic:
 
-- A timer that tracks how long the article is active on the screen.
+- A slice-based timer that verifies the completion of 1-minute reading segments.
 - Scroll listeners to ensure the user is actually moving down the page.
 - A simple anti-cheat system (e.g., checking for unnatural, rapid tapping or automated scripts).
 

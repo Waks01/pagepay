@@ -78,7 +78,7 @@ PAYSTACK_WEBHOOK_SECRET=...
 3. **Skip education unit progression**
 
 ## Complete+ Benefits (everything in Study+ plus)
-1. **1.5x point multipliers** on reading, tasks, daily rewards, bills cashback
+1. **2x point multipliers** on reading, tasks, daily rewards, bills cashback
 2. **Optional ads on novels** (skip for 3 pts/slice or watch for 33 pts/slice)
 3. **Priority task verification**
 4. **Gold Complete+ badge**

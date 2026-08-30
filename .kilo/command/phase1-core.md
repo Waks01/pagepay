@@ -97,7 +97,7 @@
   - Request: `{session_id}`
   - Calculates `duration_seconds` from start/end time
   - Validates `verified=true` (scroll events > 0)
-  - Awards points: `points = max(0, (effective_duration // 600) * 5)` — floor division, as implemented
+  - Awards points: credits slice completion bonus (2 pts Free / 4 pts Premium) immediately upon verification
   - Stages `pending_points` on the row for post-read ad claim
 
 ### Step 6: Dockerize
