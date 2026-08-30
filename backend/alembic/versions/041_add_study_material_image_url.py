@@ -14,7 +14,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "041_add_study_material_image_url"
-down_revision: Union[str, None] = "3f02971605b1"
+down_revision: Union[str, None] = "040_add_ad_requests_use_case"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
