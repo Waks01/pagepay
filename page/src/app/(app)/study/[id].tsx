@@ -295,7 +295,9 @@ export default function MaterialDetailScreen() {
             Material not found
           </Text>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={[styles.backBtnText, { color: tokens.mint }]}>Go Back</Text>
+            <Text style={[styles.backBtnText, { color: tokens.mint }]}>
+              {t("common.go_back", "Go Back")}
+            </Text>
           </Pressable>
         </View>
       </SafeAreaView>

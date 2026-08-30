@@ -52,7 +52,6 @@ type ContentDetail = {
   parent_work_id: number | null;
   body_sentinels_version: number;
   audio_url: string | null;
-
 };
 
 type ContinueReading = {
@@ -88,14 +87,15 @@ export default function ReaderScreen() {
   const [loading, setLoading] = useState(true);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-
-
-
-
-
-
-
+  const workIdRef = useRef<number | null>(null);
   const workId = content?.parent_work_id ?? Number(id);
+
+  useEffect(() => {
+    if (content?.parent_work_id) {
+      workIdRef.current = content.parent_work_id;
+    }
+  }, [content]);
+
   const socialQuery = useWorkSocial(workId);
   const logShare = useLogWorkShare(workId);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
@@ -178,10 +178,6 @@ export default function ReaderScreen() {
   const onHighlightPressSegment = useCallback((highlightId: string) => {
     setStudyFocusedHighlight(highlightId);
   }, []);
-
-
-
-
 
   useEffect(() => {
     let mounted = true;
@@ -429,10 +425,19 @@ export default function ReaderScreen() {
       } catch (e) {
         console.warn("Progress finish failed", e);
       }
-      router.back();
+
+      if (workId) {
+        router.replace(`/book/${workId}`);
+      } else {
+        router.back();
+      }
     } else {
       finishedManuallyRef.current = true;
-      router.back();
+      if (workId) {
+        router.replace(`/book/${workId}`);
+      } else {
+        router.back();
+      }
     }
   };
 
@@ -672,10 +677,6 @@ export default function ReaderScreen() {
         isPremium={isPremium}
         onLockedListenTapped={() => setPaywallOpen(true)}
       />
-
-
-
-
 
       {isStudyMode && (
         <ShareAsImage

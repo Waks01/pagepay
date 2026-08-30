@@ -5,13 +5,13 @@
 
 /**
  * Format a UTC datetime string to user's local timezone.
- * 
+ *
  * @param dateString - ISO 8601 datetime string from backend (UTC)
  * @param options - Optional formatting options
  * @returns Formatted date string in user's local timezone
- * 
+ *
  * @example
- * formatDateTime("2024-08-30T14:30:00") 
+ * formatDateTime("2024-08-30T14:30:00")
  * // => "August 30, 2024 at 03:30 PM" (if user is in WAT timezone)
  */
 export function formatDateTime(
@@ -21,12 +21,21 @@ export function formatDateTime(
     includeSeconds?: boolean;
     shortMonth?: boolean;
     shortDate?: boolean;
-  }
+  },
 ): string {
   if (!dateString) return "N/A";
 
-  const date = new Date(dateString);
-  
+  // Ensure UTC indicator if missing (backend may send "2024-08-30T14:30:00" without Z)
+  let isoString = dateString.trim();
+  if (
+    isoString.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/) &&
+    !isoString.endsWith("Z")
+  ) {
+    isoString = isoString + "Z";
+  }
+
+  const date = new Date(isoString);
+
   // Check if date is valid
   if (isNaN(date.getTime())) return "N/A";
 
@@ -73,18 +82,18 @@ export function formatDateTime(
 
 /**
  * Format a date-only string (YYYY-MM-DD) to readable format.
- * 
+ *
  * @param dateString - Date string in YYYY-MM-DD format
  * @param shortMonth - Use short month names (e.g., "Dec" instead of "December")
  * @returns Formatted date string
- * 
+ *
  * @example
  * formatDateOnly("2024-08-30")
  * // => "August 30, 2024"
  */
 export function formatDateOnly(
   dateString: string | undefined | null,
-  shortMonth: boolean = false
+  shortMonth: boolean = false,
 ): string {
   if (!dateString) return "N/A";
 
@@ -106,23 +115,32 @@ export function formatDateOnly(
 
 /**
  * Format time only from a datetime string.
- * 
+ *
  * @param dateString - ISO 8601 datetime string
  * @param includeSeconds - Include seconds in output
  * @returns Formatted time string
- * 
+ *
  * @example
  * formatTimeOnly("2024-08-30T14:30:00")
  * // => "03:30 PM" (if user is in WAT timezone)
  */
 export function formatTimeOnly(
   dateString: string | undefined | null,
-  includeSeconds: boolean = false
+  includeSeconds: boolean = false,
 ): string {
   if (!dateString) return "N/A";
 
-  const date = new Date(dateString);
-  
+  // Ensure UTC indicator if missing
+  let isoString = dateString.trim();
+  if (
+    isoString.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/) &&
+    !isoString.endsWith("Z")
+  ) {
+    isoString = isoString + "Z";
+  }
+
+  const date = new Date(isoString);
+
   if (isNaN(date.getTime())) return "N/A";
 
   const options: Intl.DateTimeFormatOptions = {
@@ -139,10 +157,10 @@ export function formatTimeOnly(
 
 /**
  * Get relative time string (e.g., "2 hours ago", "3 days ago").
- * 
+ *
  * @param dateString - ISO 8601 datetime string
  * @returns Relative time string
- * 
+ *
  * @example
  * getRelativeTime("2024-08-30T12:00:00")
  * // => "2 hours ago"
@@ -150,8 +168,17 @@ export function formatTimeOnly(
 export function getRelativeTime(dateString: string | undefined | null): string {
   if (!dateString) return "N/A";
 
-  const date = new Date(dateString);
-  
+  // Ensure UTC indicator if missing
+  let isoString = dateString.trim();
+  if (
+    isoString.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/) &&
+    !isoString.endsWith("Z")
+  ) {
+    isoString = isoString + "Z";
+  }
+
+  const date = new Date(isoString);
+
   if (isNaN(date.getTime())) return "N/A";
 
   const now = new Date();
