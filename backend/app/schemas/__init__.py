@@ -647,6 +647,7 @@ class MaterialDetail(BaseModel):
     id: int
     title: str
     exam_type: str | None = None
+    content: str | None = None
     parsed_structure: dict | None
     assets: list[dict]
     created_at: datetime

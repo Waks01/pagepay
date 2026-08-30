@@ -325,6 +325,8 @@
     "active_count_one": "{{count}} active",
     "active_count_other": "{{count}} active",
     "upload_first": "Upload your first scheme of work to get started.",
+    "loading_material_title": "Loading material…",
+    "loading_material_subtitle": "Please wait while we fetch your material",
     "exam_mode_button": "Exam Mode",
     "exam_mode_a11y": "Start exam mode",
     "review_button": "Review",

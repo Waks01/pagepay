@@ -138,6 +138,8 @@ export default function StudyScreen() {
   const [uploadProgress, setUploadProgress] = useState<number | undefined>(
     undefined,
   );
+  const [aiProcessing, setAiProcessing] = useState(false);
+  const [uploadJustCompleted, setUploadJustCompleted] = useState(false);
   const studySessionIdRef = useRef<number | null>(null);
   const [examType, setExamType] = useState<string | null>(null);
   const [materialLoading, setMaterialLoading] = useState(false);
@@ -385,12 +387,17 @@ export default function StudyScreen() {
   // only shows when there's actually something to show.
   const finalizeUploadSuccess = async (materialId: number) => {
     setSelectedMaterialId(materialId);
+    setUploadJustCompleted(true);
     const res = await apiFetch(`/api/v1/study/materials/${materialId}`);
     if (res.ok) {
       setSelectedMaterial(await res.json());
     }
     setUploadProgress(100);
-    setTimeout(() => setUploadProgress(undefined), 2000);
+    qc.invalidateQueries({ queryKey: ["study", "materials"] });
+    setTimeout(() => {
+      setUploadProgress(undefined);
+      setUploadJustCompleted(false);
+    }, 3000);
   };
 
   const handleUploadImage = async (examType: string | null) => {
@@ -415,10 +422,10 @@ export default function StudyScreen() {
         exam_type: examType,
         onProgress: handleUploadProgress,
       });
-      // Wire phase done; server now runs OCR + SOW AI parse. Poll the
-      // job and tick 80→99 monotonically while we wait.
+      setAiProcessing(true);
       setUploadProgress(80);
       const job = await pollSowJob(job_id, handlePollTick);
+      setAiProcessing(false);
       if (job.status === "failed" || !job.material_id) {
         throw new Error(job.error || "Image processing failed");
       }
@@ -447,8 +454,10 @@ export default function StudyScreen() {
         exam_type: examType,
         onProgress: handleUploadProgress,
       });
+      setAiProcessing(true);
       setUploadProgress(80);
       const job = await pollSowJob(job_id, handlePollTick);
+      setAiProcessing(false);
       if (job.status === "failed" || !job.material_id) {
         throw new Error(job.error || "Photo processing failed");
       }
@@ -497,8 +506,10 @@ export default function StudyScreen() {
         exam_type: examType,
         onProgress: handleUploadProgress,
       });
+      setAiProcessing(true);
       setUploadProgress(80);
       const job = await pollSowJob(job_id, handlePollTick);
+      setAiProcessing(false);
       if (job.status === "failed" || !job.material_id) {
         throw new Error(job.error || "Document processing failed");
       }
@@ -931,6 +942,19 @@ export default function StudyScreen() {
           <SkeletonDetailPage />
         ) : selectedMaterial ? (
           <View style={styles.detailView}>
+            {uploadJustCompleted && (
+              <Animated.View
+                entering={FadeInDown.duration(240).springify()}
+                style={[styles.successBanner, { backgroundColor: tokens.mintSoft }]}
+                accessibilityLabel={t('study.sow_upload.success_a11y')}
+                accessibilityRole="alert"
+              >
+                <Ionicons name="checkmark-circle" size={20} color={tokens.mint} />
+                <Text style={[styles.successBannerText, { color: tokens.mint }]}>
+                  {t('study.sow_upload.success')}
+                </Text>
+              </Animated.View>
+            )}
             {selectedMaterial.parsed_structure && (
               <Animated.View
                 entering={FadeInDown.delay(120).duration(240).springify()}
@@ -1466,7 +1490,8 @@ export default function StudyScreen() {
               uploading={
                 uploadMutation.isPending ||
                 uploadImageMutation.isPending ||
-                uploadDocumentMutation.isPending
+                uploadDocumentMutation.isPending ||
+                aiProcessing
               }
               uploadProgress={uploadProgress}
               examType={examType}
@@ -1794,6 +1819,18 @@ const styles = StyleSheet.create({
   },
   detailView: {
     gap: 16,
+  },
+  successBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  successBannerText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
   outlineCard: {
     borderRadius: 14,

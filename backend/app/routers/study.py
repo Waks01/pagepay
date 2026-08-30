@@ -746,6 +746,7 @@ async def get_material(
         id=material.id,
         title=material.title,
         exam_type=material.exam_type,
+        content=material.raw_input or None,
         parsed_structure=parsed,
         assets=asset_list,
         created_at=material.created_at,
