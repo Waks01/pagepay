@@ -41,7 +41,7 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 class TransactionHistoryItem(BaseModel):
     id: int
-    type: Literal["bill", "payment", "payout", "daily_reward", "study", "ad", "bonus", "streak_freeze", "audio_unlock"]
+    type: Literal["bill", "payment", "payout", "daily_reward", "reading_reward", "study", "ad", "bonus", "streak_freeze", "audio_unlock"]
     subtype: str | None = None
     status: str
     amount: int  # signed: negative = debit, positive = credit
@@ -267,14 +267,19 @@ async def get_transaction_history(
         .order_by(PointCredit.created_at.desc())
     )
     for tx in credit_result.scalars().all():
+        # Distinguish reading rewards from other bonuses
+        is_reading = tx.source and tx.source.startswith("reading_slice_")
+        tx_type = "reading_reward" if is_reading else "bonus"
+        description = "Reading Slice Reward" if is_reading else f"Bonus: {tx.source}"
+
         items.append(TransactionHistoryItem(
             id=tx.id,
-            type="bonus",
+            type=tx_type,
             subtype=tx.source,
             status="success",
             amount=tx.points,
             unit="SP",
-            description=f"Bonus: {tx.source}",
+            description=description,
             reference=None,
             timestamp=tx.created_at,
             ledger="service_credit",

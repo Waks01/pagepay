@@ -13,6 +13,7 @@ import { AirtimeDetail } from "@/components/transactions/details/AirtimeDetail";
 import { DataDetail } from "@/components/transactions/details/DataDetail";
 import { ElectricityDetail } from "@/components/transactions/details/ElectricityDetail";
 import { DailyRewardDetail } from "@/components/transactions/details/DailyRewardDetail";
+import { ReadingRewardDetail } from "@/components/transactions/details/ReadingRewardDetail";
 import { ReceiptActions } from "@/components/transactions/ReceiptActions";
 import { Skeleton } from "@/components/Skeleton";
 import type { TransactionHistoryItem } from "@/src/shared/types/transaction";
@@ -153,6 +154,10 @@ function renderTransactionDetail(
 
   if (transaction.type === "daily_reward") {
     return <DailyRewardDetail transaction={transaction} tokens={tokens} />;
+  }
+
+  if (transaction.type === "reading_reward") {
+    return <ReadingRewardDetail transaction={transaction} tokens={tokens} />;
   }
 
   return <AirtimeDetail transaction={transaction} tokens={tokens} />;

@@ -192,6 +192,9 @@ export default function ReaderScreen() {
     };
 
     loadContent();
+    setElapsedSeconds(0);
+    setSessionId(null);
+    sessionIdRef.current = null;
     finishFiredRef.current = false;
     finishedManuallyRef.current = false;
     setFinishing(false);
@@ -427,6 +430,7 @@ export default function ReaderScreen() {
       }
 
       if (workId) {
+        queryClient.invalidateQueries({ queryKey: ['book', workId, 'resume'] });
         router.replace(`/book/${workId}`);
       } else {
         router.back();

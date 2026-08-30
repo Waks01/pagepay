@@ -93,6 +93,14 @@ export default function BookDetailScreen() {
   const logShare = useLogWorkShare(workId);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
 
+  useFocusEffect(
+    useCallback(() => {
+      resumeQuery.refetch();
+      bookQuery.refetch();
+    }, [resumeQuery, bookQuery])
+  );
+
+
   const onSharePress = useCallback(() => {
     setShareSheetOpen(true);
   }, []);
