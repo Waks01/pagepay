@@ -11,9 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": [
-          "audio"
-        ]
+        "UIBackgroundModes": ["audio"]
       }
     },
     "android": {
@@ -23,7 +21,7 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false,
+      "predictiveBackGestureEnabled": false
     },
     "plugins": [
       "expo-router",
@@ -39,9 +37,7 @@
             "targetSdkVersion": 36,
             "extraBackgroundColor": "#FBFAF6",
             "packagingOptions": {
-              "pickFirst": [
-                "**/libcrypto.so"
-              ]
+              "pickFirst": ["**/libcrypto.so"]
             }
           }
         }

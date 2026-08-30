@@ -138,11 +138,13 @@ async def end_session(
     Premium users). These points are credited to the wallet immediately
     via _credit_reading_reward.
     """
+    logger.info("END_SESSION: Received request for session=%d, user=%d", payload.session_id, current_user.id)
     result = await db.execute(
         select(ReadingSession).where(ReadingSession.id == payload.session_id)
     )
     session = result.scalar_one_or_none()
     if not session or session.user_id != current_user.id:
+        logger.error("END_SESSION: Session not found or user mismatch. session=%d, user=%d", payload.session_id, current_user.id)
         raise HTTPException(status_code=404, detail="Session not found")
 
     now = datetime.utcnow()
@@ -151,11 +153,18 @@ async def end_session(
     session.duration_seconds = int(raw_duration)
 
     effective_duration = max(0, session.duration_seconds - session.total_paused_seconds)
+    logger.info("END_SESSION: Stats for session=%d: raw_dur=%d, effective_dur=%d, scroll_events=%d",
+                session.id, session.duration_seconds, effective_duration, session.scroll_events)
 
     pending_points = 0
     bonus_eligible = False
 
-    if not session.verified and session.scroll_events > 0 and effective_duration >= settings.session_verified_min_seconds:
+    # Verification check
+    is_verified_now = not session.verified and session.scroll_events > 0 and effective_duration >= settings.session_verified_min_seconds
+    logger.info("END_SESSION: Verification check for session=%d: verified=%s, scroll_events=%d, effective_dur=%d, min_req=%d, result=%s",
+                session.id, session.verified, session.scroll_events, effective_duration, settings.session_verified_min_seconds, is_verified_now)
+
+    if is_verified_now:
         session.verified = True
 
         # Credit slice completion bonus immediately upon verification
@@ -164,21 +173,28 @@ async def end_session(
         multiplier = 2.0 if current_user.tier != UserTier.FREE else 1.0
         total_points = int(base_bonus * multiplier)
 
+        logger.info("END_SESSION: Calculating points for session=%d: base=%d, multiplier=%.1f, total=%d, tier=%s",
+                    session.id, base_bonus, multiplier, total_points, current_user.tier)
+
         session.pending_points = total_points
         bonus_eligible = True
 
         await _credit_reading_reward(db, current_user, session, total_points)
         logger.info(
-            "session %d ended: user=%d verified=True. Credited slice bonus: %d pts",
+            "END_SESSION: session %d ended: user=%d verified=True. Credited slice bonus: %d pts",
             session.id, current_user.id, total_points,
         )
         pending_points = total_points
+    else:
+        logger.info("END_SESSION: Session %d NOT eligible for bonus.", session.id)
 
     await db.commit()
+    logger.info("END_SESSION: DB committed for session=%d", session.id)
     await db.refresh(current_user)
     await db.refresh(session)
 
     if bonus_eligible and pending_points > 0:
+        logger.info("END_SESSION: Triggering notifications for session=%d, points=%d", session.id, pending_points)
         await _trigger_reward_notifications(current_user.id, pending_points)
 
     return SessionEndResponse(

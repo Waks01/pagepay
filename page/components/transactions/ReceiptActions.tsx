@@ -169,18 +169,54 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
           await MediaLibrary.saveToLibraryAsync(previewUri);
           Alert.alert("Success", "Receipt image saved to gallery!");
         } else {
-          // For PDF, open share dialog (mobile doesn't have direct file save)
-          const canShare = await Sharing.isAvailableAsync();
-          if (canShare) {
-            await Sharing.shareAsync(previewUri, {
-              mimeType: "application/pdf",
-              dialogTitle: "Save Receipt PDF",
-              UTI: "com.adobe.pdf",
-            });
+          // Save PDF directly to Downloads folder
+          if (Platform.OS === "android") {
+            // On Android, use SAF to save to Downloads
+            try {
+              const permissions =
+                await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+              if (!permissions.granted) {
+                Alert.alert(
+                  "Permission Required",
+                  "Please grant storage permission to save PDF.",
+                );
+                return;
+              }
+
+              const fileName = `PagePay_Receipt_${Date.now()}.pdf`;
+              const fileUri =
+                await FileSystem.StorageAccessFramework.createFileAsync(
+                  permissions.directoryUri,
+                  fileName,
+                  "application/pdf",
+                );
+
+              // Read cached file and write to SAF location
+              const base64 = await FileSystem.readAsStringAsync(previewUri, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              await FileSystem.writeAsStringAsync(fileUri, base64, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+
+              Alert.alert("Success", "Receipt PDF saved to your files!");
+            } catch (error) {
+              console.error("[ReceiptActions] Android save error:", error);
+              Alert.alert("Error", "Failed to save PDF. Please try again.");
+            }
           } else {
+            // On iOS, save to app's document directory
+            const fileName = `PagePay_Receipt_${Date.now()}.pdf`;
+            const destPath = `${FileSystem.documentDirectory}${fileName}`;
+
+            await FileSystem.copyAsync({
+              from: previewUri,
+              to: destPath,
+            });
+
             Alert.alert(
-              "Not Available",
-              "Sharing is not available on this device.",
+              "Success",
+              "Receipt PDF saved! Access via Files app > PagePay",
             );
           }
         }
