@@ -16,6 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
+import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import { useAudioPlayer } from "expo-audio";
 import * as Sharing from "expo-sharing";
@@ -629,64 +630,7 @@ export default function StudyScreen() {
   };
 
   const handleMaterialPress = async (materialId: number) => {
-    // De-dup: tapping the already-open material is a no-op.
-    if (
-      selectedMaterialId === materialId &&
-      selectedMaterial?.id === materialId
-    ) {
-      return;
-    }
-
-    setError(null);
-    setRetryAction(null);
-    setSelectedMaterialId(materialId);
-    setMaterialLoading(true);
-
-    // Token incremented on every fetch; the resolver checks the token and
-    // bails out if a newer fetch has started. Prevents late responses from
-    // clobbering the current material.
-    const fetchId = ++materialFetchIdRef.current;
-
-    try {
-      const res = await apiFetch(`/api/v1/study/materials/${materialId}`);
-      if (fetchId !== materialFetchIdRef.current) return;
-      if (res.ok) {
-        const materialData = (await res.json()) as MaterialDetail;
-        if (fetchId !== materialFetchIdRef.current) return;
-
-        setSelectedMaterial(materialData);
-
-        const unlockedFromBackend: Record<number, unknown> = {};
-        for (const asset of materialData.assets) {
-          if (asset.unlocked && asset.content) {
-            unlockedFromBackend[asset.id] = asset.content;
-          }
-        }
-        setUnlockedAssets(unlockedFromBackend);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        if (fetchId !== materialFetchIdRef.current) return;
-        setSelectedMaterial(null);
-        const message =
-          typeof data?.detail === "string"
-            ? data.detail
-            : "Failed to load material.";
-        const specific = categorizeError(message, "load material", t);
-        setError(specific);
-        setRetryAction(() => () => handleMaterialPress(materialId));
-      }
-    } catch (err) {
-      if (fetchId !== materialFetchIdRef.current) return;
-      const message =
-        err instanceof Error ? err.message : "Failed to load material.";
-      const specific = categorizeError(message, "load material", t);
-      setError(specific);
-      setRetryAction(() => () => handleMaterialPress(materialId));
-    } finally {
-      if (fetchId === materialFetchIdRef.current) {
-        setMaterialLoading(false);
-      }
-    }
+    router.push(`/study/${materialId}`);
   };
 
   const handleChatPress = (materialId: number) => {
@@ -960,7 +904,6 @@ export default function StudyScreen() {
             </View>
           </Animated.View>
         )}
-
         {error && (
           <Animated.View
             entering={FadeIn.duration(180)}
@@ -1017,7 +960,6 @@ export default function StudyScreen() {
             </TouchableOpacity>
           </Animated.View>
         )}
-
         {bonusNotification && (
           <Animated.View
             entering={FadeIn.duration(180)}
@@ -1052,738 +994,179 @@ export default function StudyScreen() {
             </TouchableOpacity>
           </Animated.View>
         )}
+        <View style={styles.listView}>
+          <SowUploadCard
+            uploading={
+              uploadMutation.isPending ||
+              uploadImageMutation.isPending ||
+              uploadDocumentMutation.isPending ||
+              aiProcessing
+            }
+            uploadProgress={uploadProgress}
+            examType={examType}
+            onExamTypeChange={setExamType}
+            onUploadText={handleUploadText}
+            onUploadImage={handleUploadImage}
+            onTakePhoto={handleTakePhoto}
+            onUploadDocument={handleUploadDocument}
+          />
 
-        {selectedMaterialId != null && !selectedMaterial ? (
-          <SkeletonDetailPage />
-        ) : selectedMaterial ? (
-          <View style={styles.detailView}>
-            {uploadJustCompleted && (
-              <Animated.View
-                entering={FadeInDown.duration(240).springify()}
-                style={[
-                  styles.successBanner,
-                  { backgroundColor: tokens.mintSoft },
-                ]}
-                accessibilityLabel={t("study.sow_upload.success_a11y")}
-                accessibilityRole="alert"
-              >
-                <Ionicons
-                  name="checkmark-circle"
-                  size={20}
-                  color={tokens.mint}
-                />
-                <Text
-                  style={[styles.successBannerText, { color: tokens.mint }]}
-                >
-                  {t("study.sow_upload.success")}
-                </Text>
-              </Animated.View>
-            )}
-            {selectedMaterial.parsed_structure && (
-              <Animated.View
-                entering={FadeInDown.delay(120).duration(240).springify()}
-              >
-                <View
-                  style={[
-                    styles.outlineCard,
-                    {
-                      backgroundColor: tokens.card,
-                      borderColor: tokens.border,
-                    },
-                  ]}
-                >
-                  <View style={styles.sectionHeaderRow}>
-                    <Text
-                      style={[
-                        styles.outlineTitle,
-                        {
-                          color: tokens.ink,
-                          fontFamily: Fonts.editorialSemiBold as string,
-                        },
-                      ]}
-                    >
-                      {t("study.topics_covered")}
-                    </Text>
-                    <Text
-                      style={[styles.outlineMeta, { color: tokens.inkMuted }]}
-                    >
-                      {t("study.topics_total", {
-                        count: getTopicNames(selectedMaterial.parsed_structure)
-                          .length,
-                      })}
-                    </Text>
-                  </View>
-                  <View style={styles.outlineList}>
-                    {((
-                      selectedMaterial.parsed_structure as Record<
-                        string,
-                        unknown
-                      >
-                    ).topics as Array<Record<string, unknown>> | undefined) &&
-                      Array.isArray(
-                        (
-                          selectedMaterial.parsed_structure as Record<
-                            string,
-                            unknown
-                          >
-                        ).topics,
-                      ) &&
-                      (
-                        (
-                          selectedMaterial.parsed_structure as Record<
-                            string,
-                            unknown
-                          >
-                        ).topics as Array<Record<string, unknown>>
-                      ).map((topic: Record<string, unknown>, idx: number) => (
-                        <View key={idx} style={styles.outlineItem}>
-                          <Text
-                            style={[
-                              styles.outlineNum,
-                              { color: tokens.inkFaint },
-                            ]}
-                          >
-                            {String(idx + 1).padStart(2, "0")}
-                          </Text>
-                          <View
-                            style={[
-                              styles.outlineDot,
-                              { backgroundColor: tokens.mint },
-                            ]}
-                          />
-                          <Text
-                            style={[styles.outlineText, { color: tokens.ink }]}
-                          >
-                            {String(topic.name)}
-                          </Text>
-                        </View>
-                      ))}
-                  </View>
-                </View>
-              </Animated.View>
-            )}
-
-            {selectedMaterial.content && (
-              <Animated.View
-                entering={FadeInDown.delay(60).duration(240).springify()}
-              >
-                <View
-                  style={[
-                    styles.materialPreviewCard,
-                    {
-                      backgroundColor: tokens.card,
-                      borderColor: tokens.border,
-                    },
-                  ]}
-                >
-                  {selectedMaterial.image_url && (
-                    <Image
-                      source={{ uri: selectedMaterial.image_url }}
-                      style={styles.materialPreviewImage}
-                      resizeMode="contain"
-                    />
-                  )}
-                  <View style={styles.sectionHeaderRow}>
-                    <Text
-                      style={[
-                        styles.outlineTitle,
-                        {
-                          color: tokens.ink,
-                          fontFamily: Fonts.editorialSemiBold as string,
-                        },
-                      ]}
-                    >
-                      {t("study.material_preview_title")}
-                    </Text>
-                    <Text
-                      style={[styles.outlineMeta, { color: tokens.inkMuted }]}
-                    >
-                      {t("study.material_preview_meta", {
-                        words: getWordCount(selectedMaterial.content),
-                      })}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[styles.materialPreviewText, { color: tokens.ink }]}
-                    numberOfLines={6}
-                  >
-                    {selectedMaterial.content}
-                  </Text>
-                  <Pressable
-                    onPress={() => setShowReader(true)}
-                    style={({ pressed }) => [
-                      styles.readBtn,
-                      {
-                        backgroundColor: tokens.mint,
-                        opacity: pressed ? 0.85 : 1,
-                      },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel={t("study.read_material_a11y")}
-                  >
-                    <Ionicons
-                      name="book-outline"
-                      size={18}
-                      color={tokens.mintText}
-                    />
-                    <Text
-                      style={[styles.readBtnText, { color: tokens.mintText }]}
-                    >
-                      {t("study.read_material")}
-                    </Text>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={16}
-                      color={tokens.mintText}
-                    />
-                  </Pressable>
-                </View>
-              </Animated.View>
-            )}
-
-            {showReader && selectedMaterial.content && (
-              <Modal
-                visible={showReader}
-                animationType="slide"
-                presentationStyle="pageSheet"
-                onRequestClose={() => {
-                  player.pause();
-                  setTtsPlaying(false);
-                  setShowReader(false);
-                }}
-              >
-                <SafeAreaView
-                  edges={["top", "bottom"]}
-                  style={{ flex: 1, backgroundColor: tokens.paper }}
-                >
-                  <View
-                    style={[
-                      styles.readerHeader,
-                      { borderBottomColor: tokens.border },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.readerTitle, { color: tokens.ink }]}
-                      numberOfLines={1}
-                    >
-                      {selectedMaterial.title}
-                    </Text>
-                    <View style={styles.readerHeaderActions}>
-                      <TouchableOpacity
-                        onPress={handleTtsPress}
-                        disabled={ttsLoading}
-                        style={styles.readerTtsBtn}
-                      >
-                        <Ionicons
-                          name={ttsPlaying ? "pause" : "play"}
-                          size={20}
-                          color={tokens.mint}
-                        />
-                        <Text
-                          style={[styles.readerTtsText, { color: tokens.mint }]}
-                        >
-                          {ttsLoading
-                            ? t("common.loading")
-                            : ttsPlaying
-                              ? t("study.tts.pause")
-                              : t("study.tts.listen")}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => {
-                          player.pause();
-                          setTtsPlaying(false);
-                          setShowReader(false);
-                        }}
-                        style={styles.readerCloseBtn}
-                        accessibilityRole="button"
-                        accessibilityLabel={t("study.reader_close_a11y")}
-                      >
-                        <Ionicons name="close" size={22} color={tokens.ink} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                  <ScrollView style={styles.readerContent}>
-                    <Text style={[styles.readerText, { color: tokens.ink }]}>
-                      {selectedMaterial.content}
-                    </Text>
-                  </ScrollView>
-                </SafeAreaView>
-              </Modal>
-            )}
-
-            <AudioUnlockModal
-              visible={audioUnlockVisible}
-              materialId={selectedMaterial.id}
-              materialTitle={selectedMaterial.title}
-              contentLength={selectedMaterial.content?.length ?? 0}
-              onClose={() => setAudioUnlockVisible(false)}
-              onUnlocked={() => {
-                setAudioUnlocked(true);
-                setAudioUnlockVisible(false);
-              }}
-            />
-
-            <AssetBrowser
-              assets={selectedMaterial.assets}
-              userBalance={balance}
-              onUnlock={handleUnlock}
-              unlockedAssets={unlockedAssets}
-              onQuizComplete={handleQuizComplete}
-            />
-
-            {selectedMaterial.id && (
-              <ProgressDashboard
-                materialId={selectedMaterial.id}
-                totalTopics={
-                  getTopicNames(selectedMaterial?.parsed_structure ?? null)
-                    .length
-                }
-                mastered={0}
-                reviewing={0}
-                notStarted={
-                  getTopicNames(selectedMaterial?.parsed_structure ?? null)
-                    .length
-                }
+          <View style={styles.quickActionsRow}>
+            <Pressable
+              onPress={() => router.push("/study/exam-mode")}
+              style={({ pressed }) => [
+                styles.quickAction,
+                styles.quickActionPrimary,
+                { backgroundColor: tokens.mint, opacity: pressed ? 0.85 : 1 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t("study.exam_mode_a11y")}
+            >
+              <Ionicons
+                name="school-outline"
+                size={20}
+                color={tokens.mintText}
               />
-            )}
+              <Text
+                style={[styles.quickActionText, { color: tokens.mintText }]}
+              >
+                {t("study.exam_mode_button")}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={tokens.mintText}
+              />
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/study/srs-dashboard")}
+              style={({ pressed }) => [
+                styles.quickAction,
+                {
+                  backgroundColor: tokens.card,
+                  borderColor: tokens.border,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t("study.review_a11y")}
+            >
+              <Ionicons name="repeat-outline" size={20} color={tokens.mint} />
+              <Text style={[styles.quickActionText, { color: tokens.ink }]}>
+                {t("study.review_button")}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={tokens.inkMuted}
+              />
+            </Pressable>
+          </View>
 
-            <View style={styles.generateBlock}>
+          {isLoading ? (
+            <View style={styles.stateBlock}>
+              <SkeletonPage count={3} header={false} />
+            </View>
+          ) : materials.length > 0 ? (
+            <View style={styles.materialList}>
               <View style={styles.sectionHeaderRow}>
                 <Text
                   style={[
-                    styles.genHeading,
+                    styles.listTitle,
                     {
                       color: tokens.ink,
                       fontFamily: Fonts.editorialSemiBold as string,
                     },
                   ]}
                 >
-                  {t("study.generate_heading")}
+                  {t("study.your_materials")}
                 </Text>
                 <Text style={[styles.outlineMeta, { color: tokens.inkMuted }]}>
-                  {generateMode === "topic"
-                    ? t("study.generate_topic_meta")
-                    : t("study.generate_all_meta")}
+                  {t("study.active_count", { count: materials.length })}
                 </Text>
               </View>
-              <View style={styles.generateRow}>
-                <GenerateButton
-                  label={t("study.generate.mcqs")}
-                  icon="help-circle-outline"
-                  assetType="mcq"
-                  onPress={() => {
-                    const count = generateMode === "topic" ? 15 : 20;
-                    handleGenerateAsset(
-                      selectedMaterial.id,
-                      "mcq",
-                      count,
-                      selectedTopic,
-                      generateMode,
-                    );
-                  }}
-                  loading={generatingType === "mcq"}
-                  tokens={tokens}
-                />
-                <GenerateButton
-                  label={t("study.generate.flashcards")}
-                  icon="albums-outline"
-                  assetType="flashcard"
-                  onPress={() => {
-                    const count = generateMode === "topic" ? 15 : 20;
-                    handleGenerateAsset(
-                      selectedMaterial.id,
-                      "flashcard",
-                      count,
-                      selectedTopic,
-                      generateMode,
-                    );
-                  }}
-                  loading={generatingType === "flashcard"}
-                  tokens={tokens}
-                />
-                <GenerateButton
-                  label={t("study.generate.essays")}
-                  icon="document-text-outline"
-                  assetType="essay"
-                  onPress={() => {
-                    const count = generateMode === "topic" ? 15 : 20;
-                    handleGenerateAsset(
-                      selectedMaterial.id,
-                      "essay",
-                      count,
-                      selectedTopic,
-                      generateMode,
-                    );
-                  }}
-                  loading={generatingType === "essay"}
-                  tokens={tokens}
-                />
-              </View>
-
-              <View style={styles.generateRow}>
-                <GenerateButton
-                  label={t("study.diagram")}
-                  icon="git-branch-outline"
-                  assetType="diagram"
-                  onPress={() =>
-                    handleGenerateAsset(
-                      selectedMaterial.id,
-                      "diagram",
-                      1,
-                      selectedTopic,
-                      generateMode,
-                    )
-                  }
-                  loading={generatingType === "diagram"}
-                  tokens={tokens}
-                />
-                <GenerateButton
-                  label={t("study.video")}
-                  icon="play-circle-outline"
-                  assetType="video"
-                  onPress={() =>
-                    handleGenerateAsset(
-                      selectedMaterial.id,
-                      "video",
-                      1,
-                      selectedTopic,
-                      generateMode,
-                    )
-                  }
-                  loading={generatingType === "video"}
-                  tokens={tokens}
-                />
-              </View>
-
-              <View style={styles.generateRow}>
-                <GenerateButton
-                  label={t("study.try_it_yourself")}
-                  icon="create-outline"
-                  assetType="example"
-                  onPress={() => {
-                    generateExampleMutation.mutate({
-                      material_id: selectedMaterial.id,
-                      topic: selectedTopic,
-                      mode: generateMode,
-                      education_level: "secondary",
-                      subject_hints: "general",
-                    });
-                  }}
-                  loading={generateExampleMutation.isPending}
-                  tokens={tokens}
-                  full
-                />
-              </View>
-
-              <View
-                style={[
-                  styles.generateOptions,
-                  { borderTopColor: tokens.border },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.generateOptionsLabel,
-                    { color: tokens.inkMuted },
-                  ]}
+              {materials.map((m, idx) => (
+                <Animated.View
+                  key={m.id}
+                  entering={FadeInDown.delay(idx * 60)
+                    .duration(240)
+                    .springify()
+                    .damping(20)
+                    .stiffness(220)}
                 >
-                  {t("study.generate_mode_label")}
-                </Text>
-                <View style={styles.modeSelector}>
                   <TouchableOpacity
-                    onPress={() => {
-                      setGenerateMode("all");
-                      setSelectedTopic(null);
-                    }}
+                    onPress={() => handleMaterialPress(m.id)}
+                    activeOpacity={0.7}
                     style={[
-                      styles.modeBtn,
+                      styles.materialCard,
                       {
-                        backgroundColor:
-                          generateMode === "all" ? tokens.mint : tokens.card,
-                        borderColor:
-                          generateMode === "all" ? tokens.mint : tokens.border,
+                        backgroundColor: tokens.card,
+                        borderColor: tokens.border,
                       },
                     ]}
                     accessibilityRole="button"
+                    accessibilityLabel={t("study.material_a11y", {
+                      title: m.title,
+                      exam: m.exam_type || t("study.exam_type_custom"),
+                      assets: m.asset_types.join(", "),
+                      date: formatDateTime(m.created_at, {
+                        includeTime: false,
+                      }),
+                    })}
+                    accessibilityHint={t("study.material_a11y_hint")}
                   >
-                    <Text
+                    <View
                       style={[
-                        styles.modeBtnText,
-                        {
-                          color:
-                            generateMode === "all"
-                              ? tokens.mintText
-                              : tokens.ink,
-                        },
+                        styles.materialIcon,
+                        { backgroundColor: tokens.mintSoft },
                       ]}
                     >
-                      {t("study.generate_all")}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setGenerateMode("topic")}
-                    style={[
-                      styles.modeBtn,
-                      {
-                        backgroundColor:
-                          generateMode === "topic" ? tokens.mint : tokens.card,
-                        borderColor:
-                          generateMode === "topic"
-                            ? tokens.mint
-                            : tokens.border,
-                      },
-                    ]}
-                    accessibilityRole="button"
-                  >
-                    <Text
-                      style={[
-                        styles.modeBtnText,
-                        {
-                          color:
-                            generateMode === "topic"
-                              ? tokens.mintText
-                              : tokens.ink,
-                        },
-                      ]}
-                    >
-                      {t("study.generate_topic")}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {generateMode === "topic" && (
-                  <View style={styles.topicSelector}>
-                    <Text
-                      style={[
-                        styles.topicSelectorLabel,
-                        { color: tokens.inkMuted },
-                      ]}
-                    >
-                      {t("study.select_topic")}
-                    </Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.topicChips}
-                    >
-                      {getTopicNames(
-                        selectedMaterial?.parsed_structure ?? null,
-                      ).map((topicName) => (
-                        <TouchableOpacity
-                          key={topicName}
-                          onPress={() => setSelectedTopic(topicName)}
-                          style={[
-                            styles.topicChip,
-                            {
-                              backgroundColor:
-                                selectedTopic === topicName
-                                  ? tokens.mint
-                                  : tokens.card,
-                              borderColor:
-                                selectedTopic === topicName
-                                  ? tokens.mint
-                                  : tokens.border,
-                            },
-                          ]}
-                          accessibilityRole="button"
-                        >
-                          <Text
-                            style={[
-                              styles.topicChipText,
-                              {
-                                color:
-                                  selectedTopic === topicName
-                                    ? tokens.mintText
-                                    : tokens.ink,
-                              },
-                            ]}
-                          >
-                            {topicName}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-              </View>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.listView}>
-            <SowUploadCard
-              uploading={
-                uploadMutation.isPending ||
-                uploadImageMutation.isPending ||
-                uploadDocumentMutation.isPending ||
-                aiProcessing
-              }
-              uploadProgress={uploadProgress}
-              examType={examType}
-              onExamTypeChange={setExamType}
-              onUploadText={handleUploadText}
-              onUploadImage={handleUploadImage}
-              onTakePhoto={handleTakePhoto}
-              onUploadDocument={handleUploadDocument}
-            />
-
-            <View style={styles.quickActionsRow}>
-              <Pressable
-                onPress={() => router.push("/study/exam-mode")}
-                style={({ pressed }) => [
-                  styles.quickAction,
-                  styles.quickActionPrimary,
-                  { backgroundColor: tokens.mint, opacity: pressed ? 0.85 : 1 },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={t("study.exam_mode_a11y")}
-              >
-                <Ionicons
-                  name="school-outline"
-                  size={20}
-                  color={tokens.mintText}
-                />
-                <Text
-                  style={[styles.quickActionText, { color: tokens.mintText }]}
-                >
-                  {t("study.exam_mode_button")}
-                </Text>
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={tokens.mintText}
-                />
-              </Pressable>
-              <Pressable
-                onPress={() => router.push("/study/srs-dashboard")}
-                style={({ pressed }) => [
-                  styles.quickAction,
-                  {
-                    backgroundColor: tokens.card,
-                    borderColor: tokens.border,
-                    opacity: pressed ? 0.85 : 1,
-                  },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={t("study.review_a11y")}
-              >
-                <Ionicons name="repeat-outline" size={20} color={tokens.mint} />
-                <Text style={[styles.quickActionText, { color: tokens.ink }]}>
-                  {t("study.review_button")}
-                </Text>
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={tokens.inkMuted}
-                />
-              </Pressable>
-            </View>
-
-            {isLoading ? (
-              <View style={styles.stateBlock}>
-                <SkeletonPage count={3} header={false} />
-              </View>
-            ) : materials.length > 0 ? (
-              <View style={styles.materialList}>
-                <View style={styles.sectionHeaderRow}>
-                  <Text
-                    style={[
-                      styles.listTitle,
-                      {
-                        color: tokens.ink,
-                        fontFamily: Fonts.editorialSemiBold as string,
-                      },
-                    ]}
-                  >
-                    {t("study.your_materials")}
-                  </Text>
-                  <Text
-                    style={[styles.outlineMeta, { color: tokens.inkMuted }]}
-                  >
-                    {t("study.active_count", { count: materials.length })}
-                  </Text>
-                </View>
-                {materials.map((m, idx) => (
-                  <Animated.View
-                    key={m.id}
-                    entering={FadeInDown.delay(idx * 60)
-                      .duration(240)
-                      .springify()
-                      .damping(20)
-                      .stiffness(220)}
-                  >
-                    <TouchableOpacity
-                      onPress={() => handleMaterialPress(m.id)}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.materialCard,
-                        {
-                          backgroundColor: tokens.card,
-                          borderColor: tokens.border,
-                        },
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel={t("study.material_a11y", {
-                        title: m.title,
-                        exam: m.exam_type || t("study.exam_type_custom"),
-                        assets: m.asset_types.join(", "),
-                        date: new Date(m.created_at).toLocaleDateString(),
-                      })}
-                      accessibilityHint={t("study.material_a11y_hint")}
-                    >
-                      <View
-                        style={[
-                          styles.materialIcon,
-                          { backgroundColor: tokens.mintSoft },
-                        ]}
-                      >
-                        <Ionicons
-                          name="book-outline"
-                          size={18}
-                          color={tokens.mint}
-                          accessibilityLabel=""
-                        />
-                      </View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text
-                          style={[styles.materialTitle, { color: tokens.ink }]}
-                          numberOfLines={1}
-                        >
-                          {m.title}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.materialMeta,
-                            { color: tokens.inkMuted },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {m.exam_type
-                            ? m.exam_type.toUpperCase()
-                            : t("study.exam_type_custom")}{" "}
-                          · {m.asset_types.join(" · ")}
-                        </Text>
-                      </View>
                       <Ionicons
-                        name="chevron-forward"
-                        size={16}
-                        color={tokens.inkMuted}
+                        name="book-outline"
+                        size={18}
+                        color={tokens.mint}
                         accessibilityLabel=""
                       />
-                    </TouchableOpacity>
-                  </Animated.View>
-                ))}
-              </View>
-            ) : (
-              <View style={[styles.stateBlock, { borderColor: tokens.border }]}>
-                <Ionicons name="school-outline" size={32} color={tokens.mint} />
-                <Text style={[styles.stateText, { color: tokens.inkMuted }]}>
-                  {t("study.upload_first")}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text
+                        style={[styles.materialTitle, { color: tokens.ink }]}
+                        numberOfLines={1}
+                      >
+                        {m.title}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.materialMeta,
+                          { color: tokens.inkMuted },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {m.exam_type
+                          ? m.exam_type.toUpperCase()
+                          : t("study.exam_type_custom")}{" "}
+                        · {m.asset_types.join(" · ")}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={tokens.inkMuted}
+                      accessibilityLabel=""
+                    />
+                  </TouchableOpacity>
+                </Animated.View>
+              ))}
+            </View>
+          ) : (
+            <View style={[styles.stateBlock, { borderColor: tokens.border }]}>
+              <Ionicons name="school-outline" size={32} color={tokens.mint} />
+              <Text style={[styles.stateText, { color: tokens.inkMuted }]}>
+                {t("study.upload_first")}
+              </Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* Action Menu */}
