@@ -11,6 +11,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -24,6 +25,7 @@ import { apiFetch } from "@/src/shared/api/client";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PageHeader } from "@/components/PageHeader";
+import AudioUnlockModal from "@/components/AudioUnlockModal";
 import { getTopicNames } from "@/src/app/(app)/study";
 
 type MaterialDetail = {
@@ -133,14 +135,27 @@ export default function MaterialDetailScreen() {
     setTtsLoading(true);
     try {
       const res = await apiFetch(
-        `/api/v1/study/tts/synthesize?material_id=${materialId}`,
+        `/api/v1/study/tts`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: selectedMaterial.content }),
+          body: JSON.stringify({
+            text: selectedMaterial.content,
+            material_id: materialId,
+          }),
         },
       );
-      if (!res.ok) throw new Error("TTS failed");
+
+      if (!res.ok) {
+        const status = Number(res.status);
+        if (__DEV__) console.log(`[TTS] Response status: ${status}`);
+        if (status === 403) {
+          if (__DEV__) console.log("[TTS] 403 Forbidden - triggering AudioUnlockModal");
+          setAudioUnlockVisible(true);
+          return;
+        }
+        throw new Error(`TTS failed with status ${status}`);
+      }
       const data = await res.json();
       setTtsUrl(data.url);
       setTtsPlaying(true);
@@ -469,7 +484,26 @@ export default function MaterialDetailScreen() {
           <AssetBrowser
             assets={selectedMaterial.assets}
             userBalance={0}
-            onUnlock={async () => {}}
+            onUnlock={async (assetId) => {
+              try {
+                const res = await apiFetch(`/api/v1/study/unlock`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ asset_id: assetId, method: "points" }),
+                });
+                if (!res.ok) {
+                  if (res.status === 402) {
+                    alert("Insufficient points to unlock this asset.");
+                    return;
+                  }
+                  const err = await res.json().catch(() => ({ detail: "Unlock failed" }));
+                  throw new Error(err.detail || "Unlock failed");
+                }
+                qc.invalidateQueries({ queryKey: ["study", "material", materialId] });
+              } catch (err) {
+                if (__DEV__) console.error("Asset unlock failed:", err);
+              }
+            }}
             unlockedAssets={unlockedAssets}
             onQuizComplete={async () => {}}
           />
