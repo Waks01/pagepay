@@ -82,7 +82,7 @@ type AssetInfo = {
   content?: unknown;
 };
 
-function getTopicNames(parsed: Record<string, unknown> | null): string[] {
+export function getTopicNames(parsed: Record<string, unknown> | null): string[] {
   if (!parsed) return [];
   const topics = parsed.topics as TopicInfo[] | undefined;
   if (!topics) return [];
