@@ -68,7 +68,12 @@ export default function BillsHistoryScreen() {
     queryFn: async () => {
       const res = await apiFetch("/api/v1/bills/history");
       if (!res.ok) throw new Error(t("bills.history.load_failed"));
-      return res.json() as Promise<{ items: BillTransactionItem[]; total: number; page: number; limit: number }>;
+      return res.json() as Promise<{
+        items: BillTransactionItem[];
+        total: number;
+        page: number;
+        limit: number;
+      }>;
     },
   });
 
@@ -98,11 +103,13 @@ export default function BillsHistoryScreen() {
       .replace(/\b\w/g, (c) => c.toUpperCase());
 
     return (
-      <View
+      <TouchableOpacity
         style={[
           styles.item,
           { backgroundColor: tokens.card, borderColor: tokens.border },
         ]}
+        activeOpacity={0.7}
+        onPress={() => router.push(`/home/transaction-detail?id=${item.id}`)}
       >
         <View style={styles.itemLeft}>
           <View style={[styles.iconCircle, { backgroundColor: color + "20" }]}>
@@ -163,7 +170,7 @@ export default function BillsHistoryScreen() {
             </Text>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 

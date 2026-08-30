@@ -14,14 +14,26 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
-import { useCurrentUser, useCurrentUserStore } from "@/src/shared/lib/current-user";
+import {
+  useCurrentUser,
+  useCurrentUserStore,
+} from "@/src/shared/lib/current-user";
 import { PagePay } from "@/constants/theme";
 import { StateBlock } from "@/components/StateBlock";
 import { PageHeader } from "@/components/PageHeader";
 
 type TransactionHistoryItem = {
   id: number;
-  type: "bill" | "payment" | "payout" | "daily_reward" | "study" | "ad" | "bonus" | "streak_freeze" | "audio_unlock";
+  type:
+    | "bill"
+    | "payment"
+    | "payout"
+    | "daily_reward"
+    | "study"
+    | "ad"
+    | "bonus"
+    | "streak_freeze"
+    | "audio_unlock";
   subtype: string | null;
   status: string;
   amount: number;
@@ -60,7 +72,7 @@ export default function TransactionHistoryScreen() {
   useFocusEffect(
     useCallback(() => {
       void qc.invalidateQueries({ queryKey: ["transactions", "history"] });
-    }, [qc])
+    }, [qc]),
   );
 
   const onRefresh = useCallback(async () => {
@@ -124,7 +136,12 @@ export default function TransactionHistoryScreen() {
 
   const formatAmount = (item: TransactionHistoryItem) => {
     const prefix = item.amount > 0 ? "+" : "";
-    const suffix = item.unit === "NGN" ? (item.type === "payout" || item.type === "bill" ? `₦${Math.abs(item.amount)}` : `${prefix}₦${item.amount}`) : `${prefix}${item.amount} ${item.unit}`;
+    const suffix =
+      item.unit === "NGN"
+        ? item.type === "payout" || item.type === "bill"
+          ? `₦${Math.abs(item.amount)}`
+          : `${prefix}₦${item.amount}`
+        : `${prefix}${item.amount} ${item.unit}`;
     return suffix;
   };
 
@@ -150,18 +167,29 @@ export default function TransactionHistoryScreen() {
         {historyQuery.isLoading ? (
           <View style={{ gap: 12 }}>
             {Array.from({ length: 5 }).map((_, i) => (
-              <View key={i} style={{ height: 72, borderRadius: 12, backgroundColor: tokens.card }} />
+              <View
+                key={i}
+                style={{
+                  height: 72,
+                  borderRadius: 12,
+                  backgroundColor: tokens.card,
+                }}
+              />
             ))}
           </View>
         ) : historyQuery.isError ? (
           <StateBlock
-            message={t("transactions.load_error", { defaultValue: "Failed to load transaction history" })}
+            message={t("transactions.load_error", {
+              defaultValue: "Failed to load transaction history",
+            })}
             onRetry={() => historyQuery.refetch()}
             tokens={tokens}
           />
         ) : items.length === 0 ? (
           <StateBlock
-            message={t("transactions.empty", { defaultValue: "No transactions yet" })}
+            message={t("transactions.empty", {
+              defaultValue: "No transactions yet",
+            })}
             tokens={tokens}
             variant="empty"
           />
@@ -175,6 +203,9 @@ export default function TransactionHistoryScreen() {
                   { backgroundColor: tokens.card, borderColor: tokens.border },
                 ]}
                 activeOpacity={0.7}
+                onPress={() =>
+                  router.push(`/home/transaction-detail?id=${item.id}`)
+                }
               >
                 <View
                   style={[
@@ -199,7 +230,9 @@ export default function TransactionHistoryScreen() {
                     {item.type === "bill" && item.subtype
                       ? item.subtype.toUpperCase()
                       : item.subtype || item.type}
-                    {item.reference ? ` • ${item.reference.slice(0, 12)}...` : ""}
+                    {item.reference
+                      ? ` • ${item.reference.slice(0, 12)}...`
+                      : ""}
                   </Text>
                   <Text style={[styles.date, { color: tokens.inkMuted }]}>
                     {new Date(item.timestamp).toLocaleString()}
@@ -211,13 +244,21 @@ export default function TransactionHistoryScreen() {
                       styles.amount,
                       {
                         color:
-                          item.type === "bill" || item.type === "payout" || item.type === "study" || item.type === "audio_unlock" || item.type === "streak_freeze"
+                          item.type === "bill" ||
+                          item.type === "payout" ||
+                          item.type === "study" ||
+                          item.type === "audio_unlock" ||
+                          item.type === "streak_freeze"
                             ? tokens.signal
                             : tokens.mint,
                       },
                     ]}
                   >
-                    {item.type === "bill" || item.type === "payout" || item.type === "study" || item.type === "audio_unlock" || item.type === "streak_freeze"
+                    {item.type === "bill" ||
+                    item.type === "payout" ||
+                    item.type === "study" ||
+                    item.type === "audio_unlock" ||
+                    item.type === "streak_freeze"
                       ? formatAmount(item)
                       : formatAmount(item)}
                   </Text>

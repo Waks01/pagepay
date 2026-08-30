@@ -37,10 +37,40 @@ from app.schemas import (
     SessionEndResponse, SessionClaimResponse,
 )
 from app.routers.auth import get_current_user
-from app.services.notifications import create_notification
+from app.services.notifications import create_notification, create_notification_background
+from app.services.fcm import send_wallet_update_background
 
 router = APIRouter(prefix="/session", tags=["session"])
 logger = logging.getLogger("uvicorn.error")
+
+
+async def _credit_reading_reward(
+    db: AsyncSession,
+    user: User,
+    session: ReadingSession,
+    points: int,
+):
+    """Helper to credit points to user wallet and trigger notifications."""
+    user.points_balance += points
+    session.points_earned = points
+    session.claimed_at = datetime.utcnow()
+
+    # Trigger notifications in background
+    asyncio.create_task(create_notification_background(
+        user_id=user.id,
+        title="Reading Reward!",
+        body=f"You earned {points} points for finishing your reading slice.",
+        category="wallet_updates",
+        data={"type": "reading_reward", "points": str(points)}
+    ))
+
+    naira = points / max(1, settings.points_per_naira)
+    asyncio.create_task(send_wallet_update_background(
+        user_id=user.id,
+        amount_naira=naira,
+        transaction_type="credit",
+        reason="reading_bonus"
+    ))
 
 
 @router.post("/start", status_code=201)
@@ -126,6 +156,7 @@ async def end_session(
         pending_points = max(0, (effective_duration // 600) * 5)
         session.pending_points = pending_points
         bonus_eligible = True
+        await _credit_reading_reward(db, current_user, session, pending_points)
         logger.info(
             "session %d ended: user=%d verified=True effective_duration=%ds pending_points=%d",
             session.id, current_user.id, effective_duration, pending_points,
@@ -173,9 +204,7 @@ async def claim_session(
 
     points_to_credit = session.pending_points or 0
     if points_to_credit > 0:
-        current_user.points_balance += points_to_credit
-        session.points_earned = points_to_credit
-        session.claimed_at = datetime.utcnow()
+        await _credit_reading_reward(db, current_user, session, points_to_credit)
         await db.commit()
         await db.refresh(current_user)
         await db.refresh(session)
