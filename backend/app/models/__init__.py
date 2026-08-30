@@ -240,7 +240,7 @@ class ContentCatalog(Base):
     )
 
 
-
+class ReadingProgress(Base):
     """Where a user is within a long-form work (book, article series).
 
     One row per (user, work). The `work_id` is the id of the parent
@@ -407,7 +407,7 @@ class PayoutTransaction(Base):
     paystack_event_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
 
-class ReadingProgress(Base):
+class AppConfig(Base):
     """Generic key/value store for OTA-tunable settings.
 
     The point of this table is to let ops flip a unit id or a point
@@ -1615,9 +1615,6 @@ class ScheduledBill(Base):
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
-AppConfig = ReadingProgress
 
 
 @sa_event.listens_for(Base.metadata, "after_create")
