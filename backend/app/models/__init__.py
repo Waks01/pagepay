@@ -1617,17 +1617,7 @@ class ScheduledBill(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-class AppConfig(Base):
-    """Key/value application configuration."""
-    __tablename__ = "app_config"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    key: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    value: Mapped[str | None] = mapped_column(Text, nullable=True)
-    environment: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+AppConfig = ReadingProgress
 
 
 @sa_event.listens_for(Base.metadata, "after_create")
