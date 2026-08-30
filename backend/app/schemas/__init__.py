@@ -1812,6 +1812,7 @@ class UserDailyAdStat(BaseModel):
     points_earned: int
 
 
+class BillDisputeOut(BaseModel):
     reason: str
     status: str
     amount_refunded: int | None
