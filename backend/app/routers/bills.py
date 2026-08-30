@@ -955,6 +955,20 @@ async def buy_electricity(
         current_user.id, full_user.tier.value, commission_kobo, points, actual_sv_discount
     )
 
+    # Extract customer_name from verify result if available
+    customer_name = result.get("customer_name", "")
+    if not customer_name and isinstance(result, dict):
+        # Try to get it from the verify step that was done in buy_electricity
+        verify_result = await _get_vtu_client().verify_meter(
+            disco_code=payload.plan_id,
+            meter_number=payload.meter_number,
+            meter_type=payload.meter_type,
+        )
+        customer_name = verify_result.get("customer_name", "")
+    
+    # Get disco name from plan_id
+    disco_name = payload.plan_id.replace("-", " ").title()
+    
     tx = BillTransaction(
         user_id=current_user.id,
         service="electricity",
@@ -966,6 +980,19 @@ async def buy_electricity(
         reference=reference,
         status="success",
         external_ref=result.get("reference", result.get("transaction_id", "")),
+        details={
+            "disco": payload.plan_id,
+            "disco_name": disco_name,
+            "meter_number": payload.meter_number,
+            "meter_type": payload.meter_type,
+            "customer_name": customer_name,
+            "phone": payload.phone,
+            "amount": str(payload.amount_naira),
+            "charged": str(charged) if charged else None,
+            "discount": str(discount) if discount else None,
+            "token": result.get("token", result.get("units", "")),
+            "units": result.get("units", ""),
+        },
     )
     db.add(tx)
 

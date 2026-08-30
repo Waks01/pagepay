@@ -300,16 +300,6 @@ async def claim_daily_reward(
     db: AsyncSession = Depends(get_db),
 ):
     """Claim today's daily reward if available."""
-    # Device id hash guard for streak anti-abuse
-    if payload.device_id:
-        device_hash = hash_device_id(payload.device_id)
-        if current_user.device_id_hash is None:
-            current_user.device_id_hash = device_hash
-        elif current_user.device_id_hash != device_hash:
-            raise HTTPException(
-                status_code=403,
-                detail="Streak is bound to a different device.",
-            )
     streak = await _update_reward_streak(current_user.id, db, request)
     streak = await _reconstruct_reward_streak_from_history(current_user.id, db, streak)
     rewards = await _get_or_create_default_rewards(db)
@@ -523,13 +513,6 @@ async def freeze_streak_by_points(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if payload.device_id:
-        device_hash = hash_device_id(payload.device_id)
-        if current_user.device_id_hash is None:
-            current_user.device_id_hash = device_hash
-        elif current_user.device_id_hash != device_hash:
-            raise HTTPException(status_code=403, detail="Streak is bound to a different device.")
-
     streak = await _update_reward_streak(current_user.id, db, request)
 
     if streak.reward_streak > 0:

@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { TransactionDetailHeader } from "@/components/transactions/TransactionDetailHeader";
 import { AirtimeDetail } from "@/components/transactions/details/AirtimeDetail";
 import { DataDetail } from "@/components/transactions/details/DataDetail";
+import { ElectricityDetail } from "@/components/transactions/details/ElectricityDetail";
 import { ReceiptActions } from "@/components/transactions/ReceiptActions";
 import { Skeleton } from "@/components/Skeleton";
 import type { TransactionHistoryItem } from "@/src/shared/types/transaction";
@@ -136,6 +137,7 @@ function renderTransactionDetail(
       case "data":
         return <DataDetail transaction={transaction} tokens={tokens} />;
       case "electricity":
+        return <ElectricityDetail transaction={transaction} tokens={tokens} />;
       case "tv":
       case "recharge_pin":
       case "betting":

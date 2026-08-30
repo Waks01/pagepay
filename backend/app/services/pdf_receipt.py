@@ -111,6 +111,19 @@ def generate_receipt_pdf(transaction: BillTransaction) -> bytes:
         if transaction.details.get("network_name"):
             details_data.insert(3, ['Network', transaction.details["network_name"]])
     
+    # For electricity transactions, show disco and meter details
+    if transaction.service == "electricity" and transaction.details:
+        if transaction.details.get("disco_name"):
+            details_data.insert(3, ['Disco', transaction.details["disco_name"]])
+        if transaction.details.get("customer_name"):
+            details_data.insert(4, ['Customer Name', transaction.details["customer_name"]])
+        if transaction.details.get("meter_type"):
+            details_data.insert(5, ['Meter Type', transaction.details["meter_type"].title()])
+        if transaction.details.get("token"):
+            details_data.append(['Token', transaction.details["token"]])
+        if transaction.details.get("units"):
+            details_data.append(['Units', transaction.details["units"]])
+    
     if transaction.meter_number:
         details_data.insert(3, ['Meter Number', transaction.meter_number])
     if transaction.smartcard_number:

@@ -135,9 +135,15 @@ def generate_receipt_image(transaction: BillTransaction) -> bytes:
     # Transaction Details
     details = []
     
-    # Network name (from details.network_name)
-    if transaction.details and transaction.details.get("network_name"):
-        details.append(("Network", transaction.details["network_name"]))
+    # Network name (from details.network_name) for airtime/data
+    if transaction.service in ["airtime", "data"] and transaction.details:
+        if transaction.details.get("network_name"):
+            details.append(("Network", transaction.details["network_name"]))
+    
+    # Disco name for electricity
+    if transaction.service == "electricity" and transaction.details:
+        if transaction.details.get("disco_name"):
+            details.append(("Disco", transaction.details["disco_name"]))
     
     # For data transactions, show plan name and size
     if transaction.service == "data" and transaction.details:
@@ -146,11 +152,26 @@ def generate_receipt_image(transaction: BillTransaction) -> bytes:
         if transaction.details.get("size"):
             details.append(("Data Size", transaction.details["size"]))
     
+    # For electricity, show meter details
+    if transaction.service == "electricity" and transaction.details:
+        if transaction.details.get("customer_name"):
+            details.append(("Customer Name", transaction.details["customer_name"]))
+        if transaction.details.get("meter_type"):
+            details.append(("Meter Type", transaction.details["meter_type"].title()))
+    
     # Phone number
     if transaction.phone:
         details.append(("Phone Number", transaction.phone))
     elif transaction.meter_number:
         details.append(("Meter Number", transaction.meter_number))
+        
+    # Show token for electricity
+    if transaction.service == "electricity" and transaction.details:
+        if transaction.details.get("token"):
+            details.append(("Token", transaction.details["token"]))
+        if transaction.details.get("units"):
+            details.append(("Units", transaction.details["units"]))
+    
     elif transaction.smartcard_number:
         details.append(("Smartcard Number", transaction.smartcard_number))
     

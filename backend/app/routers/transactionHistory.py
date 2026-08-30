@@ -26,6 +26,7 @@ from app.models import (
     Payment,
     PayoutTransaction,
     UserRewardClaim,
+    DailyReward,
     StudyTransaction,
     PointCredit,
     StreakFreezeLog,
@@ -202,6 +203,12 @@ async def get_transaction_history(
         .order_by(UserRewardClaim.claimed_at.desc())
     )
     for tx in claim_result.scalars().all():
+        # Fetch reward details
+        reward_result = await db.execute(
+            select(DailyReward).where(DailyReward.id == tx.reward_id)
+        )
+        reward = reward_result.scalar_one_or_none()
+        
         items.append(TransactionHistoryItem(
             id=tx.id,
             type="daily_reward",
@@ -216,6 +223,12 @@ async def get_transaction_history(
                 "reward_id": tx.reward_id,
                 "streak_day": tx.streak_day,
                 "claim_date": tx.claim_date,
+                "points_earned": tx.points_earned,
+                "reward_title": reward.title if reward else None,
+                "reward_description": reward.description if reward else None,
+                "reward_type": reward.reward_type if reward else None,
+                "reward_value": reward.reward_value if reward else None,
+                "icon_emoji": reward.icon_emoji if reward else "🎁",
             },
         ))
 
