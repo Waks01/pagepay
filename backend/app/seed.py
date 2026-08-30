@@ -113,25 +113,11 @@ async def seed_initial_content(db: AsyncSession) -> int:
 async def seed_openstax_books(db: AsyncSession) -> int:
     """Pull OpenStax STEM textbooks (CC BY 4.0) on first run.
 
-    Idempotent: skips if any openstax-sourced row already exists in
-    content_catalog. The curriculum list lives in
-    `app.services.content.openstax.CURRICULUM` — we pull the first
-    3 books (the heaviest are physics + calculus, ~30 chapters each)
-    on first seed and let the admin /refresh endpoint pull the rest
-    on demand. Pulling all 12 at first seed would balloon startup
-    time on Render free tier.
+    Idempotent: the underlying import function skips any book whose
+    synthetic source_url is already in content_catalog.
     """
     from app.services.content.openstax import import_openstax_books, CURRICULUM
-    existing = (await db.execute(
-        select(ContentCatalog.id)
-        .where(ContentCatalog.source == "openstax")
-        .limit(1)
-    )).scalar_one_or_none()
-    if existing is not None:
-        return 0
     try:
-        # Seed the first 3 books only. The admin /refresh endpoint
-        # can pull the rest.
         summary = await import_openstax_books(db, curriculum=CURRICULUM[:3])
         return summary.get("books_imported", 0)
     except Exception as exc:  # noqa: BLE001 — startup seed; best-effort
