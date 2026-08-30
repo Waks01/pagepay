@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What PagePay Is
 
-PagePay is a **read-to-earn + AI study platform** — an Expo mobile app where users earn points for verified reading time, ad-watching, and completing social tasks. It features an AI-powered study system that turns syllabi into quizzes/flashcards and a VTU bills payment system. Revenue comes from AdMob + AppLovin MAX and Flutterwave/Paystack premium subscriptions. Target market: Nigeria.
+PagePay is a **read-to-earn + AI study platform** — an Expo mobile app where users earn points for verified slice completion, ad-watching, and completing social tasks. It features an AI-powered study system that turns syllabi into quizzes/flashcards and a VTU bills payment system. Revenue comes from AdMob + AppLovin MAX and Flutterwave/Paystack premium subscriptions. Target market: Nigeria.
 
 This is a production revenue system. No placeholders, mock data, or TODOs in committed code. If an integration is missing, raise an explicit error — never silently return empty objects.
 

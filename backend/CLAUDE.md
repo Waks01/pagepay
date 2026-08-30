@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Backend Overview
-The backend is a FastAPI application using SQLAlchemy 2.0 (async) and PostgreSQL. It implements a "Read-to-Earn" system where user activity (reading time and ad-watching) is verified server-side and credited as points.
+The backend is a FastAPI application using SQLAlchemy 2.0 (async) and PostgreSQL. It implements a "Read-to-Earn" system where user activity (slice completion and ad-watching) is verified server-side and credited as points.
 
 ## Common Commands
 

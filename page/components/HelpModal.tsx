@@ -57,7 +57,7 @@ export function HelpModal({ visible, onClose }: HelpModalProps) {
             <QA
               tokens={tokens}
               q="Why was my session paused?"
-              a="The reader pauses if no scroll activity is detected for 45 seconds, or if the app loses focus. Pause to keep your verified-reading time honest — we never credit paused time."
+              a="The reader pauses if no scroll activity is detected for 45 seconds, or if the app loses focus. Pause to keep your verified reading slices honest — we never credit paused time."
             />
             <QA
               tokens={tokens}

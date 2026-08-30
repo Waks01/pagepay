@@ -187,7 +187,7 @@ await db.execute(
 
 - `reading_slice_bonus_points = 2` (₦0.20) per slice, premium ×2 = 4 pts.
 - 30-second verified floor required before bonus credits.
-- This is "real work" reward (verified reading time), not ad-derived.
+- This is "real work" reward (verified slice completion), not ad-derived.
 
 **Migration destination:** `cashable_balance`. Reading is *not* an ad.
 

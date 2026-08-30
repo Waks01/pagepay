@@ -216,7 +216,7 @@ Instead of putting ads inside the book, use the ad as the payment token to acces
 
 Let them read cleanly, but use ads to boost their earnings at the end.
 
-- _The Flow:_ The user spends 10 minutes reading a verified news stream. At the end, they earn a base rate of 10 points.
+- _The Flow:_ The user completes a verified reading slice. At the end, they earn a slice-completion bonus (2 points for Free users, 4 for Premium users).
 - _The Prompt:_ "Great job reading! You earned 10 points. Want to double it to 20 points? Watch a short video to claim your bonus."
 - _Why it works:_ They already got their clean reading experience. Now, they are highly motivated to watch the ad because it directly doubles the value of the time they just spent.
 

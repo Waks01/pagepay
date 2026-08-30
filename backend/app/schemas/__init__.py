@@ -1931,3 +1931,26 @@ class ScheduledBillCancelResponse(BaseModel):
     """Response after cancelling a schedule."""
     cancelled: bool
     id: int
+
+class PointCreditOut(BaseModel):
+    """One audit row for points credited.
+    """
+    id: int
+    user_id: int
+    source: str
+    points: int
+
+    model_config = {"from_attributes": True}
+
+class WalletTransactionOut(BaseModel):
+    """Unified view of a wallet transaction.
+    """
+    id: int
+    amount: int
+    type: Literal["credit", "debit"]
+    source: str
+    category: str
+    timestamp: datetime
+
+    model_config = {"from_attributes": True}
+

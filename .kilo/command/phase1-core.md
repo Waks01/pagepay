@@ -219,7 +219,7 @@ npx expo install expo-dev-client  # Required for native modules in Phase 2+
 ✅ User can register, login, logout
 ✅ User can browse catalog with filter chips
 ✅ User can read article/book
-✅ Points awarded for verified reading time
+✅ Points awarded for verified slice completion
 ✅ Wallet shows updated balance
 ✅ Anti-cheat (scroll + app state) functional
 ✅ App builds and runs on real Android device

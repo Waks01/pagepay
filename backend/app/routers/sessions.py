@@ -52,7 +52,25 @@ async def _credit_reading_reward(
 ):
     """Helper to credit points to user wallet. Notifications are triggered by the caller after commit."""
     logger.info("Crediting reward: user=%d, points=%d", user.id, points)
-    user.points_balance += points
+
+    if settings.wallet_split_enabled:
+        # Engagement rewards (reading, ads, quizzes) go to service_credit_balance
+        user.service_credit_balance += points
+        logger.info("Crediting to service_credit_balance: new_balance=%d", user.service_credit_balance)
+    else:
+        # Legacy fallback
+        user.points_balance += points
+        logger.info("Crediting to legacy points_balance: new_balance=%d", user.points_balance)
+
+    # Create audit record for transaction history
+    from app.models import PointCredit
+    audit_record = PointCredit(
+        user_id=user.id,
+        source=f"reading_slice_{session.id}",
+        points=points,
+    )
+    db.add(audit_record)
+
     session.points_earned = points
     session.claimed_at = datetime.utcnow()
 
@@ -203,7 +221,7 @@ async def end_session(
         bonus_eligible=bonus_eligible,
         pending_points=pending_points,
         requires_claim=bonus_eligible and pending_points > 0,
-        new_balance=current_user.points_balance,
+        new_balance=current_user.service_credit_balance if settings.wallet_split_enabled else current_user.points_balance,
         new_cashable_balance=current_user.cashable_balance,
     )
 
@@ -243,6 +261,6 @@ async def claim_session(
 
     return SessionClaimResponse(
         points_earned=points_to_credit,
-        new_balance=current_user.points_balance,
+        new_balance=current_user.service_credit_balance if settings.wallet_split_enabled else current_user.points_balance,
         already_claimed=False,
     )
