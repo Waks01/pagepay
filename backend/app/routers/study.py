@@ -7,10 +7,12 @@ ad-or-points gated unlock → streaming study chat.
 import logging
 import uuid
 import asyncio
+import io
+import re
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -850,6 +852,155 @@ async def delete_material(
     await db.delete(material)
     await db.commit()
     return Response(status_code=204)
+
+
+# ── GET /study/materials/{id}/export ───────────────────────────────────
+
+
+@router.get("/materials/{material_id}/export")
+async def export_material(
+    material_id: int,
+    format: str = "pdf",
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    topic_names: list[str] = []
+    if material.parsed_structure:
+        import json as _json
+        parsed = _json.loads(material.parsed_structure)
+        topic_names = [t.get("name", "") for t in parsed.get("topics", []) if t.get("name")]
+
+    assets_result = await db.execute(
+        select(StudyAsset).where(StudyAsset.material_id == material_id)
+    )
+    assets = assets_result.scalars().all()
+
+    content = material.raw_input or ""
+    safe_title = material.title or "study-material"
+    base_name = re.sub(r"^[A-Z]+ · ", "", safe_title).strip() or "study-material"
+    base_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", base_name).strip() or "study_material"
+
+    if format == "image":
+        from PIL import Image, ImageDraw, ImageFont
+        width, height = 800, 1000
+        img = Image.new("RGB", (width, height), color="white")
+        draw = ImageDraw.Draw(img)
+        try:
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
+            font_body = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+            font_meta = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+        except Exception:
+            font_title = ImageFont.load_default()
+            font_body = ImageFont.load_default()
+            font_meta = ImageFont.load_default()
+
+        y = 30
+        draw.text((40, y), safe_title, fill="black", font=font_title)
+        y += 50
+        meta = f"Exam: {(material.exam_type or 'Custom').upper()}    Topics: {len(topic_names)}    Assets: {len(assets)}"
+        draw.text((40, y), meta, fill="#666666", font=font_meta)
+        y += 30
+        draw.line([(40, y), (width - 40, y)], fill="#0E7C66", width=2)
+        y += 20
+
+        paragraphs = _split_paragraphs(content or "")
+        for para in paragraphs:
+            lines = _wrap_text(para, width - 80, font_body)
+            for line in lines:
+                if y > height - 40:
+                    break
+                draw.text((40, y), line, fill="black", font=font_body)
+                y += 26
+            y += 10
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+        return Response(
+            content=buffer.getvalue(),
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f'attachment; filename="{base_name}.png"',
+            },
+        )
+
+    if format == "pdf":
+        from app.services.pdf_material import material_to_pdf
+        pdf_bytes = material_to_pdf(
+            title=safe_title,
+            content=content,
+            exam_type=material.exam_type,
+            topic_names=topic_names,
+            asset_count=len(assets),
+            created_at=material.created_at,
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{base_name}.pdf"',
+            },
+        )
+
+    if format == "docx":
+        import docx  # python-docx
+        doc = docx.Document()
+        doc.add_heading(safe_title, level=1)
+        if material.exam_type:
+            doc.add_paragraph(f"Exam: {material.exam_type.upper()}")
+        doc.add_paragraph(f"Topics: {len(topic_names)}  |  Assets: {len(assets)}")
+        doc.add_paragraph("")
+        if topic_names:
+            doc.add_heading("Topics Covered", level=2)
+            for idx, name in enumerate(topic_names, 1):
+                doc.add_paragraph(f"{idx}. {name}", style="List Number")
+            doc.add_paragraph("")
+        doc.add_heading("Content", level=2)
+        for para in (content or "").split("\n\n"):
+            para = para.strip()
+            if para:
+                doc.add_paragraph(para)
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        return Response(
+            content=buffer.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={
+                "Content-Disposition": f'attachment; filename="{base_name}.docx"',
+            },
+        )
+
+    if format == "txt":
+        body = "\n".join([
+            safe_title,
+            f"Exam: {(material.exam_type or 'Custom').upper()}",
+            f"Topics: {len(topic_names)}",
+            f"Assets: {len(assets)}",
+            "",
+            "---",
+            "",
+            content or "(No content available)",
+        ])
+        return Response(
+            content=body.encode("utf-8"),
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": f'attachment; filename="{base_name}.txt"',
+            },
+        )
+
+    raise HTTPException(status_code=400, detail="Unsupported export format. Use pdf, docx, or txt.")
 
 
 # ── POST /study/generate ────────────────────────────────────────────
@@ -1874,4 +2025,33 @@ async def serve_study_tts_audio(filename: str):
         media_type="audio/mpeg",
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+# ── Export helpers ─────────────────────────────────────────────────────
+
+def _split_paragraphs(text: str) -> list[str]:
+    parts = text.split("\n\n")
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _wrap_text(text: str, max_width: int, font) -> list[str]:
+    """Very basic word-wrap for PIL bitmap fonts."""
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        test = f"{current} {word}".strip()
+        try:
+            bbox = font.getbbox(test)
+            width = bbox[2] - bbox[0]
+        except Exception:
+            width = len(test) * 10
+        if width > max_width and current:
+            lines.append(current)
+            current = word
+        else:
+            current = test
+    if current:
+        lines.append(current)
+    return lines or [""]
 

@@ -162,6 +162,7 @@ export default function StudyScreen() {
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editExamType, setEditExamType] = useState<string | null>(null);
+  const [shareFormatVisible, setShareFormatVisible] = useState(false);
 
   // Load cached assets on mount
   useEffect(() => {
@@ -703,31 +704,33 @@ export default function StudyScreen() {
     setDeleteConfirmVisible(true);
   };
 
-  const handleSharePress = async () => {
+  const handleSharePress = async (format: "pdf" | "docx" | "txt" | "image") => {
     if (!selectedMaterial) return;
-    setActionMenuVisible(false);
+    setShareFormatVisible(false);
     try {
-      const cleanTitle = selectedMaterial.title.replace(/^[A-Z]+ · /, "").trim() || "study-material";
-      const topics = getTopicNames(selectedMaterial.parsed_structure);
-      const body = [
-        `# ${selectedMaterial.title}`,
-        `Exam: ${selectedMaterial.exam_type ? selectedMaterial.exam_type.toUpperCase() : "Custom"}`,
-        `Topics: ${topics.length}`,
-        `Assets: ${selectedMaterial.assets.length}`,
-        "",
-        "---",
-        "",
-        selectedMaterial.content || "(No content available)",
-      ].join("\n");
+      const res = await apiFetch(
+        `/api/v1/study/materials/${selectedMaterial.id}/export?format=${format}`,
+      );
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const contentDisposition = res.headers.get("Content-Disposition");
+      const filename = contentDisposition?.match(/filename="?([^"]+)"?/)?.[1] || `material.${format}`;
+      const destPath = `${FileSystem.cacheDirectory}${filename}`;
 
-      const filename = `${cleanTitle.replace(/[^a-zA-Z0-9_-]+/g, "_")}.txt`;
-      const fileUri = `${FileSystem.cacheDirectory}${filename}`;
-      await FileSystem.writeAsStringAsync(fileUri, body, { encoding: FileSystem.EncodingType.UTF8 });
-
-      await Sharing.shareAsync(fileUri, {
-        mimeType: "text/plain",
-        dialogTitle: selectedMaterial.title,
-      });
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = (reader.result as string).split(",")[1];
+        await FileSystem.writeAsStringAsync(destPath, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(destPath, {
+            mimeType: res.headers.get("Content-Type") || "application/octet-stream",
+            dialogTitle: selectedMaterial.title,
+          });
+        }
+      };
+      reader.readAsDataURL(blob);
     } catch (err) {
       if (__DEV__) console.error("Share failed:", err);
     }
@@ -1786,7 +1789,10 @@ export default function StudyScreen() {
               <Text style={[styles.actionMenuText, { color: tokens.ink }]}>Edit</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={handleSharePress}
+              onPress={() => {
+                setActionMenuVisible(false);
+                setShareFormatVisible(true);
+              }}
               style={styles.actionMenuItem}
               accessibilityRole="button"
               accessibilityLabel="Share material"
@@ -1803,6 +1809,46 @@ export default function StudyScreen() {
               <Ionicons name="trash-outline" size={20} color={tokens.signal} />
               <Text style={[styles.actionMenuText, { color: tokens.signal }]}>Delete</Text>
             </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Share Format Picker */}
+      <Modal
+        visible={shareFormatVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShareFormatVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShareFormatVisible(false)}
+        >
+          <View style={[styles.shareFormatModal, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text style={[styles.shareFormatTitle, { color: tokens.ink }]}>Share as</Text>
+            {([
+              { format: "pdf" as const, label: "PDF", icon: "document-text-outline", desc: "Formatted document" },
+              { format: "docx" as const, label: "DOCX", icon: "document-outline", desc: "Word document" },
+              { format: "txt" as const, label: "TXT", icon: "document-attach-outline", desc: "Plain text" },
+              { format: "image" as const, label: "Image", icon: "image-outline", desc: "PNG image" },
+            ]).map((item) => (
+              <TouchableOpacity
+                key={item.format}
+                onPress={() => handleSharePress(item.format)}
+                style={[styles.shareFormatItem, { borderBottomColor: tokens.border }]}
+                accessibilityRole="button"
+                accessibilityLabel={`Share as ${item.label}`}
+              >
+                <View style={[styles.shareFormatIcon, { backgroundColor: tokens.mintSoft }]}>
+                  <Ionicons name={item.icon as any} size={22} color={tokens.mint} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.shareFormatLabel, { color: tokens.ink }]}>{item.label}</Text>
+                  <Text style={[styles.shareFormatDesc, { color: tokens.inkMuted }]}>{item.desc}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} />
+              </TouchableOpacity>
+            ))}
           </View>
         </Pressable>
       </Modal>
@@ -2499,5 +2545,43 @@ const styles = StyleSheet.create({
   deleteBtnText: {
     fontSize: 14,
     fontWeight: "700",
+  },
+  shareFormatModal: {
+    width: "100%",
+    maxWidth: 320,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  shareFormatTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  shareFormatItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  shareFormatIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareFormatLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  shareFormatDesc: {
+    fontSize: 12,
+    marginTop: 2,
   },
 });
