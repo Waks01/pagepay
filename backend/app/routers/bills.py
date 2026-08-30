@@ -295,6 +295,13 @@ async def buy_airtime(
         reference=reference,
         status="success",
         external_ref=result.reference,
+        details={
+            "network": result.network,
+            "network_name": payload.network.upper(),
+            "amount": str(result.amount),
+            "discount": result.discount,
+            "mobile_number": result.mobile_number,
+        },
     )
     db.add(tx)
 

@@ -46,7 +46,7 @@ export default function TransactionDetailScreen() {
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: tokens.paper }]}>
-        <PageHeader title="Transaction Details" />
+        <PageHeader title="Transaction Details" tokens={tokens} />
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
@@ -90,7 +90,7 @@ export default function TransactionDetailScreen() {
   if (error || !transaction) {
     return (
       <View style={[styles.container, { backgroundColor: tokens.paper }]}>
-        <PageHeader title="Transaction Details" />
+        <PageHeader title="Transaction Details" tokens={tokens} />
         <StateBlock
           icon="alert-circle-outline"
           message="Transaction not found"
@@ -103,7 +103,7 @@ export default function TransactionDetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: tokens.paper }]}>
-      <PageHeader title="Transaction Details" />
+      <PageHeader title="Transaction Details" tokens={tokens} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}

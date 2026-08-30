@@ -5,6 +5,7 @@ and PagePay branding - optimized for social media sharing.
 """
 
 import io
+import os
 import qrcode
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
@@ -56,9 +57,32 @@ def generate_receipt_image(transaction: BillTransaction) -> bytes:
     
     y = 80
     
-    # Header - PagePay Logo
-    draw.text((540, y), "PagePay", fill=MINT, font=font_logo, anchor="mt")
-    y += 90
+    # Try to load logo image
+    logo_image = None
+    logo_paths = [
+        "/app/assets/logo.png",  # Docker path
+        "./app/assets/logo.png",  # Relative path
+        "../page/assets/images/icon.png",  # Development path
+    ]
+    
+    for logo_path in logo_paths:
+        try:
+            if os.path.exists(logo_path):
+                logo_img = Image.open(logo_path)
+                logo_size = 64
+                logo_img = logo_img.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+                # Center logo
+                logo_x = (width - logo_size) // 2
+                img.paste(logo_img, (logo_x, y), logo_img if logo_img.mode == 'RGBA' else None)
+                y += logo_size + 20
+                break
+        except Exception:
+            continue
+    
+    # If no logo found, use text logo
+    if logo_image is None:
+        draw.text((540, y), "PagePay", fill=MINT, font=font_logo, anchor="mt")
+        y += 90
     
     # Receipt Title
     draw.text((540, y), "Payment Receipt", fill=INK, font=font_title, anchor="mt")
@@ -109,24 +133,43 @@ def generate_receipt_image(transaction: BillTransaction) -> bytes:
     y += 80
     
     # Transaction Details
-    details = [
-        ("Amount", f"₦{transaction.amount_naira:,.2f}"),
-        ("Points Earned", f"{transaction.points_earned:,} SP"),
-    ]
+    details = []
     
-    # Add service-specific fields
+    # Network name (from details.network_name)
+    if transaction.details and transaction.details.get("network_name"):
+        details.append(("Network", transaction.details["network_name"]))
+    
+    # Phone number
     if transaction.phone:
-        details.insert(0, ("Phone Number", transaction.phone))
+        details.append(("Phone Number", transaction.phone))
     elif transaction.meter_number:
-        details.insert(0, ("Meter Number", transaction.meter_number))
+        details.append(("Meter Number", transaction.meter_number))
     elif transaction.smartcard_number:
-        details.insert(0, ("Smartcard Number", transaction.smartcard_number))
+        details.append(("Smartcard Number", transaction.smartcard_number))
     
+    # Amount
+    details.append(("Amount", f"₦{transaction.amount_naira:,.2f}"))
+    
+    # Add commission if exists
+    if transaction.commission_naira:
+        commission_in_naira = transaction.commission_naira / 100  # Convert kobo to naira
+        details.append(("Commission", f"₦{commission_in_naira:,.2f}"))
+    
+    # Add points earned
+    if transaction.points_earned:
+        details.append(("Points Earned", f"{transaction.points_earned:,} SP"))
+    
+    # Add reference and date
     details.extend([
         ("Reference", transaction.reference),
         ("Date", transaction.created_at.strftime('%b %d, %Y at %I:%M %p')),
     ])
     
+    # Add discount if exists (from details)
+    if transaction.details and transaction.details.get("discount"):
+        details.append(("Discount", f"{transaction.details['discount']}%"))
+    
+    # Add external reference if exists
     if transaction.external_ref:
         details.append(("Provider Ref", transaction.external_ref))
     

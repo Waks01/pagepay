@@ -8,12 +8,13 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
-import * as MediaLibrary from "expo-media-library";
+import * as MediaLibrary from "expo-media-library/legacy";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
+import { ReceiptPreviewModal } from "@/components/transactions/ReceiptPreviewModal";
 
 type ReceiptActionsProps = {
   transactionId: number;
@@ -21,20 +22,21 @@ type ReceiptActionsProps = {
 };
 
 export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
-  const [downloading, setDownloading] = useState<"pdf" | "image" | null>(null);
+  const [downloadingImage, setDownloadingImage] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [sharingImage, setSharingImage] = useState(false);
+  const [sharingPdf, setSharingPdf] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewUri, setPreviewUri] = useState("");
+  const [previewFormat, setPreviewFormat] = useState<"pdf" | "image">("image");
+  const [previewAction, setPreviewAction] = useState<"save" | "share">("save");
 
   const downloadReceipt = async (format: "pdf" | "image") => {
     try {
-      setDownloading(format);
-
-      // Request media library permissions for saving
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Please grant media library permission to save receipts.",
-        );
-        return;
+      if (format === "image") {
+        setDownloadingImage(true);
+      } else {
+        setDownloadingPdf(true);
       }
 
       // Download from API
@@ -63,34 +65,33 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        // Save to media library
+        // Show preview
+        setPreviewUri(fileUri);
+        setPreviewFormat(format);
+        setPreviewAction("save");
+        setShowPreview(true);
+
         if (format === "image") {
-          await MediaLibrary.saveToLibraryAsync(fileUri);
-          Alert.alert("Success", "Receipt image saved to gallery!");
+          setDownloadingImage(false);
         } else {
-          // For PDF, offer to share
-          const canShare = await Sharing.isAvailableAsync();
-          if (canShare) {
-            await Sharing.shareAsync(fileUri, {
-              mimeType: "application/pdf",
-              dialogTitle: "Share Receipt PDF",
-            });
-          } else {
-            Alert.alert("Success", "Receipt PDF downloaded!");
-          }
+          setDownloadingPdf(false);
         }
       };
     } catch (error) {
       console.error("[ReceiptActions] Download error:", error);
       Alert.alert("Error", "Failed to download receipt. Please try again.");
-    } finally {
-      setDownloading(null);
+      setDownloadingImage(false);
+      setDownloadingPdf(false);
     }
   };
 
   const shareReceipt = async (format: "pdf" | "image") => {
     try {
-      setDownloading(format);
+      if (format === "image") {
+        setSharingImage(true);
+      } else {
+        setSharingPdf(true);
+      }
 
       const canShare = await Sharing.isAvailableAsync();
       if (!canShare) {
@@ -98,6 +99,8 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
           "Not Available",
           "Sharing is not available on this device.",
         );
+        setSharingImage(false);
+        setSharingPdf(false);
         return;
       }
 
@@ -127,17 +130,70 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        // Share
-        await Sharing.shareAsync(fileUri, {
-          mimeType: format === "pdf" ? "application/pdf" : "image/png",
-          dialogTitle: `Share Receipt ${format === "pdf" ? "PDF" : "Image"}`,
-        });
+        // Show preview
+        setPreviewUri(fileUri);
+        setPreviewFormat(format);
+        setPreviewAction("share");
+        setShowPreview(true);
+
+        if (format === "image") {
+          setSharingImage(false);
+        } else {
+          setSharingPdf(false);
+        }
       };
     } catch (error) {
       console.error("[ReceiptActions] Share error:", error);
       Alert.alert("Error", "Failed to share receipt. Please try again.");
-    } finally {
-      setDownloading(null);
+      setSharingImage(false);
+      setSharingPdf(false);
+    }
+  };
+
+  const confirmAction = async () => {
+    try {
+      setShowPreview(false);
+
+      if (previewAction === "save") {
+        if (previewFormat === "image") {
+          // Save image to gallery
+          const { status } = await MediaLibrary.requestPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert(
+              "Permission Required",
+              "Please grant media library permission to save receipts.",
+            );
+            return;
+          }
+
+          await MediaLibrary.saveToLibraryAsync(previewUri);
+          Alert.alert("Success", "Receipt image saved to gallery!");
+        } else {
+          // For PDF, open share dialog (mobile doesn't have direct file save)
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(previewUri, {
+              mimeType: "application/pdf",
+              dialogTitle: "Save Receipt PDF",
+              UTI: "com.adobe.pdf",
+            });
+          } else {
+            Alert.alert(
+              "Not Available",
+              "Sharing is not available on this device.",
+            );
+          }
+        }
+      } else {
+        // Share action
+        await Sharing.shareAsync(previewUri, {
+          mimeType: previewFormat === "pdf" ? "application/pdf" : "image/png",
+          dialogTitle: `Share Receipt ${previewFormat === "pdf" ? "PDF" : "Image"}`,
+        });
+      }
+    } catch (error) {
+      console.error("[ReceiptActions] Confirm error:", error);
+      Alert.alert("Error", "Failed to complete action. Please try again.");
     }
   };
 
@@ -153,10 +209,10 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
             { backgroundColor: tokens.card, borderColor: tokens.border },
           ]}
           onPress={() => downloadReceipt("image")}
-          disabled={downloading !== null}
+          disabled={downloadingImage}
           activeOpacity={0.7}
         >
-          {downloading === "image" ? (
+          {downloadingImage ? (
             <PagePaySpinner size={24} />
           ) : (
             <>
@@ -182,10 +238,10 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
             { backgroundColor: tokens.card, borderColor: tokens.border },
           ]}
           onPress={() => downloadReceipt("pdf")}
-          disabled={downloading !== null}
+          disabled={downloadingPdf}
           activeOpacity={0.7}
         >
-          {downloading === "pdf" ? (
+          {downloadingPdf ? (
             <PagePaySpinner size={24} />
           ) : (
             <>
@@ -217,10 +273,10 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
             { backgroundColor: tokens.card, borderColor: tokens.border },
           ]}
           onPress={() => shareReceipt("image")}
-          disabled={downloading !== null}
+          disabled={sharingImage}
           activeOpacity={0.7}
         >
-          {downloading === "image" ? (
+          {sharingImage ? (
             <PagePaySpinner size={24} />
           ) : (
             <>
@@ -250,10 +306,10 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
             { backgroundColor: tokens.card, borderColor: tokens.border },
           ]}
           onPress={() => shareReceipt("pdf")}
-          disabled={downloading !== null}
+          disabled={sharingPdf}
           activeOpacity={0.7}
         >
-          {downloading === "pdf" ? (
+          {sharingPdf ? (
             <PagePaySpinner size={24} />
           ) : (
             <>
@@ -276,6 +332,17 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Preview Modal */}
+      <ReceiptPreviewModal
+        visible={showPreview}
+        onClose={() => setShowPreview(false)}
+        onConfirm={confirmAction}
+        imageUri={previewUri}
+        format={previewFormat}
+        action={previewAction}
+        tokens={tokens}
+      />
     </View>
   );
 }
