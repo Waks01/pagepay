@@ -379,11 +379,6 @@ export default function BuyEducationScreen() {
         <ShortfallModal
           visible={showShortfallModal}
           shortfallSv={shortfallSv}
-          adsNeeded={Math.ceil(shortfallSv / 16)}
-          onWatchAds={() => {
-            setShowShortfallModal(false);
-            // TODO: Navigate to ad watching flow
-          }}
           onCancel={() => {
             setShowShortfallModal(false);
             setApplySvDiscountAmount(0);

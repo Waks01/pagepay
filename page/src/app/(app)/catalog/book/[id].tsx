@@ -15,8 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
-import { PLATFORM_ENV } from '@/src/shared/lib/ads';
-import { NativeAdBanner } from '@/components/ads/NativeAdBanner';
 import { AttributionCard } from '@/components/AttributionCard';
 import { SocialBar } from '@/components/SocialBar';
 import { ShareSheet, type ShareTarget } from '@/components/ShareSheet';
@@ -70,23 +68,7 @@ export default function BookDetailScreen() {
 
   const workId = Number(id);
 
-  const [nativeAdUnit, setNativeAdUnit] = useState('');
-  const { data: adConfig } = useQuery({
-    queryKey: ['ads-config'],
-    queryFn: async () => {
-      const res = await apiFetch(`/api/v1/config/ads?env=${PLATFORM_ENV}`);
-      if (!res.ok) return {};
-      return (await res.json()) as Record<string, string>;
-    },
-  });
 
-  useEffect(() => {
-    if (adConfig) {
-      const platform = Platform.OS;
-      const unitKey = platform === 'android' ? 'in_feed_android' : 'in_feed_ios';
-      setNativeAdUnit(adConfig[unitKey] || '');
-    }
-  }, [adConfig]);
 
   const bookQuery = useQuery({
     queryKey: ['book', workId],
@@ -232,8 +214,6 @@ export default function BookDetailScreen() {
               !resumeQuery.data?.is_finished &&
               resumeQuery.data?.current_slice_id === slice.id;
             
-            const shouldShowAd = (idx + 1) % 4 === 0 && nativeAdUnit;
-
             return (
               <View key={`slice-${slice.id}`}>
                 <TouchableOpacity
@@ -309,13 +289,6 @@ export default function BookDetailScreen() {
                     ) : null}
                   </View>
                 </TouchableOpacity>
-                
-                {shouldShowAd && (
-                  <NativeAdBanner
-                    adUnit={nativeAdUnit}
-                    sessionId={null}
-                  />
-                )}
               </View>
             );
           })}

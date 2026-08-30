@@ -13,9 +13,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { apiFetch, API_URL } from "@/src/shared/api/client";
-import { PLATFORM_ENV } from "@/src/shared/lib/ads";
-import { RewardedAd } from "@/components/ads/RewardedAd";
-import { NativeAdBanner } from "@/components/ads/NativeAdBanner";
 import { BodyRenderer } from "@/components/reader/BodyRenderer";
 import {
   StudyPanel,
@@ -37,10 +34,8 @@ import {
 } from "@/src/features/works/hooks/use-works";
 import { useStudyStore } from "@/src/shared/lib/studyStore";
 import { usePreferences } from "@/src/shared/lib/preferences";
-import { useAdGating } from "@/src/shared/hooks/useAdGating"; // Phase 3 & 4
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
-import { useAdSlot } from "@/src/shared/contexts/AdSlot";
 import { SkeletonDetailPage } from "@/components/skeletons";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
 import { useAudioPlayer } from "expo-audio";
@@ -57,13 +52,7 @@ type ContentDetail = {
   parent_work_id: number | null;
   body_sentinels_version: number;
   audio_url: string | null;
-  // Phase 3: Ad gating fields
-  content_source?: string | null;
-  is_ad_free_content?: boolean;
-  can_skip_pre_read_ad?: boolean;
-  can_skip_post_read_ad?: boolean;
-  show_pre_read_ad?: boolean;
-  show_post_read_ad?: boolean;
+
 };
 
 type ContinueReading = {
@@ -98,47 +87,13 @@ export default function ReaderScreen() {
   const [paused, setPaused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [adUnit, setAdUnit] = useState("");
-  const [preReadOpen, setPreReadOpen] = useState(false);
-  const { state: adSlotState, release: releaseAdSlot } = useAdSlot();
-  const preReadDismissedRef = useRef(false);
-  const [preReadHasShown, setPreReadHasShown] = useState(false);
-  const [postReadAdOpen, setPostReadAdOpen] = useState(false);
-  const [nativeAdUnit, setNativeAdUnit] = useState("");
 
-  // Phase 3 & 4: Ad gating based on content type and user tier
-  const { adGating, loading: adGatingLoading } = useAdGating(
-    id ? parseInt(id, 10) : null,
-  );
 
-  useEffect(() => {
-    if (preReadDismissedRef.current || adGatingLoading) {
-      return;
-    }
-    if (adGating && adGating.showPreReadAd) {
-      if (__DEV__) {
-        console.log("[Reader] Pre-read ad opening", {
-          showPreReadAd: adGating.showPreReadAd,
-          contentId: id,
-          now: new Date().toISOString(),
-        });
-      }
-      setPreReadOpen(true);
-    }
-  }, [adGating, adGatingLoading, id]);
 
-  useEffect(() => {
-    if (preReadOpen) {
-      setPreReadHasShown(true);
-      if (__DEV__) {
-        console.log("[Reader] Pre-read ad opened", {
-          preReadOpen,
-          preReadHasShown: true,
-          now: new Date().toISOString(),
-        });
-      }
-    }
-  }, [preReadOpen]);
+
+
+
+
 
   const workId = content?.parent_work_id ?? Number(id);
   const socialQuery = useWorkSocial(workId);
@@ -162,12 +117,6 @@ export default function ReaderScreen() {
   const lastSavedOffset = useRef(0);
   const finishFiredRef = useRef(false);
   const finishedManuallyRef = useRef(false);
-  // Guard against the post-read ad's onClaimed/onSkipped firing more than once
-  // (AdMob CLOSED can fire twice in some SDK versions, or both the slot path
-  // and the component-level listener can race). Without this, the user would
-  // see the post-read ad open, watch it, then immediately see another one
-  // queued behind it before navigation completes.
-  const claimProcessedRef = useRef(false);
   const [finishing, setFinishing] = useState(false);
 
   const { data: user } = useQuery({
@@ -230,26 +179,9 @@ export default function ReaderScreen() {
     setStudyFocusedHighlight(highlightId);
   }, []);
 
-  const { data: adConfig } = useQuery({
-    queryKey: ["ads-config"],
-    queryFn: async () => {
-      const res = await apiFetch(`/api/v1/config/ads?env=${PLATFORM_ENV}`);
-      if (!res.ok) return {};
-      return (await res.json()) as Record<string, string>;
-    },
-  });
 
-  useEffect(() => {
-    if (adConfig) {
-      const platform = Platform.OS;
-      const rewardedKey =
-        platform === "android" ? "rewarded_android" : "rewarded_ios";
-      const nativeKey =
-        platform === "android" ? "in_feed_android" : "in_feed_ios";
-      setAdUnit(adConfig[rewardedKey] || "");
-      setNativeAdUnit(adConfig[nativeKey] || "");
-    }
-  }, [adConfig]);
+
+
 
   useEffect(() => {
     let mounted = true;
@@ -266,7 +198,6 @@ export default function ReaderScreen() {
     loadContent();
     finishFiredRef.current = false;
     finishedManuallyRef.current = false;
-    claimProcessedRef.current = false;
     setFinishing(false);
 
     (async () => {
@@ -311,9 +242,6 @@ export default function ReaderScreen() {
         console.error("Initial session start failed", e);
       }
     })();
-    preReadDismissedRef.current = false;
-    setPreReadHasShown(false);
-
     return () => {
       mounted = false;
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
@@ -325,12 +253,10 @@ export default function ReaderScreen() {
   }, [id]);
 
   useEffect(() => {
-    if (!sessionIdRef.current || preReadOpen || !preReadHasShown) {
+    if (!sessionIdRef.current) {
       if (__DEV__) {
         console.log("[Reader] Timer gated", {
           hasSession: Boolean(sessionIdRef.current),
-          preReadOpen,
-          preReadHasShown,
           now: new Date().toISOString(),
         });
       }
@@ -357,7 +283,7 @@ export default function ReaderScreen() {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [sessionId, preReadOpen, preReadHasShown, elapsedSeconds]);
+  }, [sessionId, elapsedSeconds]);
 
   const sendHeartbeat = async () => {
     if (!sessionIdRef.current) return;
@@ -495,7 +421,15 @@ export default function ReaderScreen() {
 
     if (sessionIdRef.current) {
       finishedManuallyRef.current = true;
-      setPostReadAdOpen(true);
+      await endSession(sessionIdRef.current);
+      try {
+        await apiFetch(`/api/v1/progress/finish?slice_id=${Number(id)}`, {
+          method: "POST",
+        });
+      } catch (e) {
+        console.warn("Progress finish failed", e);
+      }
+      router.push(`/catalog/book/${workId}`);
     } else {
       finishedManuallyRef.current = true;
       router.replace(`/catalog/book/${workId}`);
@@ -578,7 +512,6 @@ export default function ReaderScreen() {
     } catch (e) {
       console.warn("Progress finish failed", e);
     }
-    releaseAdSlot();
     router.push(`/catalog/book/${workId}`);
   };
   const onPostReadAdSkipped = async () => {
@@ -596,8 +529,7 @@ export default function ReaderScreen() {
     setPostReadAdOpen(false);
 
     if (!sessionIdRef.current) {
-      releaseAdSlot();
-      router.replace(`/catalog/book/${workId}`);
+        router.replace(`/catalog/book/${workId}`);
       return;
     }
 
@@ -610,7 +542,6 @@ export default function ReaderScreen() {
     } catch (e) {
       console.warn("Progress finish failed", e);
     }
-    releaseAdSlot();
     router.push(`/catalog/book/${workId}`);
   };
 
@@ -725,12 +656,6 @@ export default function ReaderScreen() {
           />
         )}
 
-        {readerMode !== "listen" && isReadMode && nativeAdUnit && sessionId && (
-          <View style={styles.adSlot}>
-            <NativeAdBanner adUnit={nativeAdUnit} sessionId={sessionId} />
-          </View>
-        )}
-
         {readerMode !== "listen" && (
           <BodyRenderer
             bodyText={content.body_text || ""}
@@ -743,34 +668,8 @@ export default function ReaderScreen() {
             onHighlightPress={isStudyMode ? onHighlightPressSegment : undefined}
             renderAfter={(idx, seg) => {
               if (!isReadMode) return null;
-              if (!nativeAdUnit || !sessionId) return null;
-
-              // v3+ content: inject ad after every 3rd text segment
-              if (content.body_sentinels_version >= 1) {
-                if (seg.kind !== "text" || idx % 3 !== 0) {
-                  return null;
-                }
-              }
-
-              // Pre-v3 content: inject ad after every 4th paragraph
-              // (the renderAfter index maps to paragraph index in PlainBodyWithHighlights)
-              if (content.body_sentinels_version < 1 && idx % 4 !== 0) {
-                return null;
-              }
-
-              return (
-                <View style={styles.adSlot}>
-                  <NativeAdBanner adUnit={nativeAdUnit} sessionId={sessionId} />
-                </View>
-              );
             }}
           />
-        )}
-
-        {readerMode !== "listen" && isReadMode && nativeAdUnit && sessionId && (
-          <View style={styles.adSlot}>
-            <NativeAdBanner adUnit={nativeAdUnit} sessionId={sessionId} />
-          </View>
         )}
 
         {readerMode !== "listen" && (
@@ -867,48 +766,9 @@ export default function ReaderScreen() {
         onLockedListenTapped={() => setPaywallOpen(true)}
       />
 
-      <RewardedAd
-        key="pre-read"
-        visible={preReadOpen}
-        adUnit={adUnit}
-        adUnitName={
-          Platform.OS === "android" ? "rewarded_android" : "rewarded_ios"
-        }
-        userId={user?.id ?? 0}
-        sessionId={sessionId ?? undefined}
-        title={t("reader.ad_pre_title")}
-        eyebrow={t("reader.ad_pre_eyebrow")}
-        body={t("reader.ad_pre_body")}
-        claimLabel={t("reader.ad_pre_claim")}
-        allowSkip
-        skipLabel={t("reader.ad_pre_skip")}
-        onClaimed={onPreReadClaimed}
-        onSkipped={onPreReadSkipped}
-        onClose={() => {
-          preReadDismissedRef.current = true;
-          setPreReadOpen(false);
-        }}
-      />
 
-      <RewardedAd
-        key="post-read"
-        visible={postReadAdOpen}
-        adUnit={adUnit}
-        adUnitName={
-          Platform.OS === "android" ? "rewarded_android" : "rewarded_ios"
-        }
-        userId={user?.id ?? 0}
-        sessionId={sessionId ?? undefined}
-        title={t("reader.ad_post_title")}
-        eyebrow={t("reader.ad_post_eyebrow")}
-        body={t("reader.ad_post_body")}
-        claimLabel={t("reader.ad_post_claim")}
-        allowSkip
-        skipLabel={t("reader.ad_pre_skip")}
-        onClaimed={onPostReadAdClaimed}
-        onSkipped={onPostReadAdSkipped}
-        onClose={() => {}}
-      />
+
+
 
       {isStudyMode && (
         <ShareAsImage
@@ -961,7 +821,6 @@ const styles = StyleSheet.create({
   modalBox: { padding: 24, borderRadius: 12, width: "100%", gap: 12 },
   modalTitle: { fontSize: 18, fontWeight: "bold" },
   modalText: { fontSize: 14 },
-  adSlot: { marginVertical: 20 },
   endFooter: {
     marginTop: 32,
     alignItems: "center",

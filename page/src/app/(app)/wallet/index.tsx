@@ -26,7 +26,6 @@ import {
   koboToPoints,
 } from "@/src/shared/lib/money";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
-import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
 import {
   useCurrentUser,
   useCurrentUserStore,
@@ -43,7 +42,6 @@ import {
 import {
   SkeletonBalanceCard,
 } from "@/components/skeletons";
-import { NativeAdBanner } from "@/components/ads/NativeAdBanner";
 
 type WithdrawalRecord = {
   reference: string;
@@ -100,21 +98,6 @@ export default function WalletScreen() {
   const params = useLocalSearchParams<{ welcomeBonus?: string }>();
   const welcomeBonus = Number(params.welcomeBonus ?? 0);
   const insets = useSafeAreaInsets();
-
-  // Fetch ad config for native unit. useAdsConfig has its own
-  // 1-hour staleTime and is shared with the AdSlotProvider, home,
-  // and catalog — fetched once and reused.
-  const [nativeAdUnit, setNativeAdUnit] = useState("");
-  const { data: adConfig } = useAdsConfig();
-
-  useEffect(() => {
-    if (adConfig) {
-      const platform = Platform.OS;
-      const unitKey =
-        platform === "android" ? "in_feed_android" : "in_feed_ios";
-      setNativeAdUnit(adConfig[unitKey] || "");
-    }
-  }, [adConfig]);
 
   const payoutQ = useQuery({
     queryKey: ["payout", "account"],

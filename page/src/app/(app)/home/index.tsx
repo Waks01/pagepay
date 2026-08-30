@@ -19,7 +19,6 @@ import { apiFetch } from "@/src/shared/api/client";
 import { fetchDailyRewardStatus } from "@/src/features/rewards/api";
 import { useCatalogFilter } from "@/src/shared/lib/catalog-filter";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
-import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
 import {
   useCurrentUser,
   useCurrentUserStore,
@@ -36,7 +35,6 @@ import { ResumeCard } from "@/components/ResumeCard";
 import { VTUServiceCard } from "@/components/VTUServiceCard";
 import { UserAvatar } from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
-import { NativeAdBanner } from "@/components/ads/NativeAdBanner";
 import { PagePay } from "@/constants/theme";
 import { SkeletonPage } from "@/components/skeletons";
 import { StateBlock } from "@/components/StateBlock";
@@ -56,20 +54,7 @@ export default function HomeScreen() {
   // state, no re-auth on tab switch.
   const user = useCurrentUser();
 
-  // Fetch ad config for native unit. useAdsConfig has its own
-  // 1-hour staleTime and the same queryKey as the AdSlotProvider
-  // and the catalog tab — the data is fetched once and reused.
-  const [nativeAdUnit, setNativeAdUnit] = useState("");
-  const { data: adConfig } = useAdsConfig();
 
-  useEffect(() => {
-    if (adConfig) {
-      const platform = Platform.OS;
-      const unitKey =
-        platform === "android" ? "in_feed_android" : "in_feed_ios";
-      setNativeAdUnit(adConfig[unitKey] || "");
-    }
-  }, [adConfig]);
 
   // The feed query uses the cached user id from the store. If the
   // store hasn't populated yet (shouldn't happen — auth gate loads
@@ -593,18 +578,12 @@ export default function HomeScreen() {
           ) : (
             <View style={styles.feed}>
               {items.map((item, index) => {
-                // Inject native ad every 4th position
-                const shouldShowAd = (index + 1) % 4 === 0 && nativeAdUnit;
-
                 return (
                   <View key={`feed-${item.id}-${index}`}>
                     <ContentCard
                       item={item}
                       onPress={() => onCardPress(item.id)}
                     />
-                    {shouldShowAd && (
-                      <NativeAdBanner adUnit={nativeAdUnit} sessionId={null} />
-                    )}
                   </View>
                 );
               })}

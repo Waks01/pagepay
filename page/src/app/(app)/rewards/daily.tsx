@@ -32,16 +32,13 @@ import { getDeviceFingerprint } from "@/src/shared/lib/device-fingerprint";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { useCurrentUser } from "@/src/shared/lib/current-user";
-import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
 import { StateBlock } from "@/components/StateBlock";
 import { Skeleton } from "@/components/Skeleton";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
-import { RewardedAd } from "@/components/ads/RewardedAd";
 import {
   fetchDailyRewardStatus,
   claimDailyReward,
   fetchDailyRewardConfig,
-  freezeStreakByAd,
   freezeStreakByPoints,
   DailyRewardStatus,
   DailyRewardInfo,
@@ -85,11 +82,9 @@ export default function DailyRewardsScreen() {
   const queryClient = useQueryClient();
   const [claimingReward, setClaimingReward] = useState(false);
   const [showClaimModal, setShowClaimModal] = useState(false);
-  const [showAdModal, setShowAdModal] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
   const user = useCurrentUser();
-  const adsConfigQ = useAdsConfig();
 
   useEffect(() => {
     getDeviceFingerprint()
@@ -134,8 +129,8 @@ export default function DailyRewardsScreen() {
   }, [error]);
 
   const claimMutation = useMutation({
-    mutationFn: ({ deviceId, doubleWithAd }: { deviceId?: string; doubleWithAd: boolean }) =>
-      claimDailyReward(deviceId, doubleWithAd),
+    mutationFn: ({ deviceId }: { deviceId?: string }) =>
+      claimDailyReward(deviceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["daily-reward-status"] });
       setShowClaimModal(false);
@@ -155,17 +150,7 @@ export default function DailyRewardsScreen() {
     },
   });
 
-  const freezeByAdMutation = useMutation({
-    mutationFn: (deviceId?: string) => freezeStreakByAd(deviceId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["daily-reward-status"] });
-    },
-    onError: (error: Error) => {
-      console.error("Streak freeze by ad error:", error.message);
-    },
-  });
-
-  const freezeByPointsMutation = useMutation({
+const freezeByPointsMutation = useMutation({
     mutationFn: (deviceId?: string) => freezeStreakByPoints(deviceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["daily-reward-status"] });
@@ -175,11 +160,11 @@ export default function DailyRewardsScreen() {
     },
   });
 
-  const handleClaimReward = async (doubleWithAd: boolean = false) => {
+  const handleClaimReward = async () => {
     if (!rewardStatus?.can_claim_today) return;
     setClaimingReward(true);
     try {
-      await claimMutation.mutateAsync({ deviceId: deviceId || undefined, doubleWithAd });
+      await claimMutation.mutateAsync({ deviceId: deviceId || undefined });
     } finally {
       setClaimingReward(false);
     }
@@ -197,11 +182,7 @@ export default function DailyRewardsScreen() {
     currentStreak === 0 &&
     !!rewardStatus?.last_claim_date;
 
-  const handleFreezeByAd = async () => {
-    await freezeByAdMutation.mutateAsync(deviceId || undefined);
-  };
-
-  const handleFreezeByPoints = async () => {
+const handleFreezeByPoints = async () => {
     await freezeByPointsMutation.mutateAsync(deviceId || undefined);
   };
 
@@ -793,32 +774,6 @@ export default function DailyRewardsScreen() {
                 style={[
                   styles.recoveryButton,
                   {
-                    backgroundColor: tokens.mint,
-                    opacity: freezeByAdMutation.isPending ? 0.7 : 1,
-                  },
-                ]}
-                onPress={handleFreezeByAd}
-                disabled={freezeByAdMutation.isPending}
-              >
-                {freezeByAdMutation.isPending ? (
-                  <PagePaySpinner size={16} />
-                ) : (
-                  <Ionicons name="videocam" size={18} color={tokens.mintText} />
-                )}
-                <Text
-                  style={[
-                    styles.recoveryButtonText,
-                    { color: tokens.mintText },
-                  ]}
-                >
-                  {t("daily_rewards.recovery_watch_ad")}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.recoveryButton,
-                  {
                     backgroundColor: tokens.gold,
                     opacity: freezeByPointsMutation.isPending ? 0.7 : 1,
                   },
@@ -842,13 +797,12 @@ export default function DailyRewardsScreen() {
               </TouchableOpacity>
             </View>
 
-            {(freezeByAdMutation.isError || freezeByPointsMutation.isError) && (
+            {freezeByPointsMutation.isError && (
               <View style={styles.recoveryError}>
                 <Text
                   style={[styles.recoveryErrorText, { color: tokens.signal }]}
                 >
-                  {freezeByAdMutation.error?.message ||
-                    freezeByPointsMutation.error?.message ||
+                  {freezeByPointsMutation.error?.message ||
                     t("daily_rewards.recovery_failed")}
                 </Text>
               </View>
@@ -1044,7 +998,7 @@ export default function DailyRewardsScreen() {
                 styles.claimOptionButton,
                 { backgroundColor: tokens.mint, borderColor: tokens.mint },
               ]}
-              onPress={() => claimMutation.mutate({ deviceId: deviceId || undefined, doubleWithAd: false })}
+              onPress={() => claimMutation.mutate({ deviceId: deviceId || undefined })}
               disabled={claimingReward}
               activeOpacity={0.9}
             >
@@ -1054,30 +1008,6 @@ export default function DailyRewardsScreen() {
               <Text style={[styles.claimOptionSubtitle, { color: tokens.mintText }]}>
                 {t("daily_rewards.claim_option_regular_desc", { defaultValue: "Add to your balance" })}
               </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.claimOptionButton,
-                { backgroundColor: tokens.card, borderColor: tokens.mint },
-              ]}
-              onPress={() => {
-                setShowClaimModal(false);
-                setShowAdModal(true);
-              }}
-              disabled={claimingReward}
-              activeOpacity={0.9}
-            >
-              <Ionicons name="play-circle-outline" size={24} color={tokens.mint} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.claimOptionTitle, { color: tokens.ink }]}>
-                  {t("daily_rewards.claim_option_double", { defaultValue: "Watch Ad → Double to 100 SP" })}
-                </Text>
-                <Text style={[styles.claimOptionSubtitle, { color: tokens.inkMuted }]}>
-                  {t("daily_rewards.claim_option_double_desc", { defaultValue: "Watch 1 short ad to double your reward" })}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={tokens.inkMuted} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1092,29 +1022,7 @@ export default function DailyRewardsScreen() {
         </View>
       )}
 
-      {/* Rewarded Ad for daily reward double */}
-      <RewardedAd
-        key="daily-reward-double"
-        visible={showAdModal}
-        adUnit={adsConfigQ.data?.rewarded_android || adsConfigQ.data?.rewarded_ios || ""}
-        adUnitName={Platform.OS === "android" ? "rewarded_android" : "rewarded_ios"}
-        userId={user?.id ?? 0}
-        title={t("daily_rewards.ad_title", { defaultValue: "Watch Ad" })}
-        body={t("daily_rewards.ad_body", { defaultValue: "Watch this ad to double your daily reward" })}
-        claimLabel={t("daily_rewards.watch_ad", { defaultValue: "Watch Ad" })}
-        allowSkip
-        skipLabel={t("common.skip", { defaultValue: "Skip" })}
-        onClaimed={() => {
-          setShowAdModal(false);
-          claimMutation.mutate({ deviceId: deviceId || undefined, doubleWithAd: true });
-        }}
-        onSkipped={() => {
-          setShowAdModal(false);
-        }}
-        onClose={() => {
-          setShowAdModal(false);
-        }}
-      />
+
     </SafeAreaView>
   );
 }

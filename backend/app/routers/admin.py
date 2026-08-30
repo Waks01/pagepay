@@ -25,7 +25,6 @@ from app.routers import (
     admin_logs,
     admin_payments,
     admin_tasks,
-    admin_ads,
 )
 from app.routers.analytics import router as analytics_router
 
@@ -47,5 +46,4 @@ router.include_router(admin_config.router)
 router.include_router(admin_logs.router)
 router.include_router(admin_payments.router)
 router.include_router(admin_tasks.router)
-router.include_router(admin_ads.router)
 router.include_router(analytics_router)

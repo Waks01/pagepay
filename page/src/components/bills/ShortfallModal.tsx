@@ -8,16 +8,12 @@ import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 interface ShortfallModalProps {
   visible: boolean;
   shortfallSv: number;
-  adsNeeded: number;
-  onWatchAds: () => void;
   onCancel: () => void;
 }
 
 export function ShortfallModal({
   visible,
   shortfallSv,
-  adsNeeded,
-  onWatchAds,
   onCancel,
 }: ShortfallModalProps) {
   const { t } = useTranslation();
@@ -44,7 +40,7 @@ export function ShortfallModal({
             <View style={styles.infoRow}>
               <Ionicons name="analytics-outline" size={20} color={tokens.mint} />
               <Text style={[styles.infoText, { color: tokens.ink }]}>
-                {t("sv_discount.watch_ads_prompt", { ads: adsNeeded, sv: adsNeeded * 16 })}
+                Need {shortfallSv} more SV
               </Text>
             </View>
           </View>
@@ -56,16 +52,6 @@ export function ShortfallModal({
             >
               <Text style={[styles.cancelButtonText, { color: tokens.ink }]}>
                 {t("sv_discount.cancel")}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.button, styles.watchButton, { backgroundColor: tokens.mint }]}
-              onPress={onWatchAds}
-            >
-              <Ionicons name="play-circle-outline" size={20} color={tokens.mintText} />
-              <Text style={[styles.watchButtonText, { color: tokens.mintText }]}>
-                {t("sv_discount.watch_ads", { count: adsNeeded })}
               </Text>
             </TouchableOpacity>
           </View>
@@ -143,12 +129,5 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 16,
     fontWeight: "600",
-  },
-  watchButton: {
-    // backgroundColor set via tokens
-  },
-  watchButtonText: {
-    fontSize: 16,
-    fontWeight: "700",
   },
 });

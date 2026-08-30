@@ -92,8 +92,8 @@ async def grant_welcome_bonus(db: AsyncSession, user: User) -> bool:
         )
         return False
 
-    # 2. Credit the wallet. Same atomic-increment pattern as the AdMob
-    #    SSV handler in routers/ads.py.
+    # 2. Credit the wallet. Same atomic-increment pattern as the wallet
+    #    credit handlers.
     if settings.wallet_split_enabled:
         await db.execute(
             update(User)

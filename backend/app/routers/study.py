@@ -1265,35 +1265,6 @@ async def unlock_asset(
             points_spent=asset.points_to_unlock,
         )
 
-    elif payload.method == "ad":
-        # Create a pending ad-gated transaction. The client must
-        # request an ad token (POST /api/v1/ads/request-token), show
-        # the rewarded ad, and the SSV callback will credit the user's
-        # wallet. They then call this endpoint again with
-        # method="points" to consume the newly-earned points. The
-        # ad-credit flow is fully server-side — the client never
-        # reports revenue.
-        txn = StudyTransaction(
-            user_id=current_user.id,
-            asset_id=asset.id,
-            method="ad",
-            points_spent=0,
-            reward_granted=False,
-        )
-        db.add(txn)
-        await db.commit()
-        await db.refresh(txn)
-
-        return UnlockResponse(
-            unlocked=False,
-            content=None,
-            new_balance=(await db.execute(
-                select(User.points_balance).where(User.id == current_user.id)
-            )).scalar_one() or 0,
-            method="ad",
-            points_spent=0,
-        )
-
     raise HTTPException(status_code=400, detail="Invalid method")
 
 
@@ -1418,30 +1389,6 @@ async def unlock_material_audio(
             provider="unlocked",
         )
 
-    if method == "ad":
-        unlock = AudioUnlock(
-            user_id=current_user.id,
-            material_id=material_id,
-            method="ad",
-            cost_sv=cost_sv,
-        )
-        db.add(unlock)
-        await db.commit()
-        await db.refresh(unlock)
-
-        return AudioUnlockResponse(
-            unlocked=True,
-            material_id=material_id,
-            cost_sv=0,
-            method="ad",
-            new_balance=(
-                current_user.service_credit_balance
-                if settings.wallet_split_enabled
-                else current_user.points_balance
-            ),
-            url=f"/api/v1/study/tts/audio/{material_id}_cached.mp3",
-            provider="ad_unlock",
-        )
 
 
 class AudioUnlockStatusResponse(BaseModel):

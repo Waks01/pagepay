@@ -10,11 +10,9 @@ Reward flow (split — ads and reading settled independently)
    user's wallet and stamps `session.points_earned`. The response
    carries `slice_bonus_credited` and `new_balance`.
 
-   Ad rewards (pre-read + post-read) are credited independently by the
-   SSV webhook when the user finishes watching each ad. They land as
-   their own wallet entries — see `AdEvent.user_points_credited`.
+    Reading rewards are credited when the session ends and is verified.
 
-4. POST /session/claim — DEPRECATED no-op for back-compat. New clients
+  4. POST /session/claim — DEPRECATED no-op for back-compat. New clients
    should not call it. Kept so older clients don't 404.
 
 The pre-read ad gate is enforced client-side: the reader surfaces a

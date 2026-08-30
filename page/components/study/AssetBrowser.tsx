@@ -92,7 +92,7 @@ type AssetContent = McqContent | FlashcardContent | EssayContent | DiagramConten
 type AssetBrowserProps = {
   assets: AssetInfo[];
   userBalance: number;
-  onUnlock: (assetId: number, method: 'points' | 'ad') => Promise<void>;
+  onUnlock: (assetId: number) => Promise<void>;
   unlockedAssets: Record<number, unknown>;
   onQuizComplete?: (assetId: number, score: number) => Promise<void>;
 };
@@ -227,9 +227,9 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
     });
   };
 
-  const handleUnlock = async (asset: AssetInfo, method: 'points' | 'ad') => {
+  const handleUnlock = async (asset: AssetInfo) => {
     try {
-      await onUnlock(asset.id, method);
+      await onUnlock(asset.id);
     } catch (error) {
       if (__DEV__) {
         console.error('[AssetBrowser] Unlock failed:', error);
@@ -427,8 +427,7 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
           visible
           pointsCost={pendingUnlock.points_to_unlock}
           userBalance={userBalance}
-          onUnlockPoints={() => handleUnlock(pendingUnlock, 'points')}
-          onWatchAd={() => handleUnlock(pendingUnlock, 'ad')}
+          onUnlockPoints={() => handleUnlock(pendingUnlock)}
           onClose={() => setPendingUnlock(null)}
         />
       )}

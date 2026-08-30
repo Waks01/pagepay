@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.config import settings
-from app.models import AdEvent, Payment, AdminUser, Task, TaskSubmission
+from app.models import Payment, AdminUser, Task, TaskSubmission
 from app.schemas import RevenueSummary
 from app.services.admin_auth import require_permission
 
@@ -38,57 +38,6 @@ async def revenue_summary(
         start = datetime.fromisoformat(start_date)
     if end_date:
         end = datetime.fromisoformat(end_date)
-
-    # Ad Revenue - Calculate using historical FX rates.
-    # Include both legacy events (with revenue_usd) and SSV events (with user_points_credited).
-    ad_events = (
-        await db.execute(
-            select(
-                AdEvent.revenue_usd,
-                AdEvent.fx_rate_used,
-                AdEvent.user_points_credited,
-            )
-            .where(AdEvent.created_at >= start)
-            .where(AdEvent.created_at <= end)
-            .where(AdEvent.credit_status == "credited")
-        )
-    ).all()
-
-    ad_revenue_usd = 0.0
-    ad_revenue_ngn_kobo = 0
-    total_points = 0
-    total_fx_rate = 0.0
-    fx_count = 0
-
-    for event in ad_events:
-        if event.revenue_usd and event.fx_rate_used:
-            # Convert from micro-units
-            usd = float(event.revenue_usd) / 1_000_000
-            fx_rate = float(event.fx_rate_used) / 1_000_000
-            ngn = usd * fx_rate
-            kobo = int(ngn * 100)
-
-            ad_revenue_usd += usd
-            ad_revenue_ngn_kobo += kobo
-            total_fx_rate += fx_rate
-            fx_count += 1
-
-        if event.user_points_credited:
-            total_points += event.user_points_credited
-
-    # Calculate average FX rate used during period
-    average_fx_rate = (
-        total_fx_rate / fx_count if fx_count > 0 else 0.0
-    )
-
-    # Calculate platform/user split for ads from config
-    PLATFORM_SHARE = settings.platform_ad_revenue_percent
-    USER_SHARE = 1.0 - PLATFORM_SHARE
-
-    ad_platform_share_usd = ad_revenue_usd * PLATFORM_SHARE
-    ad_user_share_usd = ad_revenue_usd * USER_SHARE
-    ad_platform_share_ngn = int(ad_revenue_ngn_kobo * PLATFORM_SHARE)
-    ad_user_share_ngn = int(ad_revenue_ngn_kobo * USER_SHARE)
 
     # Premium Revenue (already in kobo)
     prem_rev_kobo = (
@@ -137,19 +86,28 @@ async def revenue_summary(
             task_platform_share_kobo += task.platform_fee_amount
             task_worker_share_kobo += reward
 
+    # Ad revenue removed
+    ad_revenue_usd = 0.0
+    ad_revenue_ngn_kobo = 0
+    ad_platform_share_usd = 0.0
+    ad_platform_share_ngn = 0
+    ad_user_share_usd = 0.0
+    ad_user_share_ngn = 0
+    total_points = 0
+
     # Combined totals
-    total_revenue_usd = ad_revenue_usd + premium_revenue_usd
-    total_revenue_ngn = ad_revenue_ngn_kobo + int(prem_rev_kobo) + task_revenue_kobo
-    platform_earnings_ngn = ad_platform_share_ngn + int(prem_rev_kobo) + task_platform_share_kobo
-    user_earnings_ngn = ad_user_share_ngn + task_worker_share_kobo
+    total_revenue_usd = premium_revenue_usd
+    total_revenue_ngn = int(prem_rev_kobo) + task_revenue_kobo
+    platform_earnings_ngn = int(prem_rev_kobo) + task_platform_share_kobo
+    user_earnings_ngn = task_worker_share_kobo
 
     return RevenueSummary(
-        ad_revenue_usd=ad_revenue_usd,
-        ad_revenue_ngn=ad_revenue_ngn_kobo,
-        ad_platform_share_usd=ad_platform_share_usd,
-        ad_platform_share_ngn=ad_platform_share_ngn,
-        ad_user_share_usd=ad_user_share_usd,
-        ad_user_share_ngn=ad_user_share_ngn,
+        ad_revenue_usd=0.0,
+        ad_revenue_ngn=0,
+        ad_platform_share_usd=0.0,
+        ad_platform_share_ngn=0,
+        ad_user_share_usd=0.0,
+        ad_user_share_ngn=0,
         task_revenue_ngn=task_revenue_kobo,
         task_platform_share_ngn=task_platform_share_kobo,
         task_worker_share_ngn=task_worker_share_kobo,
@@ -181,26 +139,7 @@ async def revenue_daily(
     end = datetime.utcnow()
     start = end - timedelta(days=days)
 
-    # Ad revenue per day (micro-units -> kobo)
-    ad_rows = await db.execute(
-        select(
-            func.date(AdEvent.created_at).label("day"),
-            func.sum(AdEvent.revenue_usd).label("rev_usd"),
-            func.sum(AdEvent.fx_rate_used).label("fx"),
-        )
-        .where(AdEvent.created_at >= start)
-        .where(AdEvent.created_at <= end)
-        .where(AdEvent.credit_status == "credited")
-        .group_by(func.date(AdEvent.created_at))
-    )
-
-    ad_by_day: dict[str, float] = {}
-    for row in ad_rows.mappings().all():
-        day = str(row["day"])
-        rev_usd = float(row["rev_usd"] or 0) / 1_000_000
-        fx_rate = float(row["fx"] or 0) / 1_000_000
-        kobo = int(rev_usd * fx_rate * 100) if fx_rate else 0
-        ad_by_day[day] = kobo
+    # Ad revenue per day removed
 
     # Premium revenue per day (kobo)
     prem_rows = await db.execute(
@@ -223,13 +162,13 @@ async def revenue_daily(
     cursor = start.date()
     while cursor <= end.date():
         day_str = cursor.isoformat()
-        ad_kobo = ad_by_day.get(day_str, 0)
+        ad_kobo = 0
         prem_kobo = prem_by_day.get(day_str, 0)
         items.append({
             "date": day_str,
-            "ad_revenue_kobo": ad_kobo,
+            "ad_revenue_kobo": 0,
             "premium_revenue_kobo": prem_kobo,
-            "total_revenue_kobo": ad_kobo + prem_kobo,
+            "total_revenue_kobo": prem_kobo,
         })
         cursor += timedelta(days=1)
 

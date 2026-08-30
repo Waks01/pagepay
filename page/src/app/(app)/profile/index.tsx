@@ -41,7 +41,6 @@ import {
   type ThemePref,
 } from "@/src/shared/lib/preferences";
 import { clearToken } from "@/src/shared/lib/storage";
-import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
 import { useBiometricAuth } from "@/src/shared/hooks/use-biometric-auth";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import {
@@ -65,7 +64,6 @@ import {
   useReferralStats,
   useGenerateReferral,
 } from "@/src/features/community/hooks/use-community";
-import { NativeAdBanner } from "@/components/ads/NativeAdBanner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageHeader } from "@/components/PageHeader";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -117,21 +115,6 @@ export default function ProfileScreen() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [showAvatarLightbox, setShowAvatarLightbox] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Fetch ad config for native unit. useAdsConfig has its own
-  // 1-hour staleTime and is shared with the AdSlotProvider, home
-  // and catalog — fetched once and reused.
-  const [nativeAdUnit, setNativeAdUnit] = useState("");
-  const { data: adConfig } = useAdsConfig();
-
-  useEffect(() => {
-    if (adConfig) {
-      const platform = Platform.OS;
-      const unitKey =
-        platform === "android" ? "in_feed_android" : "in_feed_ios";
-      setNativeAdUnit(adConfig[unitKey] || "");
-    }
-  }, [adConfig]);
 
   // Read the user from the global store. /me is fetched once at
   // app start by the auth gate — never on tab switch.
@@ -1063,13 +1046,6 @@ export default function ProfileScreen() {
           }
         >
           <ReferralSection tokens={tokens} />
-        </ErrorBoundary>
-
-        {/* ── Native ad after stats ─────────────────────────────── */}
-        <ErrorBoundary fallback={null}>
-          {nativeAdUnit && (
-            <NativeAdBanner adUnit={nativeAdUnit} sessionId={null} />
-          )}
         </ErrorBoundary>
 
         {/* ── Settings rows ────────────────────────────────────── */}

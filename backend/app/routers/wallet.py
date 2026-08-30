@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 from pydantic import BaseModel, Field
 
 from app.database import get_db
-from app.models import ReadingSession, ContentCatalog, AdEvent, User, Payment, BillTransaction, PayoutTransaction, PointCredit, StudyTransaction, StudyMaterial, PayoutAccount as PayoutAccountRow, UserRewardClaim, DailyReward
+from app.models import ReadingSession, ContentCatalog, User, Payment, BillTransaction, PayoutTransaction, PointCredit, StudyTransaction, StudyMaterial, PayoutAccount as PayoutAccountRow, UserRewardClaim, DailyReward
 from app.routers.auth import get_current_user
 from app.routers.payouts import paystack_webhook as _payouts_paystack_webhook
 from app.services.paystack import get_client

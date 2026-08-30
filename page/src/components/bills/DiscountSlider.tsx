@@ -11,7 +11,6 @@ interface DiscountSliderProps {
   userServiceCreditBalance: number;
   maxDiscountPercent?: number;
   onDiscountChange: (svAmount: number) => void;
-  onWatchAds?: () => void;
 }
 
 export function DiscountSlider({
@@ -19,7 +18,6 @@ export function DiscountSlider({
   userServiceCreditBalance,
   maxDiscountPercent = 25,
   onDiscountChange,
-  onWatchAds,
 }: DiscountSliderProps) {
   const { t } = useTranslation();
   const scheme = useEffectiveScheme();
@@ -37,7 +35,6 @@ export function DiscountSlider({
   };
 
   const shortfallSv = Math.max(0, selectedSv - userServiceCreditBalance);
-  const adsNeeded = Math.ceil(shortfallSv / 16);
   const nairaSaved = (selectedSv * 10) / 100;
 
   if (maxDiscountSv === 0) return null;
@@ -80,22 +77,9 @@ export function DiscountSlider({
           <View style={styles.shortfallContent}>
             <Ionicons name="warning-outline" size={16} color={tokens.signal} />
             <Text style={[styles.shortfallText, { color: tokens.signal }]}>
-              Need {shortfallSv} more SV (watch {adsNeeded} ads)
+              Need {shortfallSv} more SV
             </Text>
           </View>
-          {onWatchAds && (
-            <TouchableOpacity
-              style={[styles.watchAdsBtn, { backgroundColor: tokens.mint }]}
-              onPress={onWatchAds}
-            >
-              <Ionicons name="play-circle" size={16} color={tokens.mintText} />
-              <Text
-                style={[styles.watchAdsBtnText, { color: tokens.mintText }]}
-              >
-                Watch Ads
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
       )}
     </View>
@@ -152,18 +136,5 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: "500",
-  },
-  watchAdsBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    gap: 6,
-  },
-  watchAdsBtnText: {
-    fontSize: 14,
-    fontWeight: "600",
   },
 });

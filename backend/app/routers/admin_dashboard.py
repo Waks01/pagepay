@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.config import settings
 from app.models import (
-    User, ReadingSession, AdEvent, PayoutTransaction, Payment, CommunityNote,
+    User, ReadingSession, PayoutTransaction, Payment, CommunityNote,
     FraudFlag, AdminUser, Task, TaskSubmission,
 )
 from app.schemas import DashboardStats
@@ -101,48 +101,6 @@ async def dashboard_stats(
         )
     ).scalar_one()
 
-    # Ad Revenue - Calculate using historical FX rates stored in each AdEvent.
-    # Include both legacy events (with revenue_usd) and SSV events (with user_points_credited).
-    ad_events = (
-        await db.execute(
-            select(
-                AdEvent.revenue_usd,
-                AdEvent.fx_rate_used,
-                AdEvent.user_points_credited,
-            )
-            .where(AdEvent.created_at >= window_start)
-            .where(AdEvent.created_at <= window_end)
-            .where(AdEvent.credit_status == "credited")
-        )
-    ).all()
-
-    ad_revenue_usd = 0.0
-    ad_revenue_ngn_kobo = 0
-    total_points = 0
-
-    for event in ad_events:
-        if event.revenue_usd and event.fx_rate_used:
-            # Convert from micro-units
-            usd = float(event.revenue_usd) / 1_000_000
-            fx_rate = float(event.fx_rate_used) / 1_000_000
-            ngn = usd * fx_rate
-            kobo = int(ngn * 100)
-
-            ad_revenue_usd += usd
-            ad_revenue_ngn_kobo += kobo
-
-        if event.user_points_credited:
-            total_points += event.user_points_credited
-
-    # Calculate platform/user split for ads from config
-    PLATFORM_SHARE = settings.platform_ad_revenue_percent
-    USER_SHARE = 1.0 - PLATFORM_SHARE
-
-    ad_platform_share_usd = ad_revenue_usd * PLATFORM_SHARE
-    ad_user_share_usd = ad_revenue_usd * USER_SHARE
-    ad_platform_share_ngn = int(ad_revenue_ngn_kobo * PLATFORM_SHARE)
-    ad_user_share_ngn = int(ad_revenue_ngn_kobo * USER_SHARE)
-
     # Task Revenue - from completed task submissions today
     task_revenue_kobo = 0
     task_platform_share_kobo = 0
@@ -190,21 +148,30 @@ async def dashboard_stats(
     except Exception as exc:
         logger.error("FX lookup failed in dashboard stats: %s", exc)
 
+    # Ad revenue removed
+    ad_revenue_usd = 0.0
+    ad_revenue_ngn_kobo = 0
+    ad_platform_share_usd = 0.0
+    ad_platform_share_ngn = 0
+    ad_user_share_usd = 0.0
+    ad_user_share_ngn = 0
+    total_points = 0
+
     # Combined totals
-    total_revenue_usd = ad_revenue_usd + premium_revenue_usd
-    total_revenue_ngn = ad_revenue_ngn_kobo + int(premium_revenue_kobo) + task_revenue_kobo
-    platform_earnings_ngn = ad_platform_share_ngn + int(premium_revenue_kobo) + task_platform_share_kobo
-    user_earnings_ngn = ad_user_share_ngn + task_worker_share_kobo
+    total_revenue_usd = premium_revenue_usd
+    total_revenue_ngn = int(premium_revenue_kobo) + task_revenue_kobo
+    platform_earnings_ngn = int(premium_revenue_kobo) + task_platform_share_kobo
+    user_earnings_ngn = task_worker_share_kobo
 
     return DashboardStats(
         total_users=int(total_users),
         active_users_today=int(active_today),
-        ad_revenue_usd=ad_revenue_usd,
-        ad_revenue_ngn=ad_revenue_ngn_kobo,
-        ad_platform_share_usd=ad_platform_share_usd,
-        ad_platform_share_ngn=ad_platform_share_ngn,
-        ad_user_share_usd=ad_user_share_usd,
-        ad_user_share_ngn=ad_user_share_ngn,
+        ad_revenue_usd=0.0,
+        ad_revenue_ngn=0,
+        ad_platform_share_usd=0.0,
+        ad_platform_share_ngn=0,
+        ad_user_share_usd=0.0,
+        ad_user_share_ngn=0,
         task_revenue_ngn=task_revenue_kobo,
         task_platform_share_ngn=task_platform_share_kobo,
         task_worker_share_ngn=task_worker_share_kobo,
@@ -214,7 +181,7 @@ async def dashboard_stats(
         total_revenue_ngn=total_revenue_ngn,
         platform_earnings_ngn=platform_earnings_ngn,
         user_earnings_ngn=user_earnings_ngn,
-        total_points_distributed=total_points,
+        total_points_distributed=0,
         pending_payouts=int(pending_payouts),
         pending_notes=int(pending_notes),
         high_severity_fraud_flags=int(high_fraud),

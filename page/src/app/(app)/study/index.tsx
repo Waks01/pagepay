@@ -575,13 +575,13 @@ export default function StudyScreen() {
     }
   };
 
-  const handleUnlock = async (assetId: number, method: "points" | "ad") => {
+  const handleUnlock = async (assetId: number) => {
     setError(null);
     setRetryAction(null);
     const res = await apiFetch("/api/v1/study/unlock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ asset_id: assetId, method }),
+      body: JSON.stringify({ asset_id: assetId }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));

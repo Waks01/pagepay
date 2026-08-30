@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import User, AdEvent
+from app.models import User
 from app.services.wallet import kobo_to_points
 from app.core.config import settings
 
@@ -63,32 +63,6 @@ def max_discount_sv(price_kobo: int) -> int:
     """
     full_price_sv = kobo_to_points(price_kobo)
     return math.ceil(full_price_sv * DISCOUNT_CAP_PERCENT)
-
-
-async def get_ads_watched_today(user_id: int, db: AsyncSession) -> int:
-    """
-    Count rewarded ads watched by user today (UTC day).
-    
-    Args:
-        user_id: User ID
-        db: Database session
-        
-    Returns:
-        Number of ads watched today
-    """
-    today_start = datetime.now(timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    
-    result = await db.execute(
-        select(func.count(AdEvent.id))
-        .where(AdEvent.user_id == user_id)
-        .where(AdEvent.ad_type == "rewarded")
-        .where(AdEvent.credit_status == "credited")
-        .where(AdEvent.created_at >= today_start)
-    )
-    
-    return result.scalar() or 0
 
 
 async def check_discount_eligibility(
@@ -152,22 +126,14 @@ async def check_discount_eligibility(
     
     ads_needed = math.ceil(shortfall / sv_per_ad)
     
-    # Check if user has ad-budget remaining
-    ads_watched_today = await get_ads_watched_today(user.id, db)
-    ads_remaining = DAILY_AD_IMPRESSION_CAP - ads_watched_today
-    
-    # User can earn the shortfall → raise error with earn_route
-    if ads_needed <= ads_remaining:
-        raise SvShortfallError(
-            shortfall_sv=shortfall,
-            ads_needed=ads_needed,
-            ads_remaining=ads_remaining,
-            user_balance=user.service_credit_balance,
-            requested_sv=requested,
-        )
-    
-    # User hit ad cap → apply what they have (partial discount, no error)
-    return user.service_credit_balance
+    # User doesn't have enough sv and cannot earn more via ads
+    raise SvShortfallError(
+        shortfall_sv=shortfall,
+        ads_needed=ads_needed,
+        ads_remaining=0,
+        user_balance=user.service_credit_balance,
+        requested_sv=requested,
+    )
 
 
 async def check_full_sv_payment_eligibility(
@@ -202,25 +168,10 @@ async def check_full_sv_payment_eligibility(
     
     ads_needed = math.ceil(shortfall / sv_per_ad)
     
-    # Check ad budget
-    ads_watched_today = await get_ads_watched_today(user.id, db)
-    ads_remaining = DAILY_AD_IMPRESSION_CAP - ads_watched_today
-    
-    if ads_needed <= ads_remaining:
-        raise SvShortfallError(
-            shortfall_sv=shortfall,
-            ads_needed=ads_needed,
-            ads_remaining=ads_remaining,
-            user_balance=user.service_credit_balance,
-            requested_sv=sv_cost,
-        )
-    
-    # User hit ad cap and still doesn't have enough → hard fail
-    # (Different from bill discounts where we apply partial)
+    # User doesn't have enough sv → hard fail
     raise ValueError(
         f"Insufficient service credits. Need {sv_cost} sv, "
-        f"have {user.service_credit_balance} sv. "
-        f"Daily ad cap reached ({DAILY_AD_IMPRESSION_CAP}/day)."
+        f"have {user.service_credit_balance} sv."
     )
 
 

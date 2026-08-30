@@ -6,7 +6,6 @@ Aggregates all user transaction types into a single unified history:
 - PayoutTransaction: withdrawals
 - UserRewardClaim: daily reward claims
 - StudyTransaction: study asset unlocks
-- AdEvent: ad impressions / rewarded ad views
 - PointCredit: one-time bonus credits
 - StreakFreezeLog: streak freeze attempts
 - AudioUnlock: audio unlock events
@@ -28,7 +27,6 @@ from app.models import (
     PayoutTransaction,
     UserRewardClaim,
     StudyTransaction,
-    AdEvent,
     PointCredit,
     StreakFreezeLog,
     AudioUnlock,
@@ -247,38 +245,6 @@ async def get_transaction_history(
                 "points_spent": tx.points_spent,
                 "reward_granted": tx.reward_granted,
             },
-        ))
-
-    # Ad events
-    ad_result = await db.execute(
-        select(AdEvent)
-        .where(AdEvent.user_id == current_user.id)
-        .order_by(AdEvent.created_at.desc())
-    )
-    for tx in ad_result.scalars().all():
-        description = f"Ad View ({tx.ad_type})"
-        if tx.watched_fully and tx.reward_granted:
-            description = f"Rewarded Ad ({tx.ad_type})"
-        items.append(TransactionHistoryItem(
-            id=tx.id,
-            type="ad",
-            subtype=tx.ad_type,
-            status="success" if tx.credit_status == "credited" else "failed",
-            amount=tx.user_points_credited or 0,
-            unit="SP",
-            description=description,
-            reference=tx.transaction_id,
-            timestamp=tx.created_at,
-            ledger="service_credit",
-            metadata={
-                "ad_unit": tx.ad_unit,
-                "provider": tx.provider,
-                "watched_fully": tx.watched_fully,
-                "reward_granted": tx.reward_granted,
-                "user_points_credited": tx.user_points_credited,
-                "credit_status": tx.credit_status,
-                "use_case": tx.use_case,
-            } if tx.user_points_credited or tx.credit_status else None,
         ))
 
     # Point credits

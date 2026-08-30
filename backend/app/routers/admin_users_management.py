@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import (
     User, ReadingSession, PayoutTransaction, Payment, AdminUser,
-    AdminAuditLog, AdEvent, FraudFlag, AdminUserNote, UserTier,
+    AdminAuditLog, FraudFlag, AdminUserNote, UserTier,
 )
 from app.schemas import UserListResponse
 from app.services.admin_auth import require_permission
@@ -80,15 +80,7 @@ async def get_user_segments(
 
     total = (await db.execute(select(func.count(User.id)))).scalar_one()
 
-    # High-value: users who watched >1000 ads (credited AdEvents)
-    high_value = (
-        await db.execute(
-            select(func.count(func.distinct(AdEvent.user_id))).where(
-                AdEvent.watched_fully == True,  # noqa: E712
-                AdEvent.user_points_credited > 0,
-            )
-        )
-    ).scalar_one()
+    # High-value users count removed with ad system
 
     # Power readers: >50 reading sessions
     power_readers = (
@@ -490,22 +482,7 @@ async def get_user_activity(
             "detail": f"{'verified' if s.verified else 'unverified'} · {s.points_earned or 0} pts",
         })
 
-    # Rewarded ad watches (credited AdEvents)
-    rows = await db.execute(
-        select(AdEvent)
-        .where(AdEvent.user_id == user_id, AdEvent.watched_fully == True)  # noqa: E712
-        .order_by(AdEvent.created_at.desc())
-        .limit(limit)
-    )
-    for e in rows.scalars().all():
-        events.append({
-            "type": "ad_watch",
-            "id": e.id,
-            "timestamp": e.created_at.isoformat() if e.created_at else None,
-            "summary": f"Watched ad: {e.ad_unit or 'unknown'}",
-            "detail": f"+{e.user_points_credited or 0} pts"
-            if e.user_points_credited else "no credit",
-        })
+    # Rewarded ad watches removed
 
     # Balance adjustments (admin audit log)
     rows = await db.execute(
@@ -624,25 +601,7 @@ async def get_user_ads(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    rows = await db.execute(
-        select(AdEvent)
-        .where(AdEvent.user_id == user_id)
-        .order_by(AdEvent.created_at.desc())
-        .limit(limit)
-    )
-    items = [
-        {
-            "id": e.id,
-            "ad_unit": e.ad_unit,
-            "provider": e.provider,
-            "watched_fully": e.watched_fully,
-            "reward_granted": e.reward_granted,
-            "points_credited": e.user_points_credited or 0,
-            "transaction_id": e.transaction_id,
-            "created_at": e.created_at.isoformat() if e.created_at else None,
-        }
-        for e in rows.scalars().all()
-    ]
+    items = []
     return {"items": items, "total": len(items), "user_id": user_id}
 
 
@@ -666,23 +625,6 @@ async def get_user_wallet_history(
         raise HTTPException(status_code=404, detail="User not found")
 
     entries: list[dict] = []
-
-    # Ad credits
-    rows = await db.execute(
-        select(AdEvent)
-        .where(AdEvent.user_id == user_id, AdEvent.watched_fully == True)  # noqa: E712
-        .order_by(AdEvent.created_at.desc())
-        .limit(limit)
-    )
-    for e in rows.scalars().all():
-        if e.user_points_credited:
-            entries.append({
-                "type": "ad_credit",
-                "id": e.id,
-                "timestamp": e.created_at.isoformat() if e.created_at else None,
-                "delta": e.user_points_credited,
-                "detail": f"{e.ad_unit or 'ad'} via {e.provider or '?'}: +{e.user_points_credited} pts",
-            })
 
     # Admin balance adjustments
     rows = await db.execute(

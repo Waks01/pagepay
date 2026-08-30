@@ -1,9 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 
-import {
-  PLATFORM_CONFIG_QUERY_KEY,
-  fetchPlatformConfig,
-} from '@/src/shared/lib/ads';
+import { apiFetch } from '@/src/shared/api/client';
+
+const PLATFORM_CONFIG_QUERY_KEY = ['config', 'platform'] as const;
+
+async function fetchPlatformConfig() {
+  const res = await apiFetch('/api/v1/config/platform');
+  if (!res.ok) throw new Error('Failed to load platform config');
+  return (await res.json()) as Record<string, unknown>;
+}
 
 export function usePlatformConfig() {
   return useQuery({

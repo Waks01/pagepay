@@ -24,7 +24,6 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",
@@ -45,13 +44,6 @@
               ]
             }
           }
-        }
-      ],
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-3898064484524772~6521009021",
-          "iosAppId": "ca-app-pub-3898064484524772~4871553842"
         }
       ],
       [
@@ -82,7 +74,6 @@
     },
     "extra": {
       "apiUrl": "https://pagepay-fff6.onrender.com",
-      "adsEnv": "prod",
       "router": {},
       "eas": {
         "projectId": "cd073eef-398e-4fd3-bba5-b5c4cb98df79"

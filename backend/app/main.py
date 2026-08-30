@@ -14,7 +14,7 @@ from app.config import settings
 from app.database import AsyncSessionLocal, engine
 from app.limiter import limiter
 from app.models import Base
-from app.routers import auth, content, sessions, health, wallet, progress, ads, study, legal, bills, notifications, pin
+from app.routers import auth, content, sessions, health, wallet, progress, study, legal, bills, notifications, pin
 from app.routers.images import router as images_router
 from app.routers.audio import router as audio_router
 from app.routers.study_data import router as study_data_router
@@ -215,19 +215,7 @@ async def lifespan(app: FastAPI):
     logger.info("Scheduling wallet-split column backfill...")
     asyncio.create_task(_ensure_wallet_split_columns())
 
-    # Pre-warm AdMob SSV verifier keys in background so the first
-    # callback doesn't block on a 10s HTTPS fetch.
-    async def _prewarm_admob_keys():
-        try:
-            from app.routers.ads import _fetch_verifier_keys
-            await _fetch_verifier_keys()
-            logger.info("AdMob SSV verifier keys pre-warmed")
-        except Exception as exc:
-            logger.warning("AdMob SSV key pre-warm failed (will retry on first callback): %s", exc)
-
-    asyncio.create_task(_prewarm_admob_keys())
-    
-    # Initialize Firebase Admin for push notifications. The init helper
+# Initialize Firebase Admin for push notifications. The init helper
     # reads credentials from FIREBASE_SERVICE_ACCOUNT_JSON (raw JSON) or
     # FIREBASE_SERVICE_ACCOUNT_PATH (file path). On managed deploys
     # (Render/Railway) the raw-JSON env var is the supported path —
@@ -439,7 +427,6 @@ app.include_router(wallet.router, prefix=API_PREFIX)
 app.include_router(health.router, prefix=API_PREFIX)
 app.include_router(admin_router, prefix=API_PREFIX)
 app.include_router(progress.router, prefix=API_PREFIX)
-app.include_router(ads.router, prefix=API_PREFIX)
 app.include_router(payouts_router, prefix=API_PREFIX)
 app.include_router(payments_router, prefix=API_PREFIX)
 app.include_router(config_router, prefix=API_PREFIX)

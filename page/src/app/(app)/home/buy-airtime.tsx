@@ -18,8 +18,6 @@ import { useTranslation } from "react-i18next";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { useCurrentUser } from "@/src/shared/lib/current-user";
-import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
-import { RewardedAd } from "@/components/ads/RewardedAd";
 import { queryClient } from "@/src/shared/lib/queryClient";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
@@ -120,9 +118,6 @@ export default function BuyAirtimeScreen() {
   const [showShortfallModal, setShowShortfallModal] = useState(false);
   const [shortfallSv, setShortfallSv] = useState(0);
 
-  // Ad modal state for earning SP via rewarded ads
-  const [showAdModal, setShowAdModal] = useState(false);
-  const adsConfigQ = useAdsConfig();
   const user = useCurrentUser();
 
   const networksQ = useQuery({
@@ -990,9 +985,6 @@ export default function BuyAirtimeScreen() {
               onDiscountChange={(svAmount) => {
                 setApplySvDiscountAmount(svAmount);
               }}
-              onWatchAds={() => {
-                setShowAdModal(true);
-              }}
             />
           </View>
         )}
@@ -1110,47 +1102,9 @@ export default function BuyAirtimeScreen() {
         <ShortfallModal
           visible={showShortfallModal}
           shortfallSv={shortfallSv}
-          adsNeeded={Math.ceil(shortfallSv / 16)}
-          onWatchAds={() => {
-            setShowShortfallModal(false);
-            setShowAdModal(true);
-          }}
           onCancel={() => {
             setShowShortfallModal(false);
             setApplySvDiscountAmount(0);
-          }}
-        />
-
-        {/* Rewarded Ad Modal for earning SP */}
-        <RewardedAd
-          key="airtime-shortfall"
-          visible={showAdModal}
-          adUnit={
-            adsConfigQ.data?.rewarded_android ||
-            adsConfigQ.data?.rewarded_ios ||
-            ""
-          }
-          adUnitName={
-            Platform.OS === "android" ? "rewarded_android" : "rewarded_ios"
-          }
-          userId={user?.id ?? 0}
-          title={t("sv_discount.ad_title", "Watch Ad")}
-          body={t(
-            "sv_discount.ad_body",
-            "Watch this ad to earn service points",
-          )}
-          claimLabel={t("sv_discount.watch_ads", "Watch Ad")}
-          allowSkip
-          skipLabel={t("common.skip", "Skip")}
-          onClaimed={(_info) => {
-            setShowAdModal(false);
-            queryClient.invalidateQueries({ queryKey: ["me"] });
-          }}
-          onSkipped={() => {
-            setShowAdModal(false);
-          }}
-          onClose={() => {
-            setShowAdModal(false);
           }}
         />
       </ScrollView>

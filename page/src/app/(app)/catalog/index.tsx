@@ -25,13 +25,11 @@ import { UserAvatar } from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
 import { SkeletonContentCard } from "@/components/skeletons";
 import { CategoryChip } from "@/components/CategoryChip";
-import { NativeAdBanner } from "@/components/ads/NativeAdBanner";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { StateBlock } from "@/components/StateBlock";
 import { PageHeader } from "@/components/PageHeader";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
-import { useAdsConfig } from "@/src/shared/hooks/use-ads-config";
 import { useCurrentUser } from "@/src/shared/lib/current-user";
 
 // Education level options for the catalog level grid. Each entry has
@@ -127,21 +125,6 @@ export default function CatalogScreen() {
   }, [educationLevel]);
 
   const [refreshing, setRefreshing] = useState(false);
-
-  // Fetch ad config for native unit. useAdsConfig has its own
-  // 1-hour staleTime and is shared with the AdSlotProvider and
-  // the home tab — the data is fetched once and reused.
-  const [nativeAdUnit, setNativeAdUnit] = useState("");
-  const { data: adConfig } = useAdsConfig();
-
-  useEffect(() => {
-    if (adConfig) {
-      const platform = Platform.OS;
-      const unitKey =
-        platform === "android" ? "in_feed_android" : "in_feed_ios";
-      setNativeAdUnit(adConfig[unitKey] || "");
-    }
-  }, [adConfig]);
 
   // Phase 2: switch the catalog list source to `/content/feed/:user_id`
   // so the in-feed sponsored rotation lands every 4th item per the
@@ -620,9 +603,6 @@ export default function CatalogScreen() {
         ) : (
           <View style={styles.list}>
             {items.map((item, index) => {
-              // Inject native ad every 4th position
-              const shouldShowAd = (index + 1) % 4 === 0 && nativeAdUnit;
-
               return (
                 <View key={`catalog-${item.id}-${index}`}>
                   <ContentCard
@@ -631,9 +611,6 @@ export default function CatalogScreen() {
                       router.push(`/catalog/book/${item.id}` as never)
                     }
                   />
-                  {shouldShowAd && (
-                    <NativeAdBanner adUnit={nativeAdUnit} sessionId={null} />
-                  )}
                 </View>
               );
             })}

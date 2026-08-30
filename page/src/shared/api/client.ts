@@ -373,29 +373,6 @@ export async function getUserTier(): Promise<{
 }
 
 /**
- * Fetch ad gating information for specific content
- * Phase 3: Determines if ads should be shown based on content type and user tier
- */
-export async function getContentAdGating(contentId: number): Promise<{
-  content_id: number;
-  content_source: string | null;
-  content_type: string;
-  user_tier: string;
-  is_ad_free_content: boolean;
-  can_skip_pre_read_ad: boolean;
-  can_skip_post_read_ad: boolean;
-  can_skip_feed_ads: boolean;
-  show_pre_read_ad: boolean;
-  show_post_read_ad: boolean;
-}> {
-  const res = await apiFetch(`/api/v1/content/${contentId}/ad-gating`);
-  if (!res.ok) {
-    throw new Error("Failed to fetch ad gating info");
-  }
-  return res.json();
-}
-
-/**
  * Fetch tier benefits comparison (for premium upsell screens)
  */
 export async function getTierBenefits(): Promise<{
