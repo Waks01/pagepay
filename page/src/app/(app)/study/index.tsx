@@ -677,7 +677,8 @@ export default function StudyScreen() {
       }
     } catch (err) {
       if (fetchId !== materialFetchIdRef.current) return;
-      const message = err instanceof Error ? err.message : "Failed to load material.";
+      const message =
+        err instanceof Error ? err.message : "Failed to load material.";
       const specific = categorizeError(message, "load material", t);
       setError(specific);
       setRetryAction(() => () => handleMaterialPress(materialId));
@@ -715,7 +716,9 @@ export default function StudyScreen() {
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
       const contentDisposition = res.headers.get("Content-Disposition");
-      const filename = contentDisposition?.match(/filename="?([^"]+)"?/)?.[1] || `material.${format}`;
+      const filename =
+        contentDisposition?.match(/filename="?([^"]+)"?/)?.[1] ||
+        `material.${format}`;
       const destPath = `${FileSystem.cacheDirectory}${filename}`;
 
       const reader = new FileReader();
@@ -726,7 +729,8 @@ export default function StudyScreen() {
         });
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(destPath, {
-            mimeType: res.headers.get("Content-Type") || "application/octet-stream",
+            mimeType:
+              res.headers.get("Content-Type") || "application/octet-stream",
             dialogTitle: selectedMaterial.title,
           });
         }
@@ -740,14 +744,17 @@ export default function StudyScreen() {
   const handleEditSubmit = async () => {
     if (!selectedMaterial || !editTitle.trim()) return;
     try {
-      const res = await apiFetch(`/api/v1/study/materials/${selectedMaterial.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: editTitle.trim(),
-          exam_type: editExamType,
-        }),
-      });
+      const res = await apiFetch(
+        `/api/v1/study/materials/${selectedMaterial.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: editTitle.trim(),
+            exam_type: editExamType,
+          }),
+        },
+      );
       if (!res.ok) throw new Error("Failed to update material");
       const updated = await res.json();
       setSelectedMaterial(updated);
@@ -761,9 +768,12 @@ export default function StudyScreen() {
   const handleDeleteConfirm = async () => {
     if (!selectedMaterial) return;
     try {
-      const res = await apiFetch(`/api/v1/study/materials/${selectedMaterial.id}`, {
-        method: "DELETE",
-      });
+      const res = await apiFetch(
+        `/api/v1/study/materials/${selectedMaterial.id}`,
+        {
+          method: "DELETE",
+        },
+      );
       if (!res.ok) throw new Error("Failed to delete material");
       setSelectedMaterial(null);
       setSelectedMaterialId(null);
@@ -786,9 +796,7 @@ export default function StudyScreen() {
     >
       {selectedMaterialId != null ? (
         <PageHeader
-          title={
-            selectedMaterial?.title ?? t("study.loading_material_title")
-          }
+          title={selectedMaterial?.title ?? t("study.loading_material_title")}
           subtitle={
             selectedMaterial
               ? t("study.assets_generated", { count: totalAssets })
@@ -850,7 +858,11 @@ export default function StudyScreen() {
                   },
                 ]}
               >
-                <Ionicons name="ellipsis-vertical" size={18} color={tokens.ink} />
+                <Ionicons
+                  name="ellipsis-vertical"
+                  size={18}
+                  color={tokens.ink}
+                />
               </Pressable>
               <NotificationBell />
             </View>
@@ -921,9 +933,7 @@ export default function StudyScreen() {
                 {selectedMaterial.title.replace(/^[A-Z]+ · /, "")}
               </Text>
               <View style={styles.heroMetaRow}>
-                <View
-                  style={[styles.heroChip, { borderColor: tokens.border }]}
-                >
+                <View style={[styles.heroChip, { borderColor: tokens.border }]}>
                   <Ionicons
                     name="list-outline"
                     size={12}
@@ -936,9 +946,7 @@ export default function StudyScreen() {
                     })}
                   </Text>
                 </View>
-                <View
-                  style={[styles.heroChip, { borderColor: tokens.border }]}
-                >
+                <View style={[styles.heroChip, { borderColor: tokens.border }]}>
                   <Ionicons
                     name="albums-outline"
                     size={12}
@@ -1052,13 +1060,22 @@ export default function StudyScreen() {
             {uploadJustCompleted && (
               <Animated.View
                 entering={FadeInDown.duration(240).springify()}
-                style={[styles.successBanner, { backgroundColor: tokens.mintSoft }]}
-                accessibilityLabel={t('study.sow_upload.success_a11y')}
+                style={[
+                  styles.successBanner,
+                  { backgroundColor: tokens.mintSoft },
+                ]}
+                accessibilityLabel={t("study.sow_upload.success_a11y")}
                 accessibilityRole="alert"
               >
-                <Ionicons name="checkmark-circle" size={20} color={tokens.mint} />
-                <Text style={[styles.successBannerText, { color: tokens.mint }]}>
-                  {t('study.sow_upload.success')}
+                <Ionicons
+                  name="checkmark-circle"
+                  size={20}
+                  color={tokens.mint}
+                />
+                <Text
+                  style={[styles.successBannerText, { color: tokens.mint }]}
+                >
+                  {t("study.sow_upload.success")}
                 </Text>
               </Animated.View>
             )}
@@ -1187,10 +1204,7 @@ export default function StudyScreen() {
                     </Text>
                   </View>
                   <Text
-                    style={[
-                      styles.materialPreviewText,
-                      { color: tokens.ink },
-                    ]}
+                    style={[styles.materialPreviewText, { color: tokens.ink }]}
                     numberOfLines={6}
                   >
                     {selectedMaterial.content}
@@ -1213,10 +1227,7 @@ export default function StudyScreen() {
                       color={tokens.mintText}
                     />
                     <Text
-                      style={[
-                        styles.readBtnText,
-                        { color: tokens.mintText },
-                      ]}
+                      style={[styles.readBtnText, { color: tokens.mintText }]}
                     >
                       {t("study.read_material")}
                     </Text>
@@ -1786,7 +1797,12 @@ export default function StudyScreen() {
           style={styles.modalOverlay}
           onPress={() => setActionMenuVisible(false)}
         >
-          <View style={[styles.actionMenu, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <View
+            style={[
+              styles.actionMenu,
+              { backgroundColor: tokens.card, borderColor: tokens.border },
+            ]}
+          >
             <TouchableOpacity
               onPress={handleEditPress}
               style={styles.actionMenuItem}
@@ -1794,7 +1810,9 @@ export default function StudyScreen() {
               accessibilityLabel="Edit material"
             >
               <Ionicons name="pencil-outline" size={20} color={tokens.ink} />
-              <Text style={[styles.actionMenuText, { color: tokens.ink }]}>Edit</Text>
+              <Text style={[styles.actionMenuText, { color: tokens.ink }]}>
+                Edit
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
@@ -1806,7 +1824,9 @@ export default function StudyScreen() {
               accessibilityLabel="Share material"
             >
               <Ionicons name="share-outline" size={20} color={tokens.ink} />
-              <Text style={[styles.actionMenuText, { color: tokens.ink }]}>Share</Text>
+              <Text style={[styles.actionMenuText, { color: tokens.ink }]}>
+                Share
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleDeletePress}
@@ -1815,7 +1835,9 @@ export default function StudyScreen() {
               accessibilityLabel="Delete material"
             >
               <Ionicons name="trash-outline" size={20} color={tokens.signal} />
-              <Text style={[styles.actionMenuText, { color: tokens.signal }]}>Delete</Text>
+              <Text style={[styles.actionMenuText, { color: tokens.signal }]}>
+                Delete
+              </Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -1832,29 +1854,80 @@ export default function StudyScreen() {
           style={styles.modalOverlay}
           onPress={() => setShareFormatVisible(false)}
         >
-          <View style={[styles.shareFormatModal, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-            <Text style={[styles.shareFormatTitle, { color: tokens.ink }]}>Share as</Text>
-            {([
-              { format: "pdf" as const, label: "PDF", icon: "document-text-outline", desc: "Formatted document" },
-              { format: "docx" as const, label: "DOCX", icon: "document-outline", desc: "Word document" },
-              { format: "txt" as const, label: "TXT", icon: "document-attach-outline", desc: "Plain text" },
-              { format: "image" as const, label: "Image", icon: "image-outline", desc: "PNG image" },
-            ]).map((item) => (
+          <View
+            style={[
+              styles.shareFormatModal,
+              { backgroundColor: tokens.card, borderColor: tokens.border },
+            ]}
+          >
+            <Text style={[styles.shareFormatTitle, { color: tokens.ink }]}>
+              Share as
+            </Text>
+            {[
+              {
+                format: "pdf" as const,
+                label: "PDF",
+                icon: "document-text-outline",
+                desc: "Formatted document",
+              },
+              {
+                format: "docx" as const,
+                label: "DOCX",
+                icon: "document-outline",
+                desc: "Word document",
+              },
+              {
+                format: "txt" as const,
+                label: "TXT",
+                icon: "document-attach-outline",
+                desc: "Plain text",
+              },
+              {
+                format: "image" as const,
+                label: "Image",
+                icon: "image-outline",
+                desc: "PNG image",
+              },
+            ].map((item) => (
               <TouchableOpacity
                 key={item.format}
                 onPress={() => handleSharePress(item.format)}
-                style={[styles.shareFormatItem, { borderBottomColor: tokens.border }]}
+                style={[
+                  styles.shareFormatItem,
+                  { borderBottomColor: tokens.border },
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel={`Share as ${item.label}`}
               >
-                <View style={[styles.shareFormatIcon, { backgroundColor: tokens.mintSoft }]}>
-                  <Ionicons name={item.icon as any} size={22} color={tokens.mint} />
+                <View
+                  style={[
+                    styles.shareFormatIcon,
+                    { backgroundColor: tokens.mintSoft },
+                  ]}
+                >
+                  <Ionicons
+                    name={item.icon as any}
+                    size={22}
+                    color={tokens.mint}
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.shareFormatLabel, { color: tokens.ink }]}>{item.label}</Text>
-                  <Text style={[styles.shareFormatDesc, { color: tokens.inkMuted }]}>{item.desc}</Text>
+                  <Text
+                    style={[styles.shareFormatLabel, { color: tokens.ink }]}
+                  >
+                    {item.label}
+                  </Text>
+                  <Text
+                    style={[styles.shareFormatDesc, { color: tokens.inkMuted }]}
+                  >
+                    {item.desc}
+                  </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={tokens.inkMuted} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={tokens.inkMuted}
+                />
               </TouchableOpacity>
             ))}
           </View>
@@ -1869,31 +1942,59 @@ export default function StudyScreen() {
         onRequestClose={() => setEditModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.editModal, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
-            <Text style={[styles.editModalTitle, { color: tokens.ink }]}>Edit Material</Text>
+          <View
+            style={[
+              styles.editModal,
+              { backgroundColor: tokens.card, borderColor: tokens.border },
+            ]}
+          >
+            <Text style={[styles.editModalTitle, { color: tokens.ink }]}>
+              Edit Material
+            </Text>
             <TextInput
-              style={[styles.editInput, { backgroundColor: tokens.paper, borderColor: tokens.border, color: tokens.ink }]}
+              style={[
+                styles.editInput,
+                {
+                  backgroundColor: tokens.paper,
+                  borderColor: tokens.border,
+                  color: tokens.ink,
+                },
+              ]}
               value={editTitle}
               onChangeText={setEditTitle}
               placeholder="Material title"
               placeholderTextColor={tokens.inkFaint}
               autoFocus
             />
-            <Text style={[styles.editLabel, { color: tokens.inkMuted }]}>Exam Type</Text>
+            <Text style={[styles.editLabel, { color: tokens.inkMuted }]}>
+              Exam Type
+            </Text>
             <View style={styles.editExamChips}>
-              {['jamb', 'waec', 'neco', 'nabteb', 'custom'].map((et) => (
+              {["jamb", "waec", "neco", "nabteb", "custom"].map((et) => (
                 <TouchableOpacity
                   key={et}
-                  onPress={() => setEditExamType(editExamType === et ? null : et)}
+                  onPress={() =>
+                    setEditExamType(editExamType === et ? null : et)
+                  }
                   style={[
                     styles.editChip,
                     {
-                      backgroundColor: editExamType === et ? tokens.mintSoft : tokens.paper2,
-                      borderColor: editExamType === et ? tokens.mint : tokens.border,
+                      backgroundColor:
+                        editExamType === et ? tokens.mintSoft : tokens.paper2,
+                      borderColor:
+                        editExamType === et ? tokens.mint : tokens.border,
                     },
                   ]}
                 >
-                  <Text style={[styles.editChipText, { color: editExamType === et ? tokens.mint : tokens.inkMuted }]}>
+                  <Text
+                    style={[
+                      styles.editChipText,
+                      {
+                        color:
+                          editExamType === et ? tokens.mint : tokens.inkMuted,
+                      },
+                    ]}
+                  >
                     {et.toUpperCase()}
                   </Text>
                 </TouchableOpacity>
@@ -1904,13 +2005,17 @@ export default function StudyScreen() {
                 onPress={() => setEditModalVisible(false)}
                 style={[styles.editBtn, { borderColor: tokens.border }]}
               >
-                <Text style={[styles.editBtnText, { color: tokens.inkMuted }]}>Cancel</Text>
+                <Text style={[styles.editBtnText, { color: tokens.inkMuted }]}>
+                  Cancel
+                </Text>
               </Pressable>
               <Pressable
                 onPress={handleEditSubmit}
                 style={[styles.editBtn, { backgroundColor: tokens.mint }]}
               >
-                <Text style={[styles.editBtnText, { color: tokens.mintText }]}>Save</Text>
+                <Text style={[styles.editBtnText, { color: tokens.mintText }]}>
+                  Save
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -1928,24 +2033,38 @@ export default function StudyScreen() {
           style={styles.modalOverlay}
           onPress={() => setDeleteConfirmVisible(false)}
         >
-          <View style={[styles.deleteDialog, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <View
+            style={[
+              styles.deleteDialog,
+              { backgroundColor: tokens.card, borderColor: tokens.border },
+            ]}
+          >
             <Ionicons name="warning-outline" size={32} color={tokens.signal} />
-            <Text style={[styles.deleteTitle, { color: tokens.ink }]}>Delete Material?</Text>
+            <Text style={[styles.deleteTitle, { color: tokens.ink }]}>
+              Delete Material?
+            </Text>
             <Text style={[styles.deleteMessage, { color: tokens.inkMuted }]}>
-              This will permanently delete "{selectedMaterial?.title}" and all its generated assets. This action cannot be undone.
+              This will permanently delete "{selectedMaterial?.title}" and all
+              its generated assets. This action cannot be undone.
             </Text>
             <View style={styles.deleteActions}>
               <Pressable
                 onPress={() => setDeleteConfirmVisible(false)}
                 style={[styles.deleteBtn, { borderColor: tokens.border }]}
               >
-                <Text style={[styles.deleteBtnText, { color: tokens.inkMuted }]}>Cancel</Text>
+                <Text
+                  style={[styles.deleteBtnText, { color: tokens.inkMuted }]}
+                >
+                  Cancel
+                </Text>
               </Pressable>
               <Pressable
                 onPress={handleDeleteConfirm}
                 style={[styles.deleteBtn, { backgroundColor: tokens.signal }]}
               >
-                <Text style={[styles.deleteBtnText, { color: "#fff" }]}>Delete</Text>
+                <Text style={[styles.deleteBtnText, { color: "#fff" }]}>
+                  Delete
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -2282,7 +2401,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 220,
     borderRadius: 10,
-    backgroundColor: tokens.paper2,
+    backgroundColor: "#F3F4F6",
   },
   materialPreviewText: {
     fontSize: 14,

@@ -648,6 +648,7 @@ class MaterialDetail(BaseModel):
     title: str
     exam_type: str | None = None
     content: str | None = None
+    image_url: str | None = None
     parsed_structure: dict | None
     assets: list[dict]
     created_at: datetime
