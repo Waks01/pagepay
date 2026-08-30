@@ -655,6 +655,11 @@ class MaterialDetail(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MaterialUpdate(BaseModel):
+    title: str | None = None
+    exam_type: str | None = None
+
+
 class GenerateAssetRequest(BaseModel):
     material_id: int
     asset_type: Literal["mcq", "flashcard", "essay", "diagram", "video"] = "mcq"

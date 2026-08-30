@@ -60,6 +60,7 @@ from app.schemas import (
     GenerateAssetResponse,
     MaterialDetail,
     MaterialSummary,
+    MaterialUpdate,
     QuizCompleteRequest,
     QuizCompleteResponse,
     SowUploadJobAccepted,
@@ -751,6 +752,104 @@ async def get_material(
         assets=asset_list,
         created_at=material.created_at,
     )
+
+
+# ── PATCH /study/materials/{id} ───────────────────────────────────────
+
+
+@router.patch("/materials/{material_id}", response_model=MaterialDetail)
+async def update_material(
+    material_id: int,
+    payload: MaterialUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    if payload.title is not None:
+        material.title = payload.title.strip()
+    if payload.exam_type is not None:
+        material.exam_type = payload.exam_type.strip() or None
+
+    await db.commit()
+    await db.refresh(material)
+
+    assets_result = await db.execute(
+        select(StudyAsset).where(StudyAsset.material_id == material_id)
+    )
+    assets = assets_result.scalars().all()
+
+    unlocked_result = await db.execute(
+        select(StudyTransaction.asset_id, StudyAsset.content_json)
+        .join(StudyAsset, StudyTransaction.asset_id == StudyAsset.id)
+        .where(
+            StudyTransaction.user_id == current_user.id,
+            StudyTransaction.reward_granted == True,
+            StudyAsset.material_id == material_id,
+        )
+    )
+    unlocked_data = {row[0]: row[1] for row in unlocked_result.all()}
+
+    import json as _json
+    parsed = _json.loads(material.parsed_structure) if material.parsed_structure else None
+
+    asset_list = []
+    for a in assets:
+        asset_dict = {
+            "id": a.id,
+            "material_id": a.material_id,
+            "type": a.asset_type,
+            "points_to_unlock": a.points_to_unlock,
+            "created_at": a.created_at.isoformat(),
+        }
+        if a.id in unlocked_data:
+            asset_dict["unlocked"] = True
+            asset_dict["content"] = _json.loads(unlocked_data[a.id])
+        else:
+            asset_dict["unlocked"] = False
+        asset_list.append(asset_dict)
+
+    return MaterialDetail(
+        id=material.id,
+        title=material.title,
+        exam_type=material.exam_type,
+        content=material.raw_input or None,
+        parsed_structure=parsed,
+        assets=asset_list,
+        created_at=material.created_at,
+    )
+
+
+# ── DELETE /study/materials/{id} ──────────────────────────────────────
+
+
+@router.delete("/materials/{material_id}", status_code=204)
+async def delete_material(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    await db.delete(material)
+    await db.commit()
+    return Response(status_code=204)
 
 
 # ── POST /study/generate ────────────────────────────────────────────

@@ -381,9 +381,15 @@
         "nabteb": "NABTEB",
         "custom": "Custom"
       },
-      "exam_type_custom": "CUSTOM"
+      "exam_type_custom": "CUSTOM",
+      "edit_title": "Edit Material",
+      "edit_save": "Save",
+      "edit_cancel": "Cancel",
+      "delete_confirm_title": "Delete Material?",
+      "delete_confirm_message": "This will permanently delete \"{{title}}\" and all its generated assets. This action cannot be undone.",
+      "delete_confirm": "Delete",
+      "delete_cancel": "Cancel"
     },
-    "exam_type_custom": "CUSTOM",
     "asset_browser": {
       "section_video": "Video Lessons",
       "section_diagram": "Diagrams",

@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -16,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import { useAudioPlayer } from "expo-audio";
+import * as Sharing from "expo-sharing";
 
 import { apiFetch, API_URL } from "@/src/shared/api/client";
 import { pollSowJob } from "@/src/features/study/api";
@@ -154,6 +156,11 @@ export default function StudyScreen() {
   const player = useAudioPlayer(ttsUrl);
   const [audioUnlockVisible, setAudioUnlockVisible] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [actionMenuVisible, setActionMenuVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editExamType, setEditExamType] = useState<string | null>(null);
 
   // Load cached assets on mount
   useEffect(() => {
@@ -682,6 +689,69 @@ export default function StudyScreen() {
     router.push(`/study/chat/${materialId}`);
   };
 
+  const handleEditPress = () => {
+    if (!selectedMaterial) return;
+    setEditTitle(selectedMaterial.title.replace(/^[A-Z]+ · /, ""));
+    setEditExamType(selectedMaterial.exam_type);
+    setActionMenuVisible(false);
+    setEditModalVisible(true);
+  };
+
+  const handleDeletePress = () => {
+    setActionMenuVisible(false);
+    setDeleteConfirmVisible(true);
+  };
+
+  const handleSharePress = async () => {
+    if (!selectedMaterial) return;
+    setActionMenuVisible(false);
+    try {
+      const shareText = `Check out my study material: ${selectedMaterial.title}\n\nTopics: ${getTopicNames(selectedMaterial.parsed_structure).length}\nAssets: ${selectedMaterial.assets.length}`;
+      await Sharing.shareAsync(shareText, {
+        dialogTitle: selectedMaterial.title,
+      });
+    } catch (err) {
+      if (__DEV__) console.error("Share failed:", err);
+    }
+  };
+
+  const handleEditSubmit = async () => {
+    if (!selectedMaterial || !editTitle.trim()) return;
+    try {
+      const res = await apiFetch(`/api/v1/study/materials/${selectedMaterial.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          exam_type: editExamType,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update material");
+      const updated = await res.json();
+      setSelectedMaterial(updated);
+      setEditModalVisible(false);
+      qc.invalidateQueries({ queryKey: ["study", "materials"] });
+    } catch (err) {
+      if (__DEV__) console.error("Edit failed:", err);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedMaterial) return;
+    try {
+      const res = await apiFetch(`/api/v1/study/materials/${selectedMaterial.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete material");
+      setSelectedMaterial(null);
+      setSelectedMaterialId(null);
+      setDeleteConfirmVisible(false);
+      qc.invalidateQueries({ queryKey: ["study", "materials"] });
+    } catch (err) {
+      if (__DEV__) console.error("Delete failed:", err);
+    }
+  };
+
   const materials = materialsQ.data ?? [];
   const balance = meQ?.service_credit_balance ?? 0;
   const isLoading = materialsQ.isLoading;
@@ -744,6 +814,21 @@ export default function StudyScreen() {
                   size={18}
                   color={tokens.ink}
                 />
+              </Pressable>
+              <Pressable
+                onPress={() => setActionMenuVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Material actions"
+                style={({ pressed }) => [
+                  styles.headerIconBtn,
+                  {
+                    borderColor: tokens.border,
+                    backgroundColor: tokens.card,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <Ionicons name="ellipsis-vertical" size={18} color={tokens.ink} />
               </Pressable>
               <NotificationBell />
             </View>
@@ -1660,6 +1745,140 @@ export default function StudyScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Action Menu */}
+      <Modal
+        visible={actionMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionMenuVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setActionMenuVisible(false)}
+        >
+          <View style={[styles.actionMenu, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <TouchableOpacity
+              onPress={handleEditPress}
+              style={styles.actionMenuItem}
+              accessibilityRole="button"
+              accessibilityLabel="Edit material"
+            >
+              <Ionicons name="pencil-outline" size={20} color={tokens.ink} />
+              <Text style={[styles.actionMenuText, { color: tokens.ink }]}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleSharePress}
+              style={styles.actionMenuItem}
+              accessibilityRole="button"
+              accessibilityLabel="Share material"
+            >
+              <Ionicons name="share-outline" size={20} color={tokens.ink} />
+              <Text style={[styles.actionMenuText, { color: tokens.ink }]}>Share</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDeletePress}
+              style={styles.actionMenuItem}
+              accessibilityRole="button"
+              accessibilityLabel="Delete material"
+            >
+              <Ionicons name="trash-outline" size={20} color={tokens.signal} />
+              <Text style={[styles.actionMenuText, { color: tokens.signal }]}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.editModal, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text style={[styles.editModalTitle, { color: tokens.ink }]}>Edit Material</Text>
+            <TextInput
+              style={[styles.editInput, { backgroundColor: tokens.paper, borderColor: tokens.border, color: tokens.ink }]}
+              value={editTitle}
+              onChangeText={setEditTitle}
+              placeholder="Material title"
+              placeholderTextColor={tokens.inkFaint}
+              autoFocus
+            />
+            <Text style={[styles.editLabel, { color: tokens.inkMuted }]}>Exam Type</Text>
+            <View style={styles.editExamChips}>
+              {['jamb', 'waec', 'neco', 'nabteb', 'custom'].map((et) => (
+                <TouchableOpacity
+                  key={et}
+                  onPress={() => setEditExamType(editExamType === et ? null : et)}
+                  style={[
+                    styles.editChip,
+                    {
+                      backgroundColor: editExamType === et ? tokens.mintSoft : tokens.paper2,
+                      borderColor: editExamType === et ? tokens.mint : tokens.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.editChipText, { color: editExamType === et ? tokens.mint : tokens.inkMuted }]}>
+                    {et.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.editActions}>
+              <Pressable
+                onPress={() => setEditModalVisible(false)}
+                style={[styles.editBtn, { borderColor: tokens.border }]}
+              >
+                <Text style={[styles.editBtnText, { color: tokens.inkMuted }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleEditSubmit}
+                style={[styles.editBtn, { backgroundColor: tokens.mint }]}
+              >
+                <Text style={[styles.editBtnText, { color: tokens.mintText }]}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation */}
+      <Modal
+        visible={deleteConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteConfirmVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setDeleteConfirmVisible(false)}
+        >
+          <View style={[styles.deleteDialog, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Ionicons name="warning-outline" size={32} color={tokens.signal} />
+            <Text style={[styles.deleteTitle, { color: tokens.ink }]}>Delete Material?</Text>
+            <Text style={[styles.deleteMessage, { color: tokens.inkMuted }]}>
+              This will permanently delete "{selectedMaterial?.title}" and all its generated assets. This action cannot be undone.
+            </Text>
+            <View style={styles.deleteActions}>
+              <Pressable
+                onPress={() => setDeleteConfirmVisible(false)}
+                style={[styles.deleteBtn, { borderColor: tokens.border }]}
+              >
+                <Text style={[styles.deleteBtnText, { color: tokens.inkMuted }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleDeleteConfirm}
+                style={[styles.deleteBtn, { backgroundColor: tokens.signal }]}
+              >
+                <Text style={[styles.deleteBtnText, { color: "#fff" }]}>Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -2145,5 +2364,122 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     lineHeight: 18,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  actionMenu: {
+    width: "100%",
+    maxWidth: 320,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  actionMenuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  actionMenuText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  editModal: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 20,
+    gap: 16,
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+  },
+  editInput: {
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+  },
+  editLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  editExamChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  editChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  editChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  editActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  editBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 10,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  editBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  deleteDialog: {
+    width: "100%",
+    maxWidth: 320,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 24,
+    gap: 16,
+    alignItems: "center",
+  },
+  deleteTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+  },
+  deleteMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  deleteActions: {
+    flexDirection: "row",
+    gap: 10,
+    width: "100%",
+  },
+  deleteBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 10,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  deleteBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
   },
 });
