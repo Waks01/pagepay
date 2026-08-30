@@ -155,6 +155,7 @@ async def send_push_notification(
         )
     )
     tokens = result.scalars().all()
+    logger.info("FCM push attempt: user=%d, tokens_found=%d", user_id, len(tokens))
 
     if not tokens:
         logger.warning(f"No active FCM tokens found for user {user_id}")

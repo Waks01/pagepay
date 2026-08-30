@@ -51,11 +51,13 @@ async def _credit_reading_reward(
     points: int,
 ):
     """Helper to credit points to user wallet and trigger notifications."""
+    logger.info("Crediting reward: user=%d, points=%d", user.id, points)
     user.points_balance += points
     session.points_earned = points
     session.claimed_at = datetime.utcnow()
 
     # Trigger notifications in background
+    logger.info("Scheduling background notifications for user %d", user.id)
     asyncio.create_task(create_notification_background(
         user_id=user.id,
         title="Reading Reward!",

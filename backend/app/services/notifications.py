@@ -39,6 +39,7 @@ async def create_notification(
     # Emit socket event for real-time notification bell update
     try:
         from app.websocket import sio
+        logger.info("Attempting to emit socket event for user %s, room %s", user_id, f"user_{user_id}")
         await sio.emit(
             "notification",
             {
@@ -52,7 +53,7 @@ async def create_notification(
             },
             room=f"user_{user_id}",
         )
-        logger.info("✅ Socket event emitted for notification id=%s", notification.id)
+        logger.info("✅ Socket event emitted for notification id=%s to room user_%s", notification.id, user_id)
     except Exception as e:
         logger.warning("⚠️  Failed to emit socket event for notification: %s", e)
     
