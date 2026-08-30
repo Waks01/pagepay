@@ -31,7 +31,7 @@ from sqlalchemy import select
 
 from app.database import get_db
 from app.config import settings
-from app.models import ReadingSession, User
+from app.models import ReadingSession, User, UserTier
 from app.schemas import (
     SessionStart, SessionHeartbeat, SessionEnd,
     SessionEndResponse, SessionClaimResponse,
@@ -50,16 +50,19 @@ async def _credit_reading_reward(
     session: ReadingSession,
     points: int,
 ):
-    """Helper to credit points to user wallet and trigger notifications."""
+    """Helper to credit points to user wallet. Notifications are triggered by the caller after commit."""
     logger.info("Crediting reward: user=%d, points=%d", user.id, points)
     user.points_balance += points
     session.points_earned = points
     session.claimed_at = datetime.utcnow()
 
-    # Trigger notifications in background
-    logger.info("Scheduling background notifications for user %d", user.id)
+
+async def _trigger_reward_notifications(user_id: int, points: int):
+    """Helper to trigger in-app and push notifications for a reward."""
+    logger.info("Triggering reward notifications for user %d, points %d", user_id, points)
+
     asyncio.create_task(create_notification_background(
-        user_id=user.id,
+        user_id=user_id,
         title="Reading Reward!",
         body=f"You earned {points} points for finishing your reading slice.",
         category="wallet_updates",
@@ -68,7 +71,7 @@ async def _credit_reading_reward(
 
     naira = points / max(1, settings.points_per_naira)
     asyncio.create_task(send_wallet_update_background(
-        user_id=user.id,
+        user_id=user_id,
         amount_naira=naira,
         transaction_type="credit",
         reason="reading_bonus"
@@ -128,13 +131,12 @@ async def end_session(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Stop the timer and stage pending points for post-read ad claim.
+    """Stop the timer and credit pending points for verified slice completion.
 
     A verified session (scroll_events > 0, effective_duration >= min)
-    earns points calculated as `max(0, (effective_duration // 600) * 5)`.
-    These points are staged as `pending_points` on the session row. The
-    actual wallet credit happens in POST /session/claim after the user
-    watches the post-read ad and the SSV webhook confirms.
+    earns a flat slice-completion bonus (2 points for Free users, 4 for
+    Premium users). These points are credited to the wallet immediately
+    via _credit_reading_reward.
     """
     result = await db.execute(
         select(ReadingSession).where(ReadingSession.id == payload.session_id)
@@ -175,6 +177,9 @@ async def end_session(
     await db.commit()
     await db.refresh(current_user)
     await db.refresh(session)
+
+    if bonus_eligible and pending_points > 0:
+        await _trigger_reward_notifications(current_user.id, pending_points)
 
     return SessionEndResponse(
         session_id=session.id,
@@ -218,6 +223,7 @@ async def claim_session(
         await db.commit()
         await db.refresh(current_user)
         await db.refresh(session)
+        await _trigger_reward_notifications(current_user.id, points_to_credit)
 
     return SessionClaimResponse(
         points_earned=points_to_credit,

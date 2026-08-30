@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,6 +13,7 @@ import * as Sharing from "expo-sharing";
 import * as MediaLibrary from "expo-media-library";
 
 import { apiFetch } from "@/src/shared/api/client";
+import { PagePaySpinner } from "@/components/PagePaySpinner";
 
 type ReceiptActionsProps = {
   transactionId: number;
@@ -157,7 +157,7 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
           activeOpacity={0.7}
         >
           {downloading === "image" ? (
-            <ActivityIndicator size="small" color={tokens.mint} />
+            <PagePaySpinner size={24} />
           ) : (
             <>
               <View
@@ -186,7 +186,7 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
           activeOpacity={0.7}
         >
           {downloading === "pdf" ? (
-            <ActivityIndicator size="small" color={tokens.accent} />
+            <PagePaySpinner size={24} />
           ) : (
             <>
               <View
@@ -221,7 +221,7 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
           activeOpacity={0.7}
         >
           {downloading === "image" ? (
-            <ActivityIndicator size="small" color={tokens.mint} />
+            <PagePaySpinner size={24} />
           ) : (
             <>
               <View
@@ -254,7 +254,7 @@ export function ReceiptActions({ transactionId, tokens }: ReceiptActionsProps) {
           activeOpacity={0.7}
         >
           {downloading === "pdf" ? (
-            <ActivityIndicator size="small" color={tokens.accent} />
+            <PagePaySpinner size={24} />
           ) : (
             <>
               <View

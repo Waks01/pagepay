@@ -2435,6 +2435,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
+    zIndex: 9999,
+    elevation: 9999,
   },
   actionMenu: {
     width: "100%",

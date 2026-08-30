@@ -43,7 +43,7 @@ The core technical and business workflow relies on a smart, automated pipeline:
 [News/Content Providers via APIs]
        │
        ▼
- [Your App Engine] ───► (Tracks Reading Time & Screen Touches)
+ [Your App Engine] ───► (Tracks Slice Completion & Screen Touches)
        │
        ▼
  [Ad Networks / Monetization] ───► (Generates Revenue for You)
@@ -95,7 +95,7 @@ If a user looking at an article and a couple of ads generates **$0.05** in ad re
 1. **Build a simple front-end feed** using a modern stack (like React Native or Flutter if you're targeting mobile).
 2. **Fetch content** using a free Tier News API or a curated list of RSS feeds.
 3. **Integrate test ads** (using AdMob test IDs) to make sure your layout handles banners cleanly.
-4. **Write the user ledger logic** in your database to securely increment points based on verified reading time before deploying to production.
+4. **Write the user ledger logic** in your database to securely increment points based on verified slice completion before deploying to production.
 
 Would you look to build this as a standard mobile app backed by a traditional database, or are you thinking about a Web3/Crypto reward system?
 
@@ -139,17 +139,17 @@ If you don't want to rely on traditional ad networks at all, you can pull conten
 
 ## The Technical Execution Blueprint
 
-Since these providers give you the raw text or web views via API, your app's core architecture only needs to handle the **Time-on-Page (ToP)** tracking logic to issue the rewards securely:
+Since these providers give you the raw text or web views via API, your app's core architecture only needs to handle the **Slice Completion** tracking logic to issue the rewards securely:
 
 ```
 [Provider API (e.g., NewsBreak)] ──► Parses Text into App Layout
                                             │
                                             ▼
-                             [Foreground Time Tracker]
+                             [Slice Verification Engine]
                                             │
    ┌────────────────────────────────────────┴────────────────────────────────────────┐
    ▼                                                                                 ▼
-User scrolls & reads for X seconds                                    User goes idle or closes app
+User completes a verified 1-minute slice                                    User goes idle or closes app
    │                                                                                 │
    ▼                                                                                 ▼
 Trigger Secure API Endpoint                                                    Pause Timer (No Payout)

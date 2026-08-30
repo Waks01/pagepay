@@ -1,4 +1,4 @@
-import { View, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import { View, StyleSheet, ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { TransactionDetailHeader } from "@/components/transactions/TransactionDetailHeader";
 import { AirtimeDetail } from "@/components/transactions/details/AirtimeDetail";
 import { ReceiptActions } from "@/components/transactions/ReceiptActions";
+import { Skeleton } from "@/components/Skeleton";
 import type { TransactionHistoryItem } from "@/src/shared/types/transaction";
 
 export default function TransactionDetailScreen() {
@@ -46,9 +47,42 @@ export default function TransactionDetailScreen() {
     return (
       <View style={[styles.container, { backgroundColor: tokens.paper }]}>
         <PageHeader title="Transaction Details" />
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={tokens.mint} />
-        </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Header skeleton */}
+          <View
+            style={[
+              styles.headerSkeleton,
+              {
+                backgroundColor: tokens.card,
+                borderBottomColor: tokens.border,
+              },
+            ]}
+          >
+            <Skeleton
+              width={56}
+              height={56}
+              borderRadius={28}
+              marginBottom={12}
+            />
+            <Skeleton width={120} height={28} marginBottom={8} />
+            <Skeleton width={100} height={20} marginBottom={4} />
+            <Skeleton width={80} height={16} />
+          </View>
+
+          {/* Details skeleton */}
+          <View style={styles.detailsSkeleton}>
+            <Skeleton width="100%" height={20} marginBottom={16} />
+            <View style={{ gap: 12 }}>
+              <Skeleton width="100%" height={60} borderRadius={12} />
+              <Skeleton width="100%" height={60} borderRadius={12} />
+              <Skeleton width="100%" height={60} borderRadius={12} />
+              <Skeleton width="100%" height={60} borderRadius={12} />
+            </View>
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -129,5 +163,15 @@ const styles = StyleSheet.create({
   },
   receiptActions: {
     marginTop: 16,
+  },
+  headerSkeleton: {
+    alignItems: "center",
+    paddingTop: 24,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+  },
+  detailsSkeleton: {
+    padding: 16,
   },
 });

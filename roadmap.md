@@ -14,7 +14,7 @@ Ship every phase as a standalone, monetizing product. Each phase is an MVP, not 
 
 ### User Value
 - Students and casual readers can read public domain books/news
-- Earn confirmable points for verified reading time
+- Earn confirmable points for verified slice completion
 - Points tracked live in a wallet
 
 ### Backend Build
@@ -85,7 +85,7 @@ src/
 ### Shippable Feature Set (Phase 1)
 ✅ User registration & login
 ✅ Browse and read public domain books + news
-✅ Earn points for verified reading time
+✅ Earn points for verified slice completion
 ✅ Wallet balance tracking
 ✅ In-app anti-bot guardrails
 ✅ Live on Play Store as "PagePay: Read & Earn"
