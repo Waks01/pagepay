@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Image,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,7 +19,6 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { WebView } from "react-native-webview";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 
@@ -49,6 +47,14 @@ type MaterialDetail = {
   created_at: string;
 };
 
+type PdfPage = {
+  page: number;
+  total: number;
+  image_base64: string;
+  width: number;
+  height: number;
+};
+
 export default function FileViewerScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -66,6 +72,17 @@ export default function FileViewerScreen() {
       if (!res.ok) throw new Error("Failed to load material");
       return res.json() as Promise<MaterialDetail>;
     },
+  });
+
+  const pagesQ = useQuery({
+    queryKey: ["study", "material", materialId, "pages"],
+    queryFn: async () => {
+      const res = await apiFetch(`/api/v1/study/materials/${materialId}/pages`);
+      if (!res.ok) throw new Error("Failed to load pages");
+      const data = await res.json();
+      return data.pages as PdfPage[];
+    },
+    enabled: !!materialQ.data?.has_original_file && materialQ.data?.file_mime_type === "application/pdf",
   });
 
   const selectedMaterial = materialQ.data;
@@ -129,10 +146,8 @@ export default function FileViewerScreen() {
           borderBottomColor="#333"
           tokens={tokens}
         />
-        <View style={styles.center}>
-          <Text style={[styles.loadingText, { color: "#fff" }]}>
-            {t("study.loading_material_title", "Loading…")}
-          </Text>
+        <View style={styles.skeletonContainer}>
+          <SkeletonBox style={styles.skeletonLarge} />
         </View>
       </SafeAreaView>
     );
@@ -192,13 +207,43 @@ export default function FileViewerScreen() {
         )}
 
         {isPdf && (
-          <WebView
-            source={{ uri: fileUrl }}
-            style={styles.webview}
-            startInLoadingState
-            scalesPageToFit
-            originWhitelist={["*"]}
-          />
+          <View style={styles.pdfContainer}>
+            {pagesQ.isLoading ? (
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.pdfScrollContent}
+              >
+                {[1, 2, 3].map((i) => (
+                  <SkeletonBox key={i} style={styles.pdfPageSkeleton} />
+                ))}
+              </ScrollView>
+            ) : pagesQ.isError ? (
+              <View style={styles.center}>
+                <Text style={[styles.errorText, { color: "#fff" }]}>
+                  Failed to load PDF pages
+                </Text>
+                <Pressable onPress={() => pagesQ.refetch()} style={styles.retryBtn}>
+                  <Text style={styles.retryBtnText}>Retry</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.pdfScrollContent}
+              >
+                {(pagesQ.data || []).map((page) => (
+                  <ZoomableImage
+                    key={page.page}
+                    uri={`data:image/png;base64,${page.image_base64}`}
+                  />
+                ))}
+              </ScrollView>
+            )}
+          </View>
         )}
 
         {!isImage && !isPdf && (
@@ -214,6 +259,10 @@ export default function FileViewerScreen() {
       </View>
     </SafeAreaView>
   );
+}
+
+function SkeletonBox({ style }: { style: any }) {
+  return <View style={[styles.skeletonBox, style]} />;
 }
 
 function ZoomableImage({ uri }: { uri: string }) {
@@ -303,11 +352,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
   },
-  loadingText: {
-    fontSize: 16,
+  skeletonContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  skeletonBox: {
+    backgroundColor: PagePay.light.paper2,
+    borderRadius: 12,
+  },
+  skeletonLarge: {
+    width: "100%",
+    height: 240,
+  },
+  pdfPageSkeleton: {
+    width: 320,
+    height: 420,
+    borderRadius: 8,
+    backgroundColor: PagePay.light.paper2,
+    marginRight: 12,
   },
   errorText: {
     fontSize: 16,
+    fontWeight: "600",
     textAlign: "center",
   },
   downloadBtn: {
@@ -321,13 +389,30 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
   },
+  retryBtn: {
+    marginTop: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#0E7C66",
+  },
+  retryBtnText: {
+    color: "#0E7C66",
+    fontWeight: "600",
+    fontSize: 14,
+  },
   viewerContainer: {
     flex: 1,
     backgroundColor: "#000",
   },
-  webview: {
+  pdfContainer: {
     flex: 1,
     backgroundColor: "#000",
+  },
+  pdfScrollContent: {
+    alignItems: "center",
+    paddingVertical: 16,
   },
   headerAction: {
     padding: 8,
