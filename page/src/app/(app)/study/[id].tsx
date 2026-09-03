@@ -75,6 +75,7 @@ export default function MaterialDetailScreen() {
   const [shareFormatVisible, setShareFormatVisible] = useState(false);
   const [pdfPages, setPdfPages] = useState<Array<{ page: number; total: number; image_base64: string; width: number; height: number }> | null>(null);
   const [loadingPages, setLoadingPages] = useState(false);
+  const [pdfPagesError, setPdfPagesError] = useState<string | null>(null);
   const studySessionIdRef = useRef<number | null>(null);
 
   const materialQ = useQuery({
@@ -106,20 +107,28 @@ export default function MaterialDetailScreen() {
     let cancelled = false;
     if (selectedMaterial?.file_mime_type === "application/pdf" && selectedMaterial.has_original_file) {
       setLoadingPages(true);
+      setPdfPagesError(null);
       apiFetch(`/api/v1/study/materials/${selectedMaterial.id}/pages`)
         .then(async (res) => {
-          if (!res.ok) throw new Error("Failed to load pages");
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: "Failed to load pages" }));
+            throw new Error(err.detail || "Failed to load pages");
+          }
           const data = await res.json();
           if (!cancelled) setPdfPages(data.pages || []);
         })
         .catch((err) => {
-          if (!cancelled) console.error("Failed to load PDF pages:", err);
+          if (!cancelled) {
+            console.error("Failed to load PDF pages:", err);
+            setPdfPagesError(err.message || "Failed to load PDF pages");
+          }
         })
         .finally(() => {
           if (!cancelled) setLoadingPages(false);
         });
     } else {
       setPdfPages(null);
+      setPdfPagesError(null);
     }
     return () => {
       cancelled = true;
@@ -524,6 +533,36 @@ export default function MaterialDetailScreen() {
                             Rendering PDF pages…
                           </Text>
                         </View>
+                      ) : pdfPagesError ? (
+                        <Pressable
+                          onPress={() => {
+                            setPdfPagesError(null);
+                            setLoadingPages(true);
+                            apiFetch(`/api/v1/study/materials/${selectedMaterial.id}/pages`)
+                              .then(async (res) => {
+                                if (!res.ok) {
+                                  const err = await res.json().catch(() => ({ detail: "Failed to load pages" }));
+                                  throw new Error(err.detail || "Failed to load pages");
+                                }
+                                const data = await res.json();
+                                setPdfPages(data.pages || []);
+                                setPdfPagesError(null);
+                              })
+                              .catch((err) => {
+                                console.error("Retry PDF pages failed:", err);
+                                setPdfPagesError(err.message || "Failed to load PDF pages");
+                              })
+                              .finally(() => {
+                                setLoadingPages(false);
+                              });
+                          }}
+                          style={[styles.openFileBtn, { borderColor: tokens.border }]}
+                        >
+                          <Ionicons name="refresh-outline" size={18} color={tokens.mint} />
+                          <Text style={[styles.openFileText, { color: tokens.mint }]}>
+                            Retry loading pages
+                          </Text>
+                        </Pressable>
                       ) : pdfPages && pdfPages.length > 0 ? (
                         <ScrollView
                           horizontal
@@ -541,12 +580,17 @@ export default function MaterialDetailScreen() {
                           ))}
                         </ScrollView>
                       ) : (
-                        <View style={[styles.openFileBtn, { borderColor: tokens.border }]}>
+                        <Pressable
+                          onPress={() =>
+                            router.push(`/study/${materialId}/file-viewer`)
+                          }
+                          style={[styles.openFileBtn, { borderColor: tokens.border }]}
+                        >
                           <Ionicons name="document-outline" size={18} color={tokens.mint} />
                           <Text style={[styles.openFileText, { color: tokens.mint }]}>
                             Tap to open PDF
                           </Text>
-                        </View>
+                        </Pressable>
                       )}
                     </View>
                   )}

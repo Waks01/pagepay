@@ -1129,6 +1129,11 @@ async def get_material_pages(
 
     try:
         pdf = fitz.open(stream=material.original_file_data, filetype="pdf")
+    except Exception as exc:
+        logger.exception("[pages] failed to open PDF material_id=%s err=%s", material_id, exc)
+        raise HTTPException(status_code=400, detail="Stored file is not a valid PDF") from exc
+
+    try:
         pages: list[dict] = []
         for page_num in range(len(pdf)):
             page = pdf[page_num]

@@ -102,11 +102,15 @@ async def start_session(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    session = ReadingSession(user_id=current_user.id, content_id=payload.content_id)
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
-    return {"session_id": session.id}
+    try:
+        session = ReadingSession(user_id=current_user.id, content_id=payload.content_id)
+        db.add(session)
+        await db.commit()
+        await db.refresh(session)
+        return {"session_id": session.id}
+    except Exception as exc:
+        logger.exception("[session/start] failed user=%s content_id=%s err=%s", current_user.id, payload.content_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to start session") from exc
 
 
 @router.post("/heartbeat")

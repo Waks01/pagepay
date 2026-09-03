@@ -93,6 +93,7 @@ export async function publicApiFetch(
 export async function apiFetch(
   path: string,
   options: RequestInit = {},
+  retries = 2,
 ): Promise<Response> {
   const token = await getToken();
   const isFormData = options.body instanceof FormData;
@@ -118,55 +119,73 @@ export async function apiFetch(
     );
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`${API_URL}${path}`, {
-      ...options,
-      headers,
-    });
-  } catch (e) {
-    if (__DEV__) {
-      console.error(
-        `[apiFetch] NETWORK ERROR ${API_URL}${path}`,
-        e instanceof Error ? `${e.name}: ${e.message}` : e,
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers,
+      });
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      if (__DEV__) {
+        console.error(
+          `[apiFetch] NETWORK ERROR ${API_URL}${path}`,
+          lastError.message,
+        );
+      }
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        continue;
+      }
+      throw new Error(
+        `Can't reach the server at ${API_URL}. Check your connection and try again.`,
       );
     }
-    throw new Error(
-      `Can't reach the server at ${API_URL}. Check your connection and try again.`,
-    );
-  }
 
-  if (__DEV__) {
-    console.log(`[apiFetch] ← ${res.status} ${API_URL}${path}`);
-  }
-
-  if (res.status === 401 && path !== "/api/v1/auth/refresh") {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
-      const newToken = await getToken();
-      const newHeaders: HeadersInit = {
-        ...(isFormData ? {} : { "Content-Type": "application/json" }),
-        ...(newToken ? { Authorization: `Bearer ${newToken}` } : {}),
-        ...options.headers,
-      };
-      try {
-        res = await fetch(`${API_URL}${path}`, {
-          ...options,
-          headers: newHeaders,
-        });
-      } catch {
-        // Network error after refresh — don't clear tokens, could be temporary
-        _onUnauthenticated?.();
-        throw new Error("Network error during token refresh");
-      }
-    } else {
-      // Refresh failed — tokens are already cleared by refreshAccessToken if they were invalid
-      _onUnauthenticated?.();
-      throw new Error("Unauthorized");
+    if (__DEV__) {
+      console.log(`[apiFetch] ← ${res.status} ${API_URL}${path}`);
     }
+
+    if (res.status === 502 && attempt < retries) {
+      if (__DEV__) {
+        console.warn(
+          `[apiFetch] 502 on ${path}, retrying (${attempt + 1}/${retries})`,
+        );
+      }
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      continue;
+    }
+
+    if (res.status === 401 && path !== "/api/v1/auth/refresh") {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        const newToken = await getToken();
+        const newHeaders: HeadersInit = {
+          ...(isFormData ? {} : { "Content-Type": "application/json" }),
+          ...(newToken ? { Authorization: `Bearer ${newToken}` } : {}),
+          ...options.headers,
+        };
+        try {
+          res = await fetch(`${API_URL}${path}`, {
+            ...options,
+            headers: newHeaders,
+          });
+        } catch {
+          _onUnauthenticated?.();
+          throw new Error("Network error during token refresh");
+        }
+      } else {
+        _onUnauthenticated?.();
+        throw new Error("Unauthorized");
+      }
+    }
+
+    return res;
   }
 
-  return res;
+  throw lastError || new Error(`Failed to reach ${API_URL}${path} after ${retries + 1} attempts`);
 }
 
 /**
