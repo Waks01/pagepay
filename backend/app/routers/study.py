@@ -1118,8 +1118,16 @@ async def get_material_pages(
     if mime != "application/pdf":
         raise HTTPException(status_code=400, detail="Only PDF page rendering is supported")
 
+    if len(material.original_file_data) == 0:
+        raise HTTPException(status_code=400, detail="Empty PDF file")
+
     try:
         import fitz  # PyMuPDF
+    except ImportError:
+        logger.exception("[pages] PyMuPDF not installed")
+        raise HTTPException(status_code=500, detail="PDF renderer not configured on server")
+
+    try:
         pdf = fitz.open(stream=material.original_file_data, filetype="pdf")
         pages: list[dict] = []
         for page_num in range(len(pdf)):
@@ -1135,7 +1143,10 @@ async def get_material_pages(
             })
         pdf.close()
         return {"pages": pages}
+    except HTTPException:
+        raise
     except Exception as exc:
+        logger.exception("[pages] PDF rendering failed material_id=%s err=%s", material_id, exc)
         raise HTTPException(status_code=500, detail=f"PDF rendering failed: {exc}") from exc
 
 

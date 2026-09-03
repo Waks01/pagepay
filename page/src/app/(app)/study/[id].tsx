@@ -21,7 +21,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 
-import { apiFetch } from "@/src/shared/api/client";
+import { apiFetch, API_URL } from "@/src/shared/api/client";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PageHeader } from "@/components/PageHeader";
@@ -426,7 +426,7 @@ export default function MaterialDetailScreen() {
           {selectedMaterial.has_original_file && selectedMaterial.file_mime_type?.startsWith("image/") && (
             <Animated.View entering={FadeInDown.delay(60).duration(240).springify()}>
               <Image
-                source={{ uri: `/api/v1/study/materials/${materialId}/file` }}
+                source={{ uri: `${API_URL}/api/v1/study/materials/${materialId}/file` }}
                 style={styles.materialImage}
                 resizeMode="contain"
               />
@@ -499,7 +499,7 @@ export default function MaterialDetailScreen() {
 
                 {selectedMaterial.file_mime_type?.startsWith("image/") && (
                   <Image
-                    source={{ uri: `/api/v1/study/materials/${selectedMaterial.id}/file` }}
+                    source={{ uri: `${API_URL}/api/v1/study/materials/${selectedMaterial.id}/file` }}
                     style={styles.materialPreviewImage}
                     resizeMode="contain"
                   />
@@ -532,7 +532,7 @@ export default function MaterialDetailScreen() {
                     ) : (
                       <Pressable
                         onPress={() => {
-                          const url = `/api/v1/study/materials/${selectedMaterial.id}/file`;
+                          const url = `${API_URL}/api/v1/study/materials/${selectedMaterial.id}/file`;
                           Linking.openURL(url);
                         }}
                         style={[styles.openFileBtn, { borderColor: tokens.border }]}
@@ -549,7 +549,7 @@ export default function MaterialDetailScreen() {
                 {selectedMaterial.file_mime_type && !selectedMaterial.file_mime_type.startsWith("image/") && selectedMaterial.file_mime_type !== "application/pdf" && (
                   <Pressable
                     onPress={() => {
-                      const url = `/api/v1/study/materials/${selectedMaterial.id}/file`;
+                      const url = `${API_URL}/api/v1/study/materials/${selectedMaterial.id}/file`;
                       Linking.openURL(url);
                     }}
                     style={[styles.openFileBtn, { borderColor: tokens.border }]}
