@@ -477,90 +477,84 @@ export default function MaterialDetailScreen() {
             <Animated.View
               entering={FadeInDown.delay(80).duration(240).springify()}
             >
-              <View
-                style={[
-                  styles.materialPreviewCard,
-                  { backgroundColor: tokens.card, borderColor: tokens.border },
-                ]}
+              <Pressable
+                onPress={() =>
+                  router.push(`/study/${materialId}/file-viewer`)
+                }
               >
-                <View style={styles.sectionHeaderRow}>
-                  <Text
-                    style={[
-                      styles.outlineTitle,
-                      { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string },
-                    ]}
-                  >
-                    {t("study.original_file_title", "Original File")}
-                  </Text>
-                  <Text style={[styles.outlineMeta, { color: tokens.inkMuted }]}>
-                    {selectedMaterial.file_mime_type?.split("/")[1]?.toUpperCase()}
-                  </Text>
-                </View>
-
-                {selectedMaterial.file_mime_type?.startsWith("image/") && (
-                  <Image
-                    source={{ uri: `${API_URL}/api/v1/study/materials/${selectedMaterial.id}/file` }}
-                    style={styles.materialPreviewImage}
-                    resizeMode="contain"
-                  />
-                )}
-
-                {selectedMaterial.file_mime_type === "application/pdf" && (
-                  <View>
-                    {loadingPages ? (
-                      <View style={styles.loadingPages}>
-                        <Text style={[styles.loadingPagesText, { color: tokens.inkMuted }]}>
-                          Rendering PDF pages…
-                        </Text>
-                      </View>
-                    ) : pdfPages && pdfPages.length > 0 ? (
-                      <ScrollView
-                        horizontal
-                        pagingEnabled
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.pdfScroll}
-                      >
-                        {pdfPages.map((page) => (
-                          <Image
-                            key={page.page}
-                            source={{ uri: `data:image/png;base64,${page.image_base64}` }}
-                            style={styles.pdfPageImage}
-                            resizeMode="contain"
-                          />
-                        ))}
-                      </ScrollView>
-                    ) : (
-                      <Pressable
-                        onPress={() => {
-                          const url = `${API_URL}/api/v1/study/materials/${selectedMaterial.id}/file`;
-                          Linking.openURL(url);
-                        }}
-                        style={[styles.openFileBtn, { borderColor: tokens.border }]}
-                      >
-                        <Ionicons name="document-outline" size={18} color={tokens.mint} />
-                        <Text style={[styles.openFileText, { color: tokens.mint }]}>
-                          Open PDF
-                        </Text>
-                      </Pressable>
-                    )}
-                  </View>
-                )}
-
-                {selectedMaterial.file_mime_type && !selectedMaterial.file_mime_type.startsWith("image/") && selectedMaterial.file_mime_type !== "application/pdf" && (
-                  <Pressable
-                    onPress={() => {
-                      const url = `${API_URL}/api/v1/study/materials/${selectedMaterial.id}/file`;
-                      Linking.openURL(url);
-                    }}
-                    style={[styles.openFileBtn, { borderColor: tokens.border }]}
-                  >
-                    <Ionicons name="document-outline" size={18} color={tokens.mint} />
-                    <Text style={[styles.openFileText, { color: tokens.mint }]}>
-                      Open File
+                <View
+                  style={[
+                    styles.materialPreviewCard,
+                    { backgroundColor: tokens.card, borderColor: tokens.border },
+                  ]}
+                >
+                  <View style={styles.sectionHeaderRow}>
+                    <Text
+                      style={[
+                        styles.outlineTitle,
+                        { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string },
+                      ]}
+                    >
+                      {t("study.original_file_title", "Original File")}
                     </Text>
-                  </Pressable>
-                )}
-              </View>
+                    <Text style={[styles.outlineMeta, { color: tokens.inkMuted }]}>
+                      {selectedMaterial.file_mime_type?.split("/")[1]?.toUpperCase()}
+                    </Text>
+                  </View>
+
+                  {selectedMaterial.file_mime_type?.startsWith("image/") && (
+                    <Image
+                      source={{ uri: `${API_URL}/api/v1/study/materials/${selectedMaterial.id}/file` }}
+                      style={styles.materialPreviewImage}
+                      resizeMode="contain"
+                    />
+                  )}
+
+                  {selectedMaterial.file_mime_type === "application/pdf" && (
+                    <View>
+                      {loadingPages ? (
+                        <View style={styles.loadingPages}>
+                          <Text style={[styles.loadingPagesText, { color: tokens.inkMuted }]}>
+                            Rendering PDF pages…
+                          </Text>
+                        </View>
+                      ) : pdfPages && pdfPages.length > 0 ? (
+                        <ScrollView
+                          horizontal
+                          pagingEnabled
+                          showsHorizontalScrollIndicator={false}
+                          style={styles.pdfScroll}
+                        >
+                          {pdfPages.map((page) => (
+                            <Image
+                              key={page.page}
+                              source={{ uri: `data:image/png;base64,${page.image_base64}` }}
+                              style={styles.pdfPageImage}
+                              resizeMode="contain"
+                            />
+                          ))}
+                        </ScrollView>
+                      ) : (
+                        <View style={[styles.openFileBtn, { borderColor: tokens.border }]}>
+                          <Ionicons name="document-outline" size={18} color={tokens.mint} />
+                          <Text style={[styles.openFileText, { color: tokens.mint }]}>
+                            Tap to open PDF
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {selectedMaterial.file_mime_type && !selectedMaterial.file_mime_type.startsWith("image/") && selectedMaterial.file_mime_type !== "application/pdf" && (
+                    <View style={[styles.openFileBtn, { borderColor: tokens.border }]}>
+                      <Ionicons name="document-outline" size={18} color={tokens.mint} />
+                      <Text style={[styles.openFileText, { color: tokens.mint }]}>
+                        Tap to open file
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </Pressable>
             </Animated.View>
           )}
 
