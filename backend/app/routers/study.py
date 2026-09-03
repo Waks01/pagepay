@@ -446,15 +446,32 @@ async def _extract_document_text(contents: bytes, filename: str) -> str:
 
 
 def _parse_ai_response(response_text: str) -> dict | None:
-    """Best-effort JSON parse of the SOW parser's output. Returns None
-    on failure (the AI may occasionally return non-JSON — we log it
-    and store the raw material with no parsed structure)."""
+    """Best-effort JSON parse of the SOW parser's output.
+
+    Some providers wrap JSON in a ```json ... ``` fenced code block;
+    strip that before parsing. Returns None on failure.
+    """
     import json as _json
     try:
         return _json.loads(response_text)
     except Exception:
-        logger.error("SOW parser returned non-JSON: %s", response_text[:200])
-        return None
+        pass
+    try:
+        if "```json" in response_text:
+            inner = response_text.split("```json", 1)[1]
+            inner = inner.split("```", 1)[0]
+            return _json.loads(inner)
+    except Exception:
+        pass
+    try:
+        if "```" in response_text:
+            inner = response_text.split("```", 1)[1]
+            inner = inner.split("```", 1)[0]
+            return _json.loads(inner)
+    except Exception:
+        pass
+    logger.error("SOW parser returned non-JSON: %s", response_text[:200])
+    return None
 
 
 async def _run_sow_parser(extracted_text: str) -> tuple[dict | None, str | None, str | None]:
@@ -630,6 +647,15 @@ async def _process_sow_document_job(
 
         import json as _json
         async with AsyncSessionLocal() as db:
+            filename_lower = safe_name.lower()
+            if filename_lower.endswith(".pdf"):
+                inferred_mime = "application/pdf"
+            elif filename_lower.endswith((".docx", ".doc")):
+                inferred_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            elif filename_lower.endswith(".txt"):
+                inferred_mime = "text/plain"
+            else:
+                inferred_mime = "application/octet-stream"
             material = StudyMaterial(
                 user_id=user_id,
                 title=title,
@@ -637,7 +663,7 @@ async def _process_sow_document_job(
                 raw_input=f"[DOCUMENT: {safe_name}]\n{extracted_text}",
                 parsed_structure=_json.dumps(parsed) if parsed else None,
                 original_file_data=contents,
-                file_mime_type=file.content_type or "application/octet-stream",
+                file_mime_type=inferred_mime,
                 ai_model_used=provider,
             )
             db.add(material)
