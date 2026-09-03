@@ -245,8 +245,6 @@ export default function FileViewerScreen() {
           <View style={styles.pdfContainer}>
             {pagesQ.isLoading ? (
               <ScrollView
-                horizontal
-                pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.pdfScrollContent}
               >
@@ -265,8 +263,6 @@ export default function FileViewerScreen() {
               </View>
             ) : (
               <ScrollView
-                horizontal
-                pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.pdfScrollContent}
               >
