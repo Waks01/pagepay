@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -26,6 +26,7 @@ import { apiFetch, API_URL } from "@/src/shared/api/client";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PageHeader } from "@/components/PageHeader";
+import { getCachedMaterialFileUri } from "@/src/features/study/storage";
 
 type MaterialDetail = {
   id: number;
@@ -64,6 +65,7 @@ export default function FileViewerScreen() {
   const tokens = PagePay[scheme];
 
   const [isDownloading, setIsDownloading] = useState(false);
+  const [cachedFileUri, setCachedFileUri] = useState<string | null>(null);
 
   const materialQ = useQuery({
     queryKey: ["study", "material", materialId],
@@ -73,6 +75,20 @@ export default function FileViewerScreen() {
       return res.json() as Promise<MaterialDetail>;
     },
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    if (materialQ.data?.has_original_file) {
+      getCachedMaterialFileUri(materialId, materialQ.data.file_mime_type).then(
+        (uri) => {
+          if (!cancelled) setCachedFileUri(uri);
+        },
+      );
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [materialQ.data?.has_original_file, materialQ.data?.file_mime_type, materialId]);
 
   const pagesQ = useQuery({
     queryKey: ["study", "material", materialId, "pages"],
@@ -95,42 +111,61 @@ export default function FileViewerScreen() {
     if (!selectedMaterial) return;
     setIsDownloading(true);
     try {
-      const res = await apiFetch(
-        `/api/v1/study/materials/${selectedMaterial.id}/file`,
-      );
-      if (!res.ok) throw new Error("Failed to fetch file");
-      const blob = await res.blob();
-      const contentDisposition = res.headers.get("Content-Disposition");
-      const filename =
-        contentDisposition?.match(/filename="?([^"]+)"?/)?.[1] ||
-        `material_${selectedMaterial.id}`;
-
       const ext =
         selectedMaterial.file_mime_type?.split("/")[1]?.split(";")[0] || "bin";
-      const destPath = `${FileSystem.cacheDirectory}${filename}.${ext}`;
+      const filename = `material_${selectedMaterial.id}.${ext}`;
+      const destPath = `${FileSystem.cacheDirectory}${filename}`;
 
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const base64 = (reader.result as string).split(",")[1];
-          await FileSystem.writeAsStringAsync(destPath, base64, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(destPath, {
-              mimeType: selectedMaterial.file_mime_type || "application/octet-stream",
-              dialogTitle: selectedMaterial.title || "File",
+      if (cachedFileUri) {
+        await FileSystem.copyAsync({
+          from: cachedFileUri,
+          to: destPath,
+        });
+      } else {
+        const res = await apiFetch(
+          `/api/v1/study/materials/${selectedMaterial.id}/file`,
+        );
+        if (!res.ok) throw new Error("Failed to fetch file");
+        const blob = await res.blob();
+        const contentDisposition = res.headers.get("Content-Disposition");
+        const finalFilename =
+          contentDisposition?.match(/filename="?([^"]+)"?/)?.[1] ||
+          filename;
+
+        const finalDestPath = `${FileSystem.cacheDirectory}${finalFilename}`;
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          try {
+            const base64 = (reader.result as string).split(",")[1];
+            await FileSystem.writeAsStringAsync(finalDestPath, base64, {
+              encoding: FileSystem.EncodingType.Base64,
             });
+            if (await Sharing.isAvailableAsync()) {
+              await Sharing.shareAsync(finalDestPath, {
+                mimeType: selectedMaterial.file_mime_type || "application/octet-stream",
+                dialogTitle: selectedMaterial.title || "File",
+              });
+            }
+          } catch (err) {
+            console.error("File viewer download/share failed:", err);
+          } finally {
+            setIsDownloading(false);
           }
-        } catch (err) {
-          console.error("File viewer download/share failed:", err);
-        } finally {
-          setIsDownloading(false);
-        }
-      };
-      reader.readAsDataURL(blob);
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(destPath, {
+          mimeType: selectedMaterial.file_mime_type || "application/octet-stream",
+          dialogTitle: selectedMaterial.title || "File",
+        });
+      }
     } catch (err) {
       console.error("File viewer fetch failed:", err);
+    } finally {
       setIsDownloading(false);
     }
   };
@@ -203,7 +238,7 @@ export default function FileViewerScreen() {
 
       <View style={styles.viewerContainer}>
         {isImage && (
-          <ZoomableImage uri={fileUrl} />
+          <ZoomableImage uri={cachedFileUri || fileUrl} />
         )}
 
         {isPdf && (

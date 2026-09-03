@@ -46,7 +46,7 @@ import NotificationBell from "@/components/NotificationBell";
 import { SkeletonPage, SkeletonDetailPage } from "@/components/skeletons";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
 import AudioUnlockModal from "@/components/AudioUnlockModal";
-import { cacheAsset, getCachedAsset } from "@/src/features/study/storage";
+import { cacheAsset, getCachedAsset, cacheMaterialFile } from "@/src/features/study/storage";
 import { saveLastRoute, getLastRoute } from "@/src/shared/lib/screen-memory";
 
 // Pass the server's actual error message through unchanged so the user
@@ -391,7 +391,31 @@ export default function StudyScreen() {
     setUploadJustCompleted(true);
     const res = await apiFetch(`/api/v1/study/materials/${materialId}`);
     if (res.ok) {
-      setSelectedMaterial(await res.json());
+      const data = await res.json();
+      setSelectedMaterial(data);
+
+      if (data.has_original_file) {
+        try {
+          const fileRes = await apiFetch(
+            `/api/v1/study/materials/${materialId}/file`,
+          );
+          if (fileRes.ok) {
+            const blob = await fileRes.blob();
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+              const base64 = (reader.result as string).split(",")[1];
+              await cacheMaterialFile(
+                materialId,
+                base64,
+                data.file_mime_type || "application/octet-stream",
+              );
+            };
+            reader.readAsDataURL(blob);
+          }
+        } catch (err) {
+          console.error("Failed to cache material file:", err);
+        }
+      }
     }
     setUploadProgress(100);
     qc.invalidateQueries({ queryKey: ["study", "materials"] });

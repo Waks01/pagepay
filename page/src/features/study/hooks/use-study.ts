@@ -20,6 +20,7 @@ import {
   getCachedMaterialMetadata,
   cacheMaterialMetadata,
   clearMaterialCache,
+  clearMaterialFileCache,
 } from '../storage';
 
 export function useMaterials() {
@@ -100,7 +101,10 @@ export function useUploadSowDocument() {
 export function useDeleteMaterial() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (materialId: number) => deleteMaterial(materialId),
+    mutationFn: async (materialId: number) => {
+      await deleteMaterial(materialId);
+      await clearMaterialFileCache(materialId);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['study', 'materials'] });
     },
@@ -110,8 +114,11 @@ export function useDeleteMaterial() {
 export function useUpdateMaterial() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ materialId, ...payload }: { materialId: number; title?: string; exam_type?: string | null }) =>
-      updateMaterial(materialId, payload),
+    mutationFn: async ({ materialId, ...payload }: { materialId: number; title?: string; exam_type?: string | null }) => {
+      const updated = await updateMaterial(materialId, payload);
+      await clearMaterialFileCache(materialId);
+      return updated;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['study', 'materials'] });
     },

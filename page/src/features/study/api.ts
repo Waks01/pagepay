@@ -1,5 +1,5 @@
 import { apiFetch, apiUpload } from "@/src/shared/api/client";
-import { cacheMaterialMetadata, clearMaterialCache } from "./storage";
+import { cacheMaterialMetadata, clearMaterialCache, clearMaterialFileCache } from "./storage";
 
 export type MaterialSummary = {
   id: number;
@@ -249,6 +249,7 @@ export async function deleteMaterial(id: number): Promise<void> {
     throw new Error(err.detail || "Delete failed");
   }
   await clearMaterialCache(id);
+  await clearMaterialFileCache(id);
 }
 
 export async function updateMaterial(
@@ -272,6 +273,7 @@ export async function updateMaterial(
     asset_types: (data.assets || []).map((a) => a.type),
     created_at: data.created_at,
   });
+  await clearMaterialFileCache(id);
   return data;
 }
 

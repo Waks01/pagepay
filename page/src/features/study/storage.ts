@@ -4,11 +4,13 @@
  */
 
 import * as SecureStore from 'expo-secure-store';
+import * as FileSystem from 'expo-file-system';
 
 const CACHE_PREFIX = 'study_asset_';
 const CACHE_INDEX_KEY = 'study_asset_index';
 const MATERIAL_CACHE_PREFIX = 'study_material_';
 const MATERIAL_CACHE_INDEX_KEY = 'study_material_index';
+const MATERIAL_FILE_DIR = FileSystem.cacheDirectory + 'study_files/';
 
 type CachedAsset = {
   assetId: number;
@@ -278,5 +280,82 @@ export async function clearAllMaterialCache(): Promise<void> {
     await SecureStore.deleteItemAsync(MATERIAL_CACHE_INDEX_KEY);
   } catch (error) {
     console.error('Failed to clear all material cache:', error);
+  }
+}
+
+
+// ── Original file bytes cache ────────────────────────────────────────
+
+async function ensureMaterialFileDir(): Promise<void> {
+  const dirInfo = await FileSystem.getInfoAsync(MATERIAL_FILE_DIR);
+  if (!dirInfo.exists) {
+    await FileSystem.makeDirectoryAsync(MATERIAL_FILE_DIR, { intermediates: true });
+  }
+}
+
+export async function cacheMaterialFile(
+  materialId: number,
+  base64Data: string,
+  mimeType: string,
+): Promise<void> {
+  try {
+    await ensureMaterialFileDir();
+    const ext = mimeType.split('/')[1]?.split(';')[0] || 'bin';
+    const filePath = `${MATERIAL_FILE_DIR}${materialId}.${ext}`;
+    await FileSystem.writeAsStringAsync(filePath, base64Data, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  } catch (error) {
+    console.error('Failed to cache material file:', error);
+  }
+}
+
+export async function getCachedMaterialFileUri(
+  materialId: number,
+  mimeType?: string | null,
+): Promise<string | null> {
+  try {
+    const dirInfo = await FileSystem.getInfoAsync(MATERIAL_FILE_DIR);
+    if (!dirInfo.exists) return null;
+
+    const files = await FileSystem.readDirectoryAsync(MATERIAL_FILE_DIR);
+    const matchingFile = files.find((name) => name.startsWith(`${materialId}.`));
+    if (!matchingFile) return null;
+
+    return `${MATERIAL_FILE_DIR}${matchingFile}`;
+  } catch (error) {
+    console.error('Failed to get cached material file:', error);
+    return null;
+  }
+}
+
+export async function isMaterialFileCached(materialId: number): Promise<boolean> {
+  try {
+    const uri = await getCachedMaterialFileUri(materialId);
+    return uri !== null;
+  } catch {
+    return false;
+  }
+}
+
+export async function clearMaterialFileCache(materialId: number): Promise<void> {
+  try {
+    const uri = await getCachedMaterialFileUri(materialId);
+    if (uri) {
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+    }
+  } catch (error) {
+    console.error('Failed to clear material file cache:', error);
+  }
+}
+
+export async function clearAllMaterialFileCache(): Promise<void> {
+  try {
+    const dirInfo = await FileSystem.getInfoAsync(MATERIAL_FILE_DIR);
+    if (dirInfo.exists) {
+      await FileSystem.deleteAsync(MATERIAL_FILE_DIR, { idempotent: true });
+    }
+  } catch (error) {
+    console.error('Failed to clear all material file cache:', error);
   }
 }
