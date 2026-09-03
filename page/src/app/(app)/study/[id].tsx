@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
   RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -173,7 +174,12 @@ export default function MaterialDetailScreen() {
     topic?: string | null,
     mode?: "topic" | "all",
   ) => {
+    if (!selectedMaterial?.parsed_structure) {
+      setError(t("study.errors.no_parsed_structure", "Material has no parsed structure. Re-upload or try again."));
+      return;
+    }
     setGeneratingType(assetType);
+    setError(null);
     try {
       const res = await apiFetch("/api/v1/study/generate", {
         method: "POST",
@@ -698,6 +704,7 @@ export default function MaterialDetailScreen() {
                 icon="list-outline"
                 assetType="mcq"
                 loading={generatingType === "mcq"}
+                disabled={!selectedMaterial?.parsed_structure}
                 tokens={tokens}
                 onPress={() => handleGenerateAsset("mcq", generateCount, selectedTopic, generateMode)}
               />
@@ -706,6 +713,7 @@ export default function MaterialDetailScreen() {
                 icon="layers-outline"
                 assetType="flashcard"
                 loading={generatingType === "flashcard"}
+                disabled={!selectedMaterial?.parsed_structure}
                 tokens={tokens}
                 onPress={() => handleGenerateAsset("flashcard", generateCount, selectedTopic, generateMode)}
               />
@@ -992,6 +1000,7 @@ function GenerateButton({
   assetType,
   onPress,
   loading,
+  disabled,
   tokens,
   full,
 }: {
@@ -1000,6 +1009,7 @@ function GenerateButton({
   assetType: string;
   onPress: () => void;
   loading: boolean;
+  disabled?: boolean;
   tokens: (typeof PagePay)["light"];
   full?: boolean;
 }) {
@@ -1015,7 +1025,7 @@ function GenerateButton({
           },
         ]}
       >
-        <PagePaySpinner size={20} />
+        <ActivityIndicator size="small" color={tokens.mint} />
       </View>
     );
   }
@@ -1023,28 +1033,28 @@ function GenerateButton({
   return (
     <TouchableOpacity
       onPress={onPress}
-      disabled={loading}
+      disabled={loading || disabled}
       activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel={loading ? `Generating ${label}` : `Generate ${label}`}
-      accessibilityState={{ disabled: loading, busy: loading }}
+      accessibilityState={{ disabled: loading || disabled, busy: loading }}
       accessibilityHint={`Generate new ${label} study materials`}
       style={[
         styles.genBtn,
         full && styles.genBtnFull,
         {
           borderColor: tokens.border,
-          backgroundColor: tokens.card,
+          backgroundColor: disabled ? tokens.paper : tokens.card,
         },
       ]}
     >
       <Ionicons
         name={icon}
         size={18}
-        color={tokens.mint}
+        color={disabled ? tokens.inkMuted : tokens.mint}
         accessibilityLabel=""
       />
-      <Text style={[styles.genText, { color: tokens.ink }]} numberOfLines={1}>
+      <Text style={[styles.genText, { color: disabled ? tokens.inkMuted : tokens.ink }]} numberOfLines={1}>
         {label}
       </Text>
     </TouchableOpacity>
