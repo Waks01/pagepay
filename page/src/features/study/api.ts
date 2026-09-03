@@ -1,4 +1,5 @@
 import { apiFetch, apiUpload } from "@/src/shared/api/client";
+import { cacheMaterialMetadata, clearMaterialCache } from "../storage";
 
 export type MaterialSummary = {
   id: number;
@@ -218,13 +219,60 @@ export async function pollSowJob(
 export async function fetchMaterials(): Promise<MaterialSummary[]> {
   const res = await apiFetch("/api/v1/study/materials");
   if (!res.ok) throw new Error("Failed to load materials");
-  return res.json();
+  const data = (await res.json()) as MaterialSummary[];
+  for (const item of data) {
+    await cacheMaterialMetadata(item);
+  }
+  return data;
 }
 
 export async function fetchMaterial(id: number): Promise<MaterialDetail> {
   const res = await apiFetch(`/api/v1/study/materials/${id}`);
   if (!res.ok) throw new Error("Failed to load material");
-  return res.json();
+  const data = (await res.json()) as MaterialDetail;
+  await cacheMaterialMetadata({
+    id: data.id,
+    title: data.title,
+    exam_type: data.exam_type,
+    asset_types: (data.assets || []).map((a) => a.type),
+    created_at: data.created_at,
+  });
+  return data;
+}
+
+export async function deleteMaterial(id: number): Promise<void> {
+  const res = await apiFetch(`/api/v1/study/materials/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Delete failed");
+  }
+  await clearMaterialCache(id);
+}
+
+export async function updateMaterial(
+  id: number,
+  payload: { title?: string; exam_type?: string | null },
+): Promise<MaterialDetail> {
+  const res = await apiFetch(`/api/v1/study/materials/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Update failed");
+  }
+  const data = (await res.json()) as MaterialDetail;
+  await cacheMaterialMetadata({
+    id: data.id,
+    title: data.title,
+    exam_type: data.exam_type,
+    asset_types: (data.assets || []).map((a) => a.type),
+    created_at: data.created_at,
+  });
+  return data;
 }
 
 export async function generateAsset(

@@ -11,13 +11,31 @@ import {
   routeAi,
   generateExample,
   checkExampleAnswer,
+  deleteMaterial,
+  updateMaterial,
   type UploadProgressCallback,
 } from '../api';
+import {
+  getAllCachedMaterialMetadata,
+  getCachedMaterialMetadata,
+  cacheMaterialMetadata,
+  clearMaterialCache,
+} from '../storage';
 
 export function useMaterials() {
   return useQuery({
     queryKey: ['study', 'materials'],
     queryFn: fetchMaterials,
+    async initialData() {
+      const cached = await getAllCachedMaterialMetadata();
+      return cached.map((item) => ({
+        id: item.id,
+        title: item.title,
+        exam_type: item.exam_type,
+        asset_types: item.asset_types,
+        created_at: item.created_at,
+      }));
+    },
   });
 }
 
@@ -26,6 +44,18 @@ export function useMaterial(id: number) {
     queryKey: ['study', 'material', id],
     queryFn: () => fetchMaterial(id),
     enabled: id > 0,
+    async initialData() {
+      const cached = await getCachedMaterialMetadata(id);
+      if (!cached) return undefined;
+      return {
+        id: cached.id,
+        title: cached.title,
+        exam_type: cached.exam_type,
+        parsed_structure: null,
+        assets: [],
+        created_at: cached.created_at,
+      };
+    },
   });
 }
 
@@ -61,6 +91,27 @@ export function useUploadSowDocument() {
       exam_type?: string | null;
       onProgress?: UploadProgressCallback;
     }) => uploadSowDocument(payload.file, payload.exam_type, payload.onProgress),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['study', 'materials'] });
+    },
+  });
+}
+
+export function useDeleteMaterial() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (materialId: number) => deleteMaterial(materialId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['study', 'materials'] });
+    },
+  });
+}
+
+export function useUpdateMaterial() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ materialId, ...payload }: { materialId: number; title?: string; exam_type?: string | null }) =>
+      updateMaterial(materialId, payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['study', 'materials'] });
     },

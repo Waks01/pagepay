@@ -1,18 +1,29 @@
 /**
- * Offline storage for study assets
- * Caches unlocked content locally for offline access
+ * Offline storage for study assets and materials
+ * Caches unlocked content and material metadata locally for offline access
  */
 
 import * as SecureStore from 'expo-secure-store';
 
 const CACHE_PREFIX = 'study_asset_';
 const CACHE_INDEX_KEY = 'study_asset_index';
+const MATERIAL_CACHE_PREFIX = 'study_material_';
+const MATERIAL_CACHE_INDEX_KEY = 'study_material_index';
 
 type CachedAsset = {
   assetId: number;
   content: unknown;
   unlockedAt: string;
   materialId: number;
+};
+
+type CachedMaterial = {
+  id: number;
+  title: string;
+  exam_type: string | null;
+  asset_types: string[];
+  created_at: string;
+  cachedAt: string;
 };
 
 /**
@@ -158,5 +169,114 @@ export async function getCacheSize(): Promise<number> {
     return index.length;
   } catch {
     return 0;
+  }
+}
+
+
+// ── Material metadata cache ──────────────────────────────────────────
+
+async function getMaterialCacheIndex(): Promise<number[]> {
+  try {
+    const index = await SecureStore.getItemAsync(MATERIAL_CACHE_INDEX_KEY);
+    return index ? JSON.parse(index) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function updateMaterialCacheIndex(materialIds: number[]): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(MATERIAL_CACHE_INDEX_KEY, JSON.stringify(materialIds));
+  } catch (error) {
+    console.error('Failed to update material cache index:', error);
+  }
+}
+
+export async function cacheMaterialMetadata(material: {
+  id: number;
+  title: string;
+  exam_type: string | null;
+  asset_types: string[];
+  created_at: string;
+}): Promise<void> {
+  try {
+    const cached: CachedMaterial = {
+      id: material.id,
+      title: material.title,
+      exam_type: material.exam_type,
+      asset_types: material.asset_types || [],
+      created_at: material.created_at,
+      cachedAt: new Date().toISOString(),
+    };
+
+    await SecureStore.setItemAsync(
+      `${MATERIAL_CACHE_PREFIX}${material.id}`,
+      JSON.stringify(cached),
+    );
+
+    const index = await getMaterialCacheIndex();
+    if (!index.includes(material.id)) {
+      await updateMaterialCacheIndex([...index, material.id]);
+    }
+  } catch (error) {
+    console.error('Failed to cache material metadata:', error);
+  }
+}
+
+export async function getCachedMaterialMetadata(
+  materialId: number,
+): Promise<CachedMaterial | null> {
+  try {
+    const cached = await SecureStore.getItemAsync(
+      `${MATERIAL_CACHE_PREFIX}${materialId}`,
+    );
+    return cached ? JSON.parse(cached) : null;
+  } catch (error) {
+    console.error('Failed to get cached material metadata:', error);
+    return null;
+  }
+}
+
+export async function getAllCachedMaterialMetadata(): Promise<CachedMaterial[]> {
+  try {
+    const index = await getMaterialCacheIndex();
+    const materials: CachedMaterial[] = [];
+
+    for (const materialId of index) {
+      const cached = await getCachedMaterialMetadata(materialId);
+      if (cached) {
+        materials.push(cached);
+      }
+    }
+
+    return materials;
+  } catch (error) {
+    console.error('Failed to get all cached materials:', error);
+    return [];
+  }
+}
+
+export async function clearMaterialCache(materialId: number): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(`${MATERIAL_CACHE_PREFIX}${materialId}`);
+
+    const index = await getMaterialCacheIndex();
+    await updateMaterialCacheIndex(index.filter(id => id !== materialId));
+  } catch (error) {
+    console.error('Failed to clear material cache:', error);
+  }
+}
+
+export async function clearAllMaterialCache(): Promise<void> {
+  try {
+    const index = await getMaterialCacheIndex();
+
+    for (const materialId of index) {
+      await SecureStore.deleteItemAsync(`${MATERIAL_CACHE_PREFIX}${materialId}`);
+    }
+
+    await SecureStore.deleteItemAsync(MATERIAL_CACHE_INDEX_KEY);
+  } catch (error) {
+    console.error('Failed to clear all material cache:', error);
   }
 }
