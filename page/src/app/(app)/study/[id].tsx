@@ -529,9 +529,8 @@ export default function MaterialDetailScreen() {
                     <View>
                       {loadingPages ? (
                         <View style={styles.loadingPages}>
-                          <Text style={[styles.loadingPagesText, { color: tokens.inkMuted }]}>
-                            Rendering PDF pages…
-                          </Text>
+                          <View style={[styles.pdfPageSkeleton, { backgroundColor: tokens.paper2 || tokens.paper }]} />
+                          <View style={[styles.pdfPageSkeleton, { backgroundColor: tokens.paper2 || tokens.paper, marginTop: 8 }]} />
                         </View>
                       ) : pdfPagesError ? (
                         <Pressable
@@ -1246,6 +1245,13 @@ const styles = StyleSheet.create({
   loadingPages: {
     paddingVertical: 24,
     alignItems: "center",
+    gap: 8,
+  },
+  pdfPageSkeleton: {
+    width: 320,
+    height: 420,
+    borderRadius: 8,
+    backgroundColor: PagePay.light.paper2,
   },
   loadingPagesText: {
     fontSize: 13,

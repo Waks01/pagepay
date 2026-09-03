@@ -3,14 +3,14 @@
  * Caches unlocked content and material metadata locally for offline access
  */
 
-import * as SecureStore from 'expo-secure-store';
-import * as FileSystem from 'expo-file-system';
+import * as SecureStore from "expo-secure-store";
+import * as FileSystem from "expo-file-system";
 
-const CACHE_PREFIX = 'study_asset_';
-const CACHE_INDEX_KEY = 'study_asset_index';
-const MATERIAL_CACHE_PREFIX = 'study_material_';
-const MATERIAL_CACHE_INDEX_KEY = 'study_material_index';
-const MATERIAL_FILE_DIR = FileSystem.cacheDirectory + 'study_files/';
+const CACHE_PREFIX = "study_asset_";
+const CACHE_INDEX_KEY = "study_asset_index";
+const MATERIAL_CACHE_PREFIX = "study_material_";
+const MATERIAL_CACHE_INDEX_KEY = "study_material_index";
+const MATERIAL_FILE_DIR = FileSystem.cacheDirectory + "study_files/";
 
 type CachedAsset = {
   assetId: number;
@@ -47,7 +47,7 @@ async function updateCacheIndex(assetIds: number[]): Promise<void> {
   try {
     await SecureStore.setItemAsync(CACHE_INDEX_KEY, JSON.stringify(assetIds));
   } catch (error) {
-    console.error('Failed to update cache index:', error);
+    console.error("Failed to update cache index:", error);
   }
 }
 
@@ -57,7 +57,7 @@ async function updateCacheIndex(assetIds: number[]): Promise<void> {
 export async function cacheAsset(
   assetId: number,
   content: unknown,
-  materialId: number
+  materialId: number,
 ): Promise<void> {
   try {
     const cached: CachedAsset = {
@@ -66,19 +66,19 @@ export async function cacheAsset(
       unlockedAt: new Date().toISOString(),
       materialId,
     };
-    
+
     await SecureStore.setItemAsync(
       `${CACHE_PREFIX}${assetId}`,
-      JSON.stringify(cached)
+      JSON.stringify(cached),
     );
-    
+
     // Update index
     const index = await getCacheIndex();
     if (!index.includes(assetId)) {
       await updateCacheIndex([...index, assetId]);
     }
   } catch (error) {
-    console.error('Failed to cache asset:', error);
+    console.error("Failed to cache asset:", error);
     // Don't throw - caching is optional
   }
 }
@@ -86,12 +86,14 @@ export async function cacheAsset(
 /**
  * Get cached asset
  */
-export async function getCachedAsset(assetId: number): Promise<CachedAsset | null> {
+export async function getCachedAsset(
+  assetId: number,
+): Promise<CachedAsset | null> {
   try {
     const cached = await SecureStore.getItemAsync(`${CACHE_PREFIX}${assetId}`);
     return cached ? JSON.parse(cached) : null;
   } catch (error) {
-    console.error('Failed to get cached asset:', error);
+    console.error("Failed to get cached asset:", error);
     return null;
   }
 }
@@ -115,17 +117,17 @@ export async function getAllCachedAssets(): Promise<CachedAsset[]> {
   try {
     const index = await getCacheIndex();
     const assets: CachedAsset[] = [];
-    
+
     for (const assetId of index) {
       const cached = await getCachedAsset(assetId);
       if (cached) {
         assets.push(cached);
       }
     }
-    
+
     return assets;
   } catch (error) {
-    console.error('Failed to get all cached assets:', error);
+    console.error("Failed to get all cached assets:", error);
     return [];
   }
 }
@@ -136,12 +138,12 @@ export async function getAllCachedAssets(): Promise<CachedAsset[]> {
 export async function clearAssetCache(assetId: number): Promise<void> {
   try {
     await SecureStore.deleteItemAsync(`${CACHE_PREFIX}${assetId}`);
-    
+
     // Update index
     const index = await getCacheIndex();
-    await updateCacheIndex(index.filter(id => id !== assetId));
+    await updateCacheIndex(index.filter((id) => id !== assetId));
   } catch (error) {
-    console.error('Failed to clear asset cache:', error);
+    console.error("Failed to clear asset cache:", error);
   }
 }
 
@@ -151,14 +153,14 @@ export async function clearAssetCache(assetId: number): Promise<void> {
 export async function clearAllCache(): Promise<void> {
   try {
     const index = await getCacheIndex();
-    
+
     for (const assetId of index) {
       await SecureStore.deleteItemAsync(`${CACHE_PREFIX}${assetId}`);
     }
-    
+
     await SecureStore.deleteItemAsync(CACHE_INDEX_KEY);
   } catch (error) {
-    console.error('Failed to clear all cache:', error);
+    console.error("Failed to clear all cache:", error);
   }
 }
 
@@ -174,7 +176,6 @@ export async function getCacheSize(): Promise<number> {
   }
 }
 
-
 // ── Material metadata cache ──────────────────────────────────────────
 
 async function getMaterialCacheIndex(): Promise<number[]> {
@@ -188,9 +189,12 @@ async function getMaterialCacheIndex(): Promise<number[]> {
 
 async function updateMaterialCacheIndex(materialIds: number[]): Promise<void> {
   try {
-    await SecureStore.setItemAsync(MATERIAL_CACHE_INDEX_KEY, JSON.stringify(materialIds));
+    await SecureStore.setItemAsync(
+      MATERIAL_CACHE_INDEX_KEY,
+      JSON.stringify(materialIds),
+    );
   } catch (error) {
-    console.error('Failed to update material cache index:', error);
+    console.error("Failed to update material cache index:", error);
   }
 }
 
@@ -221,7 +225,7 @@ export async function cacheMaterialMetadata(material: {
       await updateMaterialCacheIndex([...index, material.id]);
     }
   } catch (error) {
-    console.error('Failed to cache material metadata:', error);
+    console.error("Failed to cache material metadata:", error);
   }
 }
 
@@ -234,12 +238,14 @@ export async function getCachedMaterialMetadata(
     );
     return cached ? JSON.parse(cached) : null;
   } catch (error) {
-    console.error('Failed to get cached material metadata:', error);
+    console.error("Failed to get cached material metadata:", error);
     return null;
   }
 }
 
-export async function getAllCachedMaterialMetadata(): Promise<CachedMaterial[]> {
+export async function getAllCachedMaterialMetadata(): Promise<
+  CachedMaterial[]
+> {
   try {
     const index = await getMaterialCacheIndex();
     const materials: CachedMaterial[] = [];
@@ -253,7 +259,7 @@ export async function getAllCachedMaterialMetadata(): Promise<CachedMaterial[]> 
 
     return materials;
   } catch (error) {
-    console.error('Failed to get all cached materials:', error);
+    console.error("Failed to get all cached materials:", error);
     return [];
   }
 }
@@ -263,9 +269,9 @@ export async function clearMaterialCache(materialId: number): Promise<void> {
     await SecureStore.deleteItemAsync(`${MATERIAL_CACHE_PREFIX}${materialId}`);
 
     const index = await getMaterialCacheIndex();
-    await updateMaterialCacheIndex(index.filter(id => id !== materialId));
+    await updateMaterialCacheIndex(index.filter((id) => id !== materialId));
   } catch (error) {
-    console.error('Failed to clear material cache:', error);
+    console.error("Failed to clear material cache:", error);
   }
 }
 
@@ -274,22 +280,23 @@ export async function clearAllMaterialCache(): Promise<void> {
     const index = await getMaterialCacheIndex();
 
     for (const materialId of index) {
-      await SecureStore.deleteItemAsync(`${MATERIAL_CACHE_PREFIX}${materialId}`);
+      await SecureStore.deleteItemAsync(
+        `${MATERIAL_CACHE_PREFIX}${materialId}`,
+      );
     }
 
     await SecureStore.deleteItemAsync(MATERIAL_CACHE_INDEX_KEY);
   } catch (error) {
-    console.error('Failed to clear all material cache:', error);
+    console.error("Failed to clear all material cache:", error);
   }
 }
 
-
 // ── Original file bytes cache ────────────────────────────────────────
 
-async function ensureMaterialFileDir(): Promise<void> {
-  const dirInfo = await FileSystem.getInfoAsync(MATERIAL_FILE_DIR);
-  if (!dirInfo.exists) {
-    await FileSystem.makeDirectoryAsync(MATERIAL_FILE_DIR, { intermediates: true });
+function ensureMaterialFileDir(): void {
+  const dir = new FileSystem.Directory(FileSystem.Paths.cache, "study_files");
+  if (!dir.exists) {
+    dir.create({ intermediates: true });
   }
 }
 
@@ -299,14 +306,20 @@ export async function cacheMaterialFile(
   mimeType: string,
 ): Promise<void> {
   try {
-    await ensureMaterialFileDir();
-    const ext = mimeType.split('/')[1]?.split(';')[0] || 'bin';
-    const filePath = `${MATERIAL_FILE_DIR}${materialId}.${ext}`;
-    await FileSystem.writeAsStringAsync(filePath, base64Data, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+    ensureMaterialFileDir();
+    const ext = mimeType.split("/")[1]?.split(";")[0] || "bin";
+    const dir = new FileSystem.Directory(FileSystem.Paths.cache, "study_files");
+    const file = new FileSystem.File(dir, `${materialId}.${ext}`);
+
+    // Convert base64 to Uint8Array and write
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    file.write(bytes);
   } catch (error) {
-    console.error('Failed to cache material file:', error);
+    console.error("Failed to cache material file:", error);
   }
 }
 
@@ -315,21 +328,27 @@ export async function getCachedMaterialFileUri(
   mimeType?: string | null,
 ): Promise<string | null> {
   try {
-    const dirInfo = await FileSystem.getInfoAsync(MATERIAL_FILE_DIR);
-    if (!dirInfo.exists) return null;
+    const dir = new FileSystem.Directory(FileSystem.Paths.cache, "study_files");
+    if (!dir.exists) return null;
 
-    const files = await FileSystem.readDirectoryAsync(MATERIAL_FILE_DIR);
-    const matchingFile = files.find((name) => name.startsWith(`${materialId}.`));
+    const files = dir.list();
+    const matchingFile = files.find(
+      (item) =>
+        item instanceof FileSystem.File &&
+        item.name.startsWith(`${materialId}.`),
+    );
     if (!matchingFile) return null;
 
-    return `${MATERIAL_FILE_DIR}${matchingFile}`;
+    return matchingFile.uri;
   } catch (error) {
-    console.error('Failed to get cached material file:', error);
+    console.error("Failed to get cached material file:", error);
     return null;
   }
 }
 
-export async function isMaterialFileCached(materialId: number): Promise<boolean> {
+export async function isMaterialFileCached(
+  materialId: number,
+): Promise<boolean> {
   try {
     const uri = await getCachedMaterialFileUri(materialId);
     return uri !== null;
@@ -338,24 +357,27 @@ export async function isMaterialFileCached(materialId: number): Promise<boolean>
   }
 }
 
-export async function clearMaterialFileCache(materialId: number): Promise<void> {
+export async function clearMaterialFileCache(
+  materialId: number,
+): Promise<void> {
   try {
     const uri = await getCachedMaterialFileUri(materialId);
     if (uri) {
-      await FileSystem.deleteAsync(uri, { idempotent: true });
+      const file = new FileSystem.File(uri);
+      file.delete();
     }
   } catch (error) {
-    console.error('Failed to clear material file cache:', error);
+    console.error("Failed to clear material file cache:", error);
   }
 }
 
 export async function clearAllMaterialFileCache(): Promise<void> {
   try {
-    const dirInfo = await FileSystem.getInfoAsync(MATERIAL_FILE_DIR);
-    if (dirInfo.exists) {
-      await FileSystem.deleteAsync(MATERIAL_FILE_DIR, { idempotent: true });
+    const dir = new FileSystem.Directory(FileSystem.Paths.cache, "study_files");
+    if (dir.exists) {
+      dir.delete();
     }
   } catch (error) {
-    console.error('Failed to clear all material file cache:', error);
+    console.error("Failed to clear all material file cache:", error);
   }
 }
