@@ -1,5 +1,5 @@
 import { apiFetch, apiUpload } from "@/src/shared/api/client";
-import { cacheMaterialMetadata, clearMaterialCache } from "../storage";
+import { cacheMaterialMetadata, clearMaterialCache } from "./storage";
 
 export type MaterialSummary = {
   id: number;
