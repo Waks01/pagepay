@@ -648,9 +648,10 @@ class MaterialDetail(BaseModel):
     title: str
     exam_type: str | None = None
     content: str | None = None
-    image_url: str | None = None
     parsed_structure: dict | None
     assets: list[dict]
+    file_mime_type: str | None = None
+    has_original_file: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

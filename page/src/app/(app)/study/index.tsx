@@ -165,6 +165,8 @@ export default function StudyScreen() {
   const [editTitle, setEditTitle] = useState("");
   const [editExamType, setEditExamType] = useState<string | null>(null);
   const [shareFormatVisible, setShareFormatVisible] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
 
   // Load cached assets on mount
   useEffect(() => {
@@ -203,19 +205,7 @@ export default function StudyScreen() {
 
   // Restore last selected material on mount
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const saved = await getLastRoute();
-      if (saved && saved.startsWith("/study/materials/")) {
-        const id = Number(saved.split("/").pop());
-        if (!cancelled && !isNaN(id)) {
-          handleMaterialPress(id);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    // Navigation to last route removed to ensure Study tab lands on main index page
   }, []);
 
   // Persist selected material to route memory
@@ -422,25 +412,13 @@ export default function StudyScreen() {
         return;
       }
 
-      // Validate file type
       const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
       if (file.type && !validTypes.includes(file.type.toLowerCase())) {
         throw new Error(t("study.errors.invalid_file_type"));
       }
 
-      const { job_id } = await uploadImageMutation.mutateAsync({
-        file: { uri: file.uri, name: file.name, type: file.type },
-        exam_type: examType,
-        onProgress: handleUploadProgress,
-      });
-      setAiProcessing(true);
-      setUploadProgress(80);
-      const job = await pollSowJob(job_id, handlePollTick);
-      setAiProcessing(false);
-      if (job.status === "failed" || !job.material_id) {
-        throw new Error(job.error || "Image processing failed");
-      }
-      await finalizeUploadSuccess(job.material_id);
+      setPreviewFile({ uri: file.uri, name: file.name, type: file.type });
+      setPreviewVisible(true);
     } catch (err) {
       setUploadProgress(undefined);
       const message = err instanceof Error ? err.message : "Upload failed";
@@ -460,19 +438,8 @@ export default function StudyScreen() {
         setUploadProgress(undefined);
         return;
       }
-      const { job_id } = await uploadImageMutation.mutateAsync({
-        file: { uri: file.uri, name: file.name, type: file.type },
-        exam_type: examType,
-        onProgress: handleUploadProgress,
-      });
-      setAiProcessing(true);
-      setUploadProgress(80);
-      const job = await pollSowJob(job_id, handlePollTick);
-      setAiProcessing(false);
-      if (job.status === "failed" || !job.material_id) {
-        throw new Error(job.error || "Photo processing failed");
-      }
-      await finalizeUploadSuccess(job.material_id);
+      setPreviewFile({ uri: file.uri, name: file.name, type: file.type });
+      setPreviewVisible(true);
     } catch (err) {
       setUploadProgress(undefined);
       const message = err instanceof Error ? err.message : "Upload failed";
@@ -492,39 +459,8 @@ export default function StudyScreen() {
         setUploadProgress(undefined);
         return;
       }
-
-      // Client-side file validation
-      const validTypes = [
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/msword",
-      ];
-      if (file.type && !validTypes.includes(file.type.toLowerCase())) {
-        throw new Error(t("study.errors.invalid_format"));
-      }
-
-      // Validate file extension as fallback
-      const validExtensions = [".pdf", ".docx", ".doc"];
-      const hasValidExtension = validExtensions.some((ext) =>
-        file.name.toLowerCase().endsWith(ext),
-      );
-      if (!hasValidExtension) {
-        throw new Error(t("study.errors.invalid_format"));
-      }
-
-      const { job_id } = await uploadDocumentMutation.mutateAsync({
-        file: { uri: file.uri, name: file.name, type: file.type },
-        exam_type: examType,
-        onProgress: handleUploadProgress,
-      });
-      setAiProcessing(true);
-      setUploadProgress(80);
-      const job = await pollSowJob(job_id, handlePollTick);
-      setAiProcessing(false);
-      if (job.status === "failed" || !job.material_id) {
-        throw new Error(job.error || "Document processing failed");
-      }
-      await finalizeUploadSuccess(job.material_id);
+      setPreviewFile({ uri: file.uri, name: file.name, type: file.type });
+      setPreviewVisible(true);
     } catch (err) {
       setUploadProgress(undefined);
       const message = err instanceof Error ? err.message : "Upload failed";
@@ -534,50 +470,50 @@ export default function StudyScreen() {
     }
   };
 
-  const handleGenerateAsset = async (
-    materialId: number,
-    assetType: string,
-    count?: number,
-    topic?: string | null,
-    mode?: "topic" | "all",
-  ) => {
-    setGeneratingType(assetType);
-    setError(null);
-    setRetryAction(null);
+  const confirmUpload = async () => {
+    if (!previewFile) return;
+    setPreviewVisible(false);
+    setUploadProgress(0);
     try {
-      const res = await apiFetch("/api/v1/study/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          material_id: materialId,
-          asset_type: assetType,
-          count: count ?? (mode === "topic" ? 15 : 20),
-          topic: topic ?? null,
-          mode: mode ?? "all",
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || "Generation failed");
+      const isImage = previewFile.type.startsWith("image/");
+      const isPdf = previewFile.type === "application/pdf";
+      if (isImage) {
+        const { job_id } = await uploadImageMutation.mutateAsync({
+          file: { uri: previewFile.uri, name: previewFile.name, type: previewFile.type },
+          exam_type: examType,
+          onProgress: handleUploadProgress,
+        });
+        setAiProcessing(true);
+        setUploadProgress(80);
+        const job = await pollSowJob(job_id, handlePollTick);
+        setAiProcessing(false);
+        if (job.status === "failed" || !job.material_id) {
+          throw new Error(job.error || "Image processing failed");
+        }
+        await finalizeUploadSuccess(job.material_id);
+      } else if (isPdf) {
+        const { job_id } = await uploadDocumentMutation.mutateAsync({
+          file: { uri: previewFile.uri, name: previewFile.name, type: previewFile.type },
+          exam_type: examType,
+          onProgress: handleUploadProgress,
+        });
+        setAiProcessing(true);
+        setUploadProgress(80);
+        const job = await pollSowJob(job_id, handlePollTick);
+        setAiProcessing(false);
+        if (job.status === "failed" || !job.material_id) {
+          throw new Error(job.error || "Document processing failed");
+        }
+        await finalizeUploadSuccess(job.material_id);
+      } else {
+        throw new Error("Unsupported file type");
       }
-      const detailRes = await apiFetch(`/api/v1/study/materials/${materialId}`);
-      if (detailRes.ok) {
-        setSelectedMaterial(await detailRes.json());
-      }
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Generation failed";
-      const specificError = categorizeError(
-        message,
-        `${assetType} generation`,
-        t,
-      );
-      setError(specificError);
-      setRetryAction(
-        () => () =>
-          handleGenerateAsset(materialId, assetType, count, topic, mode),
-      );
+    } catch (err) {
+      setUploadProgress(undefined);
+      const message = err instanceof Error ? err.message : "Upload failed";
+      setError(message);
     } finally {
-      setGeneratingType(null);
+      setPreviewFile(null);
     }
   };
 
@@ -1453,72 +1389,62 @@ export default function StudyScreen() {
           </View>
         </Pressable>
       </Modal>
-    </SafeAreaView>
-  );
-}
 
-function GenerateButton({
-  label,
-  icon,
-  assetType,
-  onPress,
-  loading,
-  tokens,
-  full,
-}: {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  assetType: string;
-  onPress: () => void;
-  loading: boolean;
-  tokens: (typeof PagePay)["light"];
-  full?: boolean;
-}) {
-  if (loading) {
-    return (
-      <View
-        style={[
-          styles.genBtn,
-          full && styles.genBtnFull,
-          {
-            borderColor: tokens.border,
-            backgroundColor: tokens.paper,
-          },
-        ]}
+      {/* Pre-upload preview */}
+      <Modal
+        visible={previewVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewVisible(false)}
       >
-        <PagePaySpinner size={20} />
-      </View>
-    );
-  }
-
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={loading}
-      activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityLabel={loading ? `Generating ${label}` : `Generate ${label}`}
-      accessibilityState={{ disabled: loading, busy: loading }}
-      accessibilityHint={`Generate new ${label} study materials`}
-      style={[
-        styles.genBtn,
-        full && styles.genBtnFull,
-        {
-          borderColor: tokens.border,
-          backgroundColor: tokens.card,
-        },
-      ]}
-    >
-      <Ionicons
-        name={icon}
-        size={18}
-        color={tokens.mint}
-        accessibilityLabel=""
-      />
-      <Text style={[styles.genText, { color: tokens.ink }]} numberOfLines={1}>
-        {label}
-      </Text>
-    </TouchableOpacity>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setPreviewVisible(false)}
+        >
+          <View style={[styles.previewModal, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+            <Text style={[styles.previewTitle, { color: tokens.ink }]}>
+              {t("study.preview_title", "Preview")}
+            </Text>
+            <Text style={[styles.previewFileName, { color: tokens.inkMuted }]}>
+              {previewFile?.name}
+            </Text>
+            {previewFile?.type?.startsWith("image/") && (
+              <Image
+                source={{ uri: previewFile.uri }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            )}
+            {previewFile?.type === "application/pdf" && (
+              <View style={styles.previewPdfPlaceholder}>
+                <Ionicons name="document-text-outline" size={48} color={tokens.mint} />
+                <Text style={[styles.previewPdfText, { color: tokens.inkMuted }]}>
+                  PDF preview will be available after upload
+                </Text>
+              </View>
+            )}
+            <View style={styles.previewActions}>
+              <Pressable
+                onPress={() => setPreviewVisible(false)}
+                style={[styles.previewBtn, { borderColor: tokens.border }]}
+              >
+                <Text style={[styles.previewBtnText, { color: tokens.inkMuted }]}>
+                  {t("common.cancel")}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmUpload}
+                style={[styles.previewBtn, { backgroundColor: tokens.mint }]}
+              >
+                <Text style={[styles.previewBtnText, { color: tokens.mintText }]}>
+                  {t("study.upload_confirm", "Upload")}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
@@ -2101,5 +2027,51 @@ const styles = StyleSheet.create({
   shareFormatDesc: {
     fontSize: 12,
     marginTop: 2,
+  },
+  previewModal: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 20,
+    gap: 16,
+  },
+  previewTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+  },
+  previewFileName: {
+    fontSize: 13,
+  },
+  previewImage: {
+    width: "100%",
+    height: 220,
+    borderRadius: 10,
+    backgroundColor: "#F3F4F6",
+  },
+  previewPdfPlaceholder: {
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 24,
+  },
+  previewPdfText: {
+    fontSize: 13,
+    textAlign: "center",
+  },
+  previewActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  previewBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 10,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  previewBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

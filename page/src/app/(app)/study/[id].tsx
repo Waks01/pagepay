@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Image,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -17,7 +18,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { useAudioPlayer } from "expo-audio";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 
@@ -27,6 +27,7 @@ import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PageHeader } from "@/components/PageHeader";
 import AudioUnlockModal from "@/components/AudioUnlockModal";
 import { getTopicNames } from "@/src/app/(app)/study";
+import { ProgressDashboard } from "@/components/study/ProgressDashboard";
 
 type MaterialDetail = {
   id: number;
@@ -58,11 +59,10 @@ export default function MaterialDetailScreen() {
 
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialDetail | null>(null);
   const [unlockedAssets, setUnlockedAssets] = useState<Record<number, unknown>>({});
-  const [showReader, setShowReader] = useState(false);
-  const [ttsUrl, setTtsUrl] = useState<string | null>(null);
-  const [ttsPlaying, setTtsPlaying] = useState(false);
-  const [ttsLoading, setTtsLoading] = useState(false);
-  const player = useAudioPlayer(ttsUrl);
+  const [generateMode, setGenerateMode] = useState<"topic" | "all">("all");
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [generateCount, setGenerateCount] = useState<number>(15);
+  const [generatingType, setGeneratingType] = useState<string | null>(null);
   const [audioUnlockVisible, setAudioUnlockVisible] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [actionMenuVisible, setActionMenuVisible] = useState(false);
@@ -71,6 +71,8 @@ export default function MaterialDetailScreen() {
   const [editTitle, setEditTitle] = useState("");
   const [editExamType, setEditExamType] = useState<string | null>(null);
   const [shareFormatVisible, setShareFormatVisible] = useState(false);
+  const [pdfPages, setPdfPages] = useState<Array<{ page: number; total: number; image_base64: string; width: number; height: number }> | null>(null);
+  const [loadingPages, setLoadingPages] = useState(false);
   const studySessionIdRef = useRef<number | null>(null);
 
   const materialQ = useQuery({
@@ -82,11 +84,45 @@ export default function MaterialDetailScreen() {
     },
   });
 
+  const progressQ = useQuery({
+    queryKey: ["study", "progress", materialId],
+    queryFn: async () => {
+      const res = await apiFetch(`/api/v1/study/materials/${materialId}/progress`);
+      if (!res.ok) throw new Error("Failed to load progress");
+      return res.json();
+    },
+    enabled: !!selectedMaterial,
+  });
+
   useEffect(() => {
     if (materialQ.data) {
       setSelectedMaterial(materialQ.data);
     }
   }, [materialQ.data]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (selectedMaterial?.file_mime_type === "application/pdf" && selectedMaterial.has_original_file) {
+      setLoadingPages(true);
+      apiFetch(`/api/v1/study/materials/${selectedMaterial.id}/pages`)
+        .then(async (res) => {
+          if (!res.ok) throw new Error("Failed to load pages");
+          const data = await res.json();
+          if (!cancelled) setPdfPages(data.pages || []);
+        })
+        .catch((err) => {
+          if (!cancelled) console.error("Failed to load PDF pages:", err);
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingPages(false);
+        });
+    } else {
+      setPdfPages(null);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedMaterial?.id, selectedMaterial?.file_mime_type, selectedMaterial?.has_original_file]);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,44 +163,39 @@ export default function MaterialDetailScreen() {
 
   const handleTtsPress = useCallback(async () => {
     if (!selectedMaterial?.content) return;
-    if (ttsPlaying) {
-      player.pause();
-      setTtsPlaying(false);
-      return;
-    }
-    setTtsLoading(true);
-    try {
-      const res = await apiFetch(
-        `/api/v1/study/tts`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: selectedMaterial.content,
-            material_id: materialId,
-          }),
-        },
-      );
+    // TTS logic moved to /reader.tsx
+  }, [selectedMaterial]);
 
+  const handleGenerateAsset = async (
+    assetType: string,
+    count?: number,
+    topic?: string | null,
+    mode?: "topic" | "all",
+  ) => {
+    setGeneratingType(assetType);
+    try {
+      const res = await apiFetch("/api/v1/study/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          material_id: materialId,
+          asset_type: assetType,
+          count: count ?? (mode === "topic" ? 15 : 20),
+          topic: topic ?? null,
+          mode: mode ?? "all",
+        }),
+      });
       if (!res.ok) {
-        const status = Number(res.status);
-        if (__DEV__) console.log(`[TTS] Response status: ${status}`);
-        if (status === 403) {
-          if (__DEV__) console.log("[TTS] 403 Forbidden - triggering AudioUnlockModal");
-          setAudioUnlockVisible(true);
-          return;
-        }
-        throw new Error(`TTS failed with status ${status}`);
+        const err = await res.json().catch(() => ({ detail: "Generation failed" }));
+        throw new Error(err.detail || "Generation failed");
       }
-      const data = await res.json();
-      setTtsUrl(data.url);
-      setTtsPlaying(true);
+      qc.invalidateQueries({ queryKey: ["study", "material", materialId] });
     } catch (err) {
-      if (__DEV__) console.error("TTS error:", err);
+      if (__DEV__) console.error("Generation failed:", err);
     } finally {
-      setTtsLoading(false);
+      setGeneratingType(null);
     }
-  }, [materialId, selectedMaterial, ttsPlaying, player]);
+  };
 
   const handleChatPress = () => {
     router.push(`/study/chat/${materialId}`);
@@ -378,8 +409,21 @@ export default function MaterialDetailScreen() {
         }
       >
         <View style={styles.detailView}>
-          {selectedMaterial.image_url && (
+          {progressQ.data && (
             <Animated.View entering={FadeInDown.duration(240).springify()}>
+              <ProgressDashboard
+                materialId={materialId}
+                totalTopics={progressQ.data.total_topics}
+                mastered={progressQ.data.mastered}
+                reviewing={progressQ.data.reviewing}
+                notStarted={progressQ.data.not_started}
+                progress={progressQ.data.progress}
+              />
+            </Animated.View>
+          )}
+
+          {selectedMaterial.image_url && (
+            <Animated.View entering={FadeInDown.delay(60).duration(240).springify()}>
               <Image
                 source={{ uri: selectedMaterial.image_url }}
                 style={styles.materialImage}
@@ -428,6 +472,97 @@ export default function MaterialDetailScreen() {
             </Animated.View>
           )}
 
+          {selectedMaterial.has_original_file && (
+            <Animated.View
+              entering={FadeInDown.delay(80).duration(240).springify()}
+            >
+              <View
+                style={[
+                  styles.materialPreviewCard,
+                  { backgroundColor: tokens.card, borderColor: tokens.border },
+                ]}
+              >
+                <View style={styles.sectionHeaderRow}>
+                  <Text
+                    style={[
+                      styles.outlineTitle,
+                      { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string },
+                    ]}
+                  >
+                    {t("study.original_file_title", "Original File")}
+                  </Text>
+                  <Text style={[styles.outlineMeta, { color: tokens.inkMuted }]}>
+                    {selectedMaterial.file_mime_type?.split("/")[1]?.toUpperCase()}
+                  </Text>
+                </View>
+
+                {selectedMaterial.file_mime_type?.startsWith("image/") && (
+                  <Image
+                    source={{ uri: `/api/v1/study/materials/${selectedMaterial.id}/file` }}
+                    style={styles.materialPreviewImage}
+                    resizeMode="contain"
+                  />
+                )}
+
+                {selectedMaterial.file_mime_type === "application/pdf" && (
+                  <View>
+                    {loadingPages ? (
+                      <View style={styles.loadingPages}>
+                        <Text style={[styles.loadingPagesText, { color: tokens.inkMuted }]}>
+                          Rendering PDF pages…
+                        </Text>
+                      </View>
+                    ) : pdfPages && pdfPages.length > 0 ? (
+                      <ScrollView
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.pdfScroll}
+                      >
+                        {pdfPages.map((page) => (
+                          <Image
+                            key={page.page}
+                            source={{ uri: `data:image/png;base64,${page.image_base64}` }}
+                            style={styles.pdfPageImage}
+                            resizeMode="contain"
+                          />
+                        ))}
+                      </ScrollView>
+                    ) : (
+                      <Pressable
+                        onPress={() => {
+                          const url = `/api/v1/study/materials/${selectedMaterial.id}/file`;
+                          Linking.openURL(url);
+                        }}
+                        style={[styles.openFileBtn, { borderColor: tokens.border }]}
+                      >
+                        <Ionicons name="document-outline" size={18} color={tokens.mint} />
+                        <Text style={[styles.openFileText, { color: tokens.mint }]}>
+                          Open PDF
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                )}
+
+                {selectedMaterial.file_mime_type && !selectedMaterial.file_mime_type.startsWith("image/") && selectedMaterial.file_mime_type !== "application/pdf" && (
+                  <Pressable
+                    onPress={() => {
+                      const url = `/api/v1/study/materials/${selectedMaterial.id}/file`;
+                      Linking.openURL(url);
+                    }}
+                    style={[styles.openFileBtn, { borderColor: tokens.border }]}
+                  >
+                    <Ionicons name="document-outline" size={18} color={tokens.mint} />
+                    <Text style={[styles.openFileText, { color: tokens.mint }]}>
+                      Open File
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </Animated.View>
+          )}
+
           {selectedMaterial.content && (
             <Animated.View
               entering={FadeInDown.delay(120).duration(240).springify()}
@@ -460,7 +595,7 @@ export default function MaterialDetailScreen() {
                   {selectedMaterial.content}
                 </Text>
                 <Pressable
-                  onPress={() => setShowReader(true)}
+                  onPress={() => router.push(`/study/${materialId}/reader`)}
                   style={({ pressed }) => [
                     styles.readBtn,
                     {
@@ -480,6 +615,107 @@ export default function MaterialDetailScreen() {
               </View>
             </Animated.View>
           )}
+
+          <Animated.View
+            entering={FadeInDown.delay(180).duration(240).springify()}
+            style={styles.generateBlock}
+          >
+            <View style={styles.sectionHeaderRow}>
+              <Text
+                style={[
+                  styles.outlineTitle,
+                  { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string },
+                ]}
+              >
+                {t("study.generate_assets_title", "Generate AI Study Assets")}
+              </Text>
+            </View>
+
+            <View style={styles.generateOptions}>
+              <Text style={[styles.generateOptionsLabel, { color: tokens.inkMuted }]}>
+                {t("study.generate_mode_label", "Generation Mode")}
+              </Text>
+              <View style={styles.modeSelector}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setGenerateMode("all");
+                    setSelectedTopic(null);
+                  }}
+                  style={[
+                    styles.modeBtn,
+                    {
+                      backgroundColor: generateMode === "all" ? tokens.mintSoft : tokens.paper,
+                      borderColor: generateMode === "all" ? tokens.mint : tokens.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.modeBtnText, { color: generateMode === "all" ? tokens.mint : tokens.ink }]}>
+                    {t("study.mode_all", "All Topics")}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setGenerateMode("topic")}
+                  style={[
+                    styles.modeBtn,
+                    {
+                      backgroundColor: generateMode === "topic" ? tokens.mintSoft : tokens.paper,
+                      borderColor: generateMode === "topic" ? tokens.mint : tokens.border,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.modeBtnText, { color: generateMode === "topic" ? tokens.mint : tokens.ink }]}>
+                    {t("study.mode_topic", "Specific Topic")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {generateMode === "topic" && topicNames.length > 0 && (
+                <View style={styles.topicSelector}>
+                  <Text style={[styles.topicSelectorLabel, { color: tokens.inkMuted }]}>
+                    {t("study.select_topic", "Select Topic")}
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.topicChips}>
+                    {topicNames.map((topic, idx) => (
+                      <TouchableOpacity
+                        key={idx}
+                        onPress={() => setSelectedTopic(topic)}
+                        style={[
+                          styles.topicChip,
+                          {
+                            backgroundColor: selectedTopic === topic ? tokens.mintSoft : tokens.paper,
+                            borderColor: selectedTopic === topic ? tokens.mint : tokens.border,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.topicChipText, { color: selectedTopic === topic ? tokens.mint : tokens.ink }]}>
+                          {topic}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.generateRow}>
+              <GenerateButton
+                label={t("study.generate_mcq", "MCQs")}
+                icon="list-outline"
+                assetType="mcq"
+                loading={generatingType === "mcq"}
+                tokens={tokens}
+                onPress={() => handleGenerateAsset("mcq", generateCount, selectedTopic, generateMode)}
+              />
+              <GenerateButton
+                label={t("study.generate_flashcards", "Flashcards")}
+                icon="layers-outline"
+                assetType="flashcard"
+                loading={generatingType === "flashcard"}
+                tokens={tokens}
+                onPress={() => handleGenerateAsset("flashcard", generateCount, selectedTopic, generateMode)}
+              />
+            </View>
+          </Animated.View>
 
           <AssetBrowser
             assets={selectedMaterial.assets}
@@ -509,77 +745,6 @@ export default function MaterialDetailScreen() {
           />
         </View>
       </ScrollView>
-
-      {showReader && selectedMaterial.content && (
-        <Modal
-          visible={showReader}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => {
-            player.pause();
-            setTtsPlaying(false);
-            setShowReader(false);
-          }}
-        >
-          <SafeAreaView
-            edges={["top", "bottom"]}
-            style={{ flex: 1, backgroundColor: tokens.paper }}
-          >
-            <View
-              style={[
-                styles.readerHeader,
-                { borderBottomColor: tokens.border },
-              ]}
-            >
-              <Text
-                style={[styles.readerTitle, { color: tokens.ink }]}
-                numberOfLines={1}
-              >
-                {selectedMaterial.title}
-              </Text>
-              <View style={styles.readerHeaderActions}>
-                <TouchableOpacity
-                  onPress={handleTtsPress}
-                  disabled={ttsLoading}
-                  style={styles.readerTtsBtn}
-                >
-                  <Ionicons
-                    name={ttsPlaying ? "pause" : "play"}
-                    size={20}
-                    color={tokens.mint}
-                  />
-                  <Text
-                    style={[styles.readerTtsText, { color: tokens.mint }]}
-                  >
-                    {ttsLoading
-                      ? t("common.loading")
-                      : ttsPlaying
-                        ? t("study.tts.pause")
-                        : t("study.tts.listen")}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    player.pause();
-                    setTtsPlaying(false);
-                    setShowReader(false);
-                  }}
-                  style={styles.readerCloseBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("study.reader_close_a11y")}
-                >
-                  <Ionicons name="close" size={22} color={tokens.ink} />
-                </TouchableOpacity>
-              </View>
-            </View>
-            <ScrollView style={styles.readerContent}>
-              <Text style={[styles.readerText, { color: tokens.ink }]}>
-                {selectedMaterial.content}
-              </Text>
-            </ScrollView>
-          </SafeAreaView>
-        </Modal>
-      )}
 
       <AudioUnlockModal
         visible={audioUnlockVisible}
@@ -826,6 +991,71 @@ function AssetBrowser({
   );
 }
 
+function GenerateButton({
+  label,
+  icon,
+  assetType,
+  onPress,
+  loading,
+  tokens,
+  full,
+}: {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  assetType: string;
+  onPress: () => void;
+  loading: boolean;
+  tokens: (typeof PagePay)["light"];
+  full?: boolean;
+}) {
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.genBtn,
+          full && styles.genBtnFull,
+          {
+            borderColor: tokens.border,
+            backgroundColor: tokens.paper,
+          },
+        ]}
+      >
+        <PagePaySpinner size={20} />
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      disabled={loading}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={loading ? `Generating ${label}` : `Generate ${label}`}
+      accessibilityState={{ disabled: loading, busy: loading }}
+      accessibilityHint={`Generate new ${label} study materials`}
+      style={[
+        styles.genBtn,
+        full && styles.genBtnFull,
+        {
+          borderColor: tokens.border,
+          backgroundColor: tokens.card,
+        },
+      ]}
+    >
+      <Ionicons
+        name={icon}
+        size={18}
+        color={tokens.mint}
+        accessibilityLabel=""
+      />
+      <Text style={[styles.genText, { color: tokens.ink }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
@@ -833,6 +1063,94 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 48,
+  },
+  generateBlock: {
+    gap: 12,
+  },
+  genHeading: {
+    fontSize: 16,
+    letterSpacing: -0.2,
+  },
+  generateRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  genBtn: {
+    flex: 1,
+    minWidth: 90,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  genBtnFull: {
+    flexBasis: "100%",
+  },
+  genBtnShimmer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  genText: {
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: -0.1,
+  },
+  generateOptions: {
+    gap: 10,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  generateOptionsLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  modeSelector: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  modeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  modeBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  topicSelector: {
+    gap: 8,
+  },
+  topicSelectorLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  topicChips: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  topicChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  topicChipText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   loadingState: {
     flex: 1,
@@ -875,6 +1193,37 @@ const styles = StyleSheet.create({
     height: 240,
     borderRadius: 12,
     backgroundColor: PagePay.light.paper2,
+  },
+  loadingPages: {
+    paddingVertical: 24,
+    alignItems: "center",
+  },
+  loadingPagesText: {
+    fontSize: 13,
+  },
+  pdfScroll: {
+    marginTop: 8,
+  },
+  pdfPageImage: {
+    width: 320,
+    height: 420,
+    borderRadius: 8,
+    backgroundColor: PagePay.light.paper2,
+    marginRight: 12,
+  },
+  openFileBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  openFileText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
   sectionHeaderRow: {
     flexDirection: "row",

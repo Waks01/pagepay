@@ -544,17 +544,6 @@ async def _process_sow_image_job(
 
         title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
 
-        image_url = None
-        try:
-            from app.services.cloudinary import upload_bytes
-            uploaded = await upload_bytes(
-                contents,
-                public_id=f"study_materials/{user_id}/{job_id}",
-            )
-            image_url = uploaded.get("secure_url") or uploaded.get("url")
-        except Exception as exc:
-            logger.warning("[sow/upload-image worker] Cloudinary upload failed job=%s err=%s", job_id, exc)
-
         import json as _json
         async with AsyncSessionLocal() as db:
             material = StudyMaterial(
@@ -563,7 +552,8 @@ async def _process_sow_image_job(
                 exam_type=exam_type,
                 raw_input=f"[IMAGE: {safe_name}]\n{extracted_text}",
                 parsed_structure=_json.dumps(parsed) if parsed else None,
-                image_url=image_url,
+                original_file_data=contents,
+                file_mime_type=file.content_type or "image/jpeg",
                 ai_model_used=provider,
             )
             db.add(material)
@@ -639,17 +629,6 @@ async def _process_sow_document_job(
 
         title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
 
-        image_url = None
-        try:
-            from app.services.cloudinary import upload_bytes
-            uploaded = await upload_bytes(
-                contents,
-                public_id=f"study_materials/{user_id}/{job_id}",
-            )
-            image_url = uploaded.get("secure_url") or uploaded.get("url")
-        except Exception as exc:
-            logger.warning("[sow/upload-document worker] Cloudinary upload failed job=%s err=%s", job_id, exc)
-
         import json as _json
         async with AsyncSessionLocal() as db:
             material = StudyMaterial(
@@ -658,7 +637,8 @@ async def _process_sow_document_job(
                 exam_type=exam_type,
                 raw_input=f"[DOCUMENT: {safe_name}]\n{extracted_text}",
                 parsed_structure=_json.dumps(parsed) if parsed else None,
-                image_url=image_url,
+                original_file_data=contents,
+                file_mime_type=file.content_type or "application/octet-stream",
                 ai_model_used=provider,
             )
             db.add(material)
@@ -776,9 +756,10 @@ async def get_material(
         title=material.title,
         exam_type=material.exam_type,
         content=material.raw_input or None,
-        image_url=material.image_url or None,
         parsed_structure=parsed,
         assets=asset_list,
+        file_mime_type=material.file_mime_type or None,
+        has_original_file=material.original_file_data is not None,
         created_at=material.created_at,
     )
 
@@ -851,9 +832,10 @@ async def update_material(
         title=material.title,
         exam_type=material.exam_type,
         content=material.raw_input or None,
-        image_url=material.image_url or None,
         parsed_structure=parsed,
         assets=asset_list,
+        file_mime_type=material.file_mime_type or None,
+        has_original_file=material.original_file_data is not None,
         created_at=material.created_at,
     )
 
@@ -1054,7 +1036,85 @@ async def export_material(
             },
         )
 
-    raise HTTPException(status_code=400, detail="Unsupported export format. Use pdf, docx, or txt.")
+    raise HTTPException(status_code=400, detail="Unsupported export format. Use pdf, docx, txt, or image.")
+
+
+# ── GET /study/materials/{id}/file ────────────────────────────────────
+
+
+@router.get("/materials/{material_id}/file")
+async def get_material_file(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    if not material.original_file_data:
+        raise HTTPException(status_code=404, detail="Original file not available")
+
+    mime = material.file_mime_type or "application/octet-stream"
+    return Response(
+        content=material.original_file_data,
+        media_type=mime,
+        headers={
+            "Content-Disposition": f'inline; filename="material_{material_id}{_ext_from_mime(mime)}"',
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
+# ── GET /study/materials/{id}/pages ───────────────────────────────────
+
+
+@router.get("/materials/{material_id}/pages")
+async def get_material_pages(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    if not material.original_file_data:
+        raise HTTPException(status_code=404, detail="Original file not available")
+
+    mime = material.file_mime_type or ""
+    if mime != "application/pdf":
+        raise HTTPException(status_code=400, detail="Only PDF page rendering is supported")
+
+    try:
+        import fitz  # PyMuPDF
+        pdf = fitz.open(stream=material.original_file_data, filetype="pdf")
+        pages: list[dict] = []
+        for page_num in range(len(pdf)):
+            page = pdf[page_num]
+            pix = page.get_pixmap(dpi=150)
+            img_bytes = pix.tobytes("png")
+            pages.append({
+                "page": page_num + 1,
+                "total": len(pdf),
+                "image_base64": __import__("base64").b64encode(img_bytes).decode("ascii"),
+                "width": pix.width,
+                "height": pix.height,
+            })
+        pdf.close()
+        return {"pages": pages}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"PDF rendering failed: {exc}") from exc
 
 
 # ── POST /study/generate ────────────────────────────────────────────
@@ -2119,4 +2179,18 @@ def _download_image(url: str) -> bytes | None:
     except Exception:
         pass
     return None
+
+
+def _ext_from_mime(mime: str) -> str:
+    mapping = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/heic": ".heic",
+        "application/pdf": ".pdf",
+        "application/msword": ".doc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+        "text/plain": ".txt",
+    }
+    return mapping.get(mime.lower().split(";", 1)[0].strip(), "")
 

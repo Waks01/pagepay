@@ -43,6 +43,7 @@ apscheduler==3.10.4
 # PDF generation for bill receipts
 reportlab==4.2.5
 qrcode[pil]==8.0
+pymupdf==1.25.3
 
 # Redis for purchase rate limiting
 redis==5.2.1

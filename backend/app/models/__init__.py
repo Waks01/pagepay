@@ -1,7 +1,7 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import (
     String, Integer, BigInteger, Boolean, Text, DateTime, Time, Enum, Float,
-    SmallInteger, JSON, UniqueConstraint, ForeignKey, Index, text,
+    SmallInteger, JSON, UniqueConstraint, ForeignKey, Index, text, LargeBinary,
 )
 from sqlalchemy import event as sa_event
 from datetime import datetime, time
@@ -480,7 +480,8 @@ class StudyMaterial(Base):
     raw_input: Mapped[str] = mapped_column(Text)
     parsed_structure: Mapped[str | None] = mapped_column(Text, nullable=True)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    original_file_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    file_mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     ai_model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -644,7 +645,7 @@ class Payment(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     tier: Mapped[str] = mapped_column(String(50))  # premium_monthly | premium_yearly | wallet_deposit
-    amount_kobo: Mapped[int] = mapped_column(BigInteger)  # ₦500 = 50000 kobo (total for deposits, price for subs)
+    amount_kobo: Mapped[int] = mapped_column(BigInteger)  # ₦5 = 500 kobo (total for deposits, price for subs)
     provider: Mapped[str] = mapped_column(String(50))  # paystack | flutterwave
     provider_tx_ref: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(50), default="pending")  # pending | success | failed
