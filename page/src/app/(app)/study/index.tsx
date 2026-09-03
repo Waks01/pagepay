@@ -402,24 +402,29 @@ export default function StudyScreen() {
   };
 
   const handleUploadImage = async (examType: string | null) => {
+    console.log("[study/index] handleUploadImage START", { examType });
     setError(null);
     setRetryAction(null);
     setUploadProgress(0);
     try {
       const file = await pickImage();
       if (!file) {
+        console.log("[study/index] handleUploadImage CANCELED");
         setUploadProgress(undefined);
         return;
       }
 
       const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
       if (file.type && !validTypes.includes(file.type.toLowerCase())) {
+        console.log("[study/index] handleUploadImage INVALID TYPE", file.type);
         throw new Error(t("study.errors.invalid_file_type"));
       }
+      console.log("[study/index] handleUploadImage PREVIEW", file);
 
       setPreviewFile({ uri: file.uri, name: file.name, type: file.type });
       setPreviewVisible(true);
     } catch (err) {
+      console.log("[study/index] handleUploadImage ERROR", err);
       setUploadProgress(undefined);
       const message = err instanceof Error ? err.message : "Upload failed";
       const specificError = categorizeError(message, "image upload", t);
@@ -429,18 +434,22 @@ export default function StudyScreen() {
   };
 
   const handleTakePhoto = async (examType: string | null) => {
+    console.log("[study/index] handleTakePhoto START", { examType });
     setError(null);
     setRetryAction(null);
     setUploadProgress(0);
     try {
       const file = await takePhoto();
       if (!file) {
+        console.log("[study/index] handleTakePhoto CANCELED");
         setUploadProgress(undefined);
         return;
       }
+      console.log("[study/index] handleTakePhoto PREVIEW", file);
       setPreviewFile({ uri: file.uri, name: file.name, type: file.type });
       setPreviewVisible(true);
     } catch (err) {
+      console.log("[study/index] handleTakePhoto ERROR", err);
       setUploadProgress(undefined);
       const message = err instanceof Error ? err.message : "Upload failed";
       const specificError = categorizeError(message, "photo upload", t);
@@ -450,18 +459,22 @@ export default function StudyScreen() {
   };
 
   const handleUploadDocument = async (examType: string | null) => {
+    console.log("[study/index] handleUploadDocument START", { examType });
     setError(null);
     setRetryAction(null);
     setUploadProgress(0);
     try {
       const file = await pickDocument();
       if (!file) {
+        console.log("[study/index] handleUploadDocument CANCELED");
         setUploadProgress(undefined);
         return;
       }
+      console.log("[study/index] handleUploadDocument PREVIEW", file);
       setPreviewFile({ uri: file.uri, name: file.name, type: file.type });
       setPreviewVisible(true);
     } catch (err) {
+      console.log("[study/index] handleUploadDocument ERROR", err);
       setUploadProgress(undefined);
       const message = err instanceof Error ? err.message : "Upload failed";
       const specificError = categorizeError(message, "document upload", t);
@@ -471,27 +484,33 @@ export default function StudyScreen() {
   };
 
   const confirmUpload = async () => {
+    console.log("[study/index] confirmUpload START", { previewFile });
     if (!previewFile) return;
     setPreviewVisible(false);
     setUploadProgress(0);
     try {
       const isImage = previewFile.type.startsWith("image/");
       const isPdf = previewFile.type === "application/pdf";
+      console.log("[study/index] confirmUpload routing", { isImage, isPdf });
       if (isImage) {
+        console.log("[study/index] confirmUpload calling uploadSowImage");
         const { job_id } = await uploadImageMutation.mutateAsync({
           file: { uri: previewFile.uri, name: previewFile.name, type: previewFile.type },
           exam_type: examType,
           onProgress: handleUploadProgress,
         });
+        console.log("[study/index] confirmUpload image job_id", { job_id });
         setAiProcessing(true);
         setUploadProgress(80);
         const job = await pollSowJob(job_id, handlePollTick);
+        console.log("[study/index] confirmUpload poll result", job);
         setAiProcessing(false);
         if (job.status === "failed" || !job.material_id) {
           throw new Error(job.error || "Image processing failed");
         }
         await finalizeUploadSuccess(job.material_id);
       } else if (isPdf) {
+        console.log("[study/index] confirmUpload calling uploadSowDocument");
         const { job_id } = await uploadDocumentMutation.mutateAsync({
           file: { uri: previewFile.uri, name: previewFile.name, type: previewFile.type },
           exam_type: examType,

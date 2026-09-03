@@ -13,6 +13,7 @@ export function useDocumentPicker() {
         copyToCacheDirectory: true,
       });
       if (result.canceled || !result.assets[0]) {
+        console.log("[useDocumentPicker] pickDocument canceled or no asset");
         return null;
       }
       const asset = result.assets[0];
@@ -38,12 +39,14 @@ export function useDocumentPicker() {
         }
       }
       
-      return {
+      const picked = {
         uri,
         name,
         type: asset.mimeType || 'application/octet-stream',
         size,
       };
+      console.log("[useDocumentPicker] pickDocument picked", picked);
+      return picked;
     } finally {
       setPicking(false);
     }

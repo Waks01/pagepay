@@ -14,15 +14,18 @@ export function useImagePicker() {
         base64: false,
       });
       if (result.canceled || !result.assets[0]) {
+        console.log("[useImagePicker] pickImage canceled or no asset");
         return null;
       }
       const asset = result.assets[0];
-      return {
+      const picked = {
         uri: asset.uri,
         name: `sow_${Date.now()}.jpg`,
         type: asset.type || 'image/jpeg',
         size: typeof (asset as any).fileSize === 'number' ? (asset as any).fileSize as number : null,
       };
+      console.log("[useImagePicker] pickImage picked", picked);
+      return picked;
     } finally {
       setPicking(false);
     }
@@ -34,6 +37,7 @@ export function useImagePicker() {
       // Request camera permission
       const { status } = await requestCameraPermissionsAsync();
       if (status !== 'granted') {
+        console.log("[useImagePicker] takePhoto permission denied");
         return null;
       }
 
@@ -43,15 +47,18 @@ export function useImagePicker() {
         base64: false,
       });
       if (result.canceled || !result.assets[0]) {
+        console.log("[useImagePicker] takePhoto canceled or no asset");
         return null;
       }
       const asset = result.assets[0];
-      return {
+      const picked = {
         uri: asset.uri,
         name: `sow_${Date.now()}.jpg`,
         type: asset.type || 'image/jpeg',
         size: typeof (asset as any).fileSize === 'number' ? (asset as any).fileSize as number : null,
       };
+      console.log("[useImagePicker] takePhoto picked", picked);
+      return picked;
     } finally {
       setPicking(false);
     }

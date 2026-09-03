@@ -131,6 +131,7 @@ export async function uploadSowImage(
   exam_type?: string | null,
   onProgress?: UploadProgressCallback,
 ): Promise<SowUploadJobAccepted> {
+  console.log("[study/api] uploadSowImage START", { file, exam_type });
   const form = new FormData();
   form.append("file", { uri: file.uri, name: file.name, type: file.type || "application/octet-stream" } as any);
   if (exam_type) {
@@ -142,11 +143,15 @@ export async function uploadSowImage(
     form,
     onProgress ? { onProgress } : undefined,
   );
+  console.log("[study/api] uploadSowImage RESPONSE", { status: res.status, statusText: res.statusText });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
+    console.log("[study/api] uploadSowImage ERROR", err);
     throw new Error(err.detail || "Image upload failed");
   }
-  return res.json();
+  const data = await res.json();
+  console.log("[study/api] uploadSowImage SUCCESS", data);
+  return data;
 }
 
 export async function uploadSowDocument(
@@ -154,6 +159,7 @@ export async function uploadSowDocument(
   exam_type?: string | null,
   onProgress?: UploadProgressCallback,
 ): Promise<SowUploadJobAccepted> {
+  console.log("[study/api] uploadSowDocument START", { file, exam_type });
   const form = new FormData();
   form.append("file", { uri: file.uri, name: file.name, type: file.type || "application/octet-stream" } as any);
   if (exam_type) {
@@ -165,11 +171,15 @@ export async function uploadSowDocument(
     form,
     onProgress ? { onProgress } : undefined,
   );
+  console.log("[study/api] uploadSowDocument RESPONSE", { status: res.status, statusText: res.statusText });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
+    console.log("[study/api] uploadSowDocument ERROR", err);
     throw new Error(err.detail || "Document upload failed");
   }
-  return res.json();
+  const data = await res.json();
+  console.log("[study/api] uploadSowDocument SUCCESS", data);
+  return data;
 }
 
 /**

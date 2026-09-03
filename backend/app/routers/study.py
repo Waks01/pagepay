@@ -174,7 +174,7 @@ async def upload_sow_image(
         file.content_type,
         content_length,
     )
-
+    logger.info("[sow/upload-image] cloudinary_in_scope=%s", __name__)
     api_key = settings.gemini_api_key
     if not api_key:
         logger.error("[sow/upload-image] Gemini API key not configured")
@@ -270,10 +270,7 @@ async def upload_sow_document(
         file.content_type,
         content_length,
     )
-
-    # Sanitize filename before we read the body — the path-traversal
-    # filename is the most likely attack vector, the body size is
-    # secondary.
+    logger.info("[sow/upload-document] cloudinary_in_scope=%s", __name__)
     safe_name = safe_filename(file.filename, fallback="document")
     logger.info("[sow/upload-document] safe_name=%s", safe_name)
 
@@ -509,9 +506,10 @@ async def _process_sow_image_job(
     report.
     """
     logger.info(
-        "[sow/upload-image worker] START job=%s user=%s bytes=%s",
-        job_id, user_id, len(contents),
+        "[sow/upload-image worker] START job=%s user=%s bytes=%s cloudinary_available=%s",
+        job_id, user_id, len(contents), "cloudinary" in dir(),
     )
+    logger.info("[sow/upload-image worker] study_router_cloudinary_imports=%s", "cloudinary" in globals())
     try:
         await _mark_job_status(job_id, "processing")
 
@@ -583,9 +581,10 @@ async def _process_sow_document_job(
     material, updates the job row.
     """
     logger.info(
-        "[sow/upload-document worker] START job=%s user=%s bytes=%s",
-        job_id, user_id, len(contents),
+        "[sow/upload-document worker] START job=%s user=%s bytes=%s cloudinary_available=%s",
+        job_id, user_id, len(contents), "cloudinary" in dir(),
     )
+    logger.info("[sow/upload-document worker] study_router_cloudinary_imports=%s", "cloudinary" in globals())
     try:
         await _mark_job_status(job_id, "processing")
 
@@ -874,6 +873,8 @@ async def export_material(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    logger.info("[export] material_id=%s format=%s user=%s", material_id, format, current_user.id)
+    logger.info("[export] cloudinary_in_scope=%s", "cloudinary" in dir())
     result = await db.execute(
         select(StudyMaterial).where(
             StudyMaterial.id == material_id,
@@ -1041,6 +1042,7 @@ async def get_material_file(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    logger.info("[file] material_id=%s user=%s", material_id, current_user.id)
     result = await db.execute(
         select(StudyMaterial).where(
             StudyMaterial.id == material_id,
@@ -1073,6 +1075,7 @@ async def get_material_pages(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    logger.info("[pages] material_id=%s user=%s", material_id, current_user.id)
     result = await db.execute(
         select(StudyMaterial).where(
             StudyMaterial.id == material_id,
