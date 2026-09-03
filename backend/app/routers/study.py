@@ -2163,17 +2163,6 @@ def _wrap_text(text: str, max_width: int, font) -> list[str]:
     return lines or [""]
 
 
-def _download_image(url: str) -> bytes | None:
-    try:
-        with httpx.Client(timeout=15) as client:
-            resp = client.get(url)
-            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image/"):
-                return resp.content
-    except Exception:
-        pass
-    return None
-
-
 def _ext_from_mime(mime: str) -> str:
     mapping = {
         "image/jpeg": ".jpg",
