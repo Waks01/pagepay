@@ -901,19 +901,14 @@ async def export_material(
     base_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", base_name).strip() or "study_material"
 
     if format == "image":
-        if material.image_url:
-            try:
-                image_bytes = _download_image(material.image_url)
-                if image_bytes:
-                    return Response(
-                        content=image_bytes,
-                        media_type="image/png",
-                        headers={
-                            "Content-Disposition": f'attachment; filename="{base_name}.png"',
-                        },
-                    )
-            except Exception:
-                pass
+        if material.original_file_data:
+            return Response(
+                content=material.original_file_data,
+                media_type=material.file_mime_type or "application/octet-stream",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{base_name}.png"',
+                },
+            )
         
         from PIL import Image, ImageDraw, ImageFont
         width, height = 800, 1000
@@ -967,7 +962,7 @@ async def export_material(
             topic_names=topic_names,
             asset_count=len(assets),
             created_at=material.created_at,
-            image_url=material.image_url,
+            image_bytes=material.original_file_data,
         )
         return Response(
             content=pdf_bytes,
@@ -986,13 +981,11 @@ async def export_material(
         doc.add_paragraph(f"Topics: {len(topic_names)}  |  Assets: {len(assets)}")
         doc.add_paragraph("")
         
-        if material.image_url:
+        if material.original_file_data:
             try:
-                image_bytes = _download_image(material.image_url)
-                if image_bytes:
-                    img_stream = io.BytesIO(image_bytes)
-                    doc.add_picture(img_stream, width=docx.shared.Inches(5.5))
-                    doc.add_paragraph("")
+                img_stream = io.BytesIO(material.original_file_data)
+                doc.add_picture(img_stream, width=docx.shared.Inches(5.5))
+                doc.add_paragraph("")
             except Exception:
                 pass
         

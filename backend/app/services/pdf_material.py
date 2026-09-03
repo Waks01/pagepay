@@ -27,7 +27,6 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
 from reportlab.lib.utils import ImageReader
 
-import httpx
 
 # ---------------------------------------------------------------------------
 # Brand palette
@@ -52,7 +51,7 @@ def material_to_pdf(
     asset_count: int = 0,
     created_at: datetime | None = None,
     source_label: str = "PagePay Study",
-    image_url: str | None = None,
+    image_bytes: bytes | None = None,
 ) -> bytes:
     """Render a study material as a branded PDF.
 
@@ -64,7 +63,7 @@ def material_to_pdf(
         asset_count: Number of generated study assets.
         created_at: Optional upload timestamp.
         source_label: Brand string shown in the footer.
-        image_url: Optional URL of the original uploaded image/document.
+        image_bytes: Optional raw bytes of the original uploaded file.
 
     Returns:
         Raw PDF bytes suitable for ``StreamingResponse`` output or
@@ -107,16 +106,14 @@ def material_to_pdf(
     story.append(Spacer(1, 14))
 
     # ── Original image ────────────────────────────────────────────────────
-    if image_url:
+    if image_bytes:
         try:
-            image_bytes = _download_image(image_url)
-            if image_bytes:
-                img_stream = io.BytesIO(image_bytes)
-                img = RLImage(img_stream, width=4.5 * inch, height=4.5 * inch, kind='proportional')
-                story.append(img)
-                story.append(Spacer(1, 14))
-                story.append(_divider())
-                story.append(Spacer(1, 14))
+            img_stream = io.BytesIO(image_bytes)
+            img = RLImage(img_stream, width=4.5 * inch, height=4.5 * inch, kind='proportional')
+            story.append(img)
+            story.append(Spacer(1, 14))
+            story.append(_divider())
+            story.append(Spacer(1, 14))
         except Exception:
             pass
 
@@ -166,16 +163,6 @@ def material_to_pdf(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-def _download_image(url: str) -> bytes | None:
-    try:
-        with httpx.Client(timeout=15) as client:
-            resp = client.get(url)
-            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image/"):
-                return resp.content
-    except Exception:
-        pass
-    return None
 
 
 def _build_styles() -> dict[str, ParagraphStyle]:

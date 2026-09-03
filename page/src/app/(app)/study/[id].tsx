@@ -34,7 +34,8 @@ type MaterialDetail = {
   title: string;
   exam_type: string | null;
   content: string | null;
-  image_url: string | null;
+  file_mime_type: string | null;
+  has_original_file: boolean;
   parsed_structure: Record<string, unknown> | null;
   assets: Array<{
     id: number;
@@ -422,10 +423,10 @@ export default function MaterialDetailScreen() {
             </Animated.View>
           )}
 
-          {selectedMaterial.image_url && (
+          {selectedMaterial.has_original_file && selectedMaterial.file_mime_type?.startsWith("image/") && (
             <Animated.View entering={FadeInDown.delay(60).duration(240).springify()}>
               <Image
-                source={{ uri: selectedMaterial.image_url }}
+                source={{ uri: `/api/v1/study/materials/${materialId}/file` }}
                 style={styles.materialImage}
                 resizeMode="contain"
               />
