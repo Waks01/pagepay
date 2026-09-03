@@ -14,9 +14,18 @@ import { DataDetail } from "@/components/transactions/details/DataDetail";
 import { ElectricityDetail } from "@/components/transactions/details/ElectricityDetail";
 import { DailyRewardDetail } from "@/components/transactions/details/DailyRewardDetail";
 import { ReadingRewardDetail } from "@/components/transactions/details/ReadingRewardDetail";
+import { SubscriptionDetail } from "@/components/transactions/details/SubscriptionDetail";
 import { ReceiptActions } from "@/components/transactions/ReceiptActions";
 import { Skeleton } from "@/components/Skeleton";
 import type { TransactionHistoryItem } from "@/src/shared/types/transaction";
+
+console.log("Imports loaded:", {
+  AirtimeDetail: typeof AirtimeDetail,
+  DataDetail: typeof DataDetail,
+  ElectricityDetail: typeof ElectricityDetail,
+  ReadingRewardDetail: typeof ReadingRewardDetail,
+  SubscriptionDetail: typeof SubscriptionDetail,
+});
 
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -132,6 +141,13 @@ function renderTransactionDetail(
   transaction: TransactionHistoryItem,
   tokens: any,
 ) {
+  console.log(
+    "[TransactionDetail] Type:",
+    transaction.type,
+    "Subtype:",
+    transaction.subtype,
+  );
+
   if (transaction.type === "bill") {
     switch (transaction.subtype) {
       case "airtime":
@@ -158,6 +174,10 @@ function renderTransactionDetail(
 
   if (transaction.type === "reading_reward") {
     return <ReadingRewardDetail transaction={transaction} tokens={tokens} />;
+  }
+
+  if (transaction.type === "payment") {
+    return <SubscriptionDetail transaction={transaction} tokens={tokens} />;
   }
 
   return <AirtimeDetail transaction={transaction} tokens={tokens} />;

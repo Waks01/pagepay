@@ -1691,6 +1691,9 @@
       "reading": "Reading Reward Details",
       "study": "Study Session Details",
       "subscription": "Subscription Details",
+      "payment_details": "PAYMENT DETAILS",
+      "transaction_timeline": "TRANSACTION TIMELINE",
+      "additional_info": "ADDITIONAL INFORMATION",
       "bonus": "Bonus Details",
       "transaction_info": "Transaction Information"
     },
@@ -1757,7 +1760,19 @@
       "date_time": "Date & Time",
       "type": "Type",
       "status": "Status",
-      "points": "Points"
+      "points": "Points",
+      "payment_type": "Payment Type",
+      "payment_provider": "Payment Provider",
+      "webhook_confirmed": "Webhook Confirmed",
+      "initiated_at": "Initiated At",
+      "confirmed_at": "Confirmed At",
+      "payment_channel": "Payment Channel",
+      "card_type": "Card Type",
+      "card_last4": "Card Last 4",
+      "authorization_code": "Authorization Code",
+      "wallet_deposit": "Wallet Deposit",
+      "premium_monthly": "Premium Monthly",
+      "premium_yearly": "Premium Yearly"
     },
     "types": {
       "airtime": "Airtime",
@@ -1784,7 +1799,11 @@
       "default": "Transaction"
     },
     "share_receipt": "PagePay Receipt\n{{type}}: {{description}}\nAmount: {{amount}}\nStatus: {{status}}\nDate: {{date}}",
-    "share_receipt_pdf": "PagePay Receipt PDF"
+    "share_receipt_pdf": "PagePay Receipt PDF",
+    "help": {
+      "wallet_deposit": "This deposit has been added to your cashable wallet balance.",
+      "premium_subscription": "Your premium subscription gives you access to exclusive features and benefits."
+    }
   },
   "error_boundary": {
     "title": "Something went wrong",

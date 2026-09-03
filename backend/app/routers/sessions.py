@@ -177,10 +177,10 @@ async def end_session(
     pending_points = 0
     bonus_eligible = False
 
-    # Verification check
-    is_verified_now = not session.verified and session.scroll_events > 0 and effective_duration >= settings.session_verified_min_seconds
-    logger.info("END_SESSION: Verification check for session=%d: verified=%s, scroll_events=%d, effective_dur=%d, min_req=%d, result=%s",
-                session.id, session.verified, session.scroll_events, effective_duration, settings.session_verified_min_seconds, is_verified_now)
+    # Verification check - Removed scroll_events requirement to allow rewards for short content
+    is_verified_now = not session.verified and effective_duration >= settings.session_verified_min_seconds
+    logger.info("END_SESSION: Verification check for session=%d: verified=%s, effective_dur=%d, min_req=%d, result=%s",
+                session.id, session.verified, effective_duration, settings.session_verified_min_seconds, is_verified_now)
 
     if is_verified_now:
         session.verified = True

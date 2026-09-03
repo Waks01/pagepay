@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { useRouter } from "expo-router";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { PagePay } from "@/constants/theme";
@@ -37,6 +38,7 @@ export default function AudioUnlockModal({
   onUnlocked,
 }: Props) {
   const { t } = useTranslation();
+  const router = useRouter();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const qc = useQueryClient();
@@ -231,6 +233,22 @@ export default function AudioUnlockModal({
                     : t("study.audio_unlock.cta", "Unlock Audio")}
                 </Text>
               </Pressable>
+
+              <Pressable
+                onPress={() => router.push("/(app)/premium")}
+                style={({ pressed }) => [
+                  styles.ctaSecondary,
+                  {
+                    borderColor: tokens.mint,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.ctaSecondaryText, { color: tokens.mint }]}>
+                  {t("study.audio_unlock.go_premium", "Upgrade to Premium")}
+                </Text>
+              </Pressable>
+
             </>
           )}
         </Animated.View>
@@ -335,6 +353,17 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 15,
     fontWeight: "700",
+  },
+  ctaSecondary: {
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    marginTop: 12,
+  },
+  ctaSecondaryText: {
+    fontSize: 15,
+    fontWeight: "600",
   },
   unlockedBox: {
     alignItems: "center",
