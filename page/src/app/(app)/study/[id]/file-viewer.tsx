@@ -26,7 +26,7 @@ import { apiFetch, API_URL } from "@/src/shared/api/client";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PageHeader } from "@/components/PageHeader";
-import { getCachedMaterialFileUri } from "@/src/features/study/storage";
+import { getCachedMaterialFileUri, cacheMaterialFile } from "@/src/features/study/storage";
 
 type MaterialDetail = {
   id: number;
@@ -102,6 +102,36 @@ export default function FileViewerScreen() {
   });
 
   const selectedMaterial = materialQ.data;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (materialQ.data?.has_original_file && !cachedFileUri) {
+      apiFetch(`/api/v1/study/materials/${materialId}/file`)
+        .then(async (res) => {
+          if (!res.ok) return;
+          const blob = await res.blob();
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            if (cancelled) return;
+            const base64 = (reader.result as string).split(",")[1];
+            await cacheMaterialFile(
+              materialId,
+              base64,
+              materialQ.data!.file_mime_type || "application/octet-stream",
+            );
+            const uri = await getCachedMaterialFileUri(materialId, materialQ.data!.file_mime_type);
+            if (!cancelled && uri) setCachedFileUri(uri);
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch((err) => {
+          if (!cancelled) console.error("Failed to cache file in viewer:", err);
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [materialQ.data?.has_original_file, materialId, cachedFileUri]);
 
   const handleBack = () => {
     router.back();

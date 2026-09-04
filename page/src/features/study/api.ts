@@ -1,5 +1,5 @@
 import { apiFetch, apiUpload } from "@/src/shared/api/client";
-import { cacheMaterialMetadata, clearMaterialCache, clearMaterialFileCache } from "./storage";
+import { clearMaterialFileCache } from "./storage";
 
 export type MaterialSummary = {
   id: number;
@@ -219,25 +219,13 @@ export async function pollSowJob(
 export async function fetchMaterials(): Promise<MaterialSummary[]> {
   const res = await apiFetch("/api/v1/study/materials");
   if (!res.ok) throw new Error("Failed to load materials");
-  const data = (await res.json()) as MaterialSummary[];
-  for (const item of data) {
-    await cacheMaterialMetadata(item);
-  }
-  return data;
+  return res.json();
 }
 
 export async function fetchMaterial(id: number): Promise<MaterialDetail> {
   const res = await apiFetch(`/api/v1/study/materials/${id}`);
   if (!res.ok) throw new Error("Failed to load material");
-  const data = (await res.json()) as MaterialDetail;
-  await cacheMaterialMetadata({
-    id: data.id,
-    title: data.title,
-    exam_type: data.exam_type,
-    asset_types: (data.assets || []).map((a) => a.type),
-    created_at: data.created_at,
-  });
-  return data;
+  return res.json();
 }
 
 export async function deleteMaterial(id: number): Promise<void> {
@@ -248,7 +236,6 @@ export async function deleteMaterial(id: number): Promise<void> {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || "Delete failed");
   }
-  await clearMaterialCache(id);
   await clearMaterialFileCache(id);
 }
 
@@ -266,13 +253,6 @@ export async function updateMaterial(
     throw new Error(err.detail || "Update failed");
   }
   const data = (await res.json()) as MaterialDetail;
-  await cacheMaterialMetadata({
-    id: data.id,
-    title: data.title,
-    exam_type: data.exam_type,
-    asset_types: (data.assets || []).map((a) => a.type),
-    created_at: data.created_at,
-  });
   await clearMaterialFileCache(id);
   return data;
 }

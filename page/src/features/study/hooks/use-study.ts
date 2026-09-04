@@ -15,28 +15,12 @@ import {
   updateMaterial,
   type UploadProgressCallback,
 } from '../api';
-import {
-  getAllCachedMaterialMetadata,
-  getCachedMaterialMetadata,
-  cacheMaterialMetadata,
-  clearMaterialCache,
-  clearMaterialFileCache,
-} from '../storage';
+import { clearMaterialFileCache } from '../storage';
 
 export function useMaterials() {
   return useQuery({
     queryKey: ['study', 'materials'],
     queryFn: fetchMaterials,
-    async initialData() {
-      const cached = await getAllCachedMaterialMetadata();
-      return cached.map((item) => ({
-        id: item.id,
-        title: item.title,
-        exam_type: item.exam_type,
-        asset_types: item.asset_types,
-        created_at: item.created_at,
-      }));
-    },
   });
 }
 
@@ -45,18 +29,6 @@ export function useMaterial(id: number) {
     queryKey: ['study', 'material', id],
     queryFn: () => fetchMaterial(id),
     enabled: id > 0,
-    async initialData() {
-      const cached = await getCachedMaterialMetadata(id);
-      if (!cached) return undefined;
-      return {
-        id: cached.id,
-        title: cached.title,
-        exam_type: cached.exam_type,
-        parsed_structure: null,
-        assets: [],
-        created_at: cached.created_at,
-      };
-    },
   });
 }
 
