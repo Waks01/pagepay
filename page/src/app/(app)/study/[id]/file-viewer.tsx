@@ -26,6 +26,7 @@ import { apiFetch, API_URL } from "@/src/shared/api/client";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PageHeader } from "@/components/PageHeader";
+import { Skeleton } from "@/components/Skeleton";
 import { getCachedMaterialFileUri, cacheMaterialFile } from "@/src/features/study/storage";
 
 type MaterialDetail = {
@@ -212,7 +213,8 @@ export default function FileViewerScreen() {
           tokens={tokens}
         />
         <View style={styles.skeletonContainer}>
-          <SkeletonBox style={styles.skeletonLarge} />
+          <Skeleton height={240} width="100%" borderRadius={12} marginBottom={12} />
+          <Skeleton height={420} width="100%" borderRadius={12} />
         </View>
       </SafeAreaView>
     );
@@ -274,14 +276,11 @@ export default function FileViewerScreen() {
         {isPdf && (
           <View style={styles.pdfContainer}>
             {pagesQ.isLoading ? (
-              <ScrollView
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.pdfScrollContent}
-              >
-                {[1, 2, 3].map((i) => (
-                  <SkeletonBox key={i} style={styles.pdfPageSkeleton} />
-                ))}
-              </ScrollView>
+              <View style={styles.pdfSkeletonContainer}>
+                <Skeleton height={420} width="100%" borderRadius={12} marginBottom={12} />
+                <Skeleton height={420} width="100%" borderRadius={12} marginBottom={12} />
+                <Skeleton height={420} width="100%" borderRadius={12} />
+              </View>
             ) : pagesQ.isError ? (
               <View style={styles.center}>
                 <Text style={[styles.errorText, { color: "#fff" }]}>
@@ -320,10 +319,6 @@ export default function FileViewerScreen() {
       </View>
     </SafeAreaView>
   );
-}
-
-function SkeletonBox({ style }: { style: any }) {
-  return <View style={[styles.skeletonBox, style]} />;
 }
 
 function ZoomableImage({ uri }: { uri: string }) {
@@ -418,21 +413,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
+    gap: 12,
   },
-  skeletonBox: {
-    backgroundColor: PagePay.light.paper2,
-    borderRadius: 12,
-  },
-  skeletonLarge: {
-    width: "100%",
-    height: 240,
-  },
-  pdfPageSkeleton: {
-    width: 320,
-    height: 420,
-    borderRadius: 8,
-    backgroundColor: PagePay.light.paper2,
-    marginRight: 12,
+  pdfSkeletonContainer: {
+    padding: 16,
+    gap: 12,
   },
   errorText: {
     fontSize: 16,

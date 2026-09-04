@@ -29,6 +29,7 @@ import { PageHeader } from "@/components/PageHeader";
 import AudioUnlockModal from "@/components/AudioUnlockModal";
 import { getTopicNames } from "@/src/app/(app)/study";
 import { ProgressDashboard } from "@/components/study/ProgressDashboard";
+import { Skeleton } from "@/components/Skeleton";
 
 type MaterialDetail = {
   id: number;
@@ -529,8 +530,9 @@ export default function MaterialDetailScreen() {
                     <View>
                       {loadingPages ? (
                         <View style={styles.loadingPages}>
-                          <View style={[styles.pdfPageSkeleton, { backgroundColor: tokens.paper2 || tokens.paper }]} />
-                          <View style={[styles.pdfPageSkeleton, { backgroundColor: tokens.paper2 || tokens.paper, marginTop: 8 }]} />
+                          <Skeleton height={420} width="100%" borderRadius={12} marginBottom={8} />
+                          <Skeleton height={420} width="100%" borderRadius={12} marginBottom={8} />
+                          <Skeleton height={420} width="100%" borderRadius={12} />
                         </View>
                       ) : pdfPagesError ? (
                         <Pressable
@@ -1244,14 +1246,8 @@ const styles = StyleSheet.create({
   },
   loadingPages: {
     paddingVertical: 24,
-    alignItems: "center",
-    gap: 8,
-  },
-  pdfPageSkeleton: {
-    width: 320,
-    height: 420,
-    borderRadius: 8,
-    backgroundColor: PagePay.light.paper2,
+    paddingHorizontal: 16,
+    gap: 12,
   },
   loadingPagesText: {
     fontSize: 13,
