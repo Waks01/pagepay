@@ -277,8 +277,6 @@ export default function FileViewerScreen() {
           <View style={styles.pdfContainer}>
             {pagesQ.isLoading ? (
               <View style={styles.pdfSkeletonContainer}>
-                <Skeleton height={420} width="100%" borderRadius={12} marginBottom={12} />
-                <Skeleton height={420} width="100%" borderRadius={12} marginBottom={12} />
                 <Skeleton height={420} width="100%" borderRadius={12} />
               </View>
             ) : pagesQ.isError ? (

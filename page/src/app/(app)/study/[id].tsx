@@ -530,8 +530,6 @@ export default function MaterialDetailScreen() {
                     <View>
                       {loadingPages ? (
                         <View style={styles.loadingPages}>
-                          <Skeleton height={420} width="100%" borderRadius={12} marginBottom={8} />
-                          <Skeleton height={420} width="100%" borderRadius={12} marginBottom={8} />
                           <Skeleton height={420} width="100%" borderRadius={12} />
                         </View>
                       ) : pdfPagesError ? (
