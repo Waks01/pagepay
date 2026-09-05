@@ -19,6 +19,7 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 
@@ -67,6 +68,7 @@ export default function FileViewerScreen() {
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [cachedFileUri, setCachedFileUri] = useState<string | null>(null);
+  const [checkingCache, setCheckingCache] = useState(true);
 
   const materialQ = useQuery({
     queryKey: ["study", "material", materialId],
@@ -82,31 +84,23 @@ export default function FileViewerScreen() {
     if (materialQ.data?.has_original_file) {
       getCachedMaterialFileUri(materialId, materialQ.data.file_mime_type).then(
         (uri) => {
-          if (!cancelled) setCachedFileUri(uri);
+          if (!cancelled) {
+            setCachedFileUri(uri);
+            setCheckingCache(false);
+          }
         },
       );
+    } else {
+      setCheckingCache(false);
     }
     return () => {
       cancelled = true;
     };
   }, [materialQ.data?.has_original_file, materialQ.data?.file_mime_type, materialId]);
 
-  const pagesQ = useQuery({
-    queryKey: ["study", "material", materialId, "pages"],
-    queryFn: async () => {
-      const res = await apiFetch(`/api/v1/study/materials/${materialId}/pages`);
-      if (!res.ok) throw new Error("Failed to load pages");
-      const data = await res.json();
-      return data.pages as PdfPage[];
-    },
-    enabled: !!materialQ.data?.has_original_file && materialQ.data?.file_mime_type === "application/pdf",
-  });
-
-  const selectedMaterial = materialQ.data;
-
   useEffect(() => {
     let cancelled = false;
-    if (materialQ.data?.has_original_file && !cachedFileUri) {
+    if (materialQ.data?.has_original_file && !cachedFileUri && !checkingCache) {
       apiFetch(`/api/v1/study/materials/${materialId}/file`)
         .then(async (res) => {
           if (!res.ok) return;
@@ -132,7 +126,7 @@ export default function FileViewerScreen() {
     return () => {
       cancelled = true;
     };
-  }, [materialQ.data?.has_original_file, materialId, cachedFileUri]);
+  }, [materialQ.data?.has_original_file, materialId, cachedFileUri, checkingCache]);
 
   const handleBack = () => {
     router.back();
@@ -268,8 +262,13 @@ export default function FileViewerScreen() {
         }
       />
 
-      <View style={styles.viewerContainer}>
-        {isImage && (
+      <GestureHandlerRootView style={styles.viewerContainer}>
+        {isImage && checkingCache && (
+          <View style={styles.skeletonContainer}>
+            <Skeleton height={420} width="100%" borderRadius={12} />
+          </View>
+        )}
+        {isImage && !checkingCache && (
           <ZoomableImage uri={cachedFileUri || fileUrl} />
         )}
 
@@ -314,7 +313,7 @@ export default function FileViewerScreen() {
             </Pressable>
           </View>
         )}
-      </View>
+      </GestureHandlerRootView>
     </SafeAreaView>
   );
 }
