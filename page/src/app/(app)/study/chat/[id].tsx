@@ -296,16 +296,22 @@ export default function StudyChatScreen() {
         </ScrollView>
 
         <View style={[styles.inputBar, { backgroundColor: tokens.card, borderTopColor: tokens.border }]}>
-          <TextInput
-            style={[styles.input, { backgroundColor: tokens.paper, color: tokens.ink, borderColor: tokens.border }]}
-            placeholder={t('study_chat.placeholder')}
-            placeholderTextColor={tokens.inkMuted}
-            value={input}
-            onChangeText={setInput}
-            editable={!streaming}
-            multiline
-            maxLength={2000}
-          />
+          <ScrollView
+            style={styles.inputScroll}
+            contentContainerStyle={styles.inputScrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <TextInput
+              style={[styles.input, { backgroundColor: tokens.paper, color: tokens.ink, borderColor: tokens.border }]}
+              placeholder={t('study_chat.placeholder')}
+              placeholderTextColor={tokens.inkMuted}
+              value={input}
+              onChangeText={setInput}
+              editable={!streaming}
+              multiline
+              maxLength={2000}
+            />
+          </ScrollView>
           <Pressable
             onPress={() => sendMessage(input)}
             disabled={!input?.trim() || streaming}
@@ -446,14 +452,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  input: {
+  inputScroll: {
     flex: 1,
+    maxHeight: 100,
+  },
+  inputScrollContent: {
+    flexGrow: 1,
+  },
+  input: {
     borderRadius: 20,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 14,
-    maxHeight: 100,
+    minHeight: 40,
   },
   sendBtn: {
     width: 40,
