@@ -68,8 +68,8 @@ export default function StudyChatScreen() {
   }, [messages]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
-      if (!text.trim() || streaming) return;
+    async (text?: string) => {
+      if (!text || !text.trim() || streaming) return;
 
       const userMsg: Message = {
         id: Date.now().toString(),
@@ -308,19 +308,19 @@ export default function StudyChatScreen() {
           />
           <Pressable
             onPress={() => sendMessage(input)}
-            disabled={!input.trim() || streaming}
+            disabled={!input?.trim() || streaming}
             style={({ pressed }) => [
               styles.sendBtn,
               {
-                backgroundColor: input.trim() && !streaming ? tokens.mint : tokens.border,
-                opacity: pressed && input.trim() ? 0.85 : 1,
+                backgroundColor: input?.trim() && !streaming ? tokens.mint : tokens.border,
+                opacity: pressed && input?.trim() ? 0.85 : 1,
               },
             ]}
           >
             <Ionicons
               name="arrow-up"
               size={20}
-              color={input.trim() && !streaming ? tokens.mintText : tokens.inkMuted}
+              color={input?.trim() && !streaming ? tokens.mintText : tokens.inkMuted}
             />
           </Pressable>
         </View>
