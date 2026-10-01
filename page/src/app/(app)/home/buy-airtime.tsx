@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -329,6 +329,7 @@ export default function BuyAirtimeScreen() {
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
+    if (!profileQ.data) return;
 
     // Check if user has enough SV if they applied discount
     if (
@@ -435,17 +436,18 @@ export default function BuyAirtimeScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
-  const userCashableBalance = profileQ.data?.cashable_balance || 0;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
+  const userCashableBalance = profileQ.data?.cashable_balance;
 
   if (purchaseState === "success" && successData) {
     return (
-      <View
-        style={[
-          styles.fullscreen,
-          { paddingTop: insets.top, backgroundColor: tokens.paper },
-        ]}
-      >
+      <SafeAreaView style={{ flex: 1, backgroundColor: tokens.paper }}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.fullscreen,
+            { flexGrow: 1 },
+          ]}
+        >
         <View
           style={[
             styles.successIcon,
@@ -596,18 +598,20 @@ export default function BuyAirtimeScreen() {
               : null
           }
         />
-      </View>
+      </ScrollView>
+    </SafeAreaView>
     );
   }
 
   if (purchaseState === "failed") {
     return (
-      <View
-        style={[
-          styles.fullscreen,
-          { paddingTop: insets.top, backgroundColor: tokens.paper },
-        ]}
-      >
+      <SafeAreaView style={{ flex: 1, backgroundColor: tokens.paper }}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.fullscreen,
+            { flexGrow: 1 },
+          ]}
+        >
         <View
           style={[
             styles.errorIcon,
@@ -635,18 +639,20 @@ export default function BuyAirtimeScreen() {
             {t("common.try_again")}
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
+    </SafeAreaView>
     );
   }
 
   if (purchaseState === "processing") {
     return (
-      <View
-        style={[
-          styles.fullscreen,
-          { paddingTop: insets.top, backgroundColor: tokens.paper },
-        ]}
-      >
+      <SafeAreaView style={{ flex: 1, backgroundColor: tokens.paper }}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.fullscreen,
+            { flexGrow: 1 },
+          ]}
+        >
         <PagePaySpinner size={56} />
         <Text style={[styles.processingTitle, { color: tokens.ink }]}>
           {t("bills.airtime.processing_title")}
@@ -664,7 +670,8 @@ export default function BuyAirtimeScreen() {
           <Skeleton width="60%" height={12} borderRadius={6} marginBottom={8} />
           <Skeleton width="70%" height={12} borderRadius={6} />
         </View>
-      </View>
+      </ScrollView>
+    </SafeAreaView>
     );
   }
 
@@ -763,7 +770,7 @@ export default function BuyAirtimeScreen() {
             onRetry={handleRetryTransaction}
             onDispute={(tx) => {
               setDisputeTransaction({
-                reference: tx.id.toString(),
+                reference: tx.reference,
                 details: {
                   service: "airtime",
                   amount: tx.amount_naira,
@@ -976,7 +983,7 @@ export default function BuyAirtimeScreen() {
         </SectionCard>
 
         {/* SV Discount Slider */}
-        {finalAmount >= 25 && (
+        {finalAmount >= 25 && profileQ.data && (
           <View>
             <DiscountSlider
               productPriceKobo={finalAmount * 100}
@@ -1049,6 +1056,8 @@ export default function BuyAirtimeScreen() {
           cashPaymentKobo={finalAmount * 100 - applySvDiscountAmount * 10}
           svDiscountSv={applySvDiscountAmount}
           commissionSv={estPoints}
+          currentCashableBalance={userCashableBalance}
+          currentServiceCreditBalance={userServiceCreditBalance}
           newCashableBalance={
             userCashableBalance -
             (finalAmount * 100 - applySvDiscountAmount * 10)

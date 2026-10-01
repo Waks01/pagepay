@@ -319,6 +319,7 @@ export default function BuyElectricityScreen() {
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
+    if (!profileQ.data) return;
 
     // Check if user has enough SV if they applied discount
     if (
@@ -395,8 +396,8 @@ export default function BuyElectricityScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
-  const userCashableBalance = profileQ.data?.cashable_balance || 0;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
+  const userCashableBalance = profileQ.data?.cashable_balance;
 
   // Success screen
   if (purchaseState === "success" && successData) {
@@ -969,7 +970,7 @@ export default function BuyElectricityScreen() {
         </SectionCard>
 
         {/* SV Discount Slider */}
-        {finalAmount >= 1000 && (
+        {finalAmount >= 1000 && profileQ.data && (
           <DiscountSlider
             productPriceKobo={finalAmount * 100}
             userServiceCreditBalance={userServiceCreditBalance}
@@ -1008,6 +1009,8 @@ export default function BuyElectricityScreen() {
           cashPaymentKobo={finalAmount * 100 - applySvDiscountAmount * 10}
           svDiscountSv={applySvDiscountAmount}
           commissionSv={estPoints}
+          currentCashableBalance={userCashableBalance}
+          currentServiceCreditBalance={userServiceCreditBalance}
           newCashableBalance={
             userCashableBalance -
             (finalAmount * 100 - applySvDiscountAmount * 10)

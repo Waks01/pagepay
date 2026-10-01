@@ -133,6 +133,7 @@ export default function BuyEducationScreen() {
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
+    if (!profileQ.data) return;
     setPurchaseError(null);
 
     // Check SV shortfall
@@ -169,8 +170,8 @@ export default function BuyEducationScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
-  const userCashableBalance = profileQ.data?.cashable_balance || 0;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
+  const userCashableBalance = profileQ.data?.cashable_balance;
 
   return (
     <View
@@ -319,7 +320,7 @@ export default function BuyEducationScreen() {
         )}
 
         {/* SV Discount Slider */}
-        {totalPrice >= 100 && (
+        {totalPrice >= 100 && profileQ.data && (
           <DiscountSlider
             productPriceKobo={totalPrice * 100}
             userServiceCreditBalance={userServiceCreditBalance}
@@ -365,6 +366,8 @@ export default function BuyEducationScreen() {
           cashPaymentKobo={totalPrice * 100 - applySvDiscountAmount * 10}
           svDiscountSv={applySvDiscountAmount}
           commissionSv={estPoints}
+          currentCashableBalance={userCashableBalance}
+          currentServiceCreditBalance={userServiceCreditBalance}
           newCashableBalance={
             userCashableBalance -
             (totalPrice * 100 - applySvDiscountAmount * 10)

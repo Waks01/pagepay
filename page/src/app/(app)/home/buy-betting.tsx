@@ -197,6 +197,7 @@ export default function BuyBettingScreen() {
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
+    if (!profileQ.data) return;
     setPurchaseError(null);
 
     // Check SV shortfall
@@ -224,8 +225,8 @@ export default function BuyBettingScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
-  const userCashableBalance = profileQ.data?.cashable_balance || 0;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
+  const userCashableBalance = profileQ.data?.cashable_balance;
 
   // Pull-to-refresh: refetch the billers catalog.
   const onRefresh = useCallback(() => {
@@ -512,7 +513,7 @@ export default function BuyBettingScreen() {
         </SectionCard>
 
         {/* SV Discount Slider */}
-        {amountNum >= 100 && (
+        {amountNum >= 100 && profileQ.data && (
           <DiscountSlider
             productPriceKobo={amountNum * 100}
             userServiceCreditBalance={userServiceCreditBalance}
@@ -558,6 +559,8 @@ export default function BuyBettingScreen() {
           cashPaymentKobo={amountNum * 100 - applySvDiscountAmount * 10}
           svDiscountSv={applySvDiscountAmount}
           commissionSv={Math.floor(amountNum * 0.018 * 0.67 * 10)}
+          currentCashableBalance={userCashableBalance}
+          currentServiceCreditBalance={userServiceCreditBalance}
           newCashableBalance={
             userCashableBalance - (amountNum * 100 - applySvDiscountAmount * 10)
           }

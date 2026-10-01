@@ -184,6 +184,7 @@ export default function BuyDataScreen() {
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
+    if (!profileQ.data) return;
 
     // Check if user has enough SV if they applied discount
     if (
@@ -239,8 +240,8 @@ export default function BuyDataScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
-  const userCashableBalance = profileQ.data?.cashable_balance || 0;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
+  const userCashableBalance = profileQ.data?.cashable_balance;
 
   const renderContent = () => {
     switch (purchaseState) {
@@ -596,7 +597,7 @@ export default function BuyDataScreen() {
         </SectionCard>
 
         {/* SV Discount Slider */}
-        {selectedPkg && selectedPkg.amount >= 25 && (
+        {selectedPkg && selectedPkg.amount >= 25 && profileQ.data && (
           <DiscountSlider
             productPriceKobo={selectedPkg.amount * 100}
             userServiceCreditBalance={userServiceCreditBalance}
@@ -643,6 +644,8 @@ export default function BuyDataScreen() {
           }
           svDiscountSv={applySvDiscountAmount}
           commissionSv={estPoints}
+          currentCashableBalance={userCashableBalance}
+          currentServiceCreditBalance={userServiceCreditBalance}
           newCashableBalance={
             userCashableBalance -
             ((selectedPkg?.amount || 0) * 100 - applySvDiscountAmount * 10)

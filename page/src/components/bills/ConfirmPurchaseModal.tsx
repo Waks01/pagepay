@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView } from "react-native";
 import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
@@ -12,6 +13,8 @@ interface ConfirmPurchaseModalProps {
   cashPaymentKobo: number;
   svDiscountSv: number;
   commissionSv: number;
+  currentCashableBalance?: number;
+  currentServiceCreditBalance?: number;
   newCashableBalance: number;
   newServiceCreditBalance: number;
   onConfirm: () => void;
@@ -26,6 +29,8 @@ export function ConfirmPurchaseModal({
   cashPaymentKobo,
   svDiscountSv,
   commissionSv,
+  currentCashableBalance,
+  currentServiceCreditBalance,
   newCashableBalance,
   newServiceCreditBalance,
   onConfirm,
@@ -101,14 +106,42 @@ export function ConfirmPurchaseModal({
 
             <View style={[styles.section, { borderTopColor: tokens.border }]}>
               <Text style={[styles.sectionTitle, { color: tokens.ink }]}>
-                {t("sv_discount.new_balances")}
+                {t("sv_discount.balance_comparison")}
               </Text>
-              <Text style={[styles.balanceText, { color: tokens.inkMuted }]}>
-                • {t("sv_discount.cashable_balance", { amount: (newCashableBalance / 100).toFixed(2) })}
-              </Text>
-              <Text style={[styles.balanceText, { color: tokens.inkMuted }]}>
-                • {t("sv_discount.service_credit_balance", { sv: newServiceCreditBalance })}
-              </Text>
+
+              <View style={styles.balanceRow}>
+                <Text style={[styles.balanceLabel, { color: tokens.inkMuted }]}>
+                  {t("sv_discount.cashable_balance_label")}
+                </Text>
+              <View style={styles.balanceValues}>
+                <Text style={[styles.balanceValue, { color: tokens.inkMuted }]}>
+                  {currentCashableBalance !== undefined
+                    ? `₦${(currentCashableBalance / 100).toFixed(2)}`
+                    : "—"}
+                </Text>
+                <Ionicons name="arrow-forward" size={14} color={tokens.inkMuted} />
+                <Text style={[styles.balanceValue, { color: tokens.mint }]}>
+                  ₦{(newCashableBalance / 100).toFixed(2)}
+                </Text>
+              </View>
+              </View>
+
+              <View style={styles.balanceRow}>
+                <Text style={[styles.balanceLabel, { color: tokens.inkMuted }]}>
+                  {t("sv_discount.service_credit_balance_label")}
+                </Text>
+                <View style={styles.balanceValues}>
+                  <Text style={[styles.balanceValue, { color: tokens.inkMuted }]}>
+                    {currentServiceCreditBalance !== undefined
+                      ? `${currentServiceCreditBalance} sv`
+                      : "—"}
+                  </Text>
+                  <Ionicons name="arrow-forward" size={14} color={tokens.inkMuted} />
+                  <Text style={[styles.balanceValue, { color: tokens.mint }]}>
+                    {newServiceCreditBalance} sv
+                  </Text>
+                </View>
+              </View>
             </View>
 
             <View style={styles.actions}>
@@ -116,16 +149,14 @@ export function ConfirmPurchaseModal({
                 style={[styles.button, styles.cancelButton, { borderColor: tokens.border }]}
                 onPress={onCancel}
               >
-                <Text style={[styles.cancelButtonText, { color: tokens.ink }]}>Cancel</Text>
+                <Ionicons name="close-circle" size={24} color={tokens.ink} />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.button, styles.confirmButton, { backgroundColor: tokens.mint }]}
                 onPress={onConfirm}
               >
-                <Text style={[styles.confirmButtonText, { color: tokens.mintText }]}>
-                  Confirm Purchase
-                </Text>
+                <Ionicons name="checkmark-circle" size={24} color={tokens.mintText} />
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -198,6 +229,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 4,
   },
+  balanceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  balanceLabel: {
+    fontSize: 14,
+    flex: 1,
+  },
+  balanceValues: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  balanceValue: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
   actions: {
     flexDirection: "row",
     gap: 12,
@@ -208,6 +258,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
   },
   cancelButton: {
     borderWidth: 1,

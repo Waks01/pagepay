@@ -225,6 +225,7 @@ export default function BuyTvScreen() {
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
+    if (!profileQ.data) return;
     setPurchaseError(null);
 
     // Check SV shortfall
@@ -257,8 +258,8 @@ export default function BuyTvScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
-  const userCashableBalance = profileQ.data?.cashable_balance || 0;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
+  const userCashableBalance = profileQ.data?.cashable_balance;
 
   // Pull-to-refresh: refetch the TV providers catalog.
   const onRefresh = useCallback(() => {
@@ -480,7 +481,8 @@ export default function BuyTvScreen() {
 
         {/* SV Discount Slider */}
         {selectedPkg &&
-          (selectedPkg.price_naira || selectedPkg.amount || 0) >= 100 && (
+          (selectedPkg.price_naira || selectedPkg.amount || 0) >= 100 &&
+          profileQ.data && (
             <DiscountSlider
               productPriceKobo={
                 (selectedPkg.price_naira || selectedPkg.amount || 0) * 100
@@ -533,6 +535,8 @@ export default function BuyTvScreen() {
           }
           svDiscountSv={applySvDiscountAmount}
           commissionSv={estPoints}
+          currentCashableBalance={userCashableBalance}
+          currentServiceCreditBalance={userServiceCreditBalance}
           newCashableBalance={
             userCashableBalance -
             ((selectedPkg?.price_naira || selectedPkg?.amount || 0) * 100 -

@@ -8,7 +8,7 @@ import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
 interface DiscountSliderProps {
   productPriceKobo: number;
-  userServiceCreditBalance: number;
+  userServiceCreditBalance?: number;
   maxDiscountPercent?: number;
   onDiscountChange: (svAmount: number) => void;
 }
@@ -34,7 +34,10 @@ export function DiscountSlider({
     onDiscountChange(svAmount);
   };
 
-  const shortfallSv = Math.max(0, selectedSv - userServiceCreditBalance);
+  const shortfallSv =
+    userServiceCreditBalance !== undefined
+      ? Math.max(0, selectedSv - userServiceCreditBalance)
+      : 0;
   const nairaSaved = (selectedSv * 10) / 100;
 
   if (maxDiscountSv === 0) return null;

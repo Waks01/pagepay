@@ -157,6 +157,7 @@ export default function BuySmsScreen() {
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
+    if (!profileQ.data) return;
     setPurchaseError(null);
 
     // Check SV shortfall
@@ -183,8 +184,8 @@ export default function BuySmsScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
-  const userCashableBalance = profileQ.data?.cashable_balance || 0;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
+  const userCashableBalance = profileQ.data?.cashable_balance;
 
   // Pull-to-refresh: refetch the SMS pricing catalog.
   const onRefresh = useCallback(() => {
@@ -378,7 +379,7 @@ export default function BuySmsScreen() {
         )}
 
         {/* SV Discount Slider */}
-        {estimate.cost >= 100 && (
+        {estimate.cost >= 100 && profileQ.data && (
           <DiscountSlider
             productPriceKobo={estimate.cost * 100}
             userServiceCreditBalance={userServiceCreditBalance}
@@ -422,6 +423,8 @@ export default function BuySmsScreen() {
           cashPaymentKobo={estimate.cost * 100 - applySvDiscountAmount * 10}
           svDiscountSv={applySvDiscountAmount}
           commissionSv={estPoints}
+          currentCashableBalance={userCashableBalance}
+          currentServiceCreditBalance={userServiceCreditBalance}
           newCashableBalance={
             userCashableBalance -
             (estimate.cost * 100 - applySvDiscountAmount * 10)

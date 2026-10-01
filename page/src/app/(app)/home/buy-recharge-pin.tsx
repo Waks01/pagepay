@@ -158,6 +158,7 @@ export default function BuyRechargePinScreen() {
 
   const handleBuyPress = () => {
     if (!canSubmit) return;
+    if (!profileQ.data) return;
     setPurchaseError(null);
 
     // Check SV shortfall
@@ -190,8 +191,8 @@ export default function BuyRechargePinScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
-  const userCashableBalance = profileQ.data?.cashable_balance || 0;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
+  const userCashableBalance = profileQ.data?.cashable_balance;
 
   // Pull-to-refresh: refetch the networks catalog.
   const onRefresh = useCallback(() => {
@@ -367,7 +368,7 @@ export default function BuyRechargePinScreen() {
         )}
 
         {/* SV Discount Slider */}
-        {totalPrice >= 100 && (
+        {totalPrice >= 100 && profileQ.data && (
           <DiscountSlider
             productPriceKobo={totalPrice * 100}
             userServiceCreditBalance={userServiceCreditBalance}
@@ -413,6 +414,8 @@ export default function BuyRechargePinScreen() {
           cashPaymentKobo={totalPrice * 100 - applySvDiscountAmount * 10}
           svDiscountSv={applySvDiscountAmount}
           commissionSv={estPoints}
+          currentCashableBalance={userCashableBalance}
+          currentServiceCreditBalance={userServiceCreditBalance}
           newCashableBalance={
             userCashableBalance -
             (totalPrice * 100 - applySvDiscountAmount * 10)

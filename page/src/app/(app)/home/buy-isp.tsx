@@ -201,8 +201,8 @@ export default function BuyIspScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance || 0;
-  const userCashableBalance = profileQ.data?.cashable_balance || 0;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
+  const userCashableBalance = profileQ.data?.cashable_balance;
 
   // Pull-to-refresh: refetch both Smile and Spectranet plan catalogs.
   const onRefresh = useCallback(() => {
@@ -305,7 +305,7 @@ export default function BuyIspScreen() {
         </SectionCard>
 
         {/* SV Discount Slider */}
-        {price >= 100 && (
+        {price >= 100 && profileQ.data && (
           <DiscountSlider
             productPriceKobo={price * 100}
             userServiceCreditBalance={userServiceCreditBalance}
@@ -349,6 +349,8 @@ export default function BuyIspScreen() {
           cashPaymentKobo={price * 100 - applySvDiscountAmount * 10}
           svDiscountSv={applySvDiscountAmount}
           commissionSv={Math.floor(price * 0.018 * 0.67 * 10)}
+          currentCashableBalance={userCashableBalance}
+          currentServiceCreditBalance={userServiceCreditBalance}
           newCashableBalance={
             userCashableBalance - (price * 100 - applySvDiscountAmount * 10)
           }
