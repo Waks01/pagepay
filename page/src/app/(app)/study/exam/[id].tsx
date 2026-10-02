@@ -27,7 +27,7 @@ import { apiFetch } from "@/src/shared/api/client";
 import {
   ExamQuestion,
   ExamSubmitResponse,
-  fetchExamQuestions,
+  getExamQuestions,
   submitExam,
   submitExamAnswer,
 } from "@/src/features/study/api";
@@ -58,7 +58,7 @@ export default function ExamActiveScreen() {
   const questionsQ = useQuery({
     queryKey: ["exam", sessionId, "questions"],
     queryFn: async () => {
-      const data = await fetchExamQuestions(sessionId);
+      const data = await getExamQuestions(sessionId);
       return data;
     },
   });
