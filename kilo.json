@@ -1,4 +1,5 @@
 {
+  "$schema": "https://app.kilo.ai/config.json",
   "project": {
     "name": "PagePay",
     "tagline": "Read Stories & AI Exam Prep",

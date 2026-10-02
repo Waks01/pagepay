@@ -81,6 +81,7 @@ export default function DailyRewardsScreen() {
   const tokens = PagePay[scheme];
   const queryClient = useQueryClient();
   const [claimingReward, setClaimingReward] = useState(false);
+  const [showClaimModal, setShowClaimModal] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
   const user = useCurrentUser();
@@ -824,7 +825,7 @@ const handleFreezeByPoints = async () => {
                 opacity: claimingReward ? 0.7 : 1,
               },
             ]}
-            onPress={handleClaimReward}
+            onPress={() => setShowClaimModal(true)}
             disabled={claimingReward}
             activeOpacity={0.9}
           >
@@ -1002,7 +1003,7 @@ const handleFreezeByPoints = async () => {
                 styles.claimOptionButton,
                 { backgroundColor: tokens.mint, borderColor: tokens.mint },
               ]}
-              onPress={() => claimMutation.mutate({ deviceId: deviceId || undefined })}
+              onPress={handleClaimReward}
               disabled={claimingReward}
               activeOpacity={0.9}
             >

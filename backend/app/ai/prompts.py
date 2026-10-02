@@ -7,7 +7,7 @@ run cooler (0.3) for deterministic JSON, while chat runs warmer (0.7)
 for natural conversation.
 """
 
-SOW_PARSER = """You are an academic curriculum parser. Your job is to read a scheme of work or syllabus and return a structured outline.
+SOW_PARSER = """You are a document structure extractor. Your job is to read any uploaded document text and return structured, clean study-ready notes.
 
 Input raw text:
 {raw_text}
@@ -21,15 +21,93 @@ Output strict JSON only. No markdown. No backticks. No extra text before or afte
       "subtopics": ["Sub A", "Sub B"],
       "key_concepts": ["concept1", "concept2"]
     }}
+  ],
+  "content_blocks": [
+    {{
+      "type": "heading",
+      "text": "Section heading",
+      "level": 1
+    }},
+    {{
+      "type": "body",
+      "text": "Paragraph content..."
+    }},
+    {{
+      "type": "list",
+      "style": "bullet",
+      "items": ["item 1", "item 2"]
+    }},
+    {{
+      "type": "numbered_list",
+      "items": ["step 1", "step 2"]
+    }},
+    {{
+      "type": "tip",
+      "label": "Remember",
+      "text": "Helpful tip or important point to remember"
+    }},
+    {{
+      "type": "warning",
+      "label": "Caution",
+      "text": "Warning or common mistake to avoid"
+    }},
+    {{
+      "type": "calculation",
+      "label": "Example",
+      "steps": [
+        "Step 1 description",
+        "Step 2 with formula: Q = I × t",
+        "Result"
+      ]
+    }},
+    {{
+      "type": "code",
+      "language": "python",
+      "text": "code snippet here"
+    }},
+    {{
+      "type": "quote",
+      "text": "Notable quote or adage",
+      "attribution": "— Author Name"
+    }},
+    {{
+      "type": "formula",
+      "text": "E = mc²",
+      "description": "Energy equals mass times the speed of light squared"
+    }},
+    {{
+      "type": "table",
+      "headers": ["Column 1", "Column 2"],
+      "rows": [
+        ["Value A", "Value B"],
+        ["Value C", "Value D"]
+      ]
+    }}
   ]
 }}
 
 Rules:
-- 3-8 topics max
-- 2-5 subtopics per topic
-- 1-4 key concepts per subtopic
-- Keep labels short and student-friendly
-- If the input is very short, return fewer topics"""
+- Return BOTH topics AND content_blocks
+- content_blocks must cover the FULL document content in reading order
+- Detect the document's natural structure: headings, subheadings, sections, subsections
+- Heading levels: use 1 for main title/major sections, 2 for subsections, 3 for minor headings
+- Use body blocks for all actual content: explanations, definitions, formulas, examples, narratives
+- Convert real bullet lists into list blocks with style "bullet"
+- Convert numbered/ordered lists into numbered_list blocks
+- Use tip blocks for: "Remember", "Pro tip", "Note", "Hint", "Key point", "Important", "Don't forget"
+- Use warning blocks for: "Caution", "Warning", "Common mistake", "Avoid", "Watch out", "Danger"
+- Use calculation blocks for: worked examples, step-by-step math, problem-solving sequences
+- Use code blocks for: code snippets, commands, terminal output, syntax examples
+- Use quote blocks for: direct quotes, adages, proverbs, notable sayings, highlighted phrases
+- Use formula blocks for: standalone mathematical formulas, equations, scientific notation
+- Use table blocks for: any tabular data, comparisons, schedules, lists with columns
+- Remove page numbers, running headers/footers, copyright notices, bookmarks, URLs, timestamps, "Error!" text, and any OCR artifacts
+- Preserve key facts, formulas, dates, names, and important details in body text
+- If the document has a table of contents, include only the content sections as content_blocks (not the TOC itself as headings)
+- Keep the original meaning intact; do not summarize or shorten content
+- topics should reflect the main subjects covered, 3-8 topics max
+- This must work for ANY document type: academic notes, business reports, personal notes, study guides, legal docs, etc.
+"""
 
 MCQ_GENERATOR = """Generate {count} multiple-choice questions from the following study context.
 

@@ -1,50 +1,19 @@
-"""AI provider router with circuit breaker.
+"""AI provider router with dynamic free-model selection.
 
-Single entry point for all AI calls. Priority logic:
-  - task_type=heavy  → Gemini (1M ctx) then OpenRouter
-  - task_type=fast   → Groq (speed) then OpenRouter
-  - task_type=chat   → Groq then OpenRouter
-  - any              → all non-open providers in priority order
+Routes all AI calls through Kilo Gateway, selecting from the pool of
+available free models. Prefers vision-capable models for document
+processing tasks. Falls back through the free pool on failure.
 
-On provider failure the circuit breaker marks it and the router
-falls through to the next candidate. If every candidate is exhausted
-the endpoint returns 503.
-
-Provider order is hardcoded (you don't want ops reshuffling the
-fallback chain accidentally). Per-provider model IDs, however, read
-from `settings.*_default_model` so a model upgrade on the provider's
-side is one env-var change, not a code change.
+The free model list is refreshed periodically from Kilo Gateway's
+/models endpoint to handle model rotation.
 """
 
 from fastapi import HTTPException
 
 from app.ai.circuit_breaker import get_circuit_open, mark_failed, mark_success
-from app.ai.providers.gemini import call_gemini
-from app.ai.providers.groq import call_groq
-from app.ai.providers.openrouter import call_openrouter
+from app.ai.free_model_selector import free_model_selector
+from app.ai.providers.kilo_gateway import call_kilo_gateway
 from app.config import settings
-
-# Ordered provider registry. Order = fallback priority.
-PROVIDERS = [
-    {
-        "name": "gemini",
-        "model": settings.gemini_default_model,
-        "try": call_gemini,
-        "task_types": {"heavy", "chat", "fast"},
-    },
-    {
-        "name": "groq",
-        "model": settings.groq_default_model,
-        "try": call_groq,
-        "task_types": {"fast", "chat"},
-    },
-    {
-        "name": "openrouter",
-        "model": settings.openrouter_default_model,
-        "try": call_openrouter,
-        "task_types": {"heavy", "fast", "chat"},
-    },
-]
 
 
 async def route_ai(
@@ -52,40 +21,29 @@ async def route_ai(
     task_type: str = "fast",
     max_tokens: int = settings.ai_default_max_tokens,
     db=None,
+    prefer_vision: bool = True,
 ) -> dict:
-    """Route an AI prompt to the best available provider.
-
-    Returns `{"response": str, "provider": str, "model": str}`.
-    Raises HTTPException(503) if every provider is unavailable.
-    """
-    open_circuits = await get_circuit_open(db) if db is not None else []
-
-    candidates = [
-        p for p in PROVIDERS
-        if p["name"] not in open_circuits and task_type in p["task_types"]
-    ]
-    # Fallback: if no provider lists this task_type, try all non-open.
-    if not candidates:
-        candidates = [p for p in PROVIDERS if p["name"] not in open_circuits]
-
-    last_error: Exception | None = None
-    for provider in candidates:
-        try:
-            text = await provider["try"](prompt, provider["model"], max_tokens)
-            if db is not None:
-                await mark_success(db, provider["name"])
-            return {"response": text, "provider": provider["name"], "model": provider["model"]}
-        except Exception as exc:
-            last_error = exc
-            if db is not None:
-                await mark_failed(db, provider["name"])
-            import logging
-            logging.getLogger("uvicorn.error").warning(
-                "AI provider %s failed: %s", provider["name"], exc
-            )
-            continue
-
-    raise HTTPException(
-        status_code=503,
-        detail=f"All AI providers unavailable. Last error: {last_error}",
+    pin_model = settings.kilo_default_model
+    selected_model = await free_model_selector.get_next_model(
+        prefer_vision=prefer_vision,
+        pin_model=pin_model,
     )
+
+    try:
+        text = await call_kilo_gateway(
+            prompt,
+            model=selected_model,
+            max_tokens=max_tokens,
+            prefer_vision=prefer_vision,
+            pin_model=pin_model,
+        )
+        if db is not None:
+            await mark_success(db, "kilo")
+        return {"response": text, "provider": "kilo", "model": selected_model}
+    except Exception as exc:
+        if db is not None:
+            await mark_failed(db, "kilo")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Kilo Gateway unavailable. Error: {exc}",
+        )

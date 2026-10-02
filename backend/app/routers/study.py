@@ -256,10 +256,68 @@ async def upload_sow_image(
     return SowUploadJobAccepted(job_id=job.id, status="queued")
 
 
+@router.post("/sow/preview-pdf")
+async def preview_sow_pdf(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Render PDF pages to PNG images for client-side review.
+
+    Returns the same shape as `GET /materials/{id}/pages` so the
+    frontend can reuse its page-rendering UI. The client should send
+    the picked PDF here first, let the user select/deselect pages,
+    then call `/sow/upload-document` with `selected_pages`.
+    """
+    safe_name = safe_filename(file.filename, fallback="preview.pdf")
+    try:
+        contents = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read file: {e}")
+
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    fname = safe_name.lower()
+    if not fname.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF preview is supported")
+
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        raise HTTPException(status_code=500, detail="PDF renderer not configured")
+
+    try:
+        pdf = fitz.open(stream=contents, filetype="pdf")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Stored file is not a valid PDF") from exc
+
+    try:
+        pages: list[dict] = []
+        for page_num in range(len(pdf)):
+            page = pdf[page_num]
+            pix = page.get_pixmap(dpi=150)
+            img_bytes = pix.tobytes("png")
+            pages.append({
+                "page": page_num + 1,
+                "total": len(pdf),
+                "image_base64": __import__("base64").b64encode(img_bytes).decode("ascii"),
+                "width": pix.width,
+                "height": pix.height,
+            })
+        pdf.close()
+        return {"pages": pages}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("[sow/preview-pdf] PDF rendering failed user=%s err=%s", current_user.id, exc)
+        raise HTTPException(status_code=500, detail=f"PDF rendering failed: {exc}") from exc
+
+
 @router.post("/sow/upload-document", response_model=SowUploadJobAccepted, status_code=202)
 async def upload_sow_document(
     file: UploadFile = File(...),
     exam_type: str | None = Form(default=None),
+    selected_pages: str | None = Form(default=None),
     request: Request = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -269,6 +327,9 @@ async def upload_sow_document(
     + SOW AI parsing then run in a background task. The client
     polls `GET /api/v1/study/sow/jobs/{job_id}` to drive its progress
     bar through the 80→100 window.
+
+    For PDFs, `selected_pages` is a JSON array of 1-indexed page
+    numbers to include. If omitted, all pages are used.
     """
     content_length = request.headers.get("content-length") if request else None
     logger.info(
@@ -347,6 +408,7 @@ async def upload_sow_document(
             exam_type=exam_type,
             contents=contents,
             safe_name=safe_name,
+            selected_pages=selected_pages,
         )
     )
 
@@ -416,12 +478,15 @@ async def _ocr_image_with_gemini(
         raise RuntimeError("gemini_vision_malformed_response") from exc
 
 
-async def _extract_document_text(contents: bytes, filename: str) -> str:
+async def _extract_document_text(contents: bytes, filename: str, selected_pages: str | None = None) -> str:
     """Branch on extension and extract plain text from PDF / DOCX / TXT.
 
     Raises a `ValueError` with a user-safe category on any failure;
     the document worker translates that into the right
     `error_message` on the job row.
+
+    For PDFs, `selected_pages` is a JSON array of 1-indexed page numbers
+    to include. If omitted or empty, all pages are extracted.
     """
     fname = filename.lower()
     if fname.endswith(".pdf"):
@@ -429,7 +494,15 @@ async def _extract_document_text(contents: bytes, filename: str) -> str:
             import pypdf
             from io import BytesIO
             reader = pypdf.PdfReader(BytesIO(contents))
-            return "\n".join(p.extract_text() or "" for p in reader.pages)
+            pages = reader.pages
+            if selected_pages:
+                try:
+                    import json as _json
+                    selected = set(_json.loads(selected_pages))
+                    pages = [pages[i - 1] for i in sorted(selected) if 1 <= i <= len(reader.pages)]
+                except Exception:
+                    pass
+            return "\n".join(p.extract_text() or "" for p in pages)
         except Exception as exc:
             logger.error("PDF extraction failed: %s", exc)
             raise ValueError("pdf_extraction_failed") from exc
@@ -601,6 +674,7 @@ async def _process_sow_document_job(
     exam_type: str | None,
     contents: bytes,
     safe_name: str,
+    selected_pages: str | None = None,
 ) -> None:
     """Background worker for the document SOW upload. Same shape as
     the image worker — runs extraction + AI parse, writes the
@@ -608,14 +682,14 @@ async def _process_sow_document_job(
     """
     logger.info(
         "[sow/upload-document worker] START job=%s user=%s bytes=%s cloudinary_available=%s",
-        job_id, user_id, len(contents), "cloudinary" in dir(),
+        job_id, len(contents), "cloudinary" in dir(),
     )
     logger.info("[sow/upload-document worker] study_router_cloudinary_imports=%s", "cloudinary" in globals())
     try:
         await _mark_job_status(job_id, "processing")
 
         try:
-            extracted_text = await _extract_document_text(contents, safe_name)
+            extracted_text = await _extract_document_text(contents, safe_name, selected_pages=selected_pages)
             logger.info(
                 "[sow/upload-document worker] extract done job=%s text_len=%s",
                 job_id, len(extracted_text or ""),
@@ -1822,7 +1896,8 @@ async def get_audio_unlock_status(
             StudyMaterial.user_id == current_user.id,
         )
     )
-    if not material_result.scalar_one_or_none():
+    material = material_result.scalar_one_or_none()
+    if not material:
         raise HTTPException(status_code=404, detail="Material not found")
 
     from app.services.subscription import is_premium

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -45,6 +45,8 @@ export default function AudioUnlockModal({
 
   const [adCount, setAdCount] = useState(1);
   const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlockSuccess, setUnlockSuccess] = useState(false);
 
   const maxAds =
     contentLength > 0 ? Math.max(1, Math.ceil(contentLength / 500) + 2) : 5;
@@ -71,6 +73,8 @@ export default function AudioUnlockModal({
     if (visible) {
       setAdCount(1);
       setUnlocking(false);
+      setUnlockError(null);
+      setUnlockSuccess(false);
     }
   }, [visible]);
 
@@ -80,6 +84,7 @@ export default function AudioUnlockModal({
 
   const handleUnlock = async () => {
     setUnlocking(true);
+    setUnlockError(null);
     try {
       const res = await apiFetch(
         `/api/v1/study/materials/${materialId}/unlock-audio`,
@@ -91,13 +96,22 @@ export default function AudioUnlockModal({
       );
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: "Unlock failed" }));
-        throw new Error(err.detail || "Unlock failed");
+        const detail = err.detail || "Unlock failed";
+        setUnlockError(detail);
+        Alert.alert("Unlock Failed", detail);
+        return;
       }
       qc.invalidateQueries({ queryKey: ["audio-unlock-status"] });
       qc.invalidateQueries({ queryKey: ["me"] });
-      onUnlocked();
+      setUnlockSuccess(true);
+      Alert.alert("Success", "Audio unlocked. Tap Listen to play.");
+      setTimeout(() => {
+        onUnlocked();
+      }, 800);
     } catch (error) {
-      console.error("Audio unlock failed:", error);
+      const message = error instanceof Error ? error.message : "Unlock failed";
+      setUnlockError(message);
+      Alert.alert("Unlock Failed", message);
     } finally {
       setUnlocking(false);
     }
@@ -216,38 +230,68 @@ export default function AudioUnlockModal({
                 </Text>
               </ScrollView>
 
-              <Pressable
-                onPress={handleUnlock}
-                disabled={unlocking}
-                style={({ pressed }) => [
-                  styles.cta,
-                  {
-                    backgroundColor: tokens.mint,
-                    opacity: pressed || unlocking ? 0.75 : 1,
-                  },
-                ]}
-              >
-                <Text style={styles.ctaText}>
-                  {unlocking
-                    ? t("study.audio_unlock.unlocking", "Unlocking...")
-                    : t("study.audio_unlock.cta", "Unlock Audio")}
-                </Text>
-              </Pressable>
+              {unlockSuccess ? (
+                <View style={[styles.cta, { backgroundColor: tokens.mint }]}>
+                  <Text style={styles.ctaText}>
+                    {t("study.audio_unlock.unlocked_title", "Audio Unlocked")}
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Pressable
+                    onPress={handleUnlock}
+                    disabled={unlocking || !!unlockError}
+                    style={({ pressed }) => [
+                      styles.cta,
+                      {
+                        backgroundColor: tokens.mint,
+                        opacity: pressed || unlocking ? 0.75 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={styles.ctaText}>
+                      {unlocking
+                        ? t("study.audio_unlock.unlocking", "Unlocking...")
+                        : unlockError
+                          ? "Try Again"
+                          : t("study.audio_unlock.cta", "Unlock Audio")}
+                    </Text>
+                  </Pressable>
 
-              <Pressable
-                onPress={() => router.push("/(app)/premium")}
-                style={({ pressed }) => [
-                  styles.ctaSecondary,
-                  {
-                    borderColor: tokens.mint,
-                    opacity: pressed ? 0.7 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.ctaSecondaryText, { color: tokens.mint }]}>
-                  {t("study.audio_unlock.go_premium", "Upgrade to Premium")}
-                </Text>
-              </Pressable>
+                  {!!unlockError && (
+                    <Pressable
+                      onPress={() => setUnlockError(null)}
+                      style={styles.ctaSecondary}
+                    >
+                      <Text
+                        style={[
+                          styles.ctaSecondaryText,
+                          { color: tokens.signal },
+                        ]}
+                      >
+                        Dismiss
+                      </Text>
+                    </Pressable>
+                  )}
+                </>
+              )}
+
+              {!unlockSuccess && (
+                <Pressable
+                  onPress={() => router.push("/(app)/premium")}
+                  style={({ pressed }) => [
+                    styles.ctaSecondary,
+                    {
+                      borderColor: tokens.mint,
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.ctaSecondaryText, { color: tokens.mint }]}>
+                    {t("study.audio_unlock.go_premium", "Upgrade to Premium")}
+                  </Text>
+                </Pressable>
+              )}
 
             </>
           )}

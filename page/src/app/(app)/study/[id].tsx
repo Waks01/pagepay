@@ -79,6 +79,114 @@ export default function MaterialDetailScreen() {
   const [pdfPagesError, setPdfPagesError] = useState<string | null>(null);
   const studySessionIdRef = useRef<number | null>(null);
 
+  const renderPreviewBlocks = (
+    material: MaterialDetail,
+    tokens: any,
+  ) => {
+    if (!material.parsed_structure) {
+      return (
+        <Text
+          style={[styles.materialPreviewText, { color: tokens.ink }]}
+          numberOfLines={6}
+        >
+          {material.content}
+        </Text>
+      );
+    }
+
+    try {
+      const parsed = JSON.parse(
+        JSON.stringify(material.parsed_structure),
+      ) as { content_blocks?: any[] };
+      const blocks = parsed?.content_blocks;
+
+      if (!Array.isArray(blocks) || blocks.length === 0) {
+        return (
+          <Text
+            style={[styles.materialPreviewText, { color: tokens.ink }]}
+            numberOfLines={6}
+          >
+            {material.content}
+          </Text>
+        );
+      }
+
+      const preview = blocks.slice(0, 3);
+      return preview.map((block, idx) => {
+        if (block.type === "heading") {
+          const level = block.level || 1;
+          const fontSize = level <= 2 ? 15 : 13;
+          const fontWeight = level <= 2 ? "600" : "500";
+          return (
+            <Text
+              key={idx}
+              style={[
+                styles.materialPreviewText,
+                {
+                  fontSize,
+                  fontWeight,
+                  color: tokens.ink,
+                  marginBottom: 4,
+                },
+              ]}
+            >
+              {block.text}
+            </Text>
+          );
+        }
+
+        if (block.type === "body") {
+          return (
+            <Text
+              key={idx}
+              style={[
+                styles.materialPreviewText,
+                { color: tokens.inkMuted, marginBottom: 4 },
+              ]}
+              numberOfLines={2}
+            >
+              {block.text}
+            </Text>
+          );
+        }
+
+        if (block.type === "list" || block.type === "numbered_list") {
+          const isNumbered = block.type === "numbered_list";
+          return (
+            <View key={idx} style={{ gap: 2, marginBottom: 4 }}>
+              {(block.items || []).slice(0, 3).map((item: string, i: number) => (
+                <Text
+                  key={i}
+                  style={[
+                    styles.materialPreviewText,
+                    { color: tokens.inkMuted, fontSize: 12 },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {isNumbered ? `${i + 1}.` : "\u2022"} {item}
+                </Text>
+              ))}
+            </View>
+          );
+        }
+
+        return null;
+      });
+    } catch (e) {
+      if (__DEV__) {
+        console.error("Failed to render preview blocks:", e);
+      }
+      return (
+        <Text
+          style={[styles.materialPreviewText, { color: tokens.ink }]}
+          numberOfLines={6}
+        >
+          {material.content}
+        </Text>
+      );
+    }
+  };
+
   const materialQ = useQuery({
     queryKey: ["study", "material", materialId],
     queryFn: async () => {
@@ -632,12 +740,9 @@ export default function MaterialDetailScreen() {
                     })}
                   </Text>
                 </View>
-                <Text
-                  style={[styles.materialPreviewText, { color: tokens.ink }]}
-                  numberOfLines={6}
-                >
-                  {selectedMaterial.content}
-                </Text>
+                <View style={styles.materialPreviewStack}>
+                  {renderPreviewBlocks(selectedMaterial, tokens)}
+                </View>
                 <Pressable
                   onPress={() => router.push(`/study/${materialId}/reader`)}
                   style={({ pressed }) => [
@@ -1326,6 +1431,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     gap: 12,
+  },
+  materialPreviewImage: {
+    width: "100%",
+    height: 220,
+    borderRadius: 10,
+  },
+  materialPreviewStack: {
+    gap: 4,
   },
   materialPreviewText: {
     fontSize: 14,

@@ -151,13 +151,15 @@ class Settings(BaseSettings):
     daily_ad_impression_cap: int = 200
 
     # ── Phase 3: AI providers ────────────────────────────────────────
-    # Free-tier keys for the multi-provider router. All three are
-    # optional: if a key is missing the router simply skips that
-    # provider and falls through to the next one in the priority list.
+    # Kilo Gateway is the sole AI provider. All calls route through
+    # the Kilo free-model pool, which rotates automatically.
     # Never commit real keys — use env vars or a secrets manager.
-    gemini_api_key: str | None = None
-    groq_api_key: str | None = None
-    openrouter_api_key: str | None = None
+    kilo_api_key: str | None = None
+    kilo_gateway_base_url: str = "https://api.kilo.ai/api/gateway"
+    kilo_default_model: str = "stepfun/step-3.7-flash:free"
+    # How often the free-model selector refreshes its catalog from
+    # Kilo Gateway /models (seconds). Default: 1 hour.
+    kilo_model_refresh_seconds: int = 3600
 
     # ── Phase 8: Bills & Earn (VTU aggregator) ────────────────────────
     # Peyflex is the primary VTU provider (airtime, data, electricity, TV).
@@ -406,19 +408,23 @@ class Settings(BaseSettings):
     # ── TTS (hybrid) ───────────────────────────────────────────────
     # Provider order for on-demand study TTS. First available provider
     # wins. Free tiers:
+    #   Cloudflare Workers AI MeloTTS: free tier / pay-as-you-go
     #   NVIDIA Magpie TTS: free prototype tier, ~40 RPM
     #   OpenRouter: free :free models, ~20 RPM
     #   Gemini 3.1 Flash TTS: free tier input+output
     #   edge-tts: free, no key required, Microsoft neural voices
-    tts_default_provider: str = "nvidia"
+    tts_default_provider: str = "cloudflare"
     tts_default_voice: str = "en-US-AriaNeural"
     tts_default_rate: str = "+0%"
     tts_batch_concurrency: int = 5
 
     # Provider API keys (all optional — missing keys skip that provider).
+    cloudflare_account_id: str | None = None
+    cloudflare_api_token: str | None = None
     nvidia_nim_api_key: str | None = None
     openrouter_api_key: str | None = None
     gemini_api_key: str | None = None
+    kilo_api_key: str | None = None
 
     # NVIDIA NIM TTS endpoint (Magpie TTS Multilingual).
     # Override via env NVIDIA_NIM_TTS_URL if you host it yourself.

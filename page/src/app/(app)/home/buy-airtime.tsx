@@ -224,9 +224,9 @@ export default function BuyAirtimeScreen() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.validated && data.network) {
+        if (data.validated && data.network_name) {
           const matched = networkList.find(
-            (n) => n.id === String(data.network),
+            (n) => n.name.toLowerCase() === data.network_name.toLowerCase(),
           );
           if (matched) {
             setSelectedNetworkId(matched.id);
@@ -303,7 +303,7 @@ export default function BuyAirtimeScreen() {
         method: "POST",
         body: JSON.stringify({
           phone,
-          network: selectedNetworkId,
+          network: selectedNetwork?.name.toLowerCase() || selectedNetworkId,
           amount_naira: finalAmount,
           apply_sv_discount: applySvDiscountAmount,
         }),

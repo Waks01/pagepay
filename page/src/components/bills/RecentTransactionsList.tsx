@@ -12,6 +12,7 @@ import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
 type Transaction = {
   id: number;
+  reference: string;
   service: string;
   phone?: string;
   network?: string;
@@ -88,7 +89,7 @@ export function RecentTransactionsList({
                   style={[styles.txDetails, { color: tokens.inkMuted }]}
                   numberOfLines={1}
                 >
-                  {tx.phone || "Unknown"} · {getRelativeTime(tx.created_at)}
+                  {tx.phone || "Unknown"} · {formatTimeAgo(tx.created_at)}
                 </Text>
               </View>
             </View>

@@ -158,13 +158,17 @@ export async function uploadSowImage(
 export async function uploadSowDocument(
   file: { uri: string; name: string; type: string },
   exam_type?: string | null,
+  selected_pages?: number[] | null,
   onProgress?: UploadProgressCallback,
 ): Promise<SowUploadJobAccepted> {
-  console.log("[study/api] uploadSowDocument START", { file, exam_type });
+  console.log("[study/api] uploadSowDocument START", { file, exam_type, selected_pages });
   const form = new FormData();
   form.append("file", { uri: file.uri, name: file.name, type: file.type || "application/octet-stream" } as any);
   if (exam_type) {
     form.append("exam_type", exam_type);
+  }
+  if (selected_pages && selected_pages.length > 0) {
+    form.append("selected_pages", JSON.stringify(selected_pages));
   }
 
   const res = await apiUpload(

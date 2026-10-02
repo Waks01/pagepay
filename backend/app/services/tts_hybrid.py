@@ -1,20 +1,24 @@
 """Hybrid TTS service for on-demand study audio.
 
 Provider chain (first success wins):
-  1. NVIDIA Magpie TTS Multilingual (free prototype tier)
-  2. OpenRouter TTS endpoint (free :free models)
-  3. Gemini 3.1 Flash TTS Preview (free tier)
-  4. edge-tts (Microsoft, no key required)
+  1. Cloudflare Workers AI MeloTTS (free/pay-as-you-go)
+  2. NVIDIA Magpie TTS Multilingual (free prototype tier)
+  3. OpenRouter TTS endpoint (free :free models)
+  4. Gemini 3.1 Flash TTS Preview (free tier)
+  5. edge-tts (Microsoft, no key required)
 
-All providers return raw MP3 bytes. The caller writes them to disk or
-streams them back to the client. Cache key = SHA256(text + voice +
-provider), so the same request hits disk on repeat reads.
+Long text is split into sentence-boundary chunks (~1500 chars each).
+Each chunk is cached separately so a retry does not lose progress.
+Failed chunks are retried with the next provider in the chain; if all
+providers fail for one chunk, synthesis stops and raises an error.
+Chunks are concatenated into one MP3 before returning.
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from pathlib import Path
 
 import httpx
@@ -27,6 +31,9 @@ logger = logging.getLogger("uvicorn.error")
 AUDIO_CACHE_DIR = Path(settings.audio_cache_dir)
 AUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+TTS_CHUNK_TARGET_CHARS = 1500
+TTS_CHUNK_MAX_CHARS = 2000
+
 
 def _cache_path(text: str, voice: str, provider: str) -> Path:
     key = hashlib.sha256(f"{provider}:{voice}:{text}".encode()).hexdigest()[:16]
@@ -34,6 +41,27 @@ def _cache_path(text: str, voice: str, provider: str) -> Path:
     d = AUDIO_CACHE_DIR / "tts" / shard
     d.mkdir(parents=True, exist_ok=True)
     return d / f"{key}.mp3"
+
+
+def _chunk_text(text: str) -> list[str]:
+    if len(text) <= TTS_CHUNK_TARGET_CHARS:
+        return [text]
+
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    chunks: list[str] = []
+    current = ""
+    for sentence in sentences:
+        if len(current) + len(sentence) + 1 > TTS_CHUNK_MAX_CHARS and current:
+            chunks.append(current.strip())
+            current = sentence
+        else:
+            current = f"{current} {sentence}".strip()
+        if len(current) >= TTS_CHUNK_TARGET_CHARS:
+            chunks.append(current.strip())
+            current = ""
+    if current:
+        chunks.append(current.strip())
+    return [c for c in chunks if c]
 
 
 async def _tts_nvidia(text: str, voice: str) -> bytes | None:
@@ -123,6 +151,31 @@ async def _tts_gemini(text: str, voice: str) -> bytes | None:
     return None
 
 
+async def _tts_cloudflare(text: str, voice: str) -> bytes | None:
+    if not settings.cloudflare_account_id or not settings.cloudflare_api_token:
+        return None
+    try:
+        url = (
+            f"https://api.cloudflare.com/client/v4/accounts/"
+            f"{settings.cloudflare_account_id}/ai/run/@cf/myshell-ai/melotts"
+        )
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {settings.cloudflare_api_token}",
+                    "Content-Type": "application/json",
+                },
+                json={"prompt": text},
+            )
+            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("audio"):
+                return resp.content
+            logger.warning("Cloudflare TTS failed: %s %s", resp.status_code, resp.text[:200])
+    except Exception as exc:
+        logger.warning("Cloudflare TTS error: %s", exc)
+    return None
+
+
 async def _tts_edge(text: str, voice: str) -> bytes | None:
     try:
         path = AUDIO_CACHE_DIR / f"edge_{hashlib.md5((voice + text).encode()).hexdigest()[:12]}.mp3"
@@ -142,8 +195,12 @@ async def synthesize_study_audio(
 ) -> tuple[bytes, str]:
     """Synthesize speech for study material text.
 
-    Returns (audio_bytes, provider_name). Raises RuntimeError if all
-    providers fail.
+    Long text is split into sentence-boundary chunks. Each chunk is
+    generated via the provider chain and cached individually so retries
+    do not lose progress. Chunks are concatenated into one MP3.
+
+    Returns (audio_bytes, provider_name). Raises RuntimeError if any
+    chunk fails across all providers.
     """
     voice = voice or settings.tts_default_voice
     provider = provider or settings.tts_default_provider
@@ -152,27 +209,54 @@ async def synthesize_study_audio(
     if cache.exists():
         return cache.read_bytes(), provider
 
+    chunks = _chunk_text(text)
+    if not chunks:
+        raise RuntimeError("Empty text after chunking")
+
     providers = {
-        "nvidia": lambda: _tts_nvidia(text, voice),
-        "openrouter": lambda: _tts_openrouter(text, voice),
-        "gemini": lambda: _tts_gemini(text, voice),
-        "edge": lambda: _tts_edge(text, voice),
+        "cloudflare": _tts_cloudflare,
+        "nvidia": _tts_nvidia,
+        "openrouter": _tts_openrouter,
+        "gemini": _tts_gemini,
+        "edge": _tts_edge,
     }
 
-    ordered = [k for k in ("nvidia", "openrouter", "gemini", "edge") if k in providers]
+    ordered = [k for k in ("cloudflare", "nvidia", "openrouter", "gemini", "edge") if k in providers]
     if provider in providers and provider not in ordered:
         ordered.insert(0, provider)
 
-    last_err = None
-    for name in ordered:
-        fn = providers[name]
-        try:
-            audio = await fn()
-            if audio:
-                cache.write_bytes(audio)
-                return audio, name
-        except Exception as exc:
-            last_err = exc
-            logger.warning("TTS provider %s failed: %s", name, exc)
+    chunk_files: list[Path] = []
+    last_provider = provider
+    try:
+        for chunk in chunks:
+            chunk_cache = _cache_path(chunk, voice, provider)
+            if chunk_cache.exists():
+                chunk_files.append(chunk_cache)
+                continue
 
-    raise RuntimeError(f"All TTS providers failed. Last error: {last_err}")
+            chunk_bytes = None
+            for name in ordered:
+                try:
+                    chunk_bytes = await providers[name](chunk, voice)
+                    if chunk_bytes:
+                        last_provider = name
+                        break
+                except Exception as exc:
+                    logger.warning("TTS provider %s failed for chunk: %s", name, exc)
+
+            if chunk_bytes is None:
+                raise RuntimeError(f"TTS failed for chunk: {chunk[:80]}...")
+
+            chunk_cache.write_bytes(chunk_bytes)
+            chunk_files.append(chunk_cache)
+
+        final_bytes = b"".join(p.read_bytes() for p in chunk_files)
+        cache.write_bytes(final_bytes)
+        return final_bytes, last_provider
+    finally:
+        for path in chunk_files:
+            try:
+                if path.exists() and path != cache:
+                    path.unlink()
+            except OSError:
+                pass

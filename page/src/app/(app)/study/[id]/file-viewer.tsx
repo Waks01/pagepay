@@ -128,6 +128,8 @@ export default function FileViewerScreen() {
     };
   }, [materialQ.data?.has_original_file, materialId, cachedFileUri, checkingCache]);
 
+  const selectedMaterial = materialQ.data;
+
   const handleBack = () => {
     router.back();
   };

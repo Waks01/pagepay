@@ -62,8 +62,9 @@ export function useUploadSowDocument() {
     mutationFn: (payload: {
       file: { uri: string; name: string; type: string };
       exam_type?: string | null;
+      selected_pages?: number[] | null;
       onProgress?: UploadProgressCallback;
-    }) => uploadSowDocument(payload.file, payload.exam_type, payload.onProgress),
+    }) => uploadSowDocument(payload.file, payload.exam_type, payload.selected_pages, payload.onProgress),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['study', 'materials'] });
     },
