@@ -9,7 +9,7 @@ import uuid
 import asyncio
 import io
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 
@@ -38,6 +38,8 @@ from app.ai.prompts import (
 from app.ai.router import route_ai
 from app.models import (
     AudioUnlock,
+    ExamAnswer,
+    ExamSession,
     SowUploadJob,
     StudyAsset,
     StudyMaterial,
@@ -60,6 +62,13 @@ from app.schemas import (
     ExampleCheckRequest,
     ExampleCheckResponse,
     ExampleGenerateRequest,
+    ExamAnswerSubmit,
+    ExamAnswerConfirm,
+    ExamStartRequest,
+    ExamStartResponse,
+    ExamHistoryItem,
+    ExamResultDetail,
+    ExamSubmitResponse,
     GenerateAssetRequest,
     GenerateAssetResponse,
     MaterialDetail,
@@ -2220,4 +2229,407 @@ def _ext_from_mime(mime: str) -> str:
         "text/plain": ".txt",
     }
     return mapping.get(mime.lower().split(";", 1)[0].strip(), "")
+
+
+# ── Exam Mode ────────────────────────────────────────────────────────
+
+
+EXAM_DURATIONS = {
+    "jamb": 60,
+    "waec": 90,
+    "neco": 90,
+    "nabteb": 90,
+    "custom": 30,
+}
+EXAM_QUESTION_COUNTS = {
+    "jamb": 20,
+    "waec": 20,
+    "neco": 20,
+    "nabteb": 20,
+    "custom": 10,
+}
+
+
+async def _generate_exam_questions(material: StudyMaterial, exam_type: str, count: int) -> list[dict]:
+    """Generate exam questions from material using AI.
+
+    Uses the same AI prompts as the asset generator but returns the
+    parsed question list directly without persisting a StudyAsset.
+    """
+    import json as _json
+
+    parsed = _json.loads(material.parsed_structure) if material.parsed_structure else {}
+    topics = parsed.get("topics", [])
+
+    context_parts = []
+    for topic in topics:
+        context_parts.append(f"Topic: {topic.get('name', '')}")
+        for st in topic.get("subtopics", []):
+            context_parts.append(f"  - {st}")
+        for cc in topic.get("key_concepts", []):
+            context_parts.append(f"    * {cc}")
+    context = "\n".join(context_parts) if context_parts else material.raw_input[:4000]
+
+    prompt = MCQ_ALL_TOPICS_GENERATOR.format(context=context, count=count, difficulty="medium")
+    ai_result = await route_ai(prompt, task_type="fast", db=None)
+
+    content = None
+    try:
+        content = _json.loads(ai_result["response"])
+    except Exception:
+        logger.error("Exam question generator returned non-JSON: %s", ai_result["response"][:200])
+        raise HTTPException(status_code=502, detail="AI returned invalid format. Try again.")
+
+    questions = content.get("questions", []) if isinstance(content, dict) else []
+    if not questions:
+        raise HTTPException(status_code=502, detail="AI returned no questions. Try again.")
+
+    return questions
+
+
+@router.post("/exam/start", response_model=ExamStartResponse)
+async def start_exam(
+    payload: ExamStartRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create an exam attempt, generate questions on-demand, schedule auto-submit."""
+    result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == payload.material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    if not material.parsed_structure and not material.raw_input:
+        raise HTTPException(status_code=400, detail="Material has no content to generate questions from.")
+
+    question_count = EXAM_QUESTION_COUNTS.get(payload.exam_type, 10)
+    duration_seconds = EXAM_DURATIONS.get(payload.exam_type, 30) * 60
+
+    questions = await _generate_exam_questions(material, payload.exam_type, question_count)
+
+    import json as _json
+    now = datetime.utcnow()
+    expires_at = now + timedelta(seconds=duration_seconds)
+
+    session = ExamSession(
+        user_id=current_user.id,
+        material_id=payload.material_id,
+        exam_type=payload.exam_type,
+        status="in_progress",
+        started_at=now,
+        expires_at=expires_at,
+        total_questions=len(questions),
+        questions_json=_json.dumps(questions),
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+
+    # Schedule auto-submit via APScheduler
+    try:
+        import app.services.scheduled_bills as _scheduled_bills
+        if _scheduled_bills.scheduler is not None and _scheduled_bills.scheduler.running:
+            from app.services.scheduler import auto_submit_exam
+            _scheduled_bills.scheduler.add_job(
+                auto_submit_exam,
+                "date",
+                run_date=expires_at,
+                args=[session.id],
+                id=f"exam_timeout_{session.id}",
+                replace_existing=True,
+                misfire_grace_time=60,
+            )
+            logger.info("Scheduled exam auto-submit: session_id=%s expires_at=%s", session.id, expires_at.isoformat())
+    except Exception as exc:
+        logger.error("Failed to schedule exam auto-submit: session_id=%s err=%s", session.id, exc)
+
+    # Strip answers from questions before returning to client
+    safe_questions = []
+    for q in questions:
+        safe_questions.append({
+            "id": q.get("id", 0),
+            "question": q.get("question", ""),
+            "options": q.get("options", []),
+            "explanation": q.get("explanation"),
+        })
+
+    return ExamStartResponse(
+        session_id=session.id,
+        exam_type=payload.exam_type,
+        total_questions=len(questions),
+        duration_seconds=duration_seconds,
+        expires_at=expires_at,
+        questions=safe_questions,
+    )
+
+
+@router.get("/exam/{session_id}/questions")
+async def get_exam_questions(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch questions for an active exam session (for recovery/reconnect)."""
+    result = await db.execute(
+        select(ExamSession).where(
+            ExamSession.id == session_id,
+            ExamSession.user_id == current_user.id,
+        )
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Exam session not found")
+
+    if session.status != "in_progress":
+        raise HTTPException(status_code=400, detail=f"Exam is no longer active (status: {session.status})")
+
+    import json as _json
+    questions = _json.loads(session.questions_json)
+
+    # Return saved answers alongside questions
+    answers_result = await db.execute(
+        select(ExamAnswer).where(ExamAnswer.session_id == session_id)
+    )
+    saved_answers = {row.question_id: row.selected_answer for row in answers_result.scalars().all()}
+
+    safe_questions = []
+    for q in questions:
+        safe_questions.append({
+            "id": q.get("id", 0),
+            "question": q.get("question", ""),
+            "options": q.get("options", []),
+            "explanation": q.get("explanation"),
+            "saved_answer": saved_answers.get(q.get("id", 0)),
+        })
+
+    return {
+        "session_id": session.id,
+        "status": session.status,
+        "expires_at": session.expires_at.isoformat(),
+        "total_questions": session.total_questions,
+        "questions": safe_questions,
+    }
+
+
+@router.post("/exam/{session_id}/answer", response_model=ExamAnswerConfirm)
+async def submit_exam_answer(
+    session_id: int,
+    payload: ExamAnswerSubmit,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save a single answer for an exam question (supports auto-save)."""
+    result = await db.execute(
+        select(ExamSession).where(
+            ExamSession.id == session_id,
+            ExamSession.user_id == current_user.id,
+        )
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Exam session not found")
+
+    if session.status != "in_progress":
+        raise HTTPException(status_code=400, detail=f"Exam is no longer active (status: {session.status})")
+
+    # Verify the question exists in this exam
+    import json as _json
+    questions = _json.loads(session.questions_json)
+    question_map = {q.get("id", 0): q for q in questions}
+    question = question_map.get(payload.question_id)
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found in this exam")
+
+    correct_answer = question.get("answer", "")
+    is_correct = payload.selected_answer == correct_answer
+
+    # Upsert answer
+    answer_result = await db.execute(
+        select(ExamAnswer).where(
+            ExamAnswer.session_id == session_id,
+            ExamAnswer.question_id == payload.question_id,
+        )
+    )
+    existing = answer_result.scalar_one_or_none()
+    if existing:
+        existing.selected_answer = payload.selected_answer
+        existing.is_correct = is_correct
+        existing.answered_at = datetime.utcnow()
+    else:
+        db.add(ExamAnswer(
+            session_id=session_id,
+            question_id=payload.question_id,
+            selected_answer=payload.selected_answer,
+            is_correct=is_correct,
+        ))
+    await db.commit()
+
+    return ExamAnswerConfirm(question_id=payload.question_id, is_correct=is_correct)
+
+
+@router.post("/exam/{session_id}/submit", response_model=ExamSubmitResponse)
+async def submit_exam(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Finalize exam, calculate score server-side, mark as submitted."""
+    result = await db.execute(
+        select(ExamSession).where(
+            ExamSession.id == session_id,
+            ExamSession.user_id == current_user.id,
+        )
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Exam session not found")
+
+    if session.status not in ("in_progress",):
+        raise HTTPException(status_code=400, detail=f"Exam already {session.status}")
+
+    import json as _json
+    questions = _json.loads(session.questions_json)
+    question_map = {q.get("id", 0): q for q in questions}
+
+    answers_result = await db.execute(
+        select(ExamAnswer).where(ExamAnswer.session_id == session_id)
+    )
+    answers = {row.question_id: row for row in answers_result.scalars().all()}
+
+    correct_count = 0
+    wrong_count = 0
+    for q in questions:
+        qid = q.get("id", 0)
+        answer = answers.get(qid)
+        if answer and answer.is_correct:
+            correct_count += 1
+        else:
+            wrong_count += 1
+
+    total = len(questions)
+    score = total > 0 and round((correct_count / total) * 100) or 0
+
+    now = datetime.utcnow()
+    session.status = "submitted"
+    session.submitted_at = now
+    session.score = score
+    session.correct_count = correct_count
+    session.wrong_count = wrong_count
+    await db.commit()
+    await db.refresh(session)
+
+    # Cancel the scheduled timeout job since we submitted manually
+    try:
+        import app.services.scheduled_bills as _scheduled_bills
+        if _scheduled_bills.scheduler is not None and _scheduled_bills.scheduler.running:
+            job_id = f"exam_timeout_{session_id}"
+            try:
+                _scheduled_bills.scheduler.remove_job(job_id)
+                logger.info("Cancelled exam timeout job: session_id=%s", session_id)
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.error("Failed to cancel exam timeout job: session_id=%s err=%s", session_id, exc)
+
+    return ExamSubmitResponse(
+        session_id=session.id,
+        score=score,
+        correct_count=correct_count,
+        wrong_count=wrong_count,
+        total_questions=total,
+        passed=score >= 60,
+    )
+
+
+@router.get("/exam/history")
+async def get_exam_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all past exam attempts for the current user."""
+    result = await db.execute(
+        select(ExamSession)
+        .where(ExamSession.user_id == current_user.id)
+        .where(ExamSession.status.in_(["submitted", "timed_out", "flagged"]))
+        .order_by(ExamSession.created_at.desc())
+    )
+    sessions = result.scalars().all()
+
+    history = []
+    for s in sessions:
+        passed = (s.score or 0) >= 60
+        history.append({
+            "id": s.id,
+            "exam_type": s.exam_type,
+            "score": s.score,
+            "correct_count": s.correct_count,
+            "wrong_count": s.wrong_count,
+            "total_questions": s.total_questions,
+            "started_at": s.started_at.isoformat(),
+            "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+            "passed": passed,
+        })
+
+    return history
+
+
+@router.get("/exam/{session_id}/result")
+async def get_exam_result(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get detailed result for a completed exam attempt."""
+    result = await db.execute(
+        select(ExamSession).where(
+            ExamSession.id == session_id,
+            ExamSession.user_id == current_user.id,
+        )
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Exam session not found")
+
+    if session.status not in ("submitted", "timed_out", "flagged"):
+        raise HTTPException(status_code=400, detail="Exam not yet completed")
+
+    import json as _json
+    questions = _json.loads(session.questions_json)
+
+    answers_result = await db.execute(
+        select(ExamAnswer).where(ExamAnswer.session_id == session_id)
+    )
+    answers = {row.question_id: row for row in answers_result.scalars().all()}
+
+    detailed_questions = []
+    for q in questions:
+        qid = q.get("id", 0)
+        answer = answers.get(qid)
+        detailed_questions.append({
+            "id": qid,
+            "question": q.get("question", ""),
+            "options": q.get("options", []),
+            "correct_answer": q.get("answer", ""),
+            "selected_answer": answer.selected_answer if answer else None,
+            "is_correct": answer.is_correct if answer else False,
+            "explanation": q.get("explanation"),
+        })
+
+    return ExamResultDetail(
+        session_id=session.id,
+        exam_type=session.exam_type,
+        score=session.score or 0,
+        correct_count=session.correct_count,
+        wrong_count=session.wrong_count,
+        total_questions=session.total_questions,
+        passed=(session.score or 0) >= 60,
+        started_at=session.started_at,
+        submitted_at=session.submitted_at,
+        questions=detailed_questions,
+    )
 

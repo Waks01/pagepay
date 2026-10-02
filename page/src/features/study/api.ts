@@ -383,3 +383,146 @@ export async function sendChatMessage(payload: ChatRequest): Promise<string> {
   }
   return res.text();
 }
+
+// ── Exam Mode ────────────────────────────────────────────────────────
+
+export type ExamQuestion = {
+  id: number;
+  question: string;
+  options: string[];
+  explanation: string | null;
+  saved_answer?: string | null;
+};
+
+export type ExamStartResponse = {
+  session_id: number;
+  exam_type: string;
+  total_questions: number;
+  duration_seconds: number;
+  expires_at: string;
+  questions: ExamQuestion[];
+};
+
+export type ExamAnswerConfirm = {
+  question_id: number;
+  is_correct: boolean;
+};
+
+export type ExamSubmitResponse = {
+  session_id: number;
+  score: number;
+  correct_count: number;
+  wrong_count: number;
+  total_questions: number;
+  passed: boolean;
+};
+
+export type ExamHistoryItem = {
+  id: number;
+  exam_type: string;
+  score: number | null;
+  correct_count: number;
+  wrong_count: number;
+  total_questions: number;
+  started_at: string;
+  submitted_at: string | null;
+  passed: boolean;
+};
+
+export type ExamResultDetail = {
+  session_id: number;
+  exam_type: string;
+  score: number;
+  correct_count: number;
+  wrong_count: number;
+  total_questions: number;
+  passed: boolean;
+  started_at: string;
+  submitted_at: string | null;
+  questions: Array<{
+    id: number;
+    question: string;
+    options: string[];
+    correct_answer: string;
+    selected_answer: string | null;
+    is_correct: boolean;
+    explanation: string | null;
+  }>;
+};
+
+export async function startExam(
+  materialId: number,
+  examType: string,
+): Promise<ExamStartResponse> {
+  const res = await apiFetch("/api/v1/study/exam/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ material_id: materialId, exam_type: examType }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Failed to start exam");
+  }
+  return res.json();
+}
+
+export async function getExamQuestions(sessionId: number): Promise<{
+  session_id: number;
+  status: string;
+  expires_at: string;
+  total_questions: number;
+  questions: ExamQuestion[];
+}> {
+  const res = await apiFetch(`/api/v1/study/exam/${sessionId}/questions`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Failed to load exam questions");
+  }
+  return res.json();
+}
+
+export async function submitExamAnswer(
+  sessionId: number,
+  questionId: number,
+  selectedAnswer: string,
+): Promise<ExamAnswerConfirm> {
+  const res = await apiFetch(`/api/v1/study/exam/${sessionId}/answer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, question_id: questionId, selected_answer: selectedAnswer }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Failed to save answer");
+  }
+  return res.json();
+}
+
+export async function submitExam(sessionId: number): Promise<ExamSubmitResponse> {
+  const res = await apiFetch(`/api/v1/study/exam/${sessionId}/submit`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Failed to submit exam");
+  }
+  return res.json();
+}
+
+export async function fetchExamHistory(): Promise<ExamHistoryItem[]> {
+  const res = await apiFetch("/api/v1/study/exam/history");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Failed to load exam history");
+  }
+  return res.json();
+}
+
+export async function fetchExamResult(sessionId: number): Promise<ExamResultDetail> {
+  const res = await apiFetch(`/api/v1/study/exam/${sessionId}/result`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Failed to load exam result");
+  }
+  return res.json();
+}

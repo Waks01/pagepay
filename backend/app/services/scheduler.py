@@ -5,7 +5,15 @@ from sqlalchemy import delete, select
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.database import AsyncSessionLocal
-from app.models import User, UserStreak, UserNotificationPreference, Notification, ReadingSession
+from app.models import (
+    ExamAnswer,
+    ExamSession,
+    User,
+    UserStreak,
+    UserNotificationPreference,
+    Notification,
+    ReadingSession,
+)
 from app.services.fcm import send_push_notification, is_in_quiet_hours
 from app.services.notifications import create_notification
 from app.services.cron import expire_subscriptions
@@ -154,3 +162,59 @@ def register_subscription_expiry_job(scheduler: AsyncIOScheduler) -> None:
     logger.info(
         "Scheduled job registered: id=subscription_expiry_check trigger=cron hour=4 minute=0 misfire_grace_time=7200"
     )
+
+
+async def auto_submit_exam(session_id: int) -> None:
+    """Auto-submit an exam session when the timer expires.
+
+    This job is scheduled by POST /study/exam/start at `expires_at`.
+    It marks the session as timed_out and grades it server-side.
+    """
+    async with AsyncSessionLocal() as db:
+        try:
+            result = await db.execute(
+                select(ExamSession).where(ExamSession.id == session_id)
+            )
+            session = result.scalar_one_or_none()
+            if not session or session.status != "in_progress":
+                return
+
+            import json as _json
+            questions = _json.loads(session.questions_json)
+            question_map = {q.get("id", 0): q for q in questions}
+
+            answers_result = await db.execute(
+                select(ExamAnswer).where(ExamAnswer.session_id == session_id)
+            )
+            answers = {row.question_id: row for row in answers_result.scalars().all()}
+
+            correct_count = 0
+            wrong_count = 0
+            for q in questions:
+                qid = q.get("id", 0)
+                answer = answers.get(qid)
+                if answer and answer.is_correct:
+                    correct_count += 1
+                else:
+                    wrong_count += 1
+
+            total = len(questions)
+            score = total > 0 and round((correct_count / total) * 100) or 0
+
+            session.status = "timed_out"
+            session.submitted_at = datetime.utcnow()
+            session.score = score
+            session.correct_count = correct_count
+            session.wrong_count = wrong_count
+            await db.commit()
+            logger.info(
+                "Auto-submitted exam session_id=%s score=%s status=timed_out",
+                session_id,
+                score,
+            )
+        except Exception as exc:
+            logger.error("Auto-submit exam failed: session_id=%s err=%s", session_id, exc)
+            try:
+                await db.rollback()
+            except Exception:
+                pass

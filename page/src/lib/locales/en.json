@@ -450,7 +450,10 @@
       "done": "Done",
       "retry": "Retry",
       "dismiss": "Dismiss",
-      "pass_requirement": "60% required to pass · timed, single attempt"
+      "pass_requirement": "60% required to pass · timed, single attempt",
+      "exam_history": "Exam History",
+      "loading": "Loading…",
+      "exam_ended": "This exam is no longer available."
     },
     "generate": {
       "mcqs": "MCQs",

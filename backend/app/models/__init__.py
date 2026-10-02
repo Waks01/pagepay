@@ -1634,3 +1634,56 @@ def _create_postgres_indexes(target, connection, **kw):
         "ON streak_freeze_log (user_id, (created_at::date)) "
         "WHERE method = 'ad'"
     ))
+
+
+# ── Phase 3 extension: Exam Mode ─────────────────────────────────────
+
+
+class ExamSession(Base):
+    """One row per exam attempt.
+
+    The backend is authoritative for exam state. `questions_json` stores
+    the full question bank with answers so the server can grade without
+    trusting the client. `expires_at` is enforced by APScheduler for
+    auto-submit — there is no client-side timer fallback.
+    """
+
+    __tablename__ = "exam_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    material_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    exam_type: Mapped[str] = mapped_column(String(32))  # jamb|waec|neco|nabteb|custom
+    status: Mapped[str] = mapped_column(
+        String(20), default="setup", index=True
+    )  # setup|in_progress|submitted|timed_out|flagged
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-100
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_questions: Mapped[int] = mapped_column(Integer, default=0)
+    questions_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ExamAnswer(Base):
+    """One answer per question per exam session.
+
+    Upserted on each answer submission so the client can recover state
+    after a disconnect or app restart.
+    """
+
+    __tablename__ = "exam_answers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    question_id: Mapped[int] = mapped_column(Integer, index=True)
+    selected_answer: Mapped[str] = mapped_column(String(500))
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    answered_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("session_id", "question_id", name="uq_exam_answer_session_question"),
+    )

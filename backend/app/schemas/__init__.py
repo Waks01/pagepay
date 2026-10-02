@@ -1955,3 +1955,74 @@ class WalletTransactionOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+# ── Phase 3 extension: Exam Mode ────────────────────────────────────
+
+
+class ExamStartRequest(BaseModel):
+    material_id: int
+    exam_type: Literal["jamb", "waec", "neco", "nabteb", "custom"]
+
+
+class ExamQuestionOut(BaseModel):
+    id: int
+    question: str
+    options: list[str]
+    explanation: str | None = None
+
+
+class ExamStartResponse(BaseModel):
+    session_id: int
+    exam_type: str
+    total_questions: int
+    duration_seconds: int
+    expires_at: datetime
+    questions: list[ExamQuestionOut]
+
+
+class ExamAnswerSubmit(BaseModel):
+    session_id: int
+    question_id: int
+    selected_answer: str
+
+
+class ExamAnswerConfirm(BaseModel):
+    question_id: int
+    is_correct: bool
+
+
+class ExamSubmitResponse(BaseModel):
+    session_id: int
+    score: int
+    correct_count: int
+    wrong_count: int
+    total_questions: int
+    passed: bool
+
+
+class ExamHistoryItem(BaseModel):
+    id: int
+    exam_type: str
+    score: int | None
+    correct_count: int
+    wrong_count: int
+    total_questions: int
+    started_at: datetime
+    submitted_at: datetime | None
+    passed: bool
+
+    model_config = {"from_attributes": True}
+
+
+class ExamResultDetail(BaseModel):
+    session_id: int
+    exam_type: str
+    score: int
+    correct_count: int
+    wrong_count: int
+    total_questions: int
+    passed: bool
+    started_at: datetime
+    submitted_at: datetime | None
+    questions: list[dict]
+
