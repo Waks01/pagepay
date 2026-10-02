@@ -2,16 +2,19 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Alert,
   Image,
+  Linking,
   Modal,
   Pressable,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,7 +25,7 @@ import { useAudioPlayer } from "expo-audio";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 
-import { apiFetch, API_URL } from "@/src/shared/api/client";
+import { apiFetch, apiUpload, API_URL } from "@/src/shared/api/client";
 import { pollSowJob } from "@/src/features/study/api";
 import {
   useMaterials,
@@ -43,7 +46,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import NotificationBell from "@/components/NotificationBell";
-import { SkeletonPage, SkeletonDetailPage } from "@/components/skeletons";
+import { Skeleton, SkeletonPage, SkeletonDetailPage } from "@/components/skeletons";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
 import AudioUnlockModal from "@/components/AudioUnlockModal";
 import { cacheAsset, getCachedAsset } from "@/src/features/study/storage";
@@ -167,6 +170,9 @@ export default function StudyScreen() {
   const [shareFormatVisible, setShareFormatVisible] = useState(false);
   const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [pdfPreviewPages, setPdfPreviewPages] = useState<Array<{ page: number; total: number; image_base64: string; width: number; height: number }> | null>(null);
+  const [selectedPages, setSelectedPages] = useState<number[]>([]);
+  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
 
   // Load cached assets on mount
   useEffect(() => {
@@ -287,7 +293,8 @@ export default function StudyScreen() {
           setAudioUnlockVisible(true);
           return;
         }
-        throw new Error("TTS request failed");
+        const errText = await res.text();
+        throw new Error(errText || "TTS request failed");
       }
       const data = (await res.json()) as { url: string };
       const fullUrl = data.url.startsWith("http")
@@ -297,6 +304,10 @@ export default function StudyScreen() {
       setTtsPlaying(true);
     } catch (error) {
       if (__DEV__) console.error("TTS failed:", error);
+      Alert.alert(
+        "Playback Unavailable",
+        "Audio generation failed. Please try again later.",
+      );
     } finally {
       setTtsLoading(false);
     }
@@ -472,6 +483,36 @@ export default function StudyScreen() {
       }
       console.log("[study/index] handleUploadDocument PREVIEW", file);
       setPreviewFile({ uri: file.uri, name: file.name, type: file.type });
+
+      if (file.type === "application/pdf") {
+        setPdfPreviewLoading(true);
+        setPdfPreviewPages(null);
+          setSelectedPages([]);
+        try {
+          const form = new FormData();
+          form.append("file", {
+            uri: file.uri,
+            name: file.name,
+            type: file.type,
+          } as any);
+          const uploadResult = await apiUpload("/api/v1/study/sow/preview-pdf", form as any);
+          if (!uploadResult.ok) {
+            const err = await uploadResult.json().catch(() => ({ detail: "Failed to preview PDF" }));
+            throw new Error(err.detail || "Failed to preview PDF");
+          }
+          const data = await uploadResult.json();
+          const pages = data.pages || [];
+          setPdfPreviewPages(pages);
+          setSelectedPages(pages.map((p: any) => p.page));
+        } catch (err) {
+          console.error("[study/index] PDF preview failed:", err);
+          setError(err instanceof Error ? err.message : "Failed to preview PDF");
+          setRetryAction(() => () => handleUploadDocument(examType));
+        } finally {
+          setPdfPreviewLoading(false);
+        }
+      }
+
       setPreviewVisible(true);
     } catch (err) {
       console.log("[study/index] handleUploadDocument ERROR", err);
@@ -511,9 +552,16 @@ export default function StudyScreen() {
         await finalizeUploadSuccess(job.material_id);
       } else if (isPdf) {
         console.log("[study/index] confirmUpload calling uploadSowDocument");
+        const selectedPagesArray = pdfPreviewPages
+          ? [...selectedPages].sort((a, b) => a - b)
+          : undefined;
+        if (pdfPreviewPages && (!selectedPagesArray || selectedPagesArray.length === 0)) {
+          throw new Error("Please select at least one page to upload");
+        }
         const { job_id } = await uploadDocumentMutation.mutateAsync({
           file: { uri: previewFile.uri, name: previewFile.name, type: previewFile.type },
           exam_type: examType,
+          selected_pages: selectedPagesArray,
           onProgress: handleUploadProgress,
         });
         setAiProcessing(true);
@@ -1435,11 +1483,55 @@ export default function StudyScreen() {
               />
             )}
             {previewFile?.type === "application/pdf" && (
-              <View style={styles.previewPdfPlaceholder}>
-                <Ionicons name="document-text-outline" size={48} color={tokens.mint} />
-                <Text style={[styles.previewPdfText, { color: tokens.inkMuted }]}>
-                  PDF preview will be available after upload
-                </Text>
+              <View style={styles.previewPdfContainer}>
+                {pdfPreviewLoading ? (
+                  <View style={styles.loadingPages}>
+                    <Skeleton height={420} width="100%" borderRadius={12} />
+                  </View>
+                ) : pdfPreviewPages && pdfPreviewPages.length > 0 ? (
+                  <ScrollView
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.pdfScroll}
+                  >
+                    {pdfPreviewPages.map((page) => {
+                      const isSelected = selectedPages.includes(page.page);
+                      return (
+                        <Pressable
+                          key={page.page}
+                          onPress={() => {
+                            setSelectedPages((prev) => {
+                              if (prev.includes(page.page)) {
+                                return prev.filter((p) => p !== page.page);
+                              }
+                              return [...prev, page.page];
+                            });
+                          }}
+                          style={styles.pdfPageItem}
+                        >
+                          <Image
+                            source={{ uri: `data:image/png;base64,${page.image_base64}` }}
+                            style={styles.pdfPageImage}
+                            resizeMode="contain"
+                          />
+                          <View style={[styles.pdfPageCheck, { backgroundColor: isSelected ? tokens.mint : "rgba(0,0,0,0.4)" }]}>
+                            <Text style={[styles.pdfPageCheckText, { color: "#fff" }]}>
+                              {isSelected ? `Page ${page.page}` : `Page ${page.page}`}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : (
+                  <View style={styles.previewPdfPlaceholder}>
+                    <Ionicons name="document-text-outline" size={48} color={tokens.mint} />
+                    <Text style={[styles.previewPdfText, { color: tokens.inkMuted }]}>
+                      PDF preview will be available after upload
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
             <View style={styles.previewActions}>
@@ -1463,6 +1555,20 @@ export default function StudyScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {selectedMaterial && (
+        <AudioUnlockModal
+          visible={audioUnlockVisible}
+          materialId={selectedMaterial.id}
+          materialTitle={selectedMaterial.title}
+          contentLength={selectedMaterial.content?.length ?? 0}
+          onClose={() => setAudioUnlockVisible(false)}
+          onUnlocked={() => {
+            setAudioUnlocked(true);
+            setAudioUnlockVisible(false);
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -2073,6 +2179,37 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     paddingVertical: 24,
+  },
+  previewPdfContainer: {
+    maxHeight: 420,
+  },
+  loadingPages: {
+    paddingVertical: 12,
+  },
+  pdfScroll: {
+    width: "100%",
+  },
+  pdfPageItem: {
+    width: 280,
+    marginRight: 12,
+  },
+  pdfPageImage: {
+    width: 280,
+    height: 360,
+    borderRadius: 10,
+    backgroundColor: "#F3F4F6",
+  },
+  pdfPageCheck: {
+    position: "absolute",
+    bottom: 8,
+    left: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  pdfPageCheckText: {
+    fontSize: 12,
+    fontWeight: "700",
   },
   previewPdfText: {
     fontSize: 13,
