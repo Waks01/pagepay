@@ -150,17 +150,6 @@ class Settings(BaseSettings):
     # Override via env `DAILY_AD_IMPRESSION_CAP`.
     daily_ad_impression_cap: int = 200
 
-    # ── Phase 3: AI providers ────────────────────────────────────────
-    # Kilo Gateway is the sole AI provider. All calls route through
-    # the Kilo free-model pool, which rotates automatically.
-    # Never commit real keys — use env vars or a secrets manager.
-    kilo_api_key: str | None = None
-    kilo_gateway_base_url: str = "https://api.kilo.ai/api/gateway"
-    kilo_default_model: str = "stepfun/step-3.7-flash:free"
-    # How often the free-model selector refreshes its catalog from
-    # Kilo Gateway /models (seconds). Default: 1 hour.
-    kilo_model_refresh_seconds: int = 3600
-
     # ── Phase 8: Bills & Earn (VTU aggregator) ────────────────────────
     # Peyflex is the primary VTU provider (airtime, data, electricity, TV).
     # API key from peyflex.com.ng dashboard — never commit the real value.
@@ -424,7 +413,6 @@ class Settings(BaseSettings):
     nvidia_nim_api_key: str | None = None
     openrouter_api_key: str | None = None
     gemini_api_key: str | None = None
-    kilo_api_key: str | None = None
 
     # NVIDIA NIM TTS endpoint (Magpie TTS Multilingual).
     # Override via env NVIDIA_NIM_TTS_URL if you host it yourself.

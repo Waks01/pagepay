@@ -169,7 +169,7 @@ async def upload_sow_image(
 ):
     """Upload a SOW image. The file is read and validated synchronously
     so the 5 MB cap + content-type allowlist still hold before we
-    return. OCR (Gemini Vision) + SOW AI parsing then run in a
+    return. OCR (Cloudflare vision) + SOW AI parsing then run in a
     background task. The client polls
     `GET /api/v1/study/sow/jobs/{job_id}` to drive its progress bar
     through the 80→100 window.
@@ -184,10 +184,10 @@ async def upload_sow_image(
         content_length,
     )
     logger.info("[sow/upload-image] cloudinary_in_scope=%s", __name__)
-    api_key = settings.gemini_api_key
-    if not api_key:
-        logger.error("[sow/upload-image] Gemini API key not configured")
-        raise HTTPException(status_code=503, detail="Gemini not configured for image upload")
+
+    if not settings.cloudflare_account_id or not settings.cloudflare_api_token:
+        logger.error("[sow/upload-image] Cloudflare not configured")
+        raise HTTPException(status_code=503, detail="Cloudflare Workers AI not configured")
 
     # Content-type allowlist — `file.content_type` is set by the
     # client and is attacker-controlled. Reject anything other than
@@ -442,40 +442,46 @@ async def get_sow_job_status(
 # ── Background workers ───────────────────────────────────────────────
 
 
-async def _ocr_image_with_gemini(
-    contents: bytes, content_type: str, api_key: str
+async def _ocr_image_with_cloudflare(
+    contents: bytes, content_type: str
 ) -> str:
-    """Send the image to Gemini Vision and return the extracted text.
+    """Send the image to Cloudflare Workers AI Llama Vision and return extracted text.
 
-    Kept as a private helper so the image worker stays small. Raises
-    on any failure (network, non-200, empty body) so the worker can
-    mark the job as `failed` with a category string instead of an
-    exception that crashes the asyncio task.
+    Uses @cf/meta/llama-3.2-11b-vision-instruct with the image as a
+    base64 data URI. Raises RuntimeError on failure so the worker
+    can mark the job as `failed`.
     """
     import base64
     import httpx
 
     b64 = base64.b64encode(contents).decode()
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-    headers = {"x-goog-api-key": api_key}
+    data_uri = f"data:{content_type};base64,{b64}"
+    url = (
+        f"https://api.cloudflare.com/client/v4/accounts/"
+        f"{settings.cloudflare_account_id}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct"
+    )
+    headers = {
+        "Authorization": f"Bearer {settings.cloudflare_api_token}",
+        "Content-Type": "application/json",
+    }
     body = {
-        "contents": [{
-            "parts": [
-                {"text": "Extract all text from this image. Return the raw text exactly as written, preserving structure (headings, bullet points, numbering)."},
-                {"inline_data": {"mime_type": content_type, "data": b64}},
-            ]
-        }],
-        "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.1},
+        "prompt": "Extract all text from this image. Return the raw text exactly as written, preserving structure (headings, bullet points, numbering).",
+        "image": data_uri,
+        "max_tokens": 8000,
+        "temperature": 0.1,
     }
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(url, json=body, headers=headers)
         if resp.status_code != 200:
-            raise RuntimeError(f"gemini_vision_http_{resp.status_code}")
+            raise RuntimeError(f"cf_vision_http_{resp.status_code}")
         data = resp.json()
     try:
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        text = data.get("result", {}).get("response", "")
+        if not text:
+            raise RuntimeError("cf_vision_empty")
+        return text
     except (KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError("gemini_vision_malformed_response") from exc
+        raise RuntimeError("cf_vision_malformed_response") from exc
 
 
 async def _extract_document_text(contents: bytes, filename: str, selected_pages: str | None = None) -> str:
@@ -605,25 +611,20 @@ async def _process_sow_image_job(
     report.
     """
     logger.info(
-        "[sow/upload-image worker] START job=%s user=%s bytes=%s cloudinary_available=%s",
-        job_id, user_id, len(contents), "cloudinary" in dir(),
+        "[sow/upload-image worker] START job=%s user=%s bytes=%s",
+        job_id, user_id, len(contents),
     )
-    logger.info("[sow/upload-image worker] study_router_cloudinary_imports=%s", "cloudinary" in globals())
     try:
         await _mark_job_status(job_id, "processing")
 
-        api_key = settings.gemini_api_key
-        if not api_key:
-            raise RuntimeError("gemini_not_configured")
-
         try:
-            extracted_text = await _ocr_image_with_gemini(contents, content_type, api_key)
+            extracted_text = await _ocr_image_with_cloudflare(contents, content_type)
             logger.info(
                 "[sow/upload-image worker] OCR done job=%s text_len=%s",
                 job_id, len(extracted_text or ""),
             )
         except Exception as exc:
-            logger.error("Gemini Vision OCR failed for job %s: %s", job_id, exc)
+            logger.error("Cloudflare Vision OCR failed for job %s: %s", job_id, exc)
             raise RuntimeError("image_ocr_failed") from exc
 
         if not extracted_text.strip():
