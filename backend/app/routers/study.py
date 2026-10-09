@@ -2256,9 +2256,18 @@ async def serve_study_tts_audio(filename: str):
     if not matches:
         raise HTTPException(status_code=404, detail="Audio not found")
     path = matches[0]
-    return FileResponse(
-        path,
-        media_type="audio/mpeg",
+    raw = path.read_bytes()
+    # Detect format from file signature so the client gets the right
+    # content-type (Cloudflare MeloTTS returns WAV, edge-tts returns MP3).
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WAVE":
+        media_type = "audio/wav"
+    elif raw[:2] == b"ID3" or raw[:3] == b"\xff\xfb" or raw[:3] == b"\xff\xf3":
+        media_type = "audio/mpeg"
+    else:
+        media_type = "audio/mpeg"
+    return Response(
+        content=raw,
+        media_type=media_type,
         headers={"Cache-Control": "public, max-age=86400"},
     )
 

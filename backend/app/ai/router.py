@@ -1,18 +1,11 @@
-"""AI provider router with dynamic free-model selection.
+"""AI provider router — Cloudflare Workers AI only.
 
-Routes all AI calls through Kilo Gateway, selecting from the pool of
-available free models. Prefers vision-capable models for document
-processing tasks. Falls back through the free pool on failure.
-
-The free model list is refreshed periodically from Kilo Gateway's
-/models endpoint to handle model rotation.
+Uses Cloudflare Workers AI text generation models.
+No other providers are configured.
 """
 
 from fastapi import HTTPException
 
-from app.ai.circuit_breaker import get_circuit_open, mark_failed, mark_success
-from app.ai.free_model_selector import free_model_selector
-from app.ai.providers.kilo_gateway import call_kilo_gateway
 from app.config import settings
 
 
@@ -23,27 +16,66 @@ async def route_ai(
     db=None,
     prefer_vision: bool = True,
 ) -> dict:
-    pin_model = settings.kilo_default_model
-    selected_model = await free_model_selector.get_next_model(
-        prefer_vision=prefer_vision,
-        pin_model=pin_model,
+    """Route an AI prompt through Cloudflare Workers AI.
+
+    Uses the OpenAI-compatible chat completions endpoint.
+    Returns {"response": text, "provider": "cloudflare", "model": model_id}.
+    Raises HTTPException 503 if Cloudflare is unavailable.
+    """
+    import httpx
+
+    api_key = settings.cloudflare_api_token
+    account_id = settings.cloudflare_account_id
+
+    if not api_key or not account_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Cloudflare Workers AI not configured. Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.",
+        )
+
+    model = "@cf/zai-org/glm-4.7-flash"
+    url = (
+        f"https://api.cloudflare.com/client/v4/accounts/"
+        f"{account_id}/ai/run/{model}"
     )
 
     try:
-        text = await call_kilo_gateway(
-            prompt,
-            model=selected_model,
-            max_tokens=max_tokens,
-            prefer_vision=prefer_vision,
-            pin_model=pin_model,
-        )
-        if db is not None:
-            await mark_success(db, "kilo")
-        return {"response": text, "provider": "kilo", "model": selected_model}
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": max_tokens,
+                    "temperature": 0.3,
+                    "thinking": {"type": "disabled"},
+                },
+            )
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Cloudflare AI failed: HTTP {resp.status_code} {resp.text[:200]}",
+                )
+            data = resp.json()
+            text = (
+                data.get("result", {})
+                .get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
+            if not text:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Cloudflare AI returned empty response",
+                )
+            return {"response": text, "provider": "cloudflare", "model": model}
+    except HTTPException:
+        raise
     except Exception as exc:
-        if db is not None:
-            await mark_failed(db, "kilo")
         raise HTTPException(
             status_code=503,
-            detail=f"Kilo Gateway unavailable. Error: {exc}",
+            detail=f"Cloudflare AI unavailable: {exc}",
         )

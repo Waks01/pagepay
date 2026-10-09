@@ -2,10 +2,7 @@
 
 Provider chain (first success wins):
   1. Cloudflare Workers AI MeloTTS (free/pay-as-you-go)
-  2. NVIDIA Magpie TTS Multilingual (free prototype tier)
-  3. OpenRouter TTS endpoint (free :free models)
-  4. Gemini 3.1 Flash TTS Preview (free tier)
-  5. edge-tts (Microsoft, no key required)
+  2. edge-tts (Microsoft, no key required)
 
 Long text is split into sentence-boundary chunks (~1500 chars each).
 Each chunk is cached separately so a retry does not lose progress.
@@ -64,93 +61,6 @@ def _chunk_text(text: str) -> list[str]:
     return [c for c in chunks if c]
 
 
-async def _tts_nvidia(text: str, voice: str) -> bytes | None:
-    if not settings.nvidia_nim_api_key:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                settings.nvidia_nim_tts_url,
-                headers={
-                    "Authorization": f"Bearer {settings.nvidia_nim_api_key}",
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                data={
-                    "text": text,
-                    "voice": voice,
-                    "language_code": "en-US",
-                    "stream": "false",
-                },
-            )
-            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("audio"):
-                return resp.content
-            logger.warning("NVIDIA TTS failed: %s %s", resp.status_code, resp.text[:200])
-    except Exception as exc:
-        logger.warning("NVIDIA TTS error: %s", exc)
-    return None
-
-
-async def _tts_openrouter(text: str, voice: str) -> bytes | None:
-    if not settings.openrouter_api_key:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                "https://openrouter.ai/api/v1/audio/speech",
-                headers={
-                    "Authorization": f"Bearer {settings.openrouter_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "openai/gpt-4o-mini-tts-2025-12-15",
-                    "input": text,
-                    "voice": voice,
-                    "response_format": "mp3",
-                },
-            )
-            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("audio"):
-                return resp.content
-            logger.warning("OpenRouter TTS failed: %s %s", resp.status_code, resp.text[:200])
-    except Exception as exc:
-        logger.warning("OpenRouter TTS error: %s", exc)
-    return None
-
-
-async def _tts_gemini(text: str, voice: str) -> bytes | None:
-    if not settings.gemini_api_key:
-        return None
-    try:
-        payload = {
-            "model": "gemini-3.1-flash-tts-preview",
-            "input": text,
-            "response_format": {"type": "audio"},
-            "generation_config": {
-                "speech_config": [{"voice": voice}]
-            },
-        }
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent",
-                headers={
-                    "x-goog-api-key": settings.gemini_api_key,
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-                for part in parts:
-                    inline = part.get("inlineData") or part.get("inline_data")
-                    if inline and inline.get("mimeType", "").startswith("audio"):
-                        import base64
-                        return base64.b64decode(inline["data"])
-            logger.warning("Gemini TTS failed: %s %s", resp.status_code, resp.text[:200])
-    except Exception as exc:
-        logger.warning("Gemini TTS error: %s", exc)
-    return None
-
-
 async def _tts_cloudflare(text: str, voice: str) -> bytes | None:
     if not settings.cloudflare_account_id or not settings.cloudflare_api_token:
         return None
@@ -168,9 +78,16 @@ async def _tts_cloudflare(text: str, voice: str) -> bytes | None:
                 },
                 json={"prompt": text},
             )
-            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("audio"):
-                return resp.content
-            logger.warning("Cloudflare TTS failed: %s %s", resp.status_code, resp.text[:200])
+            if resp.status_code != 200:
+                logger.warning("Cloudflare TTS failed: %s %s", resp.status_code, resp.text[:200])
+                return None
+            data = resp.json()
+            audio_b64 = data.get("result", {}).get("audio", "")
+            if not audio_b64:
+                logger.warning("Cloudflare TTS returned no audio: %s", resp.text[:200])
+                return None
+            import base64
+            return base64.b64decode(audio_b64)
     except Exception as exc:
         logger.warning("Cloudflare TTS error: %s", exc)
     return None
@@ -215,13 +132,10 @@ async def synthesize_study_audio(
 
     providers = {
         "cloudflare": _tts_cloudflare,
-        "nvidia": _tts_nvidia,
-        "openrouter": _tts_openrouter,
-        "gemini": _tts_gemini,
         "edge": _tts_edge,
     }
 
-    ordered = [k for k in ("cloudflare", "nvidia", "openrouter", "gemini", "edge") if k in providers]
+    ordered = [k for k in ("cloudflare", "edge") if k in providers]
     if provider in providers and provider not in ordered:
         ordered.insert(0, provider)
 
