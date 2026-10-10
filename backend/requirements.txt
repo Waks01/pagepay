@@ -39,6 +39,7 @@ resend==2.4.0
 # v3 §3.3 Listen mode — TTS audio generation
 edge-tts==6.1.18
 apscheduler==3.10.4
+psycopg[binary]==3.2.10
 
 # PDF generation for bill receipts
 reportlab==4.2.5
