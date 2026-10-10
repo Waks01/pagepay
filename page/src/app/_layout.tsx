@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
+import * as Splash from "expo-splash-screen";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { View, StyleSheet, useColorScheme } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -36,8 +36,9 @@ import {
   offNotification,
 } from "@/src/lib/socket";
 import { handleNotificationTap, setupNotificationListeners } from "@/src/lib/notifications";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-SplashScreen.preventAutoHideAsync();
+Splash.preventAutoHideAsync();
 
 export const unstable_settings = {
   anchor: "/(auth)/",
@@ -154,7 +155,8 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-                  <PaystackProvider publicKey={PAYSTACK_PUBLIC_KEY}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <PaystackProvider publicKey={PAYSTACK_PUBLIC_KEY}>
             {!isReady || !fontsLoaded ? (
               <View style={{ flex: 1 }}>
                 {!splashDismissed ? (
@@ -176,7 +178,8 @@ export default function RootLayout() {
               </>
             )}
           </PaystackProvider>
-                <StatusBar style="auto" />
+          <StatusBar style="auto" />
+        </GestureHandlerRootView>
       </ThemeProvider>
     </QueryClientProvider>
   );
