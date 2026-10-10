@@ -3,6 +3,8 @@ import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
+  Animated,
+  Easing,
   Image,
   Linking,
   Modal,
@@ -18,6 +20,16 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  Gesture,
+  DetectorGesture,
+  PinchGestureHandler,
+} from "react-native-gesture-handler";
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
@@ -174,6 +186,10 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
   const [pdfPreviewPages, setPdfPreviewPages] = useState<Array<{ page: number; total: number; image_base64: string; width: number; height: number }> | null>(null);
   const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   // Load cached assets on mount
   useEffect(() => {
@@ -1490,13 +1506,38 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
             {previewFiles.length > 1 && (
               <View style={styles.previewThumbs}>
                 {previewFiles.map((f, idx) => (
-                  <Pressable
-                    key={idx}
-                    onPress={() => setPreviewFile(f)}
-                    style={[styles.previewThumb, previewFile?.uri === f.uri && { borderColor: tokens.mint, borderWidth: 2 }]}
-                  >
-                    <Image source={{ uri: f.uri }} style={styles.previewThumbImg} resizeMode="cover" />
-                  </Pressable>
+                  <View key={idx} style={styles.previewThumbWrap}>
+                    <Pressable
+                      onPress={() => setPreviewFile(f)}
+                      onLongPress={() => {
+                        if (previewFiles.length <= 1) return;
+                        setPreviewFiles((prev) => prev.filter((_, i) => i !== idx));
+                        setPreviewFile((prev) => {
+                          if (!prev) return null;
+                          const remaining = previewFiles.filter((_, i) => i !== idx);
+                          return remaining.length > 0 ? remaining[0] : null;
+                        });
+                      }}
+                      style={[styles.previewThumb, previewFile?.uri === f.uri && { borderColor: tokens.mint, borderWidth: 2 }]}
+                    >
+                      <Image source={{ uri: f.uri }} style={styles.previewThumbImg} resizeMode="cover" />
+                      <Pressable
+                        onPress={() => {
+                          if (previewFiles.length <= 1) return;
+                          setPreviewFiles((prev) => prev.filter((_, i) => i !== idx));
+                          setPreviewFile((prev) => {
+                            if (!prev) return null;
+                            const remaining = previewFiles.filter((_, i) => i !== idx);
+                            return remaining.length > 0 ? remaining[0] : null;
+                          });
+                        }}
+                        style={styles.previewThumbRemove}
+                        hitSlop={4}
+                      >
+                        <Ionicons name="close-circle" size={18} color="#fff" />
+                      </Pressable>
+                    </Pressable>
+                  </View>
                 ))}
               </View>
             )}
@@ -1593,11 +1634,33 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
           style={styles.imageViewerOverlay}
           onPress={() => setImageViewerVisible(false)}
         >
-          <Image
-            source={{ uri: previewFile?.uri }}
-            style={styles.imageViewerImage}
-            resizeMode="contain"
-          />
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <PinchGestureHandler
+              onGestureEvent={(e) => {
+                scale.value = Math.max(1, e.nativeEvent.scale);
+              }}
+              onEnded={() => {
+                if (scale.value < 1.1) {
+                  scale.value = withSpring(1);
+                }
+              }}
+            >
+              <Reanimated.View style={styles.imageViewerWrap}>
+                <Reanimated.Image
+                  source={{ uri: previewFile?.uri }}
+                  style={[styles.imageViewerImage, animatedStyle]}
+                  resizeMode="contain"
+                />
+              </Reanimated.View>
+            </PinchGestureHandler>
+            <Pressable
+              style={styles.imageViewerClose}
+              onPress={() => setImageViewerVisible(false)}
+              hitSlop={8}
+            >
+              <Ionicons name="close-circle" size={32} color="#fff" />
+            </Pressable>
+          </Pressable>
         </Pressable>
       </Modal>
 
@@ -2237,16 +2300,6 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  imageViewerOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.9)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  imageViewerImage: {
-    width: "100%",
-    height: "100%",
-  },
   previewPdfPlaceholder: {
     alignItems: "center",
     gap: 12,
@@ -2301,5 +2354,39 @@ const styles = StyleSheet.create({
   previewBtnText: {
     fontSize: 14,
     fontWeight: "700",
+  },
+  previewThumbWrap: {
+    position: "relative",
+  },
+  previewThumbRemove: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 10,
+    padding: 1,
+  },
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imageViewerWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imageViewerImage: {
+    width: "100%",
+    height: "100%",
+  },
+  imageViewerClose: {
+    position: "absolute",
+    top: 48,
+    right: 16,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 20,
+    padding: 4,
   },
 });
