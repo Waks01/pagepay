@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { launchCameraAsync, launchImageLibraryAsync, MediaType, requestCameraPermissionsAsync } from 'expo-image-picker';
+import { launchCameraAsync, launchImageLibraryAsync, requestCameraPermissionsAsync } from 'expo-image-picker';
 
 export function useImagePicker() {
   const [picking, setPicking] = useState(false);
@@ -8,7 +8,7 @@ export function useImagePicker() {
     setPicking(true);
     try {
       const result = await launchImageLibraryAsync({
-        mediaTypes: MediaType.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         quality: 0.8,
         base64: false,
