@@ -168,11 +168,12 @@ export default function StudyScreen() {
   const [editTitle, setEditTitle] = useState("");
   const [editExamType, setEditExamType] = useState<string | null>(null);
   const [shareFormatVisible, setShareFormatVisible] = useState(false);
-  const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type: string } | null>(null);
+const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [previewFiles, setPreviewFiles] = useState<Array<{ uri: string; name: string; type: string }>>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [pdfPreviewPages, setPdfPreviewPages] = useState<Array<{ page: number; total: number; image_base64: string; width: number; height: number }> | null>(null);
-  const [selectedPages, setSelectedPages] = useState<number[]>([]);
   const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
 
   // Load cached assets on mount
   useEffect(() => {
@@ -330,7 +331,7 @@ export default function StudyScreen() {
   const uploadMutation = useUploadSow();
   const uploadImageMutation = useUploadSowImage();
   const uploadDocumentMutation = useUploadSowDocument();
-  const { pickImage, takePhoto } = useImagePicker();
+  const { pickImage, pickImages, takePhoto } = useImagePicker();
   const { pickDocument } = useDocumentPicker();
   const claimBonusMutation = useClaimQuizBonus();
   const generateExampleMutation = useGenerateExample();
@@ -418,21 +419,20 @@ export default function StudyScreen() {
     setRetryAction(null);
     setUploadProgress(0);
     try {
-      const file = await pickImage();
-      if (!file) {
+      const files = await pickImages();
+      if (!files || files.length === 0) {
         console.log("[study/index] handleUploadImage CANCELED");
         setUploadProgress(undefined);
         return;
       }
-
       const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-      if (file.type && !validTypes.includes(file.type.toLowerCase())) {
-        console.log("[study/index] handleUploadImage INVALID TYPE", file.type);
+      const valid = files.filter((f) => !f.type || validTypes.includes(f.type.toLowerCase()));
+      if (valid.length === 0) {
         throw new Error(t("study.errors.invalid_file_type"));
       }
-      console.log("[study/index] handleUploadImage PREVIEW", file);
-
-      setPreviewFile({ uri: file.uri, name: file.name, type: file.type });
+      console.log("[study/index] handleUploadImage PREVIEW", valid);
+      setPreviewFiles(valid);
+      setPreviewFile(valid[0]);
       setPreviewVisible(true);
     } catch (err) {
       console.log("[study/index] handleUploadImage ERROR", err);
@@ -457,7 +457,8 @@ export default function StudyScreen() {
         return;
       }
       console.log("[study/index] handleTakePhoto PREVIEW", file);
-      setPreviewFile({ uri: file.uri, name: file.name, type: file.type });
+      setPreviewFiles([file]);
+      setPreviewFile(file);
       setPreviewVisible(true);
     } catch (err) {
       console.log("[study/index] handleTakePhoto ERROR", err);
@@ -482,6 +483,7 @@ export default function StudyScreen() {
         return;
       }
       console.log("[study/index] handleUploadDocument PREVIEW", file);
+      setPreviewFiles([file]);
       setPreviewFile({ uri: file.uri, name: file.name, type: file.type });
 
       if (file.type === "application/pdf") {
@@ -525,7 +527,7 @@ export default function StudyScreen() {
   };
 
   const confirmUpload = async () => {
-    console.log("[study/index] confirmUpload START", { previewFile });
+    console.log("[study/index] confirmUpload START", { previewFile, count: previewFiles.length });
     if (!previewFile) return;
     setPreviewVisible(false);
     setUploadProgress(0);
@@ -534,22 +536,28 @@ export default function StudyScreen() {
       const isPdf = previewFile.type === "application/pdf";
       console.log("[study/index] confirmUpload routing", { isImage, isPdf });
       if (isImage) {
-        console.log("[study/index] confirmUpload calling uploadSowImage");
-        const { job_id } = await uploadImageMutation.mutateAsync({
-          file: { uri: previewFile.uri, name: previewFile.name, type: previewFile.type },
-          exam_type: examType,
-          onProgress: handleUploadProgress,
-        });
-        console.log("[study/index] confirmUpload image job_id", { job_id });
-        setAiProcessing(true);
-        setUploadProgress(80);
-        const job = await pollSowJob(job_id, handlePollTick);
-        console.log("[study/index] confirmUpload poll result", job);
-        setAiProcessing(false);
-        if (job.status === "failed" || !job.material_id) {
-          throw new Error(job.error || "Image processing failed");
+        // Upload all selected images
+        const filesToUpload = previewFiles.length > 1 ? previewFiles : [previewFile];
+        for (let i = 0; i < filesToUpload.length; i++) {
+          const f = filesToUpload[i];
+          setUploadProgress(Math.round((i / filesToUpload.length) * 50));
+          console.log("[study/index] confirmUpload calling uploadSowImage", { idx: i, name: f.name });
+          const { job_id } = await uploadImageMutation.mutateAsync({
+            file: { uri: f.uri, name: f.name, type: f.type },
+            exam_type: examType,
+            onProgress: handleUploadProgress,
+          });
+          console.log("[study/index] confirmUpload image job_id", { job_id, idx: i });
+          setAiProcessing(true);
+          setUploadProgress(80);
+          const job = await pollSowJob(job_id, handlePollTick);
+          console.log("[study/index] confirmUpload poll result", { job, idx: i });
+          setAiProcessing(false);
+          if (job.status === "failed" || !job.material_id) {
+            throw new Error(job.error || "Image processing failed");
+          }
+          await finalizeUploadSuccess(job.material_id);
         }
-        await finalizeUploadSuccess(job.material_id);
       } else if (isPdf) {
         console.log("[study/index] confirmUpload calling uploadSowDocument");
         const selectedPagesArray = pdfPreviewPages
@@ -581,6 +589,7 @@ export default function StudyScreen() {
       setError(message);
     } finally {
       setPreviewFile(null);
+      setPreviewFiles([]);
     }
   };
 
@@ -1468,19 +1477,37 @@ export default function StudyScreen() {
           style={styles.modalOverlay}
           onPress={() => setPreviewVisible(false)}
         >
-          <View style={[styles.previewModal, { backgroundColor: tokens.card, borderColor: tokens.border }]}>
+          <Pressable
+            style={[styles.previewModal, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+            onPress={(e) => e.stopPropagation()}
+          >
             <Text style={[styles.previewTitle, { color: tokens.ink }]}>
               {t("study.preview_title", "Preview")}
             </Text>
             <Text style={[styles.previewFileName, { color: tokens.inkMuted }]}>
               {previewFile?.name}
             </Text>
+            {previewFiles.length > 1 && (
+              <View style={styles.previewThumbs}>
+                {previewFiles.map((f, idx) => (
+                  <Pressable
+                    key={idx}
+                    onPress={() => setPreviewFile(f)}
+                    style={[styles.previewThumb, previewFile?.uri === f.uri && { borderColor: tokens.mint, borderWidth: 2 }]}
+                  >
+                    <Image source={{ uri: f.uri }} style={styles.previewThumbImg} resizeMode="cover" />
+                  </Pressable>
+                ))}
+              </View>
+            )}
             {previewFile?.type?.startsWith("image/") && (
-              <Image
-                source={{ uri: previewFile.uri }}
-                style={styles.previewImage}
-                resizeMode="contain"
-              />
+              <Pressable onPress={() => setImageViewerVisible(true)}>
+                <Image
+                  source={{ uri: previewFile.uri }}
+                  style={styles.previewImage}
+                  resizeMode="contain"
+                />
+              </Pressable>
             )}
             {previewFile?.type === "application/pdf" && (
               <View style={styles.previewPdfContainer}>
@@ -1552,7 +1579,25 @@ export default function StudyScreen() {
                 </Text>
               </Pressable>
             </View>
-          </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={imageViewerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setImageViewerVisible(false)}
+      >
+        <Pressable
+          style={styles.imageViewerOverlay}
+          onPress={() => setImageViewerVisible(false)}
+        >
+          <Image
+            source={{ uri: previewFile?.uri }}
+            style={styles.imageViewerImage}
+            resizeMode="contain"
+          />
         </Pressable>
       </Modal>
 
@@ -2174,6 +2219,33 @@ const styles = StyleSheet.create({
     height: 220,
     borderRadius: 10,
     backgroundColor: "#F3F4F6",
+  },
+  previewThumbs: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 8,
+  },
+  previewThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    overflow: "hidden",
+  },
+  previewThumbImg: {
+    width: "100%",
+    height: "100%",
+  },
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imageViewerImage: {
+    width: "100%",
+    height: "100%",
   },
   previewPdfPlaceholder: {
     alignItems: "center",
