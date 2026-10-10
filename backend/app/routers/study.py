@@ -36,6 +36,7 @@ from app.ai.prompts import (
     VIDEO_SCRIPT_GENERATOR,
 )
 from app.ai.router import route_ai
+from app.services import tts_hybrid
 from app.models import (
     AudioUnlock,
     ExamAnswer,
@@ -56,6 +57,7 @@ from app.services.sanitize import (
     sanitize_for_display,
 )
 from app.services.tts_hybrid import AUDIO_CACHE_DIR, synthesize_study_audio
+import app.services.tts_hybrid as tts_hybrid
 from app.schemas import (
     ChatRequest,
     ChatResponse,
