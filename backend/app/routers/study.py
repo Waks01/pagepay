@@ -651,7 +651,7 @@ async def _process_sow_image_job(
                 raw_input=f"[IMAGE: {safe_name}]\n{extracted_text}",
                 parsed_structure=_json.dumps(parsed) if parsed else None,
                 original_file_data=contents,
-                file_mime_type=file.content_type or "image/jpeg",
+                file_mime_type=content_type or "image/jpeg",
                 ai_model_used=provider,
             )
             db.add(material)
