@@ -18,10 +18,17 @@ export function useImagePicker() {
         return null;
       }
       const asset = result.assets[0];
+      // expo-image-picker returns asset.type as "image" on some platforms
+      // instead of a proper mime type. Derive from the file extension.
+      const ext = (asset.uri.split('.').pop() || 'jpg').toLowerCase();
+      const mimeMap: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg',
+        png: 'image/png', webp: 'image/webp',
+      };
       const picked = {
         uri: asset.uri,
         name: `sow_${Date.now()}.jpg`,
-        type: asset.type || 'image/jpeg',
+        type: mimeMap[ext] || (asset.type?.startsWith('image') ? 'image/jpeg' : 'image/jpeg'),
         size: typeof (asset as any).fileSize === 'number' ? (asset as any).fileSize as number : null,
       };
       console.log("[useImagePicker] pickImage picked", picked);
@@ -51,10 +58,17 @@ export function useImagePicker() {
         return null;
       }
       const asset = result.assets[0];
+      // expo-image-picker returns asset.type as "image" on some platforms
+      // instead of a proper mime type. Derive from the file extension.
+      const ext = (asset.uri.split('.').pop() || 'jpg').toLowerCase();
+      const mimeMap: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg',
+        png: 'image/png', webp: 'image/webp',
+      };
       const picked = {
         uri: asset.uri,
         name: `sow_${Date.now()}.jpg`,
-        type: asset.type || 'image/jpeg',
+        type: mimeMap[ext] || (asset.type?.startsWith('image') ? 'image/jpeg' : 'image/jpeg'),
         size: typeof (asset as any).fileSize === 'number' ? (asset as any).fileSize as number : null,
       };
       console.log("[useImagePicker] takePhoto picked", picked);
