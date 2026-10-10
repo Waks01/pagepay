@@ -32,12 +32,20 @@ TTS_CHUNK_TARGET_CHARS = 1500
 TTS_CHUNK_MAX_CHARS = 2000
 
 
-def _cache_path(text: str, voice: str, provider: str) -> Path:
+def _cache_path(text: str, voice: str, provider: str, audio_bytes: bytes | None = None) -> Path:
     key = hashlib.sha256(f"{provider}:{voice}:{text}".encode()).hexdigest()[:16]
     shard = key[:2]
     d = AUDIO_CACHE_DIR / "tts" / shard
     d.mkdir(parents=True, exist_ok=True)
-    return d / f"{key}.mp3"
+    # Cloudflare MeloTTS returns WAV, edge-tts returns MP3. Use the
+    # correct extension so the file extension matches the container.
+    ext = "wav"
+    if audio_bytes:
+        if audio_bytes[:2] == b"ID3" or audio_bytes[:3] == b"\xff\xfb" or audio_bytes[:3] == b"\xff\xf3":
+            ext = "mp3"
+        elif audio_bytes[:4] == b"RIFF" and audio_bytes[8:12] == b"WAVE":
+            ext = "wav"
+    return d / f"{key}.{ext}"
 
 
 def _chunk_text(text: str) -> list[str]:
@@ -101,7 +109,75 @@ async def _tts_edge(text: str, voice: str) -> bytes | None:
         return path.read_bytes()
     except Exception as exc:
         logger.warning("edge-tts error: %s", exc)
+    return None
+
+
+def _concat_audio(chunks: list[bytes]) -> bytes:
+    """Concatenate audio chunks. Handles both MP3 (simple byte join)
+    and WAV (strip headers, merge PCM, rebuild header)."""
+    if not chunks:
+        return b""
+    # If all chunks are MP3, simple join works.
+    first = chunks[0]
+    if first[:2] == b"ID3" or first[:3] in (b"\xff\xfb", b"\xff\xf3"):
+        return b"".join(chunks)
+
+    # WAV: extract PCM data from each chunk and rebuild a single WAV.
+    if first[:4] == b"RIFF" and first[8:12] == b"WAVE":
+        pcm_data = b""
+        for chunk in chunks:
+            pcm = _wav_extract_pcm(chunk)
+            if pcm is None:
+                # Fallback: if any chunk isn't valid WAV, just join raw
+                return b"".join(chunks)
+            pcm_data += pcm
+        return _wav_build_pcm(pcm_data, first)
+
+    return b"".join(chunks)
+
+
+def _wav_extract_pcm(wav: bytes) -> bytes | None:
+    """Extract raw PCM samples from a WAV byte string."""
+    import struct
+    if len(wav) < 44 or wav[:4] != b"RIFF" or wav[8:12] != b"WAVE":
         return None
+    # Find the data subchunk
+    pos = 12
+    while pos < len(wav) - 8:
+        if wav[pos:pos+4] == b"data":
+            size = struct.unpack("<I", wav[pos+4:pos+8])[0]
+            return wav[pos+8:pos+8+size]
+        sub_size = struct.unpack("<I", wav[pos+4:pos+8])[0]
+        pos += 8 + sub_size + (sub_size % 2)
+    return None
+
+
+def _wav_build_pcm(pcm: bytes, template: bytes) -> bytes:
+    """Build a valid WAV from raw PCM data using the template's format."""
+    import struct
+    # Copy format info from template
+    byte_rate = struct.unpack("<I", template[24:28])[0]
+    block_align = struct.unpack("<H", template[32:34])[0]
+    bits_per_sample = struct.unpack("<H", template[34:36])[0]
+
+    out = bytearray()
+    out += b"RIFF"
+    out += struct.pack("<I", 36 + len(pcm))
+    out += b"WAVE"
+    out += b"fmt "
+    out += struct.pack("<I", 16)  # subchunk size
+    out += struct.pack("<H", 1)   # PCM
+    channels = struct.unpack("<H", template[22:24])[0]
+    sample_rate = struct.unpack("<I", template[24:28])[0]
+    out += struct.pack("<H", channels)
+    out += struct.pack("<I", sample_rate)
+    out += struct.pack("<I", byte_rate)
+    out += struct.pack("<H", block_align)
+    out += struct.pack("<H", bits_per_sample)
+    out += b"data"
+    out += struct.pack("<I", len(pcm))
+    out += pcm
+    return bytes(out)
 
 
 async def synthesize_study_audio(
@@ -114,7 +190,7 @@ async def synthesize_study_audio(
 
     Long text is split into sentence-boundary chunks. Each chunk is
     generated via the provider chain and cached individually so retries
-    do not lose progress. Chunks are concatenated into one MP3.
+    do not lose progress. Chunks are concatenated into one audio file.
 
     Returns (audio_bytes, provider_name). Raises RuntimeError if any
     chunk fails across all providers.
@@ -140,11 +216,13 @@ async def synthesize_study_audio(
         ordered.insert(0, provider)
 
     chunk_files: list[Path] = []
+    chunk_bytes_list: list[bytes] = []
     last_provider = provider
     try:
         for chunk in chunks:
             chunk_cache = _cache_path(chunk, voice, provider)
             if chunk_cache.exists():
+                chunk_bytes_list.append(chunk_cache.read_bytes())
                 chunk_files.append(chunk_cache)
                 continue
 
@@ -161,16 +239,31 @@ async def synthesize_study_audio(
             if chunk_bytes is None:
                 raise RuntimeError(f"TTS failed for chunk: {chunk[:80]}...")
 
+            # Cache with correct extension based on actual audio format
+            ext = "wav"
+            if chunk_bytes[:2] == b"ID3" or chunk_bytes[:3] in (b"\xff\xfb", b"\xff\xf3"):
+                ext = "mp3"
+            elif chunk_bytes[:4] == b"RIFF" and chunk_bytes[8:12] == b"WAVE":
+                ext = "wav"
+            chunk_cache = chunk_cache.with_suffix(f".{ext}")
             chunk_cache.write_bytes(chunk_bytes)
+            chunk_bytes_list.append(chunk_bytes)
             chunk_files.append(chunk_cache)
 
-        final_bytes = b"".join(p.read_bytes() for p in chunk_files)
-        cache.write_bytes(final_bytes)
+        final_bytes = _concat_audio(chunk_bytes_list)
+        # Write final with correct extension
+        final_ext = "wav"
+        if final_bytes[:2] == b"ID3" or final_bytes[:3] in (b"\xff\xfb", b"\xff\xf3"):
+            final_ext = "mp3"
+        elif final_bytes[:4] == b"RIFF" and final_bytes[8:12] == b"WAVE":
+            final_ext = "wav"
+        final_cache = cache.with_suffix(f".{final_ext}")
+        final_cache.write_bytes(final_bytes)
         return final_bytes, last_provider
     finally:
         for path in chunk_files:
             try:
-                if path.exists() and path != cache:
+                if path.exists() and path != final_cache:
                     path.unlink()
             except OSError:
                 pass
