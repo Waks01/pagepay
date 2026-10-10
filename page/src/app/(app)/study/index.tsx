@@ -3,8 +3,6 @@ import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
-  Animated,
-  Easing,
   Image,
   Linking,
   Modal,
@@ -25,7 +23,7 @@ import {
   DetectorGesture,
   PinchGestureHandler,
 } from "react-native-gesture-handler";
-import Reanimated, {
+import {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
@@ -1645,13 +1643,13 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
                 }
               }}
             >
-              <Reanimated.View style={styles.imageViewerWrap}>
-                <Reanimated.Image
+              <Animated.View style={styles.imageViewerWrap}>
+                <Animated.Image
                   source={{ uri: previewFile?.uri }}
                   style={[styles.imageViewerImage, animatedStyle]}
                   resizeMode="contain"
                 />
-              </Reanimated.View>
+              </Animated.View>
             </PinchGestureHandler>
             <Pressable
               style={styles.imageViewerClose}
