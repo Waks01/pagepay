@@ -53,6 +53,9 @@ async def setup_db():
     # and slows every call).
     from app.services import money_caps as _mc
     _mc._AMOUNT_BUCKET.clear()
+    # Same for the AI chat daily quota (process-global window).
+    from app.services import ai_usage as _au
+    _au.reset_all()
     async with engine_test.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield

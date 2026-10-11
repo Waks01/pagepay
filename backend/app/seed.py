@@ -70,9 +70,10 @@ async def seed_app_config(db: AsyncSession) -> int:
 async def seed_ai_provider_health(db: AsyncSession) -> int:
     """Phase 3 prep: ensure one row per known provider exists (idempotent)."""
     rows: list[dict] = [
-        {"provider_name": "openai", "consecutive_failures": 0},
-        {"provider_name": "anthropic", "consecutive_failures": 0},
-        {"provider_name": "google", "consecutive_failures": 0},
+        # The active text-generation provider. Retired multi-provider
+        # rows (openai/anthropic/google) were dropped with the old
+        # router — the admin health dashboard must reflect reality.
+        {"provider_name": "cloudflare", "consecutive_failures": 0},
     ]
 
     inserted = 0

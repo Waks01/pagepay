@@ -1,12 +1,28 @@
 """AI provider router — Cloudflare Workers AI only.
 
-Uses Cloudflare Workers AI text generation models.
-No other providers are configured.
+Single text-generation provider: Cloudflare Workers AI running
+`@cf/zai-org/glm-4.7-flash`.
+
+Two provider-specific details matter here:
+
+1. Reasoning (thinking) must be disabled per call via
+   `chat_template_kwargs: {"enable_thinking": false}`. The model is a
+   reasoning model; with thinking on, hidden reasoning tokens are
+   billed as output tokens (~3x cost measured on a tutor prompt) and
+   can consume the whole `max_tokens` budget, leaving `content: null`.
+2. The REST envelope carries `success`/`errors` fields even on HTTP
+   200, so both are checked before trusting `result`.
 """
+
+import logging
 
 from fastapi import HTTPException
 
 from app.config import settings
+
+logger = logging.getLogger("uvicorn.error")
+
+MODEL = "@cf/zai-org/glm-4.7-flash"
 
 
 async def route_ai(
@@ -15,12 +31,20 @@ async def route_ai(
     max_tokens: int = settings.ai_default_max_tokens,
     db=None,
     prefer_vision: bool = True,
+    system_prompt: str | None = None,
+    history: list[dict] | None = None,
 ) -> dict:
-    """Route an AI prompt through Cloudflare Workers AI.
+    """Send a prompt to Cloudflare Workers AI and return the text.
 
-    Uses the OpenAI-compatible chat completions endpoint.
-    Returns {"response": text, "provider": "cloudflare", "model": model_id}.
-    Raises HTTPException 503 if Cloudflare is unavailable.
+    `system_prompt` is sent with the system role; `history` is an
+    optional list of prior {"role": "user"|"assistant", "content": ...}
+    turns placed between the system prompt and the current user turn
+    (capped to the last 20 turns).
+
+    Returns {"response": str, "provider": str, "model": str,
+    "usage": {...}}. Raises HTTPException 503 on any failure —
+    callers must call this BEFORE they start streaming a response so
+    the error can still reach the client as a real HTTP status.
     """
     import httpx
 
@@ -33,10 +57,25 @@ async def route_ai(
             detail="Cloudflare Workers AI not configured. Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.",
         )
 
-    model = "@cf/zai-org/glm-4.7-flash"
+    temperature = (
+        settings.ai_temperature_chat
+        if task_type == "chat"
+        else settings.ai_temperature_default
+    )
+
+    messages: list[dict] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    for turn in (history or [])[-20:]:
+        role = turn.get("role")
+        content = turn.get("content")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": prompt})
+
     url = (
         f"https://api.cloudflare.com/client/v4/accounts/"
-        f"{account_id}/ai/run/{model}"
+        f"{account_id}/ai/run/{MODEL}"
     )
 
     try:
@@ -48,10 +87,12 @@ async def route_ai(
                     "Content-Type": "application/json",
                 },
                 json={
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": messages,
                     "max_tokens": max_tokens,
-                    "temperature": 0.3,
-                    "thinking": {"type": "disabled"},
+                    "temperature": temperature,
+                    # Cloudflare ignores the Anthropic-style
+                    # `thinking` param; this is the Workers AI knob.
+                    "chat_template_kwargs": {"enable_thinking": False},
                 },
             )
             if resp.status_code != 200:
@@ -60,22 +101,35 @@ async def route_ai(
                     detail=f"Cloudflare AI failed: HTTP {resp.status_code} {resp.text[:200]}",
                 )
             data = resp.json()
-            text = (
-                data.get("result", {})
-                .get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-            )
-            if not text:
+            if data.get("success") is False or data.get("errors"):
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Cloudflare AI error: {str(data.get('errors'))[:200]}",
+                )
+            result = data.get("result") or {}
+            message = (result.get("choices") or [{}])[0].get("message") or {}
+            text = message.get("content") or ""
+            if not text.strip():
                 raise HTTPException(
                     status_code=503,
                     detail="Cloudflare AI returned empty response",
                 )
-            return {"response": text, "provider": "cloudflare", "model": model}
+            usage = result.get("usage") or {}
+            return {
+                "response": text,
+                "provider": "cloudflare",
+                "model": result.get("model") or MODEL,
+                "usage": {
+                    "prompt_tokens": usage.get("prompt_tokens"),
+                    "completion_tokens": usage.get("completion_tokens"),
+                    "total_tokens": usage.get("total_tokens"),
+                },
+            }
     except HTTPException:
         raise
     except Exception as exc:
+        logger.error("Cloudflare AI call failed: %s", exc)
         raise HTTPException(
             status_code=503,
             detail=f"Cloudflare AI unavailable: {exc}",
-        )
+        ) from exc

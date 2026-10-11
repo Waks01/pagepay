@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, FadeInDown } from 'react-native-reanimated';
-import { useTranslation } from 'react-i18next';
 
 import { apiFetch } from '@/src/shared/api/client';
+import { sendChatMessage, type ChatRequest } from '@/src/features/study/api';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PageHeader } from '@/components/PageHeader';
@@ -34,10 +35,13 @@ type Message = {
   role: 'user' | 'assistant';
   text: string;
   timestamp: number;
+  status?: 'ok' | 'error';
+  /** Original question to replay when the student taps Retry. */
+  failedInput?: string;
 };
 
 export default function StudyChatScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const materialId = Number(id);
   const router = useRouter();
@@ -47,10 +51,15 @@ export default function StudyChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
-  const [educationLevel, setEducationLevel] = useState<string>('secondary');
-  const [difficulty, setDifficulty] = useState<string>('medium');
+  const [educationLevel, setEducationLevel] = useState<
+    NonNullable<ChatRequest['education_level']>
+  >('secondary');
+  const [difficulty, setDifficulty] = useState<
+    NonNullable<ChatRequest['difficulty']>
+  >('medium');
   const [showSettings, setShowSettings] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const materialQ = useQuery({
     queryKey: ['study', 'material', materialId],
@@ -68,13 +77,19 @@ export default function StudyChatScreen() {
   }, [messages]);
 
   const sendMessage = useCallback(
-    async (text?: string) => {
-      if (!input || !input.trim() || streaming) return;
+    async (rawText: string) => {
+      const text = (rawText ?? '').trim();
+      if (!text || streaming) return;
 
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setInput('');
       const userMsg: Message = {
         id: Date.now().toString(),
         role: 'user',
-        text: input.trim(),
+        text,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, userMsg]);
@@ -88,40 +103,53 @@ export default function StudyChatScreen() {
       ]);
 
       try {
-        const res = await apiFetch('/api/v1/study/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        // Prior turns only — the empty placeholder assistant bubble and
+        // the message being sent right now are excluded.
+        const history = messages
+          .filter((m) => m.text.trim().length > 0)
+          .slice(-10)
+          .map((m) => ({ role: m.role, content: m.text }));
+
+        const answer = await sendChatMessage(
+          {
             material_id: materialId,
-            message: input.trim(),
+            message: text,
             education_level: educationLevel,
-            difficulty,
-          }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: res.statusText }));
-          throw new Error(err.detail || 'Chat failed');
-        }
-
-        const answer = await res.text();
+            difficulty: difficulty,
+            language: i18n.language,
+            history,
+          },
+          controller.signal,
+        );
         setMessages((prev) =>
-          prev.map((m) => (m.id === assistantId ? { ...m, text: answer } : m)),
+          prev.map((m) =>
+            m.id === assistantId ? { ...m, text: answer, status: 'ok' } : m,
+          ),
         );
       } catch (err) {
         const errorText = err instanceof Error ? err.message : 'Something went wrong';
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
-              ? { ...m, text: `Error: ${errorText}` }
+              ? { ...m, text: errorText, status: 'error', failedInput: text }
               : m,
           ),
         );
       } finally {
         setStreaming(false);
+        abortRef.current = null;
       }
     },
-    [materialId, streaming, educationLevel, difficulty],
+    [materialId, messages, streaming, educationLevel, difficulty, i18n.language],
+  );
+
+  // Cancel an in-flight request when the screen unmounts so the app
+  // doesn't render into a dead component (or pay for an orphan call).
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+    },
+    [],
   );
 
   const title = materialQ.data?.title ?? t('study_chat.title');
@@ -167,7 +195,7 @@ export default function StudyChatScreen() {
           <View style={styles.settingGroup}>
             <Text style={[styles.settingLabel, { color: tokens.inkMuted }]}>Level</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.settingOptions}>
-              {['primary', 'secondary', 'tertiary', 'research'].map((level) => (
+              {(['primary', 'secondary', 'tertiary', 'research'] as const).map((level) => (
                 <Pressable
                   key={level}
                   onPress={() => setEducationLevel(level)}
@@ -195,7 +223,7 @@ export default function StudyChatScreen() {
           <View style={styles.settingGroup}>
             <Text style={[styles.settingLabel, { color: tokens.inkMuted }]}>Difficulty</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.settingOptions}>
-              {['easy', 'medium', 'hard'].map((diff) => (
+              {(['easy', 'medium', 'hard'] as const).map((diff) => (
                 <Pressable
                   key={diff}
                   onPress={() => setDifficulty(diff)}
@@ -265,20 +293,48 @@ export default function StudyChatScreen() {
               <View
                 style={[
                   styles.bubble,
+                  msg.status === 'error' && styles.errorBubble,
                   {
-                    backgroundColor: msg.role === 'user' ? tokens.mint : tokens.card,
-                    borderColor: msg.role === 'user' ? tokens.mint : tokens.border,
+                    backgroundColor:
+                      msg.role === 'user'
+                        ? tokens.mint
+                        : msg.status === 'error'
+                          ? tokens.errorSoft
+                          : tokens.card,
+                    borderColor:
+                      msg.role === 'user'
+                        ? tokens.mint
+                        : msg.status === 'error'
+                          ? tokens.error
+                          : tokens.border,
                   },
                 ]}
               >
                 <Text
                   style={[
                     styles.bubbleText,
-                    { color: msg.role === 'user' ? tokens.mintText : tokens.ink },
+                    { color: msg.role === 'user' ? tokens.mintText : msg.status === 'error' ? tokens.error : tokens.ink },
                   ]}
                 >
-                  {msg.text}
+                  {msg.status === 'error' ? `Something went wrong. ${msg.text}` : msg.text}
                 </Text>
+                {msg.status === 'error' && msg.failedInput ? (
+                  <Pressable
+                    onPress={() => {
+                      const retryText = msg.failedInput;
+                      if (retryText) sendMessage(retryText);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry last question"
+                    style={({ pressed }) => [
+                      styles.retryBtn,
+                      { borderColor: tokens.error, opacity: pressed ? 0.7 : 1 },
+                    ]}
+                  >
+                    <Ionicons name="refresh" size={13} color={tokens.error} />
+                    <Text style={[styles.retryText, { color: tokens.error }]}>Retry</Text>
+                  </Pressable>
+                ) : null}
                 {streaming && msg.role === 'assistant' && msg.text === '' ? (
                   <View style={styles.shimmerContainer}>
                     <ShimmerBar style={{ width: '60%' }} color={tokens.border} />
@@ -373,6 +429,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'capitalize',
+  },
+  errorBubble: {
+    borderWidth: 1,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  retryText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   messagesArea: {
     flex: 1,

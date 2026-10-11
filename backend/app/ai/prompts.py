@@ -403,7 +403,25 @@ The student's study material context is below. Use it to answer questions accura
 If a question goes beyond the material, say so honestly but still try to help.
 
 Study material context:
-{context}"""
+{context}
+
+Output rules:
+- Answer in plain prose with light markdown (bold for key terms, short bullet lists only when listing steps or items).
+- Keep answers focused: 100-250 words unless the student explicitly asks for more depth.
+- Base every claim on the material above. Do not invent facts, numbers, or dates it does not contain.
+- If the material does not cover the question, say so plainly in one sentence, then explain what the material does say that is closest.
+- If the student asks for content unrelated to studying (or anything inappropriate), decline politely in one sentence and offer to return to their material."""
+
+#: Locale code → language name for the chat tutor. The chat screen
+#: sends the active i18n language; non-English gets a reply-language
+#: line appended to CHAT_TUTOR_SYSTEM by the /study/chat endpoint.
+LANGUAGE_NAMES = {
+    "en": "English",
+    "ha": "Hausa",
+    "ig": "Igbo",
+    "pcm": "Nigerian Pidgin",
+    "yo": "Yoruba",
+}
 
 DIAGRAM_GENERATOR = """Create a detailed diagram description for the following topic.
 

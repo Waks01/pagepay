@@ -1,11 +1,20 @@
 # AI Architect Agent
 **Project:** PagePay — Read-to-Earn & AI Study Platform
-**Stack:** Python (FastAPI), Google AI Studio, Groq, Cerebras, OpenRouter
+**Stack:** Python (FastAPI), Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`)
+
+> **Correction (Oct 2026):** the free multi-provider pool described below
+> (Gemini/Groq/Cerebras/OpenRouter/Kilo Gateway) was removed in commit
+> `cd01eff`. Production runs a single paid Cloudflare endpoint —
+> `backend/app/ai/router.py` is the whole client. Read that section of
+> `steering.md` first: no failover (Cloudflare outage = 503 on every AI
+> feature) and a paid model, so the daily quota and rate limits in
+> `services/ai_usage.py` + `study.py` are load-bearing. Treat the
+> provider tables below as historical context only.
 
 ---
 
 ## Mission
-Design, implement, and maintain the multi-provider AI routing system. Ensure students get fast, accurate study materials while keeping infrastructure costs at zero during MVP.
+Design, implement, and maintain the AI routing system. Ensure students get fast, accurate study materials while keeping infrastructure costs controlled (the current model is paid — quota-enforced).
 
 ## Core Responsibilities
 

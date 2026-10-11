@@ -8,7 +8,7 @@ FastAPI backend for PagePay read-to-earn platform with social tasks marketplace.
 - **Database:** MySQL 8.0 with async SQLAlchemy 2.0
 - **Auth:** JWT tokens (python-jose)
 - **Migrations:** Alembic 1.13.3
-- **AI:** Multi-provider routing (Gemini, Groq, OpenRouter)
+- **AI:** Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`) — text generation, no free tier, per-user daily quota
 - **Media:** Cloudinary for image uploads
 - **Payments:** Paystack integration
 - **Container:** Docker + docker-compose
@@ -127,8 +127,7 @@ backend/
 │   │   ├── task_processor.py  # Phase 7 background worker
 │   │   └── ads.py        # Ad network resolution
 │   ├── ai/              # AI router (Phase 3)
-│   │   ├── router.py    # Multi-provider routing
-│   │   └── providers/   # Gemini, Groq, OpenRouter
+│   │   ├── router.py    # Cloudflare Workers AI client
 │   ├── models/          # SQLAlchemy models
 │   ├── schemas/         # Pydantic schemas
 │   ├── config.py        # Settings

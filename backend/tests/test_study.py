@@ -139,7 +139,7 @@ async def test_upload_sow_image_returns_job_id(
     client: AsyncClient, db_session, monkeypatch
 ):
     """The image upload endpoint should return 202 + a job_id immediately,
-    NOT block on Gemini Vision. The actual AI work happens in a
+    NOT block on Cloudflare Vision. The actual AI work happens in a
     background task that we monkey-patch to a fast stub."""
     user = User(email="imgjob@test.com", password_hash="hash")
     db_session.add(user)
@@ -147,17 +147,17 @@ async def test_upload_sow_image_returns_job_id(
     await db_session.refresh(user)
 
     # Patch the AI parser to a no-op so the background worker doesn't
-    # need a real LLM key. The OCR step is patched too (Gemini Vision
-    # would otherwise try to hit the live API).
+    # need a real LLM key. The OCR step is patched too (Cloudflare
+    # Vision would otherwise try to hit the live API).
     from app.routers import study as study_router
 
-    async def fake_ocr(contents, content_type, api_key):
+    async def fake_ocr(contents, content_type):
         return "Topic 1: Algebra. Subtopic: Equations."
 
     async def fake_parser(extracted_text):
         return ({"title": "Fake Material", "topics": []}, "stub", "{}")
 
-    monkeypatch.setattr(study_router, "_ocr_image_with_gemini", fake_ocr)
+    monkeypatch.setattr(study_router, "_ocr_image_with_cloudflare", fake_ocr)
     monkeypatch.setattr(study_router, "_run_sow_parser", fake_parser)
 
     res = await client.post(

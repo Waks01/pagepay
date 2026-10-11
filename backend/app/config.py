@@ -248,23 +248,13 @@ class Settings(BaseSettings):
     fx_cache_ttl_seconds: int = 60
     fx_http_timeout_seconds: float = 5.0
 
-    # ── AI provider base URLs + default models ───────────────────────
-    # Gemini, OpenRouter, and Groq all expose stable HTTP APIs and
-    # ship model versions over time. The base URL is stable; the
-    # default model is overridden by the PROVIDERS list in
-    # app/ai/router.py per-task-type, but we keep the per-provider
-    # default here too so the router code can fall back when the
-    # caller doesn't pin a model.
-    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
-    gemini_default_model: str = "gemini-2.5-flash"
-    openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_default_model: str = "openrouter/free"
-    openrouter_http_referer: str = "https://pagepay.ng"
-    openrouter_app_title: str = "PagePay Study"
-    groq_base_url: str = "https://api.groq.com/openai/v1"
-    groq_default_model: str = "llama-3.3-70b-versatile"
-
-    # ── AI provider circuit breaker ──────────────────────────────────
+    # ── AI provider credentials ───────────────────────────────────
+    # Text generation runs on Cloudflare Workers AI (app/ai/router.py).
+    # `gemini_api_key` is still used by the task-submission
+    # verifier (app/services/ai_verification.py); the retired
+    # Gemini/Groq/OpenRouter router settings were removed in the
+    # AI router cleanup.
+    gemini_api_key: str | None = None
 
     # ── Nitter mirrors (Twitter follow verification fallback) ───────
     # The Twitter API is paid and rate-limited; Nitter is an open
@@ -300,20 +290,27 @@ class Settings(BaseSettings):
     # Base URL used to build the canonical post URL we store in
     # content_catalog.source_url. Override via env `HIVE_BASE_URL`.
     hive_post_base_url: str = "https://hive.blog"
-    # After this many consecutive failures from a single provider the
-    # circuit opens for `ai_circuit_open_seconds` seconds and the
-    # router skips that provider. Survives process restarts (state is
-    # in `ai_provider_health`). 3 failures / 5 min is the default —
-    # loose enough to ride out a single bad batch, tight enough to
-    # avoid burning 30s/model timeouts on a dead provider.
-    ai_circuit_breaker_threshold: int = 3
-    ai_circuit_open_seconds: int = 300
 
     # Default `max_tokens` for `ai.router.route_ai` when the caller
     # doesn't pin a value. 4000 tokens ≈ 3000 words ≈ ~10 pages of
     # plain prose — enough for any MCQ/flashcard/essay generator.
     # Override via env `AI_DEFAULT_MAX_TOKENS`.
     ai_default_max_tokens: int = 4000
+
+    # Sampling temperatures. Structured/JSON generators stay cold for
+    # parseable output; the chat tutor runs warmer for natural
+    # conversation (see the note in app/ai/prompts.py).
+    # Override via env `AI_TEMPERATURE_DEFAULT` / `AI_TEMPERATURE_CHAT`.
+    ai_temperature_default: float = 0.3
+    ai_temperature_chat: float = 0.7
+
+    # Daily chat quota per user. /study/chat calls a paid model with no
+    # free tier, so an unmetered endpoint is an open bill: a scripted
+    # client could otherwise drain the Cloudflare account. Premium
+    # users get the larger cap (services/ai_usage.py enforces both).
+    # Override via env `STUDY_CHAT_DAILY_LIMIT`.
+    study_chat_daily_limit: int = 50
+    study_chat_premium_daily_limit: int = 300
 
     # Minimum effective reading duration (seconds) before a session is
     # considered "verified" and eligible for the slice bonus. The

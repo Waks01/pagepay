@@ -26,11 +26,11 @@ services:
         value: ca-app-pub-3898064484524772~6521009021
       - key: ADMOB_APP_ID_IOS
         value: ca-app-pub-3898064484524772~4871553842
+      # Still used by the task-submission verifier
+      # (app/services/ai_verification.py). Text generation itself runs
+      # on Cloudflare Workers AI via CLOUDFLARE_ACCOUNT_ID /
+      # CLOUDFLARE_API_TOKEN below.
       - key: GEMINI_API_KEY
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: OPENROUTER_API_KEY
         sync: false
       - key: CLOUDINARY_CLOUD_NAME
         value: dcr5v9f3c

@@ -72,7 +72,7 @@ Every phase is a standalone, monetizing product:
 | Expo SDK 54+ (New Architecture) | Required for modern native modules, EAS Build/Update, managed workflow |
 | FastAPI + MySQL 8.0 (local dev) + PostgreSQL 18 (production Render) | Python-native AI support, async scales, Render deployment |
 | AdMob primary (AppLovin deferred) | Fill rate (AdMob) + optional alternative provider later |
-| Gemini for heavy SOW | 1M context window handles full syllabus in one call |
+| Cloudflare Workers AI for all AI | Single model (GLM-4.7-Flash) covers SOW, quizzes, and chat on one paid endpoint; quota + rate limits protect the bill |
 | Paystack (not Flutterwave) | Better Nigerian market support, simpler API, no OAuth complexity |
 | Points-first, cash-payout-later | Regulatory simplicity — no KYC for in-app wallet |
 | Peyflex for bills/VTU | Real-time commission API, works with all Nigerian networks/utilities |
@@ -97,13 +97,19 @@ Every phase is a standalone, monetizing product:
 
 ## AI Provider Status & Selection
 
-- **Gemini Flash:** 1,500 req/day free, 1M context. Primary for heavy tasks.
-- **Groq:** ~1,000 req/day, fastest inference. Primary for real-time quizzes/chat.
-- **OpenRouter:** 50-1,000 req/day. Best failover key.
-- **Cerebras:** ~1M tokens/day BUT volatile catalog. Optional.
-- **Mistral:** ~1B tokens/month free but uses data for training. Avoid for user data.
+**Current (Oct 2026):** single paid provider — Cloudflare Workers AI, model
+`@cf/zai-org/glm-4.7-flash` (131K ctx, $0.0605/M input + $0.40/M output tokens).
+The earlier free multi-provider pool (Gemini/Groq/OpenRouter/Kilo Gateway) was
+removed in commit `cd01eff`; only the Cloudflare client remains in
+`backend/app/ai/router.py`.
 
-Route logic: heavy → Gemini, fast → Groq, fallback → OpenRouter.
+Consequences we work within:
+- **No free tier** → `/study/chat` enforces a per-user daily quota
+  (`study_chat_daily_limit`, premium gets `study_chat_premium_daily_limit`)
+  and the task type sets temperature. Reasoning is disabled per call via
+  `chat_template_kwargs` — leaving it on triples billed output tokens.
+- **No failover** → a Cloudflare outage is a 503 on every AI feature. When
+  revenue justifies it, add a second provider behind the old circuit breaker.
 
 ---
 

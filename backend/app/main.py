@@ -18,7 +18,6 @@ from app.routers import auth, content, sessions, health, wallet, progress, study
 from app.routers.images import router as images_router
 from app.routers.audio import router as audio_router
 from app.routers.study_data import router as study_data_router
-from app.routers.ai import router as ai_router
 from app.routers.referral import router as referral_router
 from app.routers.community import router as community_router
 from app.routers.streak import router as streak_router
@@ -433,7 +432,6 @@ app.include_router(payouts_router, prefix=API_PREFIX)
 app.include_router(payments_router, prefix=API_PREFIX)
 app.include_router(config_router, prefix=API_PREFIX)
 app.include_router(study.router, prefix=API_PREFIX)
-app.include_router(ai_router, prefix=API_PREFIX)
 app.include_router(referral_router, prefix=API_PREFIX)
 app.include_router(community_router, prefix=API_PREFIX)
 app.include_router(streak_router, prefix=API_PREFIX)

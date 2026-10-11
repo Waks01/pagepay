@@ -91,9 +91,20 @@ export type GenerateAssetResponse = {
   assets: unknown[];
 };
 
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type ChatRequest = {
   material_id: number;
   message: string;
+  education_level?: "primary" | "secondary" | "tertiary" | "research";
+  difficulty?: "easy" | "medium" | "hard";
+  /** Active i18n locale (en/ha/ig/pcm/yo); the tutor replies in it. */
+  language?: string;
+  /** Prior turns, oldest first. Server keeps the last 20. */
+  history?: ChatMessage[];
 };
 
 export type UnlockRequest = {
@@ -375,12 +386,16 @@ export async function routeAi(
   return res.json();
 }
 
-export async function sendChatMessage(payload: ChatRequest): Promise<string> {
+export async function sendChatMessage(
+  payload: ChatRequest,
+  signal?: AbortSignal,
+): Promise<string> {
   const res = await apiFetch("/api/v1/study/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-  });
+    signal,
+  } as RequestInit);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || "Chat failed");

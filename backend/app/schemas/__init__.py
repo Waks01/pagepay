@@ -755,9 +755,30 @@ class NotificationsListResponse(BaseModel):
     unread_count: int
 
 
+class ChatMessage(BaseModel):
+    """One prior turn of tutor chat, sent by the client so the model
+    can answer follow-ups in context."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=2000)
+
+
 class ChatRequest(BaseModel):
     material_id: int
     message: str = Field(min_length=1, max_length=2000)
+    # Body params — NOT query params. They used to be declared as
+    # scalar endpoint args, so FastAPI read them from the query string
+    # while the client sent them in the JSON body: the chat settings
+    # UI was silently ignored and every chat ran as secondary/medium.
+    education_level: Literal[
+        "primary", "secondary", "tertiary", "research"
+    ] = "secondary"
+    difficulty: Literal["easy", "medium", "hard"] = "medium"
+    # Optional BCP-47-ish locale code (en/ha/ig/pcm/yo). When set, the
+    # tutor answers in that language.
+    language: str | None = Field(default=None, max_length=10)
+    # Prior turns, oldest first. Server keeps the last 20.
+    history: list[ChatMessage] = Field(default_factory=list, max_length=40)
 
 
 class ChatResponse(BaseModel):

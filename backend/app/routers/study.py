@@ -31,6 +31,7 @@ from app.ai.prompts import (
     FLASHCARD_ALL_TOPICS_GENERATOR,
     FLASHCARD_GENERATOR,
     FLASHCARD_TOPIC_GENERATOR,
+    LANGUAGE_NAMES,
     MCQ_ALL_TOPICS_GENERATOR,
     MCQ_GENERATOR,
     MCQ_TOPIC_GENERATOR,
@@ -72,9 +73,11 @@ from app.services import audio_pricing
 from app.services import study_audio_service
 from app.services import r2_storage
 import app.services.tts_hybrid as tts_hybrid
+from app.limiter import limiter
+from app.services.ai_usage import check_and_record, release
+from app.services.subscription import is_premium
 from app.schemas import (
     ChatRequest,
-    ChatResponse,
     ExampleCheckRequest,
     ExampleCheckResponse,
     ExampleGenerateRequest,
@@ -1784,13 +1787,26 @@ Rules:
 
 
 @router.post("/chat")
+@limiter.limit("20/minute")
 async def chat_study(
+    request: Request,
     payload: ChatRequest,
-    education_level: str | None = None,
-    difficulty: str = "medium",
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Streaming AI tutor chat over one study material.
+
+    The model call happens BEFORE the response starts so a provider
+    failure returns a real 503 (the client renders it as an error
+    message). Errors raised mid-stream used to terminate an
+    already-committed 200, leaving the client with a silent empty
+    bubble.
+
+    Per-user daily quota: this calls a paid model with no free tier,
+    so the call is admitted against `study_chat_daily_limit`
+    (premium gets `study_chat_premium_daily_limit`). Failed model
+    calls are refunded. See services/ai_usage.py.
+    """
     result = await db.execute(
         select(StudyMaterial).where(
             StudyMaterial.id == payload.material_id,
@@ -1801,36 +1817,80 @@ async def chat_study(
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
 
+    daily_limit = (
+        settings.study_chat_premium_daily_limit
+        if is_premium(current_user)
+        else settings.study_chat_daily_limit
+    )
+    allowed, remaining = check_and_record(current_user.id, daily_limit)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily AI chat limit reached ({daily_limit}/day). Try again tomorrow.",
+        )
+
     context = ""
     if material.parsed_structure:
         import json as _json
-        parsed = _json.loads(material.parsed_structure)
-        context_parts = []
-        for topic in parsed.get("topics", []):
-            context_parts.append(f"Topic: {topic['name']}")
-            for st in topic.get("subtopics", []):
-                context_parts.append(f"  - {st}")
-        context = "\n".join(context_parts)
+        try:
+            parsed = _json.loads(material.parsed_structure)
+        except (ValueError, TypeError):
+            parsed = None
+            logger.error(
+                "Material %s has unparseable parsed_structure", material.id
+            )
+        if isinstance(parsed, dict):
+            context_parts = []
+            for topic in parsed.get("topics") or []:
+                if not isinstance(topic, dict):
+                    continue
+                context_parts.append(f"Topic: {topic.get('name') or 'Untitled topic'}")
+                for st in topic.get("subtopics") or []:
+                    context_parts.append(f"  - {st}")
+            context = "\n".join(context_parts)
 
     system_prompt = CHAT_TUTOR_SYSTEM.format(
         context=context or "No structured context available.",
-        education_level=education_level or "secondary",
-        difficulty=difficulty,
+        education_level=payload.education_level,
+        difficulty=payload.difficulty,
     )
-    full_prompt = f"{system_prompt}\n\nStudent question: {payload.message}"
+    language_name = LANGUAGE_NAMES.get((payload.language or "").lower())
+    if language_name and language_name != "English":
+        system_prompt += (
+            f"\n\nReply in {language_name}. Keep key subject terms in English "
+            "in parentheses where students will need the exam wording."
+        )
+
+    try:
+        ai_result = await route_ai(
+            payload.message,
+            task_type="chat",
+            max_tokens=2000,
+            db=db,
+            system_prompt=system_prompt,
+            history=[turn.model_dump() for turn in payload.history],
+        )
+    except HTTPException:
+        # Provider failed after we admitted the call — give the slot
+        # back so an outage doesn't burn the user's daily quota.
+        release(current_user.id)
+        raise
+    text = ai_result["response"]
+    logger.info(
+        "study chat: user=%s material=%s model=%s usage=%s",
+        current_user.id,
+        material.id,
+        ai_result.get("model"),
+        ai_result.get("usage"),
+    )
 
     async def generate():
-        ai_result = await route_ai(full_prompt, task_type="chat", max_tokens=2000, db=db)
-        text = ai_result["response"]
-        # Stream token-by-token in small chunks for the frontend
-        words = text.split(" ")
-        chunk = []
-        for word in words:
-            chunk.append(word)
-            yield " ".join(chunk) + " "
-            chunk = []
-        if chunk:
-            yield " ".join(chunk)
+        # Re-emit the completed answer in small chunks so the client
+        # can render it progressively. React Native's fetch can't read
+        # a streamed body incrementally, so upstream token streaming
+        # would not reach the UI anyway.
+        for word in text.split(" "):
+            yield word + " "
 
     return StreamingResponse(generate(), media_type="text/plain")
 
@@ -2884,7 +2944,16 @@ async def submit_exam(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Finalize exam, calculate score server-side, mark as submitted."""
+    """Finalize exam, calculate score server-side, mark as submitted.
+
+    Exam results deliberately do NOT roll into `StudyProgress`
+    (per-topic mastery): `_generate_exam_questions` draws questions
+    across all topics and stores no per-question topic tag, so an exam
+    score can't be attributed to individual topics the way a
+    single-topic quiz (`/study/quiz/complete`) can. Per-topic exam
+    roll-up needs topic-tagged exam questions first — until then,
+    topical mastery comes from topic-scoped quizzes.
+    """
     result = await db.execute(
         select(ExamSession).where(
             ExamSession.id == session_id,

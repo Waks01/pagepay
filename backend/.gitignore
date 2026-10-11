@@ -154,3 +154,7 @@ output*.txt
 test_result.txt
 !tests/**
 !tests/**/
+
+# Python bytecode caches (pytest writes these inside tests/)
+__pycache__/
+*.py[cod]
