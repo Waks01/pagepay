@@ -253,7 +253,9 @@ async def lifespan(app: FastAPI):
         register_reading_session_cleanup_job(_scheduled_bills.scheduler)
         from app.services.scheduler import register_subscription_expiry_job
         register_subscription_expiry_job(_scheduled_bills.scheduler)
-        logger.info("Daily study reminder, reading session cleanup, and subscription expiry jobs registered")
+        from app.services.scheduler import register_audio_stale_sweep_job
+        register_audio_stale_sweep_job(_scheduled_bills.scheduler)
+        logger.info("Daily study reminder, reading session cleanup, subscription expiry, and audio stale sweep jobs registered")
         try:
             jobs = _scheduled_bills.scheduler.get_jobs()
             logger.info("APScheduler loaded %d job(s): %s", len(jobs), ", ".join(j.id for j in jobs))

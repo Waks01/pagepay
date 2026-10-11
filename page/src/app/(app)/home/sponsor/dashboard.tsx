@@ -58,7 +58,7 @@ export default function SponsorDashboardScreen() {
           styles.taskCard,
           { backgroundColor: tokens.card, borderColor: tokens.border },
         ]}
-        onPress={() => router.push(`/sponsor/tasks/${item.id}`)}
+        onPress={() => router.push(`/home/sponsor/tasks/${item.id}`)}
       >
         <View style={styles.taskHeader}>
           <View
@@ -158,7 +158,7 @@ export default function SponsorDashboardScreen() {
         title={t("sponsor_dashboard.title")}
         right={
           <TouchableOpacity
-            onPress={() => router.push("/sponsor/tasks/create")}
+            onPress={() => router.push("/home/sponsor/tasks/create")}
           >
             <Ionicons name="add-circle" size={32} color={tokens.mint} />
           </TouchableOpacity>
@@ -224,7 +224,7 @@ export default function SponsorDashboardScreen() {
             </Text>
             <TouchableOpacity
               style={[styles.createButton, { backgroundColor: tokens.mint }]}
-              onPress={() => router.push("/sponsor/tasks/create")}
+              onPress={() => router.push("/home/sponsor/tasks/create")}
             >
               <Ionicons name="add" size={20} color={tokens.mintText} />
               <Text

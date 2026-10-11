@@ -195,7 +195,7 @@ export default function WalletScreen() {
       return;
     }
     if (pinStatusQ.data?.has_pin) {
-      router.push("/pin/verify?mode=verify&redirect=/(app)/wallet");
+      router.push("/home/pin/verify?mode=verify&redirect=/wallet");
       return;
     }
     setShowWithdraw(true);
@@ -439,7 +439,7 @@ export default function WalletScreen() {
               {/* Fund Wallet Button */}
               <PrimaryButton
                 title={t("wallet.fund_wallet")}
-                onPress={() => router.push("/fund-wallet")}
+                onPress={() => router.push("/home/fund-wallet")}
               />
 
               {/* Withdraw Button */}

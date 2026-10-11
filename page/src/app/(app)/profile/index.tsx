@@ -275,7 +275,7 @@ export default function ProfileScreen() {
             },
             {
               text: t("profile.pin.setup_button", { defaultValue: "Set PIN" }),
-              onPress: () => router.push("/pin/setup"),
+              onPress: () => router.push("/home/pin/setup"),
             },
           ],
         );
@@ -731,7 +731,7 @@ export default function ProfileScreen() {
         </Text>
         <View style={{ gap: 10 }}>
           <Pressable
-            onPress={() => router.push("/(tabs)/tasks")}
+            onPress={() => router.push("/tasks")}
             style={({ pressed }) => [
               styles.roleCard,
               {
@@ -772,7 +772,7 @@ export default function ProfileScreen() {
 
           {!meQuery?.is_sponsor && (
             <Pressable
-              onPress={() => router.push("/sponsor/register")}
+              onPress={() => router.push("/home/sponsor/register")}
               style={({ pressed }) => [
                 styles.roleCard,
                 {
@@ -810,7 +810,7 @@ export default function ProfileScreen() {
 
           {meQuery?.is_sponsor && (
             <Pressable
-              onPress={() => router.push("/sponsor/dashboard")}
+              onPress={() => router.push("/home/sponsor/dashboard")}
               style={({ pressed }) => [
                 styles.roleCard,
                 {
@@ -1121,7 +1121,7 @@ export default function ProfileScreen() {
             }
             onPress={() =>
               router.push(
-                pinStatusQuery.data?.has_pin ? "/pin/change" : "/pin/setup",
+                pinStatusQuery.data?.has_pin ? "/home/pin/change" : "/home/pin/setup",
               )
             }
           />

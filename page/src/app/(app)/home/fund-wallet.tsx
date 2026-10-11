@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { usePaystack } from "expo-paystack";
 
 import { apiFetch } from "@/src/shared/api/client";
+import { useCurrentUserStore } from "@/src/shared/lib/current-user";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PagePay } from "@/constants/theme";
 

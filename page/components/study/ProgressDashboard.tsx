@@ -1,11 +1,23 @@
-import { StyleSheet, View, Text } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+} from 'react-native';
 
+import { apiFetch } from '@/src/shared/api/client';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 
 type ProgressItem = {
-  id: number;
+  // Null for topics with no persisted row yet — the backend still
+  // returns them so every topic of the material appears as not-started.
+  id: number | null;
+  material_id: number;
   topic_index: number;
   topic_name: string;
   status: string;
@@ -15,253 +27,256 @@ type ProgressItem = {
 
 type ProgressDashboardProps = {
   materialId: number;
-  totalTopics: number;
-  mastered: number;
-  reviewing: number;
-  notStarted: number;
-  progress?: ProgressItem[];
 };
 
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; tint: string; icon: keyof typeof Ionicons.glyphMap; soft: string }
-> = {
-  mastered: { label: 'Mastered', tint: 'mint', icon: 'trophy', soft: 'mintFaint' },
-  reviewing: { label: 'Reviewing', tint: 'gold', icon: 'time', soft: 'mintFaint' },
-  not_started: { label: 'Not Started', tint: 'inkFaint', icon: 'remove-circle-outline', soft: 'paper2' },
-};
-
-export function ProgressDashboard({
-  materialId: _materialId,
-  totalTopics,
-  mastered,
-  reviewing,
-  notStarted,
-  progress,
-}: ProgressDashboardProps) {
+/**
+ * Per-topic mastery for one study material.
+ *
+ * Fetches `/materials/{id}/progress` itself — the same query key the
+ * study tab uses, so both screens share one cache entry and a quiz
+ * completion anywhere refreshes this card. The backend returns one
+ * entry per parsed topic, so the chips always cover the full set even
+ * before the student has touched a topic.
+ */
+export function ProgressDashboard({ materialId }: ProgressDashboardProps) {
+  const { t } = useTranslation();
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
 
-  const hasProgress = Array.isArray(progress) && progress.length > 0;
-  const overallMastery = totalTopics > 0 ? Math.round((mastered / totalTopics) * 100) : 0;
+  const progressQ = useQuery({
+    queryKey: ['study', 'progress', materialId],
+    queryFn: async () => {
+      const res = await apiFetch(`/api/v1/study/materials/${materialId}/progress`);
+      if (!res.ok) throw new Error('Failed to load progress');
+      return res.json() as Promise<{
+        total_topics: number;
+        mastered: number;
+        reviewing: number;
+        not_started: number;
+        progress: ProgressItem[];
+      }>;
+    },
+    enabled: materialId > 0,
+  });
 
-  // No progress data yet — render a calm placeholder so the screen never
-  // crashes if the backend hasn't returned per-topic progress (or the
-  // caller hasn't wired it up yet). Avoids `undefined.map` runtime crash.
-  if (!hasProgress) {
-    return (
-      <View
-        style={[
-          styles.container,
-          styles.placeholder,
-          { borderColor: tokens.border },
-        ]}
-      >
-        <Ionicons name="analytics-outline" size={20} color={tokens.inkMuted} />
-        <Text style={[styles.placeholderTitle, { color: tokens.ink }]}>
-          Progress will appear here
-        </Text>
-        <Text style={[styles.placeholderSub, { color: tokens.inkMuted }]}>
-          Complete a quiz or review session to start tracking your mastery.
-        </Text>
-      </View>
-    );
-  }
+  const total = progressQ.data?.total_topics ?? 0;
+  const mastered = progressQ.data?.mastered ?? 0;
+  const reviewing = progressQ.data?.reviewing ?? 0;
+  const notStarted = progressQ.data?.not_started ?? 0;
+  const progress: ProgressItem[] = progressQ.data?.progress ?? [];
+
+  const pct = total > 0 ? Math.round(((mastered + reviewing) / total) * 100) : 0;
+  const masteredRatio = total > 0 ? mastered / total : 0;
+  const reviewingRatio = total > 0 ? reviewing / total : 0;
+  const notStartedRatio = Math.max(0, 1 - masteredRatio - reviewingRatio);
+
+  // A material with no parsed topics has nothing to track — rendering
+  // an empty 0% card would be noise.
+  if (!progressQ.isLoading && total === 0) return null;
+
+  if (progressQ.isError) return null;
 
   return (
-    <View style={styles.container}>
-      {/* Editorial mastery hero — dark surface, big serif number. */}
-      <View style={[styles.hero, { backgroundColor: tokens.ink }]}>
-        <View>
-          <Text style={[styles.heroEyebrow, { color: 'rgba(255,255,255,0.6)' }]}>
-            Overall mastery
-          </Text>
-          <Text
-            style={[styles.heroNum, { color: tokens.paper, fontFamily: Fonts.editorialSemiBold as string }]}
-          >
-            {overallMastery}
-            <Text style={{ fontSize: 22, opacity: 0.6 }}>%</Text>
-          </Text>
-        </View>
-        <View style={[styles.heroChips, { flexWrap: 'wrap' }]}>
-          <HeroStat label="Mastered" value={mastered} tokens={tokens} dot="mint" />
-          <HeroStat label="Reviewing" value={reviewing} tokens={tokens} dot="gold" />
-          <HeroStat label="Not started" value={notStarted} tokens={tokens} dot="faint" />
-        </View>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: tokens.card, borderColor: tokens.border },
+      ]}
+    >
+      <View style={styles.headerRow}>
+        <Text style={[styles.title, { color: tokens.ink }]}>
+          {t('study.progress.title')}
+        </Text>
+        <Text style={[styles.pct, { color: tokens.mint }]}>{pct}%</Text>
       </View>
 
-      {/* Per-topic list — keeps the existing icon-badge layout, just tokenized. */}
-      <View style={styles.list}>
-        {progress!.map((item) => {
-          const config = STATUS_CONFIG[item.status] || STATUS_CONFIG['not_started'];
-          const tint = (tokens as any)[config.tint] as string;
-          const soft = (tokens as any)[config.soft] as string;
-          return (
+      <View style={styles.barRow}>
+        <View style={[styles.bar, { backgroundColor: tokens.border }]}>
+          {total > 0 && mastered > 0 && (
             <View
-              key={item.id}
-              style={[styles.item, { borderColor: tokens.border, backgroundColor: tokens.card }]}
-            >
-              <View
-                style={[styles.statusBadge, { backgroundColor: soft }]}
-              >
-                <Ionicons name={config.icon} size={16} color={tint} />
-              </View>
-              <View style={styles.itemInfo}>
-                <Text style={[styles.topicName, { color: tokens.ink }]}>
-                  {item.topic_name}
-                </Text>
-                <Text style={[styles.topicStatus, { color: tokens.inkMuted }]}>
-                  {config.label}
-                  {item.mastery_score !== null && ` · ${item.mastery_score}%`}
-                </Text>
-              </View>
-              {item.mastery_score !== null && (
-                <View style={[styles.scorePill, { backgroundColor: tokens.mintFaint }]}>
-                  <Text
-                    style={[
-                      styles.scoreText,
-                      { color: tokens.mint, fontFamily: Fonts.editorialSemiBold as string },
-                    ]}
-                  >
-                    {item.mastery_score}
-                  </Text>
-                </View>
-              )}
-            </View>
-          );
-        })}
+              style={[
+                styles.segment,
+                { backgroundColor: tokens.mint, width: `${masteredRatio * 100}%` },
+              ]}
+            />
+          )}
+          {total > 0 && reviewing > 0 && (
+            <View
+              style={[
+                styles.segment,
+                { backgroundColor: tokens.mintSoft, width: `${reviewingRatio * 100}%` },
+              ]}
+            />
+          )}
+          {total > 0 && notStartedRatio > 0 && (
+            <View
+              style={[
+                styles.segment,
+                { backgroundColor: tokens.border, width: `${notStartedRatio * 100}%` },
+              ]}
+            />
+          )}
+        </View>
       </View>
-    </View>
-  );
-}
 
-function HeroStat({
-  label,
-  value,
-  tokens,
-  dot,
-}: {
-  label: string;
-  value: number;
-  tokens: any;
-  dot: 'mint' | 'gold' | 'faint';
-}) {
-  const dotColor =
-    dot === 'mint' ? tokens.mint : dot === 'gold' ? tokens.gold : 'rgba(255,255,255,0.4)';
-  return (
-    <View style={styles.heroStat}>
-      <View style={[styles.legendDot, { backgroundColor: dotColor }]} />
-      <Text style={[styles.heroStatVal, { color: tokens.paper }]}>{value}</Text>
-      <Text style={[styles.heroStatLabel, { color: 'rgba(255,255,255,0.65)' }]}>{label}</Text>
+      <View style={styles.legendRow}>
+        <View style={styles.legendItem}>
+          <View style={[styles.dot, { backgroundColor: tokens.mint }]} />
+          <Text style={[styles.legendText, { color: tokens.inkMuted }]}>
+            {mastered} {t('study.progress.mastered')}
+          </Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.dot, { backgroundColor: tokens.mintSoft }]} />
+          <Text style={[styles.legendText, { color: tokens.inkMuted }]}>
+            {reviewing} {t('study.progress.reviewing')}
+          </Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.dot, { backgroundColor: tokens.border }]} />
+          <Text style={[styles.legendText, { color: tokens.inkMuted }]}>
+            {notStarted} {t('study.progress.not_started')}
+          </Text>
+        </View>
+      </View>
+
+      {progressQ.isLoading ? (
+        <View style={styles.loadingRow}>
+          <Ionicons name="hourglass-outline" size={14} color={tokens.inkMuted} />
+          <Text style={[styles.statusText, { color: tokens.inkMuted }]}>
+            {t('study.progress.loading')}
+          </Text>
+        </View>
+      ) : progress.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
+          {progress.map((item) => (
+            <Pressable
+              key={item.id ?? `topic-${item.topic_index}`}
+              style={[
+                styles.chip,
+                {
+                  borderColor:
+                    item.status === 'mastered'
+                      ? tokens.mint
+                      : item.status === 'reviewing'
+                        ? tokens.mintSoft
+                        : tokens.border,
+                  backgroundColor:
+                    item.status === 'mastered'
+                      ? tokens.mintSoft
+                      : item.status === 'reviewing'
+                        ? tokens.paper
+                        : tokens.card,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  {
+                    color:
+                      item.status === 'not_started' ? tokens.inkMuted : tokens.ink,
+                  },
+                ]}
+              >
+                {item.topic_name}
+              </Text>
+              <Text style={[styles.chipMeta, { color: tokens.mint }]}>
+                {item.status === 'mastered'
+                  ? `${item.mastery_score ?? 0}%`
+                  : item.status === 'reviewing'
+                    ? t('study.progress.reviewing')
+                    : t('study.progress.not_started')}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  card: {
     borderRadius: 14,
-    overflow: 'hidden',
+    borderWidth: 1,
+    padding: 18,
     gap: 12,
   },
-  placeholder: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    paddingVertical: 28,
-    paddingHorizontal: 20,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  title: {
+    fontSize: 16,
+    fontFamily: Fonts.editorialSemiBold as string,
+    letterSpacing: -0.3,
+  },
+  pct: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  barRow: {
+    height: 10,
+    borderRadius: 999,
+    overflow: 'hidden',
+    flexDirection: 'row',
+  },
+  bar: {
+    flex: 1,
+    borderRadius: 999,
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+  segment: {
+    height: '100%',
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  legendItem: {
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  placeholderTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  placeholderSub: {
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  hero: {
-    borderRadius: 14,
-    padding: 22,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 16,
-  },
-  heroEyebrow: {
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.1,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  heroNum: {
-    fontSize: 56,
-    letterSpacing: -1.4,
-    lineHeight: 60,
-  },
-  heroChips: {
-    flexDirection: 'row',
-    gap: 12,
-    alignSelf: 'flex-end',
-    flexShrink: 1,
-  },
-  heroStat: {
-    alignItems: 'flex-start',
-    gap: 2,
-  },
-  heroStatVal: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  heroStatLabel: {
-    fontSize: 10.5,
-    letterSpacing: 0.04,
-  },
-  legendDot: {
+  dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginBottom: 4,
   },
-  list: {
-    gap: 10,
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderRadius: 14,
-  },
-  statusBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  topicName: {
-    fontSize: 14,
+  legendText: {
+    fontSize: 12,
     fontWeight: '600',
   },
-  topicStatus: {
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  statusText: {
     fontSize: 12,
   },
-  scorePill: {
-    minWidth: 44,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignItems: 'center',
+  chips: {
+    marginTop: 4,
   },
-  scoreText: {
-    fontSize: 14,
-    letterSpacing: -0.2,
+  chip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+    gap: 4,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  chipMeta: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

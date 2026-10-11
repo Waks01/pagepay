@@ -73,7 +73,7 @@ export const UserAvatar = React.memo(function UserAvatar({
       >
         {hasAvatar ? (
           <Image
-            source={{ uri: user.avatar_url }}
+            source={user.avatar_url ? { uri: user.avatar_url } : undefined}
             style={[
               styles.avatar,
               {
@@ -114,7 +114,7 @@ export const UserAvatar = React.memo(function UserAvatar({
       {showLightbox && hasAvatar && (
         <ImageLightbox
           visible={lightboxVisible}
-          imageUri={user.avatar_url}
+          imageUri={user.avatar_url ?? ""}
           onClose={() => setLightboxVisible(false)}
           tokens={tokens}
         />

@@ -22,9 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai.prompts import (
     CHAT_TUTOR_SYSTEM,
     DIAGRAM_GENERATOR,
+    DIFFICULTY_GUIDES,
     ESSAY_ALL_TOPICS_GENERATOR,
     ESSAY_GENERATOR,
     ESSAY_TOPIC_GENERATOR,
+    EXAM_STYLE_GUIDES,
     EXAMPLE_GENERATOR,
     FLASHCARD_ALL_TOPICS_GENERATOR,
     FLASHCARD_GENERATOR,
@@ -36,6 +38,13 @@ from app.ai.prompts import (
     VIDEO_SCRIPT_GENERATOR,
 )
 from app.ai.router import route_ai
+from app.exam_types import (
+    EXAM_DURATIONS,
+    EXAM_QUESTION_COUNTS,
+    EXAM_TYPE_KEYS,
+    EXAM_TYPE_SPECS,
+    normalize_exam_type,
+)
 from app.services import tts_hybrid
 from app.models import (
     AudioUnlock,
@@ -43,6 +52,7 @@ from app.models import (
     ExamSession,
     SowUploadJob,
     StudyAsset,
+    StudyAudioBatch,
     StudyMaterial,
     StudyProgress,
     StudyTransaction,
@@ -57,6 +67,10 @@ from app.services.sanitize import (
     sanitize_for_display,
 )
 from app.services.tts_hybrid import AUDIO_CACHE_DIR, synthesize_study_audio
+from app.services import study_narration
+from app.services import audio_pricing
+from app.services import study_audio_service
+from app.services import r2_storage
 import app.services.tts_hybrid as tts_hybrid
 from app.schemas import (
     ChatRequest,
@@ -129,6 +143,11 @@ async def upload_sow(
     The text is sent to the AI router with the SOW_PARSER prompt.
     On success the parsed JSON is stored alongside the raw input.
     """
+    try:
+        exam_type = normalize_exam_type(payload.exam_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
     prompt = SOW_PARSER.format(raw_text=payload.text)
     ai_result = await route_ai(prompt, task_type="heavy", db=db)
 
@@ -144,7 +163,7 @@ async def upload_sow(
     material = StudyMaterial(
         user_id=current_user.id,
         title=title,
-        exam_type=payload.exam_type,
+        exam_type=exam_type,
         raw_input=payload.text,
         parsed_structure=_json.dumps(parsed) if parsed else None,
         ai_model_used=ai_result.get("provider"),
@@ -176,6 +195,11 @@ async def upload_sow_image(
     `GET /api/v1/study/sow/jobs/{job_id}` to drive its progress bar
     through the 80→100 window.
     """
+    try:
+        exam_type = normalize_exam_type(exam_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
     content_length = request.headers.get("content-length") if request else None
     logger.info(
         "[sow/upload-image] HIT user=%s exam_type=%s filename=%s ctype=%s length=%s",
@@ -333,6 +357,11 @@ async def upload_sow_document(
     For PDFs, `selected_pages` is a JSON array of 1-indexed page
     numbers to include. If omitted, all pages are used.
     """
+    try:
+        exam_type = normalize_exam_type(exam_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
     content_length = request.headers.get("content-length") if request else None
     logger.info(
         "[sow/upload-document] HIT user=%s exam_type=%s filename=%s ctype=%s length=%s",
@@ -898,7 +927,10 @@ async def update_material(
     if payload.title is not None:
         material.title = payload.title.strip()
     if payload.exam_type is not None:
-        material.exam_type = payload.exam_type.strip() or None
+        try:
+            material.exam_type = normalize_exam_type(payload.exam_type)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
 
     await db.commit()
     await db.refresh(material)
@@ -1314,7 +1346,19 @@ async def generate_asset(
         context = "\n".join(context_parts)
 
         if payload.asset_type == "mcq":
-            prompt = MCQ_ALL_TOPICS_GENERATOR.format(context=context, count=payload.count, difficulty=payload.difficulty)
+            # Reuse the exam context builder so pre-generated MCQs draw on
+            # the real material rather than only the topic outline, and
+            # so the requested difficulty actually reaches the prompt.
+            prompt = MCQ_ALL_TOPICS_GENERATOR.format(
+                context=_build_mcq_context(material),
+                count=payload.count,
+                exam_style=EXAM_STYLE_GUIDES.get(
+                    material.exam_type, EXAM_STYLE_GUIDES["custom"]
+                ),
+                difficulty=DIFFICULTY_GUIDES.get(
+                    payload.difficulty, DIFFICULTY_GUIDES["medium"]
+                ),
+            )
         elif payload.asset_type == "flashcard":
             prompt = FLASHCARD_ALL_TOPICS_GENERATOR.format(context=context, count=payload.count)
         elif payload.asset_type == "essay":
@@ -1335,19 +1379,120 @@ async def generate_asset(
         logger.error("Asset generator returned non-JSON: %s", ai_result["response"][:200])
         raise HTTPException(status_code=502, detail="AI returned invalid format. Try again.")
 
-    points_cost = VIDEO_UNLOCK_POINTS_COST if payload.asset_type == "video" else UNLOCK_POINTS_COST
+    if payload.asset_type == "mcq" and isinstance(content, dict) and isinstance(
+        content.get("questions"), list
+    ):
+        # Store the same normalized shape the exam engine grades against,
+        # so MCQs generated as an asset stay consistent with exam MCQs.
+        content = {"questions": _normalize_exam_questions(content["questions"])}
+
+    # Videos cost more than text assets — the same source of truth the
+    # unlock endpoint enforces, so the advertised price always matches.
+    points_cost = (
+        VIDEO_UNLOCK_POINTS_COST if payload.asset_type == "video" else UNLOCK_POINTS_COST
+    )
 
     asset = StudyAsset(
         material_id=payload.material_id,
         asset_type=payload.asset_type,
         content_json=_json.dumps(content),
         points_to_unlock=points_cost,
+        # Single-topic generation keeps its topic name so quiz results
+        # roll up into `StudyProgress` for that topic. All-topics assets
+        # leave it NULL — their questions span topics and can't be
+        # attributed to any single one.
+        topic=payload.topic if payload.mode == "topic" else None,
     )
     db.add(asset)
     await db.commit()
     await db.refresh(asset)
 
     return GenerateAssetResponse(assets=[content])
+
+
+# ── Study progress (per-topic mastery) ─────────────────────────────────
+
+# Mastery is monotonic: a topic that was once "mastered" stays mastered
+# even if a later retake scores lower. Rank order drives both the
+# non-demotion rule in the upsert and the read-path aggregation.
+_STATUS_RANK: dict[str, int] = {
+    "not_started": 0,
+    "reviewing": 1,
+    "mastered": 2,
+}
+
+
+def _topic_index_for(material: StudyMaterial, topic_name: str) -> int:
+    """Resolve a topic's position in the material's parsed structure.
+
+    Falls back to 0 when the name isn't in the (possibly re-parsed)
+    structure — the unique key is the topic *name*, so a stale index
+    still lands on the right row.
+    """
+    import json as _json
+
+    try:
+        parsed = _json.loads(material.parsed_structure or "{}")
+    except ValueError:
+        return 0
+    for idx, topic in enumerate(parsed.get("topics", []) or []):
+        if isinstance(topic, dict) and topic.get("name") == topic_name:
+            return idx
+    return 0
+
+
+async def _upsert_topic_progress(
+    db: AsyncSession,
+    user_id: int,
+    material: StudyMaterial,
+    topic_name: str,
+    status: str,
+    mastery_score: int | None = None,
+    topic_index: int | None = None,
+) -> StudyProgress:
+    """Insert or update the single progress row for (user, material, topic).
+
+    The row is keyed by topic *name* — the identity the generator and the
+    parsed structure both use. Existing rows are updated in place:
+    status never demotes, mastery_score keeps the best value seen, and
+    last_reviewed_at always advances. Callers own the commit so the
+    write can share a transaction with the caller's own mutations.
+    """
+    if topic_index is None:
+        topic_index = _topic_index_for(material, topic_name)
+
+    result = await db.execute(
+        select(StudyProgress).where(
+            StudyProgress.user_id == user_id,
+            StudyProgress.material_id == material.id,
+            StudyProgress.topic_name == topic_name,
+        )
+    )
+    progress = result.scalar_one_or_none()
+
+    now = datetime.utcnow()
+    if progress is None:
+        progress = StudyProgress(
+            user_id=user_id,
+            material_id=material.id,
+            topic_index=topic_index,
+            topic_name=topic_name,
+            status=status,
+            mastery_score=mastery_score,
+            last_reviewed_at=now,
+        )
+        db.add(progress)
+    else:
+        progress.topic_index = topic_index
+        if _STATUS_RANK.get(status, 0) >= _STATUS_RANK.get(progress.status, 0):
+            progress.status = status
+        if mastery_score is not None and (
+            progress.mastery_score is None or mastery_score > progress.mastery_score
+        ):
+            progress.mastery_score = mastery_score
+        progress.last_reviewed_at = now
+
+    return progress
 
 
 # ── POST /study/progress ─────────────────────────────────────────────
@@ -1367,15 +1512,15 @@ async def update_progress(
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
 
-    progress = StudyProgress(
-        user_id=current_user.id,
-        material_id=payload.material_id,
-        topic_index=payload.topic_index,
-        topic_name=payload.topic_name,
-        status=payload.status,
+    progress = await _upsert_topic_progress(
+        db,
+        current_user.id,
+        material,
+        payload.topic_name,
+        payload.status,
         mastery_score=payload.mastery_score,
+        topic_index=payload.topic_index,
     )
-    db.add(progress)
     await db.commit()
     await db.refresh(progress)
     return progress
@@ -1399,7 +1544,8 @@ async def get_progress(
 
     import json as _json
     parsed = _json.loads(material.parsed_structure or '{"topics": []}')
-    total_topics = len(parsed.get("topics", []))
+    topics = parsed.get("topics", []) or []
+    total_topics = len(topics)
 
     progress_result = await db.execute(
         select(StudyProgress).where(
@@ -1409,28 +1555,73 @@ async def get_progress(
     )
     progress_rows = progress_result.scalars().all()
 
-    mastered = sum(1 for p in progress_rows if p.status == "mastered")
-    reviewing = sum(1 for p in progress_rows if p.status == "reviewing")
-    not_started = total_topics - mastered - reviewing
+    # One row per topic is now enforced by the unique index, but rows
+    # written before it existed (or by older code paths) can still
+    # duplicate. Keep the strongest status, then the best score, then
+    # the most recent review — this is what feeds the counts below.
+    strongest_by_topic: dict[str, StudyProgress] = {}
+    for row in progress_rows:
+        current = strongest_by_topic.get(row.topic_name)
+        if current is None or (
+            _STATUS_RANK.get(row.status, 0),
+            row.mastery_score or -1,
+            row.last_reviewed_at or row.created_at,
+        ) > (
+            _STATUS_RANK.get(current.status, 0),
+            current.mastery_score or -1,
+            current.last_reviewed_at or current.created_at,
+        ):
+            strongest_by_topic[row.topic_name] = row
+
+    # Every topic of the material appears in the response, not just the
+    # ones with rows — untouched topics report "not_started" so the
+    # dashboard can render the full set without guessing. Rows for
+    # topics that no longer exist in the parsed structure are dropped
+    # so counts can never exceed total_topics.
+    progress: list[StudyProgressResponse] = []
+    mastered = 0
+    reviewing = 0
+    for idx, topic in enumerate(topics):
+        topic_name = str(topic.get("name", "")) if isinstance(topic, dict) else ""
+        row = strongest_by_topic.pop(topic_name, None)
+        if row is None:
+            progress.append(
+                StudyProgressResponse(
+                    id=None,
+                    material_id=material_id,
+                    topic_index=idx,
+                    topic_name=topic_name,
+                    status="not_started",
+                    mastery_score=None,
+                    last_reviewed_at=None,
+                )
+            )
+            continue
+        if row.status == "mastered":
+            mastered += 1
+        elif row.status == "reviewing":
+            reviewing += 1
+        progress.append(
+            StudyProgressResponse(
+                id=row.id,
+                material_id=row.material_id,
+                topic_index=row.topic_index,
+                topic_name=row.topic_name,
+                status=row.status,
+                mastery_score=row.mastery_score,
+                last_reviewed_at=row.last_reviewed_at,
+            )
+        )
+
+    not_started = max(0, total_topics - mastered - reviewing)
 
     return StudyProgressListResponse(
         material_id=material_id,
         total_topics=total_topics,
         mastered=mastered,
         reviewing=reviewing,
-        not_started=max(0, not_started),
-        progress=[
-            StudyProgressResponse(
-                id=p.id,
-                material_id=p.material_id,
-                topic_index=p.topic_index,
-                topic_name=p.topic_name,
-                status=p.status,
-                mastery_score=p.mastery_score,
-                last_reviewed_at=p.last_reviewed_at,
-            )
-            for p in progress_rows
-        ],
+        not_started=not_started,
+        progress=progress,
     )
 
 
@@ -1946,8 +2137,25 @@ async def complete_quiz(
             StudyMaterial.user_id == current_user.id,
         )
     )
-    if not material_result.scalar_one_or_none():
+    material = material_result.scalar_one_or_none()
+    if not material:
         raise HTTPException(status_code=403, detail="Not your material")
+
+    # Quiz results roll up into per-topic mastery before any bonus
+    # maths — progress is the student's record, the bonus is the reward.
+    # Only single-topic assets carry a topic name; all-topics quizzes
+    # span topics and stay out of per-topic progress.
+    if asset.topic:
+        status = "mastered" if payload.score >= BONUS_THRESHOLD else "reviewing"
+        await _upsert_topic_progress(
+            db,
+            current_user.id,
+            material,
+            asset.topic,
+            status,
+            mastery_score=payload.score,
+        )
+        await db.commit()
 
     bonus_awarded = False
     bonus_points = 0
@@ -2203,18 +2411,19 @@ async def synthesize_study_tts(
 ):
     """On-demand TTS for study material text.
 
-    Body: { "text": str, "voice"?: str, "provider"?: str, "material_id"?: int }
+    Body: { "text": str, "parsed_structure"?: object, "voice"?: str,
+            "provider"?: str, "material_id"?: int }
     Returns: { "url": str, "provider": str, "cached": bool }
 
     Uses the hybrid provider chain in services/tts_hybrid.py.
     Audio is cached to disk; repeat reads return the cached URL.
     Gated on premium or audio_unlock for the material.
     """
-    text = payload.get("text") or ""
+    # Shape before capping so the character budget is spent on narration
+    # rather than on raw OCR text (page numbers, headers, artifacts).
+    text = study_narration.build_narration(payload)
     if not text.strip():
         raise HTTPException(status_code=400, detail="text is required")
-    if len(text) > 4000:
-        text = text[:4000]
 
     material_id = payload.get("material_id")
     if material_id is not None:
@@ -2236,14 +2445,13 @@ async def synthesize_study_tts(
     provider = payload.get("provider") or settings.tts_default_provider
 
     try:
-        audio, used_provider = await tts_hybrid.synthesize_study_audio(text, voice, provider=provider)
+        audio, used_provider, cache_path = await tts_hybrid.synthesize_study_audio(text, voice, provider=provider)
     except Exception as exc:
         logger.error("TTS synthesis failed for user=%s: %s", current_user.id, exc)
         raise HTTPException(status_code=502, detail=f"TTS synthesis failed: {exc}")
 
-    cache = tts_hybrid._cache_path(text, voice, used_provider)
     return TtsResponse(
-        url=f"/api/v1/study/tts/audio/{cache.name}",
+        url=f"/api/v1/study/tts/audio/{cache_path.name}",
         provider=used_provider,
         cached=True,
     )
@@ -2321,43 +2529,143 @@ def _ext_from_mime(mime: str) -> str:
 # ── Exam Mode ────────────────────────────────────────────────────────
 
 
+# Per-board exam settings. Derived from the canonical registry in
+# app/exam_types.py so there is exactly one place to add or tune a board.
+# Re-exported here because existing import sites reference these names.
 EXAM_DURATIONS = {
-    "jamb": 60,
-    "waec": 90,
-    "neco": 90,
-    "nabteb": 90,
-    "custom": 30,
+    spec.key: spec.duration_minutes for spec in EXAM_TYPE_SPECS
 }
 EXAM_QUESTION_COUNTS = {
-    "jamb": 20,
-    "waec": 20,
-    "neco": 20,
-    "nabteb": 20,
-    "custom": 10,
+    spec.key: spec.question_count for spec in EXAM_TYPE_SPECS
 }
 
+def _normalize_exam_questions(raw: list[dict]) -> list[dict]:
+    """Coerce AI-generated MCQs into the shape the exam engine expects.
 
-async def _generate_exam_questions(material: StudyMaterial, exam_type: str, count: int) -> list[dict]:
-    """Generate exam questions from material using AI.
+    The generator prompts emit `correct_index` (an index into `options`)
+    and no per-question id. Grading reads a literal `answer` string and a
+    unique `id`, so without this step every question would default to
+    id 0, `question_map` would collapse to a single entry, and every
+    answer would grade as incorrect.
 
-    Uses the same AI prompts as the asset generator but returns the
-    parsed question list directly without persisting a StudyAsset.
+    Also defends against malformed AI output: questions with fewer than
+    two options or an out-of-range correct index are repaired or skipped
+    rather than stored as ungradeable.
+    """
+    out: list[dict] = []
+    for i, q in enumerate(raw):
+        if not isinstance(q, dict):
+            continue
+        options = list(q.get("options") or [])
+        question_text = (q.get("question") or "").strip()
+        if len(options) < 2 or not question_text:
+            continue
+
+        correct_index = q.get("correct_index")
+        if correct_index is None:
+            # Tolerate a generator that already emits the answer text.
+            answer_text = q.get("answer") or ""
+            correct_index = (
+                options.index(answer_text) if answer_text in options else 0
+            )
+
+        try:
+            correct_index = int(correct_index)
+        except (TypeError, ValueError):
+            correct_index = 0
+        if correct_index < 0 or correct_index >= len(options):
+            correct_index = 0
+
+        out.append(
+            {
+                "id": i + 1,
+                "question": question_text,
+                "options": options,
+                "answer": options[correct_index],
+                "correct_index": correct_index,
+                "explanation": q.get("explanation") or "",
+                "topic": q.get("topic") or "",
+            }
+        )
+    return out
+
+
+# Max characters of the raw material fed to the MCQ generator. Large
+# enough to carry real explanatory content, small enough to stay well
+# inside the model's context window once the prompt wrapper is added.
+_MCQ_CONTEXT_CHARS = 12_000
+
+
+def _build_mcq_context(material: StudyMaterial) -> str:
+    """Build the study-material context sent to the MCQ generator.
+
+    The topic outline alone is only a table of contents — questions
+    generated from it come out shallow and recall-shaped. So the raw
+    material text is included as the primary source, with the topic
+    outline prepended so the model knows how to distribute questions.
+
+    Falls back to the outline when there is no usable raw text.
     """
     import json as _json
 
     parsed = _json.loads(material.parsed_structure) if material.parsed_structure else {}
-    topics = parsed.get("topics", [])
+    topics = parsed.get("topics") or []
 
-    context_parts = []
+    outline_parts = []
     for topic in topics:
-        context_parts.append(f"Topic: {topic.get('name', '')}")
+        outline_parts.append(f"Topic: {topic.get('name', '')}")
         for st in topic.get("subtopics", []):
-            context_parts.append(f"  - {st}")
+            outline_parts.append(f"  - {st}")
         for cc in topic.get("key_concepts", []):
-            context_parts.append(f"    * {cc}")
-    context = "\n".join(context_parts) if context_parts else material.raw_input[:4000]
+            outline_parts.append(f"    * {cc}")
+    outline = "\n".join(outline_parts)
 
-    prompt = MCQ_ALL_TOPICS_GENERATOR.format(context=context, count=count, difficulty="medium")
+    raw_text = (material.raw_input or "").strip()
+
+    if not raw_text:
+        return outline or "(no study material available)"
+
+    if len(raw_text) > _MCQ_CONTEXT_CHARS:
+        # Keep the head, which carries the opening definitions and
+        # framing, rather than a truncated middle.
+        raw_text = raw_text[:_MCQ_CONTEXT_CHARS].rstrip() + "\n[... truncated ...]"
+
+    if not outline:
+        return raw_text
+
+    return (
+        "Syllabus outline (use to distribute questions across topics):\n"
+        f"{outline}\n\n"
+        "Study material:\n"
+        f"{raw_text}"
+    )
+
+
+async def _generate_exam_questions(
+    material: StudyMaterial,
+    exam_type: str,
+    count: int,
+    difficulty: str = "medium",
+) -> list[dict]:
+    """Generate exam questions from material using AI.
+
+    Receives the full study material (not just the topic outline), a
+    per-board style guide, and an explicit difficulty level — all three
+    now reach the prompt. Returns the parsed question list normalized
+    for grading, without persisting a StudyAsset.
+    """
+    import json as _json
+
+    context = _build_mcq_context(material)
+    exam_style = EXAM_STYLE_GUIDES.get(exam_type, EXAM_STYLE_GUIDES["custom"])
+    difficulty_guide = DIFFICULTY_GUIDES.get(difficulty, DIFFICULTY_GUIDES["medium"])
+
+    prompt = MCQ_ALL_TOPICS_GENERATOR.format(
+        context=context,
+        count=count,
+        exam_style=exam_style,
+        difficulty=difficulty_guide,
+    )
     ai_result = await route_ai(prompt, task_type="fast", db=None)
 
     content = None
@@ -2371,7 +2679,13 @@ async def _generate_exam_questions(material: StudyMaterial, exam_type: str, coun
     if not questions:
         raise HTTPException(status_code=502, detail="AI returned no questions. Try again.")
 
-    return questions
+    normalized = _normalize_exam_questions(questions)
+    if not normalized:
+        raise HTTPException(
+            status_code=502,
+            detail="AI returned ungradeable questions. Try again.",
+        )
+    return normalized
 
 
 @router.post("/exam/start", response_model=ExamStartResponse)
@@ -2397,7 +2711,12 @@ async def start_exam(
     question_count = EXAM_QUESTION_COUNTS.get(payload.exam_type, 10)
     duration_seconds = EXAM_DURATIONS.get(payload.exam_type, 30) * 60
 
-    questions = await _generate_exam_questions(material, payload.exam_type, question_count)
+    questions = await _generate_exam_questions(
+        material,
+        payload.exam_type,
+        question_count,
+        difficulty=payload.difficulty or "medium",
+    )
 
     import json as _json
     now = datetime.utcnow()
@@ -2720,3 +3039,396 @@ async def get_exam_result(
         questions=detailed_questions,
     )
 
+
+
+# ── Paid audio narration (episodes) ───────────────────────────────────
+
+
+class AudioQuoteRequest(BaseModel):
+    topic_indexes: list[int] = []
+    level: str | None = None
+
+
+class AudioBatchCreateRequest(BaseModel):
+    topic_indexes: list[int] = []
+    level: str | None = None
+
+
+class AudioPositionRequest(BaseModel):
+    position_seconds: float = 0.0
+    completed: bool = False
+
+
+def _batch_payload(batch) -> dict:
+    """Serialise a batch row, including a streamable URL when ready.
+
+    The URL is a short-lived presigned R2 link, regenerated on every
+    read, so the client never holds a link that can expire.
+    """
+    audio_url = None
+    if batch.status == "ready" and batch.audio_key:
+        audio_url = r2_storage.audio_url_for(batch.audio_key)
+    return {
+        "id": batch.id,
+        "topic_index": batch.topic_index,
+        "episode_index": batch.episode_index,
+        "total_episodes": batch.total_episodes,
+        "level": batch.level,
+        "status": batch.status,
+        "cost_sv": batch.cost_sv,
+        "char_count": batch.char_count,
+        "estimated_seconds": batch.est_duration_seconds,
+        "actual_duration_seconds": batch.actual_duration_seconds,
+        "audio_url": audio_url,
+        "position_seconds": batch.position_seconds,
+        "completed_at": batch.completed_at.isoformat() if batch.completed_at else None,
+        "refunded_at": batch.refunded_at.isoformat() if batch.refunded_at else None,
+        "error_message": batch.error_message,
+        "created_at": batch.created_at.isoformat() if batch.created_at else None,
+    }
+
+
+async def _load_material_for_user(db: AsyncSession, material_id: int, user_id: int):
+    from sqlalchemy import select as _select
+    result = await db.execute(
+        _select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == user_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+def _parsed_of(material) -> dict:
+    """The material's parsed structure, decoded from its stored JSON."""
+    if material is None:
+        return {}
+    parsed = material.parsed_structure
+    if isinstance(parsed, dict):
+        return parsed
+    if isinstance(parsed, str):
+        import json
+        try:
+            loaded = json.loads(parsed)
+            return loaded if isinstance(loaded, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+@router.get("/audio/topics/{material_id}")
+async def list_narratable_topics(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Topics available for narration, with per-topic episode counts."""
+    material = await _load_material_for_user(db, material_id, current_user.id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    parsed = _parsed_of(material)
+    topics = study_narration_topic_names(parsed)
+    return {
+        "material_id": material_id,
+        "title": material.title,
+        "topics": topics,
+        "levels": list(audio_pricing.VALID_LEVELS),
+        "default_level": audio_pricing.DEFAULT_LEVEL,
+    }
+
+
+@router.post("/audio/quote/{material_id}")
+async def quote_audio_narration(
+    material_id: int,
+    payload: AudioQuoteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Price a narration request. Charges nothing."""
+    material = await _load_material_for_user(db, material_id, current_user.id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    parsed = _parsed_of(material)
+    level = audio_pricing.normalise_level(payload.level)
+
+    indexes = payload.topic_indexes or [
+        t["topic_index"] for t in study_narration_topic_names(parsed)
+    ]
+    if not indexes:
+        raise HTTPException(
+            status_code=400,
+            detail="This material has no narratable topics yet.",
+        )
+
+    quoted = study_audio_service.quote(
+        parsed_structure=parsed, topic_indexes=indexes, level=level
+    )
+    quoted["balance_sv"] = await study_audio_service.read_balance(db, current_user.id)
+    return quoted
+
+
+@router.post("/audio/batches/{material_id}")
+async def create_audio_batches(
+    material_id: int,
+    payload: AudioBatchCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Debit SV and queue the requested episodes for generation."""
+    material = await _load_material_for_user(db, material_id, current_user.id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    parsed = _parsed_of(material)
+    available = study_narration_topic_names(parsed)
+    valid = {t["topic_index"] for t in available}
+    indexes = [i for i in (payload.topic_indexes or []) if i in valid]
+    if not indexes:
+        raise HTTPException(status_code=400, detail="No valid topics selected.")
+
+    result = await study_audio_service.create_batches(
+        db,
+        user_id=current_user.id,
+        material_id=material_id,
+        parsed_structure=parsed,
+        topic_indexes=indexes,
+        level=audio_pricing.normalise_level(payload.level),
+    )
+    if not result.get("ok"):
+        raise HTTPException(
+            status_code=402 if result.get("error") == "insufficient_sv" else 400,
+            detail=result.get("detail", "Could not start generation."),
+        )
+
+    # Generation is client-poll-driven: the client calls
+    # POST /audio/generate-next/{material_id} to drive the queue.
+    return result
+
+
+@router.get("/audio/batches/{material_id}")
+async def list_audio_batches(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Episodes for a material, with playback positions."""
+    batches = await study_audio_service.list_batches(
+        db, user_id=current_user.id, material_id=material_id
+    )
+    items = [_batch_payload(b) for b in batches]
+
+    # "Next" is the first episode not yet completed — playlist resume is
+    # derived from the same stored position, so it costs nothing extra.
+    next_id = next(
+        (b["id"] for b in items if b["completed_at"] is None and b["status"] == "ready"),
+        None,
+    )
+    return {
+        "material_id": material_id,
+        "episodes": items,
+        "next_episode_id": next_id,
+        "total_cost_sv": sum(b["cost_sv"] for b in items),
+        "refunded_sv": sum(
+            b["cost_sv"] for b in items if b["refunded_at"] is not None
+        ),
+    }
+
+
+@router.post("/audio/batches/{batch_id}/position")
+async def save_audio_position(
+    batch_id: int,
+    payload: AudioPositionRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persist playback position, so re-opening resumes where they stopped."""
+    ok = await study_audio_service.save_position(
+        db, batch_id, current_user.id, payload.position_seconds
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Episode not found")
+    if payload.completed:
+        await study_audio_service.mark_completed(db, batch_id, current_user.id)
+    return {"ok": True, "position_seconds": payload.position_seconds}
+
+
+@router.post("/audio/batches/{batch_id}/retry")
+async def retry_audio_batch(
+    batch_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-queue a refunded episode. Charges again — its debit was returned."""
+    from sqlalchemy import select as _select
+
+    result = await db.execute(
+        _select(StudyAudioBatch).where(
+            StudyAudioBatch.id == batch_id,
+            StudyAudioBatch.user_id == current_user.id,
+        )
+    )
+    batch = result.scalar_one_or_none()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Episode not found")
+    if batch.status != "failed":
+        raise HTTPException(status_code=400, detail="Only failed episodes can be retried")
+
+    retried = await study_audio_service.retry_failed(
+        db,
+        user_id=current_user.id,
+        material_id=batch.material_id,
+        parsed_structure={},
+        topic_indexes=[batch.topic_index],
+        level=batch.level,
+    )
+    if not retried.get("ok"):
+        raise HTTPException(
+            status_code=402 if retried.get("error") == "insufficient_sv" else 400,
+            detail=retried.get("detail", "Could not retry."),
+        )
+    # Generation is client-poll-driven via /audio/generate-next.
+    return retried
+
+
+async def _generate_one_episode(db: AsyncSession, batch) -> None:
+    """Generate, synthesise, store, and mark ready one episode.
+
+    Runs inside the request that polled for work. Any failure marks the
+    batch failed, which refunds its debit — the user is never charged for
+    audio they cannot hear, and there is no fallback to reading raw
+    material.
+    """
+    await study_audio_service.mark_generating(db, batch.id)
+
+    material = await _load_material_for_user(db, batch.material_id, batch.user_id)
+    if material is None:
+        raise RuntimeError("Material not found")
+
+    parsed = _parsed_of(material)
+
+    script, level, char_count = await study_narration.generate_episode_script(
+        material_title=material.title,
+        parsed_structure=parsed,
+        topic_index=batch.topic_index,
+        level=batch.level,
+        episode_index=batch.episode_index,
+        total_episodes=batch.total_episodes,
+    )
+
+    if not r2_storage.is_configured():
+        # Refusing to store on the ephemeral Render filesystem: the file
+        # would vanish on the next spin-down and the user would have
+        # paid for audio that no longer exists.
+        raise RuntimeError(
+            "Cloudflare R2 is not configured; audio cannot be stored durably."
+        )
+
+    voice = settings.tts_default_voice
+    provider = settings.tts_default_provider
+    audio, used_provider, cache_path = await tts_hybrid.synthesize_study_audio(
+        script, voice, provider=provider
+    )
+
+    key = r2_storage.object_key(cache_path.name)
+    r2_storage.upload_bytes(key, audio, content_type="audio/mpeg")
+
+    await study_audio_service.mark_ready(
+        db,
+        batch.id,
+        script_text=script,
+        char_count=char_count,
+        audio_key=key,
+        provider=used_provider,
+        duration_seconds=audio_pricing.estimate_duration_seconds(char_count),
+    )
+    await db.commit()
+
+
+@router.post("/audio/generate-next/{material_id}")
+async def generate_next_audio_episode(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate the next queued episode for a material.
+
+    Generation is driven by the client, not by a background task or a
+    cron worker: `main.py` documents that Render's free tier cannot
+    reliably run in-process background tasks, and an in-request worker
+    is restart-safe because all progress lives in Postgres.
+
+    One episode per call keeps each request short. A failure marks the
+    batch failed and refunds it, so the client can safely retry.
+    """
+    result = await db.execute(
+        select(StudyAudioBatch).where(
+            StudyAudioBatch.material_id == material_id,
+            StudyAudioBatch.user_id == current_user.id,
+            StudyAudioBatch.status == "queued",
+        ).order_by(StudyAudioBatch.id)
+    )
+    batch = result.scalars().first()
+
+    if batch is None:
+        return {"processed": None, "remaining": 0}
+
+    await _generate_one_episode(db, batch)
+
+    remaining_result = await db.execute(
+        select(StudyAudioBatch.id).where(
+            StudyAudioBatch.material_id == material_id,
+            StudyAudioBatch.user_id == current_user.id,
+            StudyAudioBatch.status == "queued",
+        )
+    )
+    return {
+        "processed": batch.id,
+        "topic_index": batch.topic_index,
+        "episode_index": batch.episode_index,
+        "remaining": len(remaining_result.scalars().all()),
+    }
+
+
+def _rehydrate_topics(parsed: dict) -> list[dict]:
+    """Return the topic list from a parsed structure, defensively."""
+    topics = parsed.get("topics") if isinstance(parsed, dict) else None
+    return topics if isinstance(topics, list) else []
+
+
+def study_narration_topic_names(parsed: dict) -> list[dict]:
+    """Describe each narratable topic for the client."""
+    topics = _rehydrate_topics(parsed)
+    items: list[dict] = []
+    for index, topic in enumerate(topics):
+        if not isinstance(topic, dict):
+            continue
+        name = " ".join(str(topic.get("name") or "").split()).strip()
+        source = study_narration.build_topic_source(parsed, index)
+        items.append(
+            {
+                "topic_index": index,
+                "name": name or f"Topic {index + 1}",
+                "subtopics": [
+                    " ".join(str(s).split()).strip()
+                    for s in (topic.get("subtopics") or [])
+                    if isinstance(s, str) and str(s).strip()
+                ],
+                "char_count": len(source),
+                "episodes": study_narration.episodes_for_topic(len(source)),
+            }
+        )
+    if not items:
+        source = study_narration.build_topic_source(parsed, 0)
+        if source:
+            items.append(
+                {
+                    "topic_index": 0,
+                    "name": "Full material",
+                    "subtopics": [],
+                    "char_count": len(source),
+                    "episodes": study_narration.episodes_for_topic(len(source)),
+                }
+            )
+    return items

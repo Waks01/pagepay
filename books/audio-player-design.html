@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PagePay — Study Audio Player Design</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #E8E4DA;
+    padding: 40px 20px;
+    min-height: 100vh;
+  }
+  .page {
+    max-width: 420px;
+    margin: 0 auto 48px;
+    background: #FBFAF6;
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(14,17,22,.14), 0 2px 8px rgba(14,17,22,.06);
+    position: relative;
+  }
+  .page.dark { background: #0E1116; }
+  .phone-status {
+    height: 44px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px;
+    font-size: 13px; font-weight: 600;
+  }
+  .phone-status .right { display: flex; gap: 6px; align-items: center; }
+
+  /* ── Reader screen content behind player ── */
+  .reader-body {
+    padding: 8px 20px 200px;
+    min-height: 520px;
+  }
+  .back-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 0 20px;
+  }
+  .back-btn {
+    width: 38px; height: 38px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .mat-title { font-size: 22px; font-weight: 800; letter-spacing: -.4px; margin-bottom: 4px; }
+  .mat-meta { font-size: 13px; font-weight: 500; }
+  .chip-row { display: flex; gap: 8px; margin: 16px 0 24px; }
+  .chip {
+    font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 20px;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .block-card {
+    border-radius: 16px; border: 1px solid;
+    padding: 16px; margin-bottom: 14px;
+  }
+  .block-label {
+    font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px;
+    margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+  }
+  .block-text { font-size: 15px; line-height: 1.65; font-weight: 500; }
+
+  /* ── THE AUDIO PLAYER ── */
+  .audio-player {
+    position: absolute;
+    left: 12px; right: 12px; bottom: 12px;
+    border-radius: 22px;
+    border: 1px solid;
+    padding: 16px 18px 14px;
+    box-shadow: 0 12px 32px rgba(14,17,22,.16), 0 2px 6px rgba(14,17,22,.06);
+    backdrop-filter: blur(20px);
+  }
+
+  /* light tokens */
+  .audio-player.light {
+    background: rgba(255,255,255,.92);
+    border-color: #E5E2DA;
+    --ink: #0E1116; --muted: #6B7280; --faint: #9CA3AF;
+    --card: #FFFFFF; --mint: #0E7C66; --mint-soft: #E6F1ED;
+    --border: #E5E2DA; --track: #E5E2DA;
+  }
+  /* dark tokens */
+  .audio-player.dark {
+    background: rgba(23,26,33,.94);
+    border-color: #2A2F38;
+    --ink: #FBFAF6; --muted: #9BA1A6; --faint: #6B7280;
+    --card: #171A21; --mint: #34C39B; --mint-soft: #1F3D34;
+    --border: #2A2F38; --track: #2A2F38;
+  }
+
+  .ap-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .ap-icon {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--mint-soft);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; flex-shrink: 0;
+  }
+  .ap-info { flex: 1; min-width: 0; }
+  .ap-title {
+    font-size: 13px; font-weight: 700; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ap-sub { font-size: 11px; font-weight: 500; color: var(--muted); margin-top: 1px; }
+  .ap-speed {
+    font-size: 12px; font-weight: 800; color: var(--mint);
+    background: var(--mint-soft);
+    padding: 5px 10px; border-radius: 8px;
+    flex-shrink: 0;
+  }
+
+  /* progress */
+  .ap-track-wrap { margin-bottom: 10px; }
+  .ap-track {
+    height: 6px; border-radius: 3px;
+    background: var(--track);
+    position: relative; cursor: pointer;
+  }
+  .ap-track-fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    border-radius: 3px;
+    background: var(--mint);
+  }
+  .ap-track-knob {
+    position: absolute; top: 50%;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--mint);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 6px rgba(14,124,102,.35);
+  }
+  .ap-times {
+    display: flex; justify-content: space-between;
+    margin-top: 7px;
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* controls */
+  .ap-controls {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; margin-top: 12px;
+  }
+  .ap-btn {
+    width: 44px; height: 44px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 19px;
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    cursor: pointer;
+    position: relative;
+  }
+  .ap-btn:active { opacity: .55; }
+  .ap-btn .skip-label {
+    position: absolute;
+    font-size: 8px; font-weight: 800;
+    top: 50%; left: 50%; transform: translate(-50%,-40%);
+  }
+  .ap-play {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--mint);
+    color: #fff;
+    font-size: 23px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 16px rgba(14,124,102,.3);
+  }
+  .audio-player.dark .ap-play { box-shadow: 0 6px 16px rgba(52,195,155,.25); }
+  .ap-play:active { transform: scale(.94); }
+
+  /* speed menu overlay demo */
+  .speed-menu {
+    position: absolute;
+    bottom: 78px; right: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 6px;
+    box-shadow: 0 8px 24px rgba(14,17,22,.12);
+    min-width: 92px;
+  }
+  .speed-menu-title {
+    font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px;
+    color: var(--faint); padding: 6px 10px 4px;
+  }
+  .speed-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; color: var(--ink);
+  }
+  .speed-item.active { color: var(--mint); background: var(--mint-soft); }
+  .speed-item .check { font-size: 13px; }
+
+  /* section label between light/dark */
+  .section-label {
+    max-width: 420px; margin: 0 auto 14px;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+    color: #6B7280;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: #D1CDC2; }
+
+  /* annotation dots */
+  .anno {
+    font-size: 10px; font-weight: 700; color: #0E7C66;
+    background: #E6F1ED; border-radius: 4px; padding: 1px 5px;
+    vertical-align: middle;
+  }
+  .notes {
+    max-width: 420px; margin: 0 auto 48px;
+    background: #fff; border-radius: 16px; padding: 20px;
+    border: 1px solid #E5E2DA;
+  }
+  .notes h3 { font-size: 14px; font-weight: 800; margin-bottom: 10px; color: #0E1116; }
+  .notes li { font-size: 13px; line-height: 1.7; color: #4B5563; margin-left: 18px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ LIGHT MODE ═══════════════ -->
+<div class="section-label">Light Mode</div>
+<div class="page">
+  <div class="phone-status" style="color:#0E1116;">
+    <span>9:41</span>
+    <span class="right">
+      <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13" y="0" width="3" height="11" rx="1" opacity=".3"/></svg>
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="none" stroke="currentColor" stroke-width="1.2"><rect x=".6" y=".6" width="13" height="9.8" rx="2.5"/><rect x="2.2" y="2" width="8" height="7" rx="1.2" fill="currentColor" stroke="none"/><path d="M16 4v3" stroke-linecap="round"/></svg>
+    </span>
+  </div>
+
+  <div class="reader-body">
+    <div class="back-row">
+      <div class="back-btn" style="background:#F5F2EA; color:#0E1116;">←</div>
+      <div style="flex:1;">
+        <div class="mat-title" style="color:#0E1116;">Cell Biology</div>
+        <div class="mat-meta" style="color:#6B7280;">WAEC · 12 min read</div>
+      </div>
+    </div>
+
+    <div class="chip-row">
+      <div class="chip" style="background:#E6F1ED; color:#0E7C66;">✦ Listen</div>
+      <div class="chip" style="background:#F5F2EA; color:#6B7280;">Quiz</div>
+      <div class="chip" style="background:#F5F2EA; color:#6B7280;">Cards</div>
+    </div>
+
+    <div class="block-card" style="background:#FFFFFF; border-color:#E5E2DA;">
+      <div class="block-label" style="color:#0E7C66;">📘 Key Concept</div>
+      <div class="block-text" style="color:#0E1116;">The cell is the basic structural and functional unit of all living organisms. Every living thing is composed of one or more cells...</div>
+    </div>
+
+    <div class="block-card" style="background:#FEF6F1; border-color:#FDEFE7;">
+      <div class="block-label" style="color:#C2410C;">⚠️ Warning</div>
+      <div class="block-text" style="color:#0E1116;">Do not confuse the cell membrane with the cell wall.</div>
+    </div>
+
+    <div class="block-card" style="background:#FFFFFF; border-color:#E5E2DA;">
+      <div class="block-label" style="color:#0E7C66;">📘 Body</div>
+      <div class="block-text" style="color:#0E1116;">Prokaryotic cells lack a membrane-bound nucleus, while eukaryotic cells possess one...</div>
+    </div>
+  </div>
+
+  <!-- ═══ AUDIO PLAYER — Light ═══ -->
+  <div class="audio-player light">
+    <div class="ap-top">
+      <div class="ap-icon">🔊</div>
+      <div class="ap-info">
+        <div class="ap-title">Cell Biology</div>
+        <div class="ap-sub">Audio · 4 min remaining</div>
+      </div>
+      <div class="ap-speed" id="speedTagLight">1.0x</div>
+    </div>
+
+    <div class="ap-track-wrap">
+      <div class="ap-track">
+        <div class="ap-track-fill" style="width:42%;"></div>
+        <div class="ap-track-knob" style="left:42%;"></div>
+      </div>
+      <div class="ap-times">
+        <span>1:38</span>
+        <span>3:24</span>
+      </div>
+    </div>
+
+    <div class="ap-controls">
+      <button class="ap-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      </button>
+      <button class="ap-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M11 6v12L2 12zM21 6v12l-9-6z"/></svg>
+        <span class="skip-label">15</span>
+      </button>
+      <button class="ap-play">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1.5"/><rect x="14" y="4" width="4" height="16" rx="1.5"/></svg>
+      </button>
+      <button class="ap-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M13 6v12l9-6zM3 6v12l9-6z"/></svg>
+        <span class="skip-label">15</span>
+      </button>
+      <button class="ap-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ DARK MODE ═══════════════ -->
+<div class="section-label">Dark Mode</div>
+<div class="page dark">
+  <div class="phone-status" style="color:#FBFAF6;">
+    <span>9:41</span>
+    <span class="right">
+      <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13" y="0" width="3" height="11" rx="1" opacity=".3"/></svg>
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="none" stroke="currentColor" stroke-width="1.2"><rect x=".6" y=".6" width="13" height="9.8" rx="2.5"/><rect x="2.2" y="2" width="8" height="7" rx="1.2" fill="currentColor" stroke="none"/><path d="M16 4v3" stroke-linecap="round"/></svg>
+    </span>
+  </div>
+
+  <div class="reader-body">
+    <div class="back-row">
+      <div class="back-btn" style="background:#15191F; color:#FBFAF6;">←</div>
+      <div style="flex:1;">
+        <div class="mat-title" style="color:#FBFAF6;">Cell Biology</div>
+        <div class="mat-meta" style="color:#9BA1A6;">WAEC · 12 min read</div>
+      </div>
+    </div>
+
+    <div class="chip-row">
+      <div class="chip" style="background:#1F3D34; color:#34C39B;">✦ Listen</div>
+      <div class="chip" style="background:#15191F; color:#9BA1A6;">Quiz</div>
+      <div class="chip" style="background:#15191F; color:#9BA1A6;">Cards</div>
+    </div>
+
+    <div class="block-card" style="background:#171A21; border-color:#2A2F38;">
+      <div class="block-label" style="color:#34C39B;">📘 Key Concept</div>
+      <div class="block-text" style="color:#FBFAF6;">The cell is the basic structural and functional unit of all living organisms. Every living thing is composed of one or more cells...</div>
+    </div>
+
+    <div class="block-card" style="background:#2A1F18; border-color:#3D2E22;">
+      <div class="block-label" style="color:#FB923C;">⚠️ Warning</div>
+      <div class="block-text" style="color:#FBFAF6;">Do not confuse the cell membrane with the cell wall.</div>
+    </div>
+
+    <div class="block-card" style="background:#171A21; border-color:#2A2F38;">
+      <div class="block-label" style="color:#34C39B;">📘 Body</div>
+      <div class="block-text" style="color:#FBFAF6;">Prokaryotic cells lack a membrane-bound nucleus, while eukaryotic cells possess one...</div>
+    </div>
+  </div>
+
+  <!-- ═══ AUDIO PLAYER — Dark (with speed menu open) ═══ -->
+  <div class="audio-player dark">
+    <div class="ap-top">
+      <div class="ap-icon">🔊</div>
+      <div class="ap-info">
+        <div class="ap-title">Cell Biology</div>
+        <div class="ap-sub">Audio · 4 min remaining</div>
+      </div>
+      <div class="ap-speed">1.0x</div>
+    </div>
+
+    <div class="ap-track-wrap">
+      <div class="ap-track">
+        <div class="ap-track-fill" style="width:42%;"></div>
+        <div class="ap-track-knob" style="left:42%;"></div>
+      </div>
+      <div class="ap-times">
+        <span>1:38</span>
+        <span>3:24</span>
+      </div>
+    </div>
+
+    <div class="ap-controls">
+      <button class="ap-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      </button>
+      <button class="ap-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M11 6v12L2 12zM21 6v12l-9-6z"/></svg>
+        <span class="skip-label">15</span>
+      </button>
+      <button class="ap-play">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1.5"/><rect x="14" y="4" width="4" height="16" rx="1.5"/></svg>
+      </button>
+      <button class="ap-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M13 6v12l9-6zM3 6v12l9-6z"/></svg>
+        <span class="skip-label">15</span>
+      </button>
+      <button class="ap-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      </button>
+    </div>
+
+    <!-- Speed menu popup -->
+    <div class="speed-menu">
+      <div class="speed-menu-title">Speed</div>
+      <div class="speed-item active">0.75x <span class="check">✓</span></div>
+      <div class="speed-item">1.0x <span class="check">✓</span></div>
+      <div class="speed-item">1.25x</div>
+      <div class="speed-item">1.5x</div>
+      <div class="speed-item">2.0x</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SPEC ═══════════════ -->
+<div class="notes">
+  <h3>Audio Player — Component Spec</h3>
+  <ul>
+    <li><span class="anno">1</span> <b>Replay 15s</b> — seeks back 15 seconds (long texts common, keeps position on rewind)</li>
+    <li><span class="anno">2</span> <b>Skip 15s</b> — seeks forward 15 seconds</li>
+    <li><span class="anno">3</span> <b>Play / Pause</b> — main action, mint circle with shadow</li>
+    <li><span class="anno">4</span> <b>Replay / Forward 15s</b> — outer buttons for same +/-15 actions (desktop parity)</li>
+    <li><span class="anno">5</span> <b>Progress bar</b> — draggable knob, mint fill on gray track, displays current / total time</li>
+    <li><span class="anno">6</span> <b>Speed</b> — tap to open 0.75x–2.0x menu, current speed shown in mint pill</li>
+    <li><span class="anno">7</span> <b>Title + remaining</b> — material name and remaining time</li>
+    <li><span class="anno">8</span> Floats above reader content, rounded 22px, blur backdrop, safe-area aware</li>
+    <li><span class="anno">9</span> Auto-resets to play state when audio ends; remembers last position</li>
+    <li><span class="anno">10</span> Locks screen media controls via `expo-audio`'s background playback</li>
+  </ul>
+</div>
+
+</body>
+</html>

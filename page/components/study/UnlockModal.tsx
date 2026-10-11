@@ -28,7 +28,7 @@ function AnimatedLockIcon({ color }: { color: string }) {
   const scale = useSharedValue(1);
   const rotate = useSharedValue(0);
 
-  useAnimatedStyle(() => ({
+  const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { scale: scale.value },
       { rotate: `${rotate.value}deg` },

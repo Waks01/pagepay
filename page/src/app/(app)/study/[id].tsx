@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Image as ExpoImage } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -23,12 +24,19 @@ import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 
 import { apiFetch, API_URL } from "@/src/shared/api/client";
+import { EXAM_TYPE_KEYS } from "@/src/shared/lib/exam-types";
+import { cacheDirectory } from "@/src/shared/lib/file-paths";
+import { getToken } from "@/src/shared/lib/storage";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
+import { useCurrentUser } from "@/src/shared/lib/current-user";
 import { PageHeader } from "@/components/PageHeader";
 import AudioUnlockModal from "@/components/AudioUnlockModal";
 import { getTopicNames } from "@/src/app/(app)/study";
 import { ProgressDashboard } from "@/components/study/ProgressDashboard";
+import { AssetBrowser } from "@/components/study/AssetBrowser";
+import { cacheAsset, getCachedAsset } from "@/src/features/study/storage";
+import { useClaimQuizBonus } from "@/src/features/study/hooks/use-study";
 import { Skeleton } from "@/components/Skeleton";
 
 type MaterialDetail = {
@@ -77,7 +85,26 @@ export default function MaterialDetailScreen() {
   const [pdfPages, setPdfPages] = useState<Array<{ page: number; total: number; image_base64: string; width: number; height: number }> | null>(null);
   const [loadingPages, setLoadingPages] = useState(false);
   const [pdfPagesError, setPdfPagesError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const studySessionIdRef = useRef<number | null>(null);
+  /**
+   * Headers for loading `/materials/{id}/file` inline. That endpoint is
+   * auth-gated, and RN's `<Image>` cannot send an Authorization header, so
+   * expo-image is used instead. `null` means the token hasn't resolved yet.
+   */
+  const [fileAuthHeaders, setFileAuthHeaders] = useState<Record<string, string> | null>(null);
+  const [filePreviewFailed, setFilePreviewFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getToken().then((token) => {
+      if (cancelled) return;
+      setFileAuthHeaders(token ? { Authorization: `Bearer ${token}` } : {});
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const renderPreviewBlocks = (
     material: MaterialDetail,
@@ -196,19 +223,71 @@ export default function MaterialDetailScreen() {
     },
   });
 
-  const progressQ = useQuery({
-    queryKey: ["study", "progress", materialId],
-    queryFn: async () => {
-      const res = await apiFetch(`/api/v1/study/materials/${materialId}/progress`);
-      if (!res.ok) throw new Error("Failed to load progress");
-      return res.json();
-    },
-    enabled: !!selectedMaterial,
-  });
+  const currentUser = useCurrentUser();
+  const claimQuizBonus = useClaimQuizBonus();
+
+  // Hydrate already-unlocked assets from the offline cache so quizzes
+  // stay available without re-paying for them after a restart.
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedMaterial) return;
+    (async () => {
+      for (const asset of selectedMaterial.assets) {
+        const cached = await getCachedAsset(asset.id);
+        if (cached && cached.materialId === selectedMaterial.id && !cancelled) {
+          setUnlockedAssets((prev) => ({ ...prev, [asset.id]: cached.content }));
+        }
+      }
+    })().catch((err) => {
+      if (__DEV__) console.error("Failed to load cached assets:", err);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedMaterial?.id]);
+
+  const handleAssetUnlock = async (assetId: number) => {
+    setError(null);
+    const res = await apiFetch("/api/v1/study/unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ asset_id: assetId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Unlock failed" }));
+      throw new Error(err.detail || "Unlock failed");
+    }
+    const data = await res.json();
+    if (data.unlocked && data.content) {
+      setUnlockedAssets((prev) => ({ ...prev, [assetId]: data.content }));
+      try {
+        await cacheAsset(assetId, data.content, materialId);
+      } catch (err) {
+        // Caching is best-effort — an unlock the server confirmed must
+        // not be reported as failed because the offline write failed.
+        if (__DEV__) console.error("Failed to cache unlocked asset:", err);
+      }
+    }
+    qc.invalidateQueries({ queryKey: ["me"] });
+    return data;
+  };
+
+  const handleQuizComplete = async (assetId: number, score: number) => {
+    // The bonus and the progress roll-up are server-side rewards — a
+    // failed claim must not block the student from seeing their score,
+    // so this surfaces nothing and the AssetBrowser still records the
+    // completed attempt locally.
+    try {
+      await claimQuizBonus.mutateAsync({ asset_id: assetId, score });
+    } catch (err) {
+      if (__DEV__) console.error("Quiz bonus claim failed:", err);
+    }
+  };
 
   useEffect(() => {
     if (materialQ.data) {
       setSelectedMaterial(materialQ.data);
+      setFilePreviewFailed(false);
     }
   }, [materialQ.data]);
 
@@ -281,11 +360,6 @@ export default function MaterialDetailScreen() {
     };
   }, [selectedMaterial]);
 
-  const handleTtsPress = useCallback(async () => {
-    if (!selectedMaterial?.content) return;
-    // TTS logic moved to /reader.tsx
-  }, [selectedMaterial]);
-
   const handleGenerateAsset = async (
     assetType: string,
     count?: number,
@@ -350,7 +424,7 @@ export default function MaterialDetailScreen() {
       const blob = await res.blob();
       const contentDisposition = res.headers.get("Content-Disposition");
       const filename = contentDisposition?.match(/filename="?([^"]+)"?/)?.[1] || `material.${format}`;
-      const destPath = `${FileSystem.cacheDirectory}${filename}`;
+      const destPath = `${cacheDirectory}${filename}`;
       const reader = new FileReader();
       reader.onloadend = async () => {
         const base64 = (reader.result as string).split(",")[1];
@@ -522,6 +596,23 @@ export default function MaterialDetailScreen() {
         }
       />
 
+      {error && (
+        <View
+          style={[
+            styles.errorBanner,
+            { backgroundColor: tokens.signalSoft, borderColor: tokens.signal },
+          ]}
+        >
+          <Ionicons name="alert-circle" size={16} color={tokens.signal} />
+          <Text style={[styles.errorBannerText, { color: tokens.signal }]}>
+            {error}
+          </Text>
+          <Pressable onPress={() => setError(null)} hitSlop={8}>
+            <Ionicons name="close" size={16} color={tokens.signal} />
+          </Pressable>
+        </View>
+      )}
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -534,28 +625,9 @@ export default function MaterialDetailScreen() {
         }
       >
         <View style={styles.detailView}>
-          {progressQ.data && (
-            <Animated.View entering={FadeInDown.duration(240).springify()}>
-              <ProgressDashboard
-                materialId={materialId}
-                totalTopics={progressQ.data.total_topics}
-                mastered={progressQ.data.mastered}
-                reviewing={progressQ.data.reviewing}
-                notStarted={progressQ.data.not_started}
-                progress={progressQ.data.progress}
-              />
-            </Animated.View>
-          )}
-
-          {selectedMaterial.has_original_file && selectedMaterial.file_mime_type?.startsWith("image/") && (
-            <Animated.View entering={FadeInDown.delay(60).duration(240).springify()}>
-              <Image
-                source={{ uri: `${API_URL}/api/v1/study/materials/${materialId}/file` }}
-                style={styles.materialImage}
-                resizeMode="contain"
-              />
-            </Animated.View>
-          )}
+          <Animated.View entering={FadeInDown.duration(240).springify()}>
+            <ProgressDashboard materialId={materialId} />
+          </Animated.View>
 
           {selectedMaterial.parsed_structure && topicNames.length > 0 && (
             <Animated.View
@@ -627,11 +699,32 @@ export default function MaterialDetailScreen() {
                   </View>
 
                   {selectedMaterial.file_mime_type?.startsWith("image/") && (
-                    <Image
-                      source={{ uri: `${API_URL}/api/v1/study/materials/${selectedMaterial.id}/file` }}
-                      style={styles.materialPreviewImage}
-                      resizeMode="contain"
-                    />
+                    filePreviewFailed ? (
+                      <View
+                        style={[
+                          styles.filePreviewFallback,
+                          { borderColor: tokens.border, backgroundColor: tokens.paper2 },
+                        ]}
+                      >
+                        <Ionicons name="image-outline" size={26} color={tokens.inkMuted} />
+                        <Text style={[styles.filePreviewFallbackText, { color: tokens.inkMuted }]}>
+                          {t("study.preview_unavailable", "Preview unavailable")}
+                        </Text>
+                      </View>
+                    ) : fileAuthHeaders ? (
+                      <ExpoImage
+                        source={{
+                          uri: `${API_URL}/api/v1/study/materials/${selectedMaterial.id}/file`,
+                          headers: fileAuthHeaders,
+                        }}
+                        style={styles.materialPreviewImage}
+                        contentFit="contain"
+                        transition={150}
+                        onError={() => setFilePreviewFailed(true)}
+                      />
+                    ) : (
+                      <View style={styles.materialPreviewImage} />
+                    )
                   )}
 
                   {selectedMaterial.file_mime_type === "application/pdf" && (
@@ -870,29 +963,10 @@ export default function MaterialDetailScreen() {
 
           <AssetBrowser
             assets={selectedMaterial.assets}
-            userBalance={0}
-            onUnlock={async (assetId) => {
-              try {
-                const res = await apiFetch(`/api/v1/study/unlock`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ asset_id: assetId, method: "points" }),
-                });
-                if (!res.ok) {
-                  if (res.status === 402) {
-                    alert("Insufficient points to unlock this asset.");
-                    return;
-                  }
-                  const err = await res.json().catch(() => ({ detail: "Unlock failed" }));
-                  throw new Error(err.detail || "Unlock failed");
-                }
-                qc.invalidateQueries({ queryKey: ["study", "material", materialId] });
-              } catch (err) {
-                if (__DEV__) console.error("Asset unlock failed:", err);
-              }
-            }}
+            userBalance={currentUser?.service_credit_balance ?? 0}
+            onUnlock={handleAssetUnlock}
             unlockedAssets={unlockedAssets}
-            onQuizComplete={async () => {}}
+            onQuizComplete={handleQuizComplete}
           />
         </View>
       </ScrollView>
@@ -1015,7 +1089,7 @@ export default function MaterialDetailScreen() {
             />
             <Text style={[styles.editLabel, { color: tokens.inkMuted }]}>Exam Type</Text>
             <View style={styles.editExamChips}>
-              {['jamb', 'waec', 'neco', 'nabteb', 'custom'].map((et) => (
+              {EXAM_TYPE_KEYS.map((et) => (
                 <TouchableOpacity
                   key={et}
                   onPress={() => setEditExamType(editExamType === et ? null : et)}
@@ -1028,7 +1102,7 @@ export default function MaterialDetailScreen() {
                   ]}
                 >
                   <Text style={[styles.editChipText, { color: editExamType === et ? tokens.mint : tokens.inkMuted }]}>
-                    {et.toUpperCase()}
+                    {t(`study.sow_upload.exam_types.${et}`)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1086,59 +1160,6 @@ export default function MaterialDetailScreen() {
         </Pressable>
       </Modal>
     </SafeAreaView>
-  );
-}
-
-function AssetBrowser({
-  assets,
-  onUnlock,
-  unlockedAssets,
-  onQuizComplete,
-  userBalance,
-}: {
-  assets: MaterialDetail["assets"];
-  onUnlock: (assetId: number) => void;
-  unlockedAssets: Record<number, unknown>;
-  onQuizComplete: (assetId: number, score: number) => void;
-  userBalance: number;
-}) {
-  const { t } = useTranslation();
-  const scheme = useEffectiveScheme();
-  const tokens = PagePay[scheme];
-
-  if (!assets.length) return null;
-
-  return (
-    <View style={styles.assetBrowser}>
-      {assets.map((asset) => (
-        <View
-          key={asset.id}
-          style={[styles.assetCard, { backgroundColor: tokens.card, borderColor: tokens.border }]}
-        >
-          <Text style={[styles.assetTitle, { color: tokens.ink }]}>
-            {asset.type.toUpperCase()}
-          </Text>
-          <Text style={[styles.assetMeta, { color: tokens.inkMuted }]}>
-            {asset.points_to_unlock} points to unlock
-          </Text>
-          {asset.unlocked ? (
-            <Pressable
-              style={[styles.assetBtn, { backgroundColor: tokens.mint }]}
-              onPress={() => onQuizComplete(asset.id, 80)}
-            >
-              <Text style={[styles.assetBtnText, { color: tokens.mintText }]}>View</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              style={[styles.assetBtn, { borderColor: tokens.border }]}
-              onPress={() => onUnlock(asset.id)}
-            >
-              <Text style={[styles.assetBtnText, { color: tokens.ink }]}>Unlock</Text>
-            </Pressable>
-          )}
-        </View>
-      ))}
-    </View>
   );
 }
 
@@ -1326,6 +1347,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "500",
+  },
   backBtn: {
     paddingVertical: 10,
     paddingHorizontal: 20,
@@ -1340,12 +1377,6 @@ const styles = StyleSheet.create({
   detailView: {
     gap: 16,
     paddingTop: 8,
-  },
-  materialImage: {
-    width: "100%",
-    height: 240,
-    borderRadius: 12,
-    backgroundColor: PagePay.light.paper2,
   },
   loadingPages: {
     paddingVertical: 24,
@@ -1436,6 +1467,19 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 220,
     borderRadius: 10,
+  },
+  filePreviewFallback: {
+    width: "100%",
+    height: 220,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  filePreviewFallbackText: {
+    fontSize: 12,
+    fontFamily: Fonts.sans as string,
   },
   materialPreviewStack: {
     gap: 4,
@@ -1674,33 +1718,5 @@ const styles = StyleSheet.create({
   shareFormatDesc: {
     fontSize: 12,
     marginTop: 2,
-  },
-  assetBrowser: {
-    gap: 10,
-    marginTop: 8,
-  },
-  assetCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    gap: 8,
-  },
-  assetTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  assetMeta: {
-    fontSize: 12,
-  },
-  assetBtn: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  assetBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
   },
 });

@@ -258,8 +258,8 @@ export default function BuyTvScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
-  const userCashableBalance = profileQ.data?.cashable_balance;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance ?? 0;
+  const userCashableBalance = profileQ.data?.cashable_balance ?? 0;
 
   // Pull-to-refresh: refetch the TV providers catalog.
   const onRefresh = useCallback(() => {

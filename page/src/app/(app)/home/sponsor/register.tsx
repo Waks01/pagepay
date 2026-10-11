@@ -27,7 +27,7 @@ export default function SponsorRegisterScreen() {
       Alert.alert(
         t('sponsor_register.success_title'),
         t('sponsor_register.success_message'),
-        [{ text: t('sponsor_register.continue'), onPress: () => router.replace('/sponsor/kyc') }]
+        [{ text: t('sponsor_register.continue'), onPress: () => router.replace('/home/sponsor/kyc') }]
       );
     },
     onError: (error: any) => {

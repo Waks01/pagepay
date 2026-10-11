@@ -21,10 +21,14 @@ import {
 } from "@/src/features/sponsor/api";
 import { SkeletonDetailPage } from "@/components/skeletons";
 import { PageHeader } from "@/components/PageHeader";
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 
 export default function SponsorTaskDetailScreen() {
   const { t } = useTranslation();
+  const scheme = useEffectiveScheme();
+  const tokens = PagePay[scheme];
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [rejectionReason, setRejectionReason] = useState("");

@@ -218,3 +218,39 @@ async def auto_submit_exam(session_id: int) -> None:
                 await db.rollback()
             except Exception:
                 pass
+
+
+async def refund_stale_audio_episodes() -> None:
+    """Refund episodes a killed generation request left in flight.
+
+    Generation is driven by client requests rather than a background
+    worker, so a client navigating away, a request timeout, or an
+    instance spin-down can leave a row stuck in `generating` with the
+    user already debited. This settles those.
+    """
+    from app.services import study_audio_service
+
+    async with AsyncSessionLocal() as db:
+        try:
+            refunded = await study_audio_service.refund_stale(db)
+        except Exception as exc:
+            logger.error("Stale audio episode sweep failed: %s", exc)
+            return
+
+    if refunded:
+        logger.info("APScheduler refunded %d stale audio episode(s)", refunded)
+
+
+def register_audio_stale_sweep_job(scheduler: AsyncIOScheduler) -> None:
+    scheduler.add_job(
+        refund_stale_audio_episodes,
+        "interval",
+        minutes=30,
+        misfire_grace_time=3600,
+        coalesce=True,
+        id="audio_stale_sweep",
+        replace_existing=True,
+    )
+    logger.info(
+        "Scheduled job registered: id=audio_stale_sweep trigger=interval minutes=30"
+    )

@@ -20,6 +20,7 @@ import * as Sharing from "expo-sharing";
 import { captureRef } from "react-native-view-shot";
 
 import { PagePay } from "@/constants/theme";
+import { documentDirectory } from "@/src/shared/lib/file-paths";
 import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { apiFetch } from "@/src/shared/api/client";
@@ -88,7 +89,7 @@ export function ReceiptShareModal({ visible, onClose, receipt }: Props) {
       const reader = new FileReader();
       reader.onloadend = async () => {
         const base64 = (reader.result as string).split(",")[1];
-        const destPath = `${FileSystem.documentDirectory}${fileName}`;
+        const destPath = `${documentDirectory}${fileName}`;
 
         await FileSystem.writeAsStringAsync(destPath, base64, {
           encoding: FileSystem.EncodingType.Base64,
@@ -124,7 +125,7 @@ export function ReceiptShareModal({ visible, onClose, receipt }: Props) {
         });
 
         const fileName = `PagePay_Receipt_${receipt.reference}.png`;
-        const destPath = `${FileSystem.documentDirectory}${fileName}`;
+        const destPath = `${documentDirectory}${fileName}`;
 
         await FileSystem.copyAsync({
           from: uri,

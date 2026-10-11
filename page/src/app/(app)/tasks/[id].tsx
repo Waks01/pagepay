@@ -32,7 +32,7 @@ export default function TaskDetailScreen() {
 
   const { data: platformConfig } = usePlatformConfig();
   const taskPlatformFeePercent = Math.round(
-    (platformConfig?.task_revenue_platform_percent ?? 0.3) * 100,
+    Number(platformConfig?.task_revenue_platform_percent ?? 0.3) * 100,
   );
 
   const startTaskMutation = useMutation({
@@ -83,11 +83,11 @@ export default function TaskDetailScreen() {
   }
 
   const netRewardKobo = Math.floor(
-    task.reward_amount *
-      (task.reward_multiplier ?? 1) *
-      (1 - (platformConfig?.task_revenue_platform_percent ?? 0.3)),
+    Number(task.reward_amount ?? 0) *
+      Number(task.reward_multiplier ?? 1) *
+      (1 - Number(platformConfig?.task_revenue_platform_percent ?? 0.3)),
   );
-  const remaining = task.max_completions - task.completed_count;
+  const remaining = Number(task.max_completions ?? 0) - Number(task.completed_count ?? 0);
   const expiresDate = new Date(task.expires_at);
   // Worker-facing display follows the JumpTask pattern: the big number
   // is the points they'll earn (matches the wallet unit shown

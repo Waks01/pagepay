@@ -23,7 +23,7 @@ import { bootstrapCurrentUser } from "@/src/shared/lib/current-user";
 import { setOnUnauthenticated, apiFetch, API_URL } from "@/src/shared/api/client";
 import "@/src/lib/i18n";
 import { SplashOverlay } from "@/components/SplashOverlay";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments, type Href } from "expo-router";
 import { PaystackProvider } from "expo-paystack";
 import Constants from "expo-constants";
 import BannerNotification, {
@@ -198,7 +198,7 @@ function useAuthGate() {
       const currentSegment = segments[0];
       // Only redirect if we're in the app (not already on auth/onboarding screens)
       if (currentSegment === "(app)") {
-        router.replace("/(auth)/");
+        router.replace("/(auth)/" as Href);
       }
     });
   }, [router, segments]);
@@ -216,16 +216,16 @@ function useAuthGate() {
         if (!token) {
           // No token: redirect to onboarding or login
           if (!onboardingCompleted && !inOnboarding) {
-            router.replace("/(onboarding)/");
+            router.replace("/(onboarding)/" as Href);
           } else if (onboardingCompleted && !inAuth) {
-            router.replace("/(auth)/");
+            router.replace("/(auth)/" as Href);
           }
         } else {
           // Has token: redirect to app or bootstrap user
           if (inAuth || inOnboarding) {
             router.replace("/home");
-          } else if (inApp || segments.length === 0) {
-            // Already in app or no segment yet, bootstrap user data
+          } else {
+            // Already inside the app (or at root): bootstrap user data
             void bootstrapCurrentUser();
           }
         }

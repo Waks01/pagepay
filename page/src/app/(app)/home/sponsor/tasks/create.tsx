@@ -35,7 +35,9 @@ export default function CreateTaskScreen() {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const { data: platformConfig } = usePlatformConfig();
-  const taskPlatformFeePercent = Math.round((platformConfig?.task_revenue_platform_percent ?? 0.30) * 100);
+  const taskPlatformFeePercent = Math.round(
+    Number(platformConfig?.task_revenue_platform_percent ?? 0.3) * 100,
+  );
 
   const [selectedCategory, setSelectedCategory] = useState<string>('social_media');
   const [selectedTemplate, setSelectedTemplate] = useState<TaskTemplate | null>(null);

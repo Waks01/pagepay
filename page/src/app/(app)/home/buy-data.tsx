@@ -8,7 +8,7 @@ import {
   StyleSheet,
   RefreshControl,
 } from "react-native";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -208,7 +208,7 @@ export default function BuyDataScreen() {
 
   const handleRetry = () => {
     if (authError) {
-      router.replace("/(auth)/");
+      router.replace("/(auth)/" as Href);
       return;
     }
     setPurchaseState("idle");
@@ -240,8 +240,8 @@ export default function BuyDataScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
-  const userCashableBalance = profileQ.data?.cashable_balance;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance ?? 0;
+  const userCashableBalance = profileQ.data?.cashable_balance ?? 0;
 
   const renderContent = () => {
     switch (purchaseState) {
@@ -500,7 +500,7 @@ export default function BuyDataScreen() {
               options={networkOptions}
               value={selectedNetworkId}
               onChange={(v) => {
-                setSelectedNetworkId(v);
+                setSelectedNetworkId(String(v));
                 setSelectedPlan(null);
               }}
             />

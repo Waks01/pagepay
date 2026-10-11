@@ -479,6 +479,26 @@
       "listen": "Listen",
       "pause": "Pause"
     },
+    "preview_unavailable": "Preview unavailable",
+    "tts_failed_title": "Playback Unavailable",
+    "tts_failed_body": "Audio generation failed. Please try again later.",
+    "reader": {
+      "loading_content": "Loading content...",
+      "material_not_found": "Material not found",
+      "no_content_available": "No content available"
+    },
+    "audio_player": {
+      "loading": "Loading audio...",
+      "audio": "Audio",
+      "remaining": "{{time}} remaining",
+      "playback_speed": "Playback speed",
+      "play": "Play",
+      "pause": "Pause",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "skip_back": "Skip back {{seconds}} seconds",
+      "skip_forward": "Skip forward {{seconds}} seconds"
+    },
     "audio_unlock": {
       "title": "Unlock Audio",
       "cost_label": "Unlock cost",

@@ -2,6 +2,8 @@ from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from datetime import datetime
 from typing import Literal
 
+from app.exam_types import ExamTypeKey
+
 
 def _validate_password_strength(v: str) -> str:
     if len(v) < 6:
@@ -593,6 +595,9 @@ class SowUploadRequest(BaseModel):
     # caps the raw JSON body, but Pydantic is the right place to
     # enforce the domain limit too.
     text: str = Field(min_length=10, max_length=50_000, description="SOW or syllabus text to parse")
+    # Free-form here so casing/whitespace is normalized in the router and
+    # reported as a clear domain error. Use ExamTypeKey where a hard
+    # reject is wanted (e.g. exam start).
     exam_type: str | None = Field(default=None, max_length=32, description="Exam type: jamb|waec|neco|nabteb|custom")
 
 
@@ -678,14 +683,17 @@ class GenerateAssetResponse(BaseModel):
 
 class StudyProgressUpdate(BaseModel):
     material_id: int
-    topic_index: int
+    topic_index: int | None = None  # resolved from the material's topics by name when omitted
     topic_name: str
     status: Literal["not_started", "reviewing", "mastered"] = "not_started"
     mastery_score: int | None = Field(default=None, ge=0, le=100)
 
 
 class StudyProgressResponse(BaseModel):
-    id: int
+    # `id` is None for topics that have no persisted row yet — the
+    # dashboard still renders them as "not started" so every topic of
+    # the material always appears in the response.
+    id: int | None
     material_id: int
     topic_index: int
     topic_name: str
@@ -1961,7 +1969,13 @@ class WalletTransactionOut(BaseModel):
 
 class ExamStartRequest(BaseModel):
     material_id: int
-    exam_type: Literal["jamb", "waec", "neco", "nabteb", "custom"]
+    # Derived from the registry so an unknown board fails validation with
+    # a 422 rather than silently falling back to a default duration.
+    exam_type: ExamTypeKey
+    # Difficulty is optional; unknown values fall back to "medium" in the
+    # generator. A Literal would reject typos with an opaque 422, which
+    # is no better than silently degrading.
+    difficulty: str = "medium"
 
 
 class ExamQuestionOut(BaseModel):

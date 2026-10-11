@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+import { EXAM_TYPES } from '@/src/shared/lib/exam-types';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { PagePaySpinner } from '@/components/PagePaySpinner';
 
@@ -77,13 +78,10 @@ export function SowUploadCard({
     }
   };
 
-  const examTypes = [
-    { value: 'jamb', label: t('study.sow_upload.exam_types.jamb') },
-    { value: 'waec', label: t('study.sow_upload.exam_types.waec') },
-    { value: 'neco', label: t('study.sow_upload.exam_types.neco') },
-    { value: 'nabteb', label: t('study.sow_upload.exam_types.nabteb') },
-    { value: 'custom', label: t('study.sow_upload.exam_types.custom') },
-  ];
+  const examTypes = EXAM_TYPES.map((spec) => ({
+    value: spec.key,
+    label: t(`study.sow_upload.exam_types.${spec.key}`),
+  }));
 
   return (
     <Animated.View

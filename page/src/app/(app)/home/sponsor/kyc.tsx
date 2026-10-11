@@ -14,6 +14,8 @@ import { useMutation } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useTranslation } from "react-i18next";
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { submitSponsorKYC } from "@/src/features/sponsor/api";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -27,6 +29,8 @@ const ID_TYPES = [
 
 export default function SponsorKYCScreen() {
   const { t } = useTranslation();
+  const scheme = useEffectiveScheme();
+  const tokens = PagePay[scheme];
   const [idType, setIdType] = useState<
     "nin" | "bvn" | "voters_card" | "drivers_license" | "passport"
   >("nin");
@@ -41,7 +45,7 @@ export default function SponsorKYCScreen() {
       Alert.alert(
         t("sponsor_kyc.success_title"),
         t("sponsor_kyc.success_message"),
-        [{ text: "OK", onPress: () => router.replace("/sponsor/dashboard") }],
+        [{ text: "OK", onPress: () => router.replace("/home/sponsor/dashboard") }],
       );
     },
     onError: (error: any) => {

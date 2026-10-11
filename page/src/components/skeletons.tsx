@@ -1,6 +1,7 @@
 import { View, StyleSheet, Animated } from 'react-native';
 import { useEffect, useRef } from 'react';
-import { PagePay, useEffectiveScheme } from '@/constants/theme';
+import { PagePay } from '@/constants/theme';
+import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { Skeleton } from './Skeleton';
 
 export function SkeletonBalanceCard() {

@@ -24,8 +24,8 @@ import { SkeletonPage } from "@/components/skeletons";
 import NotificationBell from "@/components/NotificationBell";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { UserAvatar } from "@/components/UserAvatar";
-import { PremiumBenefitsComparison } from "@/components/PremiumBenefitsComparison";
-import { PremiumBenefitsList } from "@/components/PremiumBenefitsList";
+import { PremiumBenefitsComparison } from "@/src/components/PremiumBenefitsComparison";
+import { PremiumBenefitsList } from "@/src/components/PremiumBenefitsList";
 import { EmptyState } from "@/components/EmptyState";
 import { NetworkError } from "@/components/NetworkError";
 
@@ -511,7 +511,7 @@ function PremiumBody({
 
         {/* Payment History Link */}
         <TouchableOpacity
-          onPress={() => router.push("/payment-history")}
+          onPress={() => router.push("/home/payment-history")}
           style={[
             styles.historyLink,
             { backgroundColor: tokens.card, borderColor: tokens.border },

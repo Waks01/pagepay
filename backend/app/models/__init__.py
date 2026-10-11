@@ -553,6 +553,11 @@ class StudyAsset(Base):
 
     Unlocking is tracked in `StudyTransaction` so the wallet history
     shows "Spent 50 pts to unlock MCQs" or "Watched 2 ads to unlock video".
+
+    `topic` is the parsed-structure topic name the asset was generated
+    from — set only when the material was generated in single-topic mode.
+    It is what lets quiz results roll up into `StudyProgress` per topic;
+    all-topics assets leave it NULL and intentionally don't move progress.
     """
 
     __tablename__ = "study_assets"
@@ -561,6 +566,7 @@ class StudyAsset(Base):
     material_id: Mapped[int] = mapped_column(BigInteger, index=True)
     asset_type: Mapped[str] = mapped_column(String(50))  # mcq|flashcard|essay|diagram|video
     content_json: Mapped[str] = mapped_column(Text)
+    topic: Mapped[str | None] = mapped_column(String(200), nullable=True)
     points_to_unlock: Mapped[int] = mapped_column(Integer, default=50)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -593,6 +599,12 @@ class StudyProgress(Base):
     - not_started: Topic hasn't been reviewed yet
     - reviewing: Student is currently studying this topic
     - mastered: Student has demonstrated understanding (quiz score >= 80%)
+
+    One row per (user, material, topic_name) — enforced by
+    `uq_study_progress_topic` so repeated quiz attempts update the row
+    instead of stacking duplicates. Status never demotes: a later
+    weaker score keeps the strongest status on record, and
+    `mastery_score` keeps the best score seen.
     """
 
     __tablename__ = "study_progress"
@@ -606,6 +618,16 @@ class StudyProgress(Base):
     mastery_score: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 0-100
     last_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index(
+            "ix_study_progress_material_topic",
+            "material_id",
+            "user_id",
+            "topic_name",
+            unique=True,
+        ),
+    )
 
 
 class AudioUnlock(Base):
@@ -627,6 +649,79 @@ class AudioUnlock(Base):
 
     __table_args__ = (
         Index("uq_audio_unlock_user_material", "user_id", "material_id", unique=True),
+    )
+
+
+class StudyAudioBatch(Base):
+    """One paid audio episode of a study material.
+
+    The unit of both selection and delivery is a *topic*, and a topic
+    longer than the duration cap auto-splits into sequential episodes
+    (`episode_index` 0, 1, 2...). Each episode is generated once, billed
+    once, and replayed for free forever — the script is frozen at
+    generation time so a resume always continues the exact lesson the
+    user paid for (the narration LLM is non-deterministic, so
+    regenerating on playback would produce different wording).
+
+    `status` is the billing state machine:
+
+        queued -> generating -> ready
+                                 \-> failed   (refund issued)
+                       \-> failed            (worker crash, sweep refunds)
+
+    `cost_sv` is debited when the row leaves `queued`, and refunded when
+    it reaches `failed`. The row is therefore the audit record for the
+    debit and its refund; `refunded_at` distinguishes the two.
+    """
+
+    __tablename__ = "study_audio_batches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    material_id: Mapped[int] = mapped_column(BigInteger, index=True)
+
+    # What was narrated. `topic_index` points into
+    # `parsed_structure.topics`; `level` is the explanation depth the user chose.
+    topic_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    episode_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_episodes: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    level: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    script_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    char_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    est_duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    actual_duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    audio_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    cost_sv: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # queued | generating | ready | failed
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued", index=True)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Playback resume. Updated as the user listens, so a re-open seeks
+    # to the stored offset instead of regenerating or recharging.
+    position_seconds: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        # Idempotency: the same (user, material, topic, episode, level) is
+        # never billed twice — a repeat request returns the cached audio.
+        Index(
+            "uq_study_audio_batch_identity",
+            "user_id",
+            "material_id",
+            "topic_index",
+            "episode_index",
+            "level",
+            unique=True,
+        ),
     )
 
 

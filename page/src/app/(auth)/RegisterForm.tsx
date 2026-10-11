@@ -413,11 +413,11 @@ export default function RegisterScreen({ onSwitchToLogin }: Props) {
                     </View>
                     <Text style={[styles.termsText, { color: tokens.inkMuted }]}>
                       {t('auth.register.terms_agree')}{' '}
-                      <Pressable onPress={() => router.push({ pathname: '/legal', params: { slug: 'terms' } })}>
+                      <Pressable onPress={() => router.push({ pathname: '/home/legal', params: { slug: 'terms' } })}>
                         <Text style={{ color: tokens.mint, fontWeight: '600' }}>{t('auth.register.terms')}</Text>
                       </Pressable>
                       {' '}{t('auth.register.and')}{' '}
-                      <Pressable onPress={() => router.push({ pathname: '/legal', params: { slug: 'privacy' } })}>
+                      <Pressable onPress={() => router.push({ pathname: '/home/legal', params: { slug: 'privacy' } })}>
                         <Text style={{ color: tokens.mint, fontWeight: '600' }}>{t('auth.register.privacy')}</Text>
                       </Pressable>
                       .

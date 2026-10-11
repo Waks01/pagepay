@@ -2,6 +2,8 @@ import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 
+import { cacheDirectory } from '@/src/shared/lib/file-paths';
+
 export function useDocumentPicker() {
   const [picking, setPicking] = useState(false);
 
@@ -23,14 +25,14 @@ export function useDocumentPicker() {
       let size = typeof asset.size === 'number' ? asset.size : null;
       
       if (uri.startsWith('content://')) {
-        const cachedUri = FileSystem.cacheDirectory + name;
+        const cachedUri = cacheDirectory + name;
         try {
           await FileSystem.copyAsync({
             from: uri,
             to: cachedUri,
           });
           uri = cachedUri;
-          const info = await FileSystem.getInfoAsync(uri, { size: true });
+          const info = await FileSystem.getInfoAsync(uri);
           if (info.exists && info.size) {
             size = info.size;
           }

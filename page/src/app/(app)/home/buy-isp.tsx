@@ -201,8 +201,8 @@ export default function BuyIspScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
-  const userCashableBalance = profileQ.data?.cashable_balance;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance ?? 0;
+  const userCashableBalance = profileQ.data?.cashable_balance ?? 0;
 
   // Pull-to-refresh: refetch both Smile and Spectranet plan catalogs.
   const onRefresh = useCallback(() => {

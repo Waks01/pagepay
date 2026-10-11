@@ -134,6 +134,9 @@ export function useClaimQuizBonus() {
     mutationFn: (payload: { asset_id: number; score: number }) => claimQuizBonus(payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['me'] });
+      // The server rolls the score into per-topic progress, so every
+      // ProgressDashboard mounted for that material refetches.
+      qc.invalidateQueries({ queryKey: ['study', 'progress'] });
     },
   });
 }

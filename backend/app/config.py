@@ -407,6 +407,32 @@ class Settings(BaseSettings):
     tts_default_rate: str = "+0%"
     tts_batch_concurrency: int = 5
 
+    # ── Paid audio narration (study) ────────────────────────────────
+    # Users pay service credits (SV) per generated episode. Deeper
+    # explanation levels produce longer scripts, so they cost more.
+    # Overridable via env so pricing can be tuned without a deploy.
+    audio_narration_char_step: int = 500      # billed per this many output characters
+    audio_narration_base_sv: dict[str, int] = {
+        "primary": 10,
+        "secondary": 15,
+        "tertiary": 20,
+        "research": 25,
+    }
+    # SV charged per char_step, by level.
+    audio_narration_rate_sv: dict[str, int] = {
+        "primary": 4,
+        "secondary": 6,
+        "tertiary": 8,
+        "research": 10,
+    }
+    # Hard ceiling on what one episode may narrate, so a single request
+    # can never run away with tokens. ~10 min of speech at 150 wpm.
+    audio_narration_max_chars: int = 8000
+    # Target length for one episode; over this, a topic splits into
+    # sequential episodes (index 0, 1, 2...) rather than one long file.
+    audio_episode_target_chars: int = 6000
+    audio_episode_max_chars: int = 8000
+
     # Provider API keys (all optional — missing keys skip that provider).
     cloudflare_account_id: str | None = None
     cloudflare_api_token: str | None = None
@@ -536,6 +562,29 @@ class Settings(BaseSettings):
     # digits). Default is /tmp for Render compatibility. Production
     # with persistent disk should set AUDIO_CACHE_DIR=/var/lib/pagepay/audio_cache.
     audio_cache_dir: str = "/tmp/pagepay_audio_cache"
+
+    # ── Cloudflare R2 object storage (narrated audio) ───────────────
+    # R2 is S3-compatible, so it reuses the same Cloudflare credentials
+    # already configured for Workers AI: the S3 access key / secret key
+    # pair and the account's S3 API endpoint. No separate credentials.
+    #
+    # Audio episodes are written here rather than to /tmp: Render's
+    # filesystem is ephemeral and the free plan has no persistent disk,
+    # so anything on disk is lost on spin-down or redeploy — which would
+    # silently break audio the user has already paid for.
+    #
+    # Reads are served by a short-lived presigned GET URL (works with a
+    # private bucket). Set cloudflare_r2_public_url only if the bucket
+    # is public and you prefer to serve files straight from the CDN.
+    cloudflare_access_key: str | None = None
+    cloudflare_secret_access_key: str | None = None
+    cloudflare_s3_api_endpoint: str | None = None
+    # Bucket name is not derivable from the credentials, but it has a
+    # sensible default so nothing extra needs configuring to start.
+    cloudflare_r2_bucket: str = "pagepay"
+    cloudflare_r2_public_url: str | None = None    # e.g. https://cdn.example.com
+    cloudflare_r2_prefix: str = "study-audio"      # object key prefix in the bucket
+    cloudflare_r2_presign_expiry_seconds: int = 3600  # 1 hour, refreshed on read
     # TTL for audio files. Same 30-day pattern as image proxy.
     # expo-av caches aggressively on the client, so this is mostly
     # for CDN edge cache (if we ever add one).

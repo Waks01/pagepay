@@ -38,6 +38,23 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      # Cloudflare R2 - durable storage for paid study audio. Reuses the
+      # CLOUDFLARE_* S3 credentials already configured for Workers AI;
+      # Render's filesystem is ephemeral so audio must not go to /tmp.
+      # Bucket name defaults to pagepay-audio in config.py.
+      - key: CLOUDFLARE_ACCESS_KEY
+        sync: false
+      - key: CLOUDFLARE_SECRET_ACCESS_KEY
+        sync: false
+      - key: CLOUDFLARE_S3_API_ENDPOINT
+        value: ""
+      # Optional: override only if you use a different bucket name.
+      - key: CLOUDFLARE_R2_BUCKET
+        value: pagepay
+      # Optional: set only if the bucket is public and you want to serve
+      # files straight from the R2 CDN instead of via presigned URLs.
+      - key: CLOUDFLARE_R2_PUBLIC_URL
+        value: ""
       - key: CLOUDFLARE_ACCOUNT_ID
         sync: false
       - key: CLOUDFLARE_API_TOKEN

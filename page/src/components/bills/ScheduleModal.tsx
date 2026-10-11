@@ -553,6 +553,22 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginBottom: 12,
   },
+  networkDropdown: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  networkSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  networkText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
   scheduleOption: {
     flexDirection: "row",
     alignItems: "center",

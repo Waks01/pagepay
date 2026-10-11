@@ -396,8 +396,8 @@ export default function BuyElectricityScreen() {
     );
   }
 
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
-  const userCashableBalance = profileQ.data?.cashable_balance;
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance ?? 0;
+  const userCashableBalance = profileQ.data?.cashable_balance ?? 0;
 
   // Success screen
   if (purchaseState === "success" && successData) {

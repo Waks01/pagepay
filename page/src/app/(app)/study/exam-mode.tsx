@@ -20,8 +20,12 @@ import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PageHeader } from "@/components/PageHeader";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
 import { startExam } from "@/src/features/study/api";
+import {
+  EXAM_TYPES,
+  type ExamTypeKey,
+} from "@/src/shared/lib/exam-types";
 
-type ExamType = "jamb" | "waec" | "neco" | "nabteb" | "custom" | null;
+type ExamType = ExamTypeKey | null;
 
 type ExamMaterial = {
   id: number;
@@ -29,14 +33,6 @@ type ExamMaterial = {
   asset_types: string[];
   created_at: string;
 };
-
-const EXAM_TYPES: { value: ExamType; label: string; duration: number; questions: number }[] = [
-  { value: "jamb", label: "JAMB", duration: 60, questions: 20 },
-  { value: "waec", label: "WAEC", duration: 90, questions: 20 },
-  { value: "neco", label: "NECO", duration: 90, questions: 20 },
-  { value: "nabteb", label: "NABTEB", duration: 90, questions: 20 },
-  { value: "custom", label: "Custom", duration: 30, questions: 10 },
-];
 
 export default function ExamModeScreen() {
   const { t } = useTranslation();
@@ -63,7 +59,7 @@ export default function ExamModeScreen() {
     },
   });
 
-  const examConfig = EXAM_TYPES.find((e) => e.value === selectedExamType);
+  const examConfig = EXAM_TYPES.find((e) => e.key === selectedExamType);
 
   const handleStartExam = async () => {
     if (!selectedExamType || !selectedMaterialId) return;
@@ -156,28 +152,28 @@ export default function ExamModeScreen() {
           <View style={styles.examTypeGrid}>
             {EXAM_TYPES.map((et, idx) => (
               <Animated.View
-                key={et.value}
+                key={et.key}
                 entering={FadeInDown.delay(idx * 40).duration(240).springify()}
                 style={{ flex: 1, minWidth: "45%" }}
               >
                 <Pressable
-                  onPress={() => setSelectedExamType(et.value)}
+                  onPress={() => setSelectedExamType(et.key)}
                   style={({ pressed }) => [
                     styles.examTypeCard,
                     {
-                      borderColor: selectedExamType === et.value ? tokens.mint : tokens.border,
-                      backgroundColor: selectedExamType === et.value ? tokens.mintSoft : tokens.card,
+                      borderColor: selectedExamType === et.key ? tokens.mint : tokens.border,
+                      backgroundColor: selectedExamType === et.key ? tokens.mintSoft : tokens.card,
                       opacity: pressed ? 0.85 : 1,
                     },
                   ]}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: selectedExamType === et.value }}
+                  accessibilityState={{ selected: selectedExamType === et.key }}
                 >
                   <View style={styles.examTypeTopRow}>
-                    <Text style={[styles.examTypeLabel, { color: selectedExamType === et.value ? tokens.mint : tokens.ink }]}>
+                    <Text style={[styles.examTypeLabel, { color: selectedExamType === et.key ? tokens.mint : tokens.ink }]}>
                       {et.label}
                     </Text>
-                    {selectedExamType === et.value ? (
+                    {selectedExamType === et.key ? (
                       <Ionicons name="checkmark-circle" size={16} color={tokens.mint} />
                     ) : null}
                   </View>

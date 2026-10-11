@@ -146,6 +146,11 @@ node_modules/
 .idea/
 
 # Test scratch files
+# NOTE: `test_*.py` is meant for ad-hoc scripts in this directory. It
+# also matches everything in tests/, so re-include that directory —
+# otherwise a new test file is invisible to git and lost on `git clean`.
 test_*.py
 output*.txt
 test_result.txt
+!tests/**
+!tests/**/

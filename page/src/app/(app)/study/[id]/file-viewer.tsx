@@ -24,6 +24,7 @@ import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 
 import { apiFetch, API_URL } from "@/src/shared/api/client";
+import { cacheDirectory } from "@/src/shared/lib/file-paths";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PageHeader } from "@/components/PageHeader";
@@ -77,6 +78,21 @@ export default function FileViewerScreen() {
       if (!res.ok) throw new Error("Failed to load material");
       return res.json() as Promise<MaterialDetail>;
     },
+  });
+
+  // Rendered PDF pages, fetched lazily so the viewer only pays for it
+  // when the material is actually a PDF.
+  const pagesQ = useQuery({
+    queryKey: ["study", "material", materialId, "pages"],
+    queryFn: async () => {
+      const res = await apiFetch(
+        `/api/v1/study/materials/${materialId}/pages`,
+      );
+      if (!res.ok) throw new Error("Failed to load PDF pages");
+      const data = await res.json();
+      return (data.pages || []) as PdfPage[];
+    },
+    enabled: !!materialQ.data?.file_mime_type?.includes("pdf"),
   });
 
   useEffect(() => {
@@ -141,7 +157,7 @@ export default function FileViewerScreen() {
       const ext =
         selectedMaterial.file_mime_type?.split("/")[1]?.split(";")[0] || "bin";
       const filename = `material_${selectedMaterial.id}.${ext}`;
-      const destPath = `${FileSystem.cacheDirectory}${filename}`;
+      const destPath = `${cacheDirectory}${filename}`;
 
       if (cachedFileUri) {
         await FileSystem.copyAsync({
@@ -159,7 +175,7 @@ export default function FileViewerScreen() {
           contentDisposition?.match(/filename="?([^"]+)"?/)?.[1] ||
           filename;
 
-        const finalDestPath = `${FileSystem.cacheDirectory}${finalFilename}`;
+        const finalDestPath = `${cacheDirectory}${finalFilename}`;
 
         const reader = new FileReader();
         reader.onloadend = async () => {

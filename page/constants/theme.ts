@@ -64,6 +64,21 @@ export const PagePay = {
     error: '#DC2626',
     gold: '#B8862C',
     indigo: '#2A2F58',
+    // ── Aliases ──────────────────────────────────────────────────
+    // Semantic names consumed by premium, bills, and rewards screens.
+    // Keep these pointing at the brand palette so a palette change in
+    // one place propagates everywhere.
+    primary: '#0E7C66',
+    primaryFaint: '#F2F8F5',
+    accent: '#2A2F58',
+    blue: '#2A2F58',
+    blueSoft: '#E4E7F0',
+    textMuted: '#6B7280',
+    cardSecondary: '#F5F2EA',
+    paperSubtle: '#F5F2EA',
+    goldSoft: '#F7EDD8',
+    errorSoft: '#FBEAEA',
+    success: '#0E7C66',
   },
   dark: {
     ink: '#FBFAF6',
@@ -84,6 +99,18 @@ export const PagePay = {
     error: '#F87171',
     gold: '#D4A85A',
     indigo: '#8E93C8',
+    // ── Aliases (see light) ──────────────────────────────────────
+    primary: '#34C39B',
+    primaryFaint: '#16261F',
+    accent: '#8E93C8',
+    blue: '#8E93C8',
+    blueSoft: '#232736',
+    textMuted: '#9BA1A6',
+    cardSecondary: '#15191F',
+    paperSubtle: '#15191F',
+    goldSoft: '#2E2413',
+    errorSoft: '#2E1717',
+    success: '#34C39B',
   },
   sepia: {
     ink: '#3E2C1C',
@@ -104,6 +131,18 @@ export const PagePay = {
     error: '#A04A1F',
     gold: '#8A6420',
     indigo: '#4A3B6B',
+    // ── Aliases (see light) ──────────────────────────────────────
+    primary: '#7C5E2A',
+    primaryFaint: '#F0E4C2',
+    accent: '#4A3B6B',
+    blue: '#4A3B6B',
+    blueSoft: '#DFD3E4',
+    textMuted: '#7A6650',
+    cardSecondary: '#EBE0C7',
+    paperSubtle: '#EBE0C7',
+    goldSoft: '#E8D9B0',
+    errorSoft: '#F2DCC4',
+    success: '#7C5E2A',
   },
 };
 

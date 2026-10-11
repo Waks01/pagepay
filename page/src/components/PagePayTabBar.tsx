@@ -39,7 +39,7 @@ export function PagePayTabBar({
     const event = navigation.emit({
       type: "tabPress",
       target: state.routes.find((r) => r.name === name)?.key,
-      canExecute: true,
+      canPreventDefault: true,
     });
     if (!event.defaultPrevented) {
       navigation.navigate(name);
@@ -148,7 +148,7 @@ function MoreTabsModal({
   onClose,
 }: {
   visible: boolean;
-  tabs: typeof TAB_ORDER;
+  tabs: ReadonlyArray<(typeof TAB_ORDER)[number]>;
   currentTab: TabName;
   tokens: Record<string, string>;
   onSelect: (name: string) => void;

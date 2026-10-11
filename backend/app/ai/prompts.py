@@ -163,7 +163,10 @@ Rules:
 
 MCQ_ALL_TOPICS_GENERATOR = """Generate {count} multiple-choice questions distributed across the following topics.
 
-Topics and context:
+Exam style guide:
+{exam_style}
+
+Study material:
 {context}
 
 Output strict JSON only. No markdown. No backticks. No extra text.
@@ -185,9 +188,60 @@ Rules:
 - correct_index is 0-3 matching the correct option
 - Explanations are 1-2 sentences, student-friendly
 - Questions should test understanding, not just memorization
-- Difficulty: medium
+- Difficulty: {difficulty}
 - Distribute questions evenly across all topics
-- Include a "topic" field in each question indicating which topic it covers"""
+- Include a "topic" field in each question indicating which topic it covers
+- Draw strictly on the study material above. Never invent facts it does not contain
+- Where the material gives numbers, dates, or definitions, test those specifically"""
+
+# Per-board phrasing guidance. Nigerian exam boards differ in how they
+# ask rather than what they ask, so this is a style guide, not a
+# syllabus. Keys match app/exam_types.py.
+EXAM_STYLE_GUIDES = {
+    "jamb": (
+        "WAEC/JAMB-style objective questions. Short, direct stems "
+        "(typically one sentence). Emphasise fast factual recall, "
+        "application of formulas, and definition-matching. Distractors "
+        "must be plausible — common misconceptions, not jokes."
+    ),
+    "waec": (
+        "WAEC-style objective questions. Slightly longer stems than "
+        "JAMB, weighted toward conceptual understanding and theory. "
+        "Prefer 'which of the following' framings over pure recall."
+    ),
+    "neco": (
+        "NECO-style objective questions. Stay close to the literal "
+        "wording and named terms used in the study material, since "
+        "students are preparing to recognise exact phrasing."
+    ),
+    "nabteb": (
+        "NABTEB-style objective questions. Bias toward technical and "
+        "procedural knowledge — tools, steps, safety, and practical "
+        "application over abstract theory."
+    ),
+    "custom": (
+        "General objective questions. Balanced between factual recall "
+        "and conceptual understanding."
+    ),
+}
+
+DIFFICULTY_GUIDES = {
+    "easy": (
+        "Recall-level questions that test definitions, names, and "
+        "directly stated facts. A student who read the material once "
+        "should answer correctly."
+    ),
+    "medium": (
+        "Mixed recall and application questions. Most should be "
+        "answerable from the material, with a few requiring a small "
+        "step of reasoning."
+    ),
+    "hard": (
+        "Application and analysis questions. Require combining two "
+        "facts from the material or reasoning one step past what is "
+        "stated. Avoid pure recall."
+    ),
+}
 
 FLASHCARD_GENERATOR = """Generate {count} flashcards from the following study context.
 
@@ -459,3 +513,51 @@ Rules:
 - For code subjects: include actual code snippets with syntax
 - For math/physics: use LaTeX notation for formulas where helpful
 - Keep explanations clear and educational"""
+
+#: Per-level spoken guidance, mirroring CHAT_TUTOR_SYSTEM above so a
+#: listener hears the same pedagogy the text tutor applies.
+NARRATION_LEVEL_GUIDANCE = {
+    "primary": (
+        "Speak to a young student. Short sentences. Explain every idea "
+        "with something from everyday life — \"Imagine you have five "
+        "apples...\". Say the simple version first, then the formal term."
+    ),
+    "secondary": (
+        "Speak to a secondary-school student. Detailed explanations with "
+        "worked examples, step-by-step walkthroughs, and real-world uses."
+    ),
+    "tertiary": (
+        "Speak to a university student. Academic depth, correct "
+        "terminology, and enough context to see why the idea matters."
+    ),
+    "research": (
+        "Speak to a researcher. Cover assumptions, trade-offs, and edge "
+        "cases; name the technique and use precise terminology."
+    ),
+}
+
+STUDY_NARRATION_SCRIPT = """You are a warm, patient tutor narrating a study lesson aloud to one student. The student is *listening*, not reading, so every sentence must make sense when spoken.
+
+Material: {material_title}
+Topic {topic_index} of {topic_total}: {topic_name}
+Subtopics: {subtopics}
+Part {episode_number} of {episode_count}
+
+Explanation level: {education_level}
+{level_guidance}
+
+Source material for this topic:
+{blocks_text}
+
+Write the narration script now. Follow these rules exactly:
+- Write only the words you will say. No headings, no bullet points, no markdown, no stage directions, no "here are the steps".
+- Open by naming the topic and saying what the student will get from it. If this is not the first part, continue smoothly from where the previous part ended instead of reintroducing the topic.
+- Explain an idea in plain language before you name its technical term, and use an everyday analogy where it helps.
+- Work through examples and calculations step by step, saying each step aloud.
+- NEVER read a formula symbol by symbol — say it in words, for example "Q equals current multiplied by time".
+- Say tables as sentences: what the columns are, then what each row tells you.
+- Signpost the moves: "Now, here's the important part...", "A common mistake is...", "Let's try an example."
+- Do not read out page numbers, URLs, or source citations.
+- Close by summarising the two or three things worth remembering.
+- Stay faithful to the source material. Do not invent facts it does not contain. If it does not cover something, say so plainly.
+- Aim for about {target_words} words."""

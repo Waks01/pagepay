@@ -69,12 +69,12 @@ export default function StudyChatScreen() {
 
   const sendMessage = useCallback(
     async (text?: string) => {
-      if (!text || !text.trim() || streaming) return;
+      if (!input || !input.trim() || streaming) return;
 
       const userMsg: Message = {
         id: Date.now().toString(),
         role: 'user',
-        text: text.trim(),
+        text: input.trim(),
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, userMsg]);
@@ -93,7 +93,7 @@ export default function StudyChatScreen() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             material_id: materialId,
-            message: text.trim(),
+            message: input.trim(),
             education_level: educationLevel,
             difficulty,
           }),
@@ -104,9 +104,9 @@ export default function StudyChatScreen() {
           throw new Error(err.detail || 'Chat failed');
         }
 
-        const text = await res.text();
+        const answer = await res.text();
         setMessages((prev) =>
-          prev.map((m) => (m.id === assistantId ? { ...m, text } : m)),
+          prev.map((m) => (m.id === assistantId ? { ...m, text: answer } : m)),
         );
       } catch (err) {
         const errorText = err instanceof Error ? err.message : 'Something went wrong';

@@ -21,6 +21,8 @@ export default function SubscriptionManagementScreen() {
   const isStudyPlusYearly = user?.tier === 'study_plus_yearly';
   const isCompletePlusMonthly = user?.tier === 'complete_plus_monthly';
   const isCompletePlusYearly = user?.tier === 'complete_plus_yearly';
+  // Monthly plans get an "upgrade to yearly" nudge; yearly-only users see plans.
+  const isPremiumMonthly = isStudyPlusMonthly || isCompletePlusMonthly;
   const isPremium = isStudyPlusMonthly || isStudyPlusYearly || isCompletePlusMonthly || isCompletePlusYearly;
 
   const handleManageSubscription = () => {

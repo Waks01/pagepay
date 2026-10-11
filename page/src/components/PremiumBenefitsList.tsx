@@ -12,11 +12,12 @@ import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 
 interface Props {
-  tier?: 'premium_monthly' | 'premium_yearly';
+  /** Key into `TierBenefitsData`. Paid tiers only — the free tier renders no upsell. */
+  tier?: 'study_plus_monthly' | 'study_plus_yearly' | 'complete_plus_monthly' | 'complete_plus_yearly';
   limit?: number;
 }
 
-export function PremiumBenefitsList({ tier = 'premium_monthly', limit }: Props) {
+export function PremiumBenefitsList({ tier = 'study_plus_monthly', limit }: Props) {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
   const { benefits, loading } = useTierBenefitsConfig();

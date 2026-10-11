@@ -6,11 +6,13 @@
 import * as SecureStore from "expo-secure-store";
 import * as FileSystem from "expo-file-system";
 
+import { cacheDirectory } from "@/src/shared/lib/file-paths";
+
 const CACHE_PREFIX = "study_asset_";
 const CACHE_INDEX_KEY = "study_asset_index";
 const MATERIAL_CACHE_PREFIX = "study_material_";
 const MATERIAL_CACHE_INDEX_KEY = "study_material_index";
-const MATERIAL_FILE_DIR = FileSystem.cacheDirectory + "study_files/";
+const MATERIAL_FILE_DIR = cacheDirectory + "study_files/";
 
 type CachedAsset = {
   assetId: number;

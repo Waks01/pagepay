@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Image, ImageSourcePropType, StyleSheet, View } from 'react-native';
+import { Image, ImageSourcePropType, StyleSheet, Text, View } from 'react-native';
 
 type NetworkIconProps = {
   name: string;
@@ -22,9 +22,9 @@ const NetworkIcon = memo(({ name, size = 40 }: NetworkIconProps) => {
       <View style={[styles.fallback, { width: size, height: size, borderRadius: size * 0.25 }]}>
         <View style={styles.fallbackInner}>
           <View style={[styles.fallbackLetter, { width: size * 0.5, height: size * 0.5, borderRadius: size * 0.15 }]}>
-            <View style={[styles.fallbackText, { fontSize: size * 0.38 }]}>
+            <Text style={[styles.fallbackText, { fontSize: size * 0.38 }]}>
               {name.charAt(0).toUpperCase()}
-            </View>
+            </Text>
           </View>
         </View>
       </View>

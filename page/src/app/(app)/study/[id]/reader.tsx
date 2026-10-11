@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Alert,
@@ -11,12 +11,13 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
-import { useAudioPlayer } from "expo-audio";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { useQuery } from "@tanstack/react-query";
 
-import { apiFetch } from "@/src/shared/api/client";
+import { apiFetch, API_URL } from "@/src/shared/api/client";
 import { PageHeader } from "@/components/PageHeader";
 import { SpecialBlockCard } from "@/components/study/SpecialBlockCard";
+import { StudyAudioPlayer } from "@/src/components/study/StudyAudioPlayer";
 import AudioUnlockModal from "@/components/AudioUnlockModal";
 import { PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
@@ -64,11 +65,24 @@ export default function MaterialReaderScreen() {
   const tokens = PagePay[scheme];
 
   const [ttsUrl, setTtsUrl] = useState<string | null>(null);
-  const [ttsPlaying, setTtsPlaying] = useState(false);
   const [ttsLoading, setTtsLoading] = useState(false);
   const player = useAudioPlayer(ttsUrl);
+  const audioStatus = useAudioPlayerStatus(player);
   const [audioUnlockVisible, setAudioUnlockVisible] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  /** Mirrors `audioUnlocked` so callbacks always read the current value. */
+  const audioUnlockedRef = useRef(false);
+
+  /** Guards against re-calling play() on every status tick. */
+  const startedUrlRef = useRef<string | null>(null);
+
+  // Start playback automatically once the audio source has loaded.
+  useEffect(() => {
+    if (ttsUrl && startedUrlRef.current !== ttsUrl && audioStatus.isLoaded) {
+      startedUrlRef.current = ttsUrl;
+      void player.play();
+    }
+  }, [ttsUrl, audioStatus.isLoaded, player]);
 
   const materialQ = useQuery({
     queryKey: ["study", "material", materialId],
@@ -83,13 +97,14 @@ export default function MaterialReaderScreen() {
     const content = materialQ.data?.content;
     if (!content) return;
 
-    if (ttsPlaying) {
-      player.pause();
-      setTtsPlaying(false);
+    // Audio already loaded — toggle playback.
+    if (ttsUrl) {
+      if (audioStatus.playing) player.pause();
+      else void player.play();
       return;
     }
 
-    if (!audioUnlocked) {
+    if (!audioUnlockedRef.current) {
       setAudioUnlockVisible(true);
       return;
     }
@@ -114,8 +129,12 @@ export default function MaterialReaderScreen() {
       }
 
       const data = await res.json();
-      setTtsUrl(data.url);
-      setTtsPlaying(true);
+      // The endpoint returns a path; expo-audio needs an absolute URL.
+      const fullUrl = data.url?.startsWith("http")
+        ? data.url
+        : `${API_URL}${data.url}`;
+      startedUrlRef.current = null;
+      setTtsUrl(fullUrl);
     } catch (err) {
       if (__DEV__) console.error("TTS error:", err);
       Alert.alert(
@@ -125,7 +144,7 @@ export default function MaterialReaderScreen() {
     } finally {
       setTtsLoading(false);
     }
-  }, [materialId, materialQ.data, ttsPlaying, player, audioUnlocked]);
+  }, [materialId, materialQ.data, ttsUrl, audioStatus.playing, player]);
 
   const renderContentBlocks = () => {
     const data = materialQ.data;
@@ -307,7 +326,6 @@ export default function MaterialReaderScreen() {
         showBack
         onBack={() => {
           player.pause();
-          setTtsPlaying(false);
           router.back();
         }}
         backgroundColor={tokens.card}
@@ -317,24 +335,38 @@ export default function MaterialReaderScreen() {
           <TouchableOpacity
             onPress={handleTtsPress}
             disabled={ttsLoading}
-            style={styles.ttsBtn}
+            style={[
+              styles.ttsBtn,
+              { borderColor: tokens.border, backgroundColor: tokens.mintSoft },
+            ]}
           >
             <Ionicons
-              name={ttsPlaying ? "pause" : "play"}
+              name={
+                ttsLoading
+                  ? "hourglass-outline"
+                  : ttsUrl && audioStatus.playing
+                    ? "pause"
+                    : "play"
+              }
               size={20}
               color={tokens.mint}
             />
             <Text style={[styles.ttsText, { color: tokens.mint }]}>
               {ttsLoading
                 ? t("common.loading")
-                : ttsPlaying
+                : ttsUrl && audioStatus.playing
                   ? t("study.tts.pause")
                   : t("study.tts.listen")}
             </Text>
           </TouchableOpacity>
         }
       />
-      <ScrollView style={styles.scrollContent}>
+      <ScrollView
+        style={styles.scrollContent}
+        contentContainerStyle={
+          ttsUrl ? styles.scrollContentWithPlayer : undefined
+        }
+      >
         {hasStructuredContent ? (
           renderContentBlocks()
         ) : (
@@ -344,6 +376,16 @@ export default function MaterialReaderScreen() {
         )}
       </ScrollView>
 
+      {ttsUrl && (
+        <View style={styles.playerDock} pointerEvents="box-none">
+          <StudyAudioPlayer
+            title={materialQ.data.title}
+            player={player}
+            status={audioStatus}
+          />
+        </View>
+      )}
+
       {materialQ.data && (
         <AudioUnlockModal
           visible={audioUnlockVisible}
@@ -352,8 +394,12 @@ export default function MaterialReaderScreen() {
           contentLength={materialQ.data.content?.length ?? 0}
           onClose={() => setAudioUnlockVisible(false)}
           onUnlocked={() => {
+            // Set the ref synchronously so the handler called below sees it.
+            audioUnlockedRef.current = true;
             setAudioUnlocked(true);
             setAudioUnlockVisible(false);
+            // Resume the interrupted playback request now that audio is unlocked.
+            void handleTtsPress();
           }}
         />
       )}
@@ -370,6 +416,16 @@ const styles = StyleSheet.create({
   scrollContent: {
     flex: 1,
     padding: 16,
+  },
+  scrollContentWithPlayer: {
+    paddingBottom: 168,
+  },
+  playerDock: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingBottom: 12,
   },
   readerHeading: {
     lineHeight: 30,

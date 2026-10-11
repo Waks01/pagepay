@@ -18,11 +18,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  Gesture,
-  DetectorGesture,
-  PinchGestureHandler,
-} from "react-native-gesture-handler";
+import { PinchGestureHandler } from "react-native-gesture-handler";
 import {
   useSharedValue,
   useAnimatedStyle,
@@ -36,6 +32,11 @@ import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 
 import { apiFetch, apiUpload, API_URL } from "@/src/shared/api/client";
+import { cacheDirectory } from "@/src/shared/lib/file-paths";
+import {
+  EXAM_TYPE_KEYS,
+  getExamTypeLabel,
+} from "@/src/shared/lib/exam-types";
 import { pollSowJob } from "@/src/features/study/api";
 import {
   useMaterials,
@@ -49,14 +50,13 @@ import { useImagePicker } from "@/src/shared/hooks/use-image-picker";
 import { useDocumentPicker } from "@/src/shared/hooks/use-document-picker";
 import { useCurrentUser } from "@/src/shared/lib/current-user";
 import { SowUploadCard } from "@/components/study/SowUploadCard";
-import { AssetBrowser } from "@/components/study/AssetBrowser";
-import { ProgressDashboard } from "@/components/study/ProgressDashboard";
 import { PageHeader } from "@/components/PageHeader";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import NotificationBell from "@/components/NotificationBell";
-import { Skeleton, SkeletonPage, SkeletonDetailPage } from "@/components/skeletons";
+import { SkeletonPage, SkeletonDetailPage } from "@/components/skeletons";
+import { Skeleton as SkeletonBase } from "@/components/Skeleton";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
 import AudioUnlockModal from "@/components/AudioUnlockModal";
 import { cacheAsset, getCachedAsset } from "@/src/features/study/storage";
@@ -181,6 +181,7 @@ export default function StudyScreen() {
 const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [previewFiles, setPreviewFiles] = useState<Array<{ uri: string; name: string; type: string }>>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [selectedPages, setSelectedPages] = useState<number[]>([]);
   const [pdfPreviewPages, setPdfPreviewPages] = useState<Array<{ page: number; total: number; image_base64: string; width: number; height: number }> | null>(null);
   const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
@@ -299,7 +300,9 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: selectedMaterial.content,
-          voice: "en-US-AriaNeural",
+          // Voice/provider are omitted so the server applies its configured
+          // defaults — the same defaults the material reader relies on, which
+          // keeps the audio cache key identical across both entry points.
           material_id: selectedMaterial.id,
         }),
       });
@@ -689,7 +692,7 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
       const filename =
         contentDisposition?.match(/filename="?([^"]+)"?/)?.[1] ||
         `material.${format}`;
-      const destPath = `${FileSystem.cacheDirectory}${filename}`;
+      const destPath = `${cacheDirectory}${filename}`;
 
       const reader = new FileReader();
       reader.onloadend = async () => {
@@ -1168,9 +1171,7 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
                         ]}
                         numberOfLines={1}
                       >
-                        {m.exam_type
-                          ? m.exam_type.toUpperCase()
-                          : t("study.exam_type_custom")}{" "}
+                        {getExamTypeLabel(m.exam_type).toUpperCase()}{" "}
                         · {m.asset_types.join(" · ")}
                       </Text>
                     </View>
@@ -1379,7 +1380,7 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
               Exam Type
             </Text>
             <View style={styles.editExamChips}>
-              {["jamb", "waec", "neco", "nabteb", "custom"].map((et) => (
+              {EXAM_TYPE_KEYS.map((et) => (
                 <TouchableOpacity
                   key={et}
                   onPress={() =>
@@ -1404,7 +1405,7 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
                       },
                     ]}
                   >
-                    {et.toUpperCase()}
+                    {t(`study.sow_upload.exam_types.${et}`)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1552,7 +1553,7 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
               <View style={styles.previewPdfContainer}>
                 {pdfPreviewLoading ? (
                   <View style={styles.loadingPages}>
-                    <Skeleton height={420} width="100%" borderRadius={12} />
+                    <SkeletonBase height={420} width="100%" borderRadius={12} />
                   </View>
                 ) : pdfPreviewPages && pdfPreviewPages.length > 0 ? (
                   <ScrollView

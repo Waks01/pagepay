@@ -1,4 +1,5 @@
-import { Tabs, BottomTabBarProps } from "expo-router";
+import { Tabs } from "expo-router";
+import type { BottomTabBarProps } from "expo-router/tabs";
 import { useCallback } from "react";
 import { PagePayTabBar } from "@/src/components/PagePayTabBar";
 import { TAB_ORDER } from "@/src/shared/lib/tab-config";
@@ -14,16 +15,19 @@ export default function AppLayout() {
       tabBar={renderTabBar}
       screenOptions={{
         headerShown: false,
-        animationEnabled: true, // Enable animations for smoother transitions
+        // Keep all tab screens mounted to preserve query cache across
+        // tab switches.
+        lazy: false,
       }}
-      lazy={false} // Keep all tab screens mounted to preserve query cache across tab switches
     >
       {TAB_ORDER.map((tab) => (
         <Tabs.Screen
           key={tab.name}
           name={tab.name}
           options={{
-            unmountOnBlur: tab.name === 'catalog',
+            // Catalog holds a long list: freeze it while blurred so it
+            // does not keep re-rendering behind the active tab.
+            freezeOnBlur: tab.name === 'catalog',
           }}
         />
       ))}

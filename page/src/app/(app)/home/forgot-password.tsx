@@ -78,7 +78,7 @@ export default function ForgotPasswordScreen() {
 
       const data = await res.json();
       setSuccess(true);
-      router.replace({ pathname: '/forgot-password-otp', params: { identifier: trimmed } });
+      router.replace({ pathname: '/home/forgot-password-otp', params: { identifier: trimmed } });
     } catch {
       setFormError(t('forgot_password.errors.connection_error'));
       setErrorTrigger(true);

@@ -152,6 +152,11 @@ export default function BuyAirtimeScreen() {
     },
   });
 
+  // Balances default to 0 so affordability checks don't trip over an
+  // unloaded profile, and are declared above their first consumer.
+  const userServiceCreditBalance = profileQ.data?.service_credit_balance ?? 0;
+  const userCashableBalance = profileQ.data?.cashable_balance ?? 0;
+
   // Fetch recent airtime transactions
   const recentTxQ = useQuery({
     queryKey: ["bills-history", "airtime", "recent"],
@@ -435,9 +440,6 @@ export default function BuyAirtimeScreen() {
       </View>
     );
   }
-
-  const userServiceCreditBalance = profileQ.data?.service_credit_balance;
-  const userCashableBalance = profileQ.data?.cashable_balance;
 
   if (purchaseState === "success" && successData) {
     return (

@@ -73,7 +73,7 @@ export default function ForgotPasswordOtpScreen() {
           setTimeout(
             () =>
               router.replace({
-                pathname: '/reset-password',
+                pathname: '/home/reset-password',
                 params: { token: data.reset_token || '' },
               }),
             800

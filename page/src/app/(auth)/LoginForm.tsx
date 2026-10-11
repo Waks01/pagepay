@@ -215,7 +215,7 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
 
                   <View style={styles.forgotRow}>
                     <Pressable
-                      onPress={() => router.push('/forgot-password')}
+                      onPress={() => router.push('/home/forgot-password')}
                       hitSlop={8}
                     >
                       <Text style={[styles.forgot, { color: tokens.mint }]}>

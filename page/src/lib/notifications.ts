@@ -274,7 +274,7 @@ export function setupNotificationListeners() {
               title: remoteMessage.notification?.title || "PagePay",
               body: remoteMessage.notification?.body || "",
               data: remoteMessage.data || {},
-              sound: null, // Use system default sound
+              sound: "default", // Use system default sound
             },
             trigger: null,
           });

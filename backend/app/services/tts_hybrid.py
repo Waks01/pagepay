@@ -32,19 +32,28 @@ TTS_CHUNK_TARGET_CHARS = 1500
 TTS_CHUNK_MAX_CHARS = 2000
 
 
+def _audio_ext(audio_bytes: bytes) -> str:
+    """Detect the container format from the file signature.
+
+    Cloudflare MeloTTS returns WAV, edge-tts returns MP3, so the
+    extension cannot be inferred from the provider alone.
+    """
+    if audio_bytes[:2] == b"ID3" or audio_bytes[:3] in (b"\xff\xfb", b"\xff\xf3"):
+        return "mp3"
+    if audio_bytes[:4] == b"RIFF" and audio_bytes[8:12] == b"WAVE":
+        return "wav"
+    return "wav"
+
+
 def _cache_path(text: str, voice: str, provider: str, audio_bytes: bytes | None = None) -> Path:
     key = hashlib.sha256(f"{provider}:{voice}:{text}".encode()).hexdigest()[:16]
     shard = key[:2]
     d = AUDIO_CACHE_DIR / "tts" / shard
     d.mkdir(parents=True, exist_ok=True)
-    # Cloudflare MeloTTS returns WAV, edge-tts returns MP3. Use the
-    # correct extension so the file extension matches the container.
-    ext = "wav"
-    if audio_bytes:
-        if audio_bytes[:2] == b"ID3" or audio_bytes[:3] == b"\xff\xfb" or audio_bytes[:3] == b"\xff\xf3":
-            ext = "mp3"
-        elif audio_bytes[:4] == b"RIFF" and audio_bytes[8:12] == b"WAVE":
-            ext = "wav"
+    # Without audio_bytes the extension is unknown, so prefer .mp3: the
+    # edge-tts provider is the common path and the file is served by
+    # sniffing its signature anyway.
+    ext = _audio_ext(audio_bytes) if audio_bytes else "mp3"
     return d / f"{key}.{ext}"
 
 
@@ -180,27 +189,45 @@ def _wav_build_pcm(pcm: bytes, template: bytes) -> bytes:
     return bytes(out)
 
 
+def _find_cached(cache: Path) -> Path | None:
+    """Return the cached file for this key, whatever extension it has.
+
+    The extension reflects the actual container, which differs between
+    providers (MeloTTS returns WAV, edge-tts returns MP3), so a cache
+    lookup must not assume one.
+    """
+    if cache.exists():
+        return cache
+    stem = cache.stem
+    for candidate in sorted(cache.parent.glob(f"{stem}.*")):
+        return candidate
+    return None
+
+
 async def synthesize_study_audio(
     text: str,
     voice: str | None = None,
     *,
     provider: str | None = None,
-) -> tuple[bytes, str]:
+) -> tuple[bytes, str, Path]:
     """Synthesize speech for study material text.
 
     Long text is split into sentence-boundary chunks. Each chunk is
     generated via the provider chain and cached individually so retries
     do not lose progress. Chunks are concatenated into one audio file.
 
-    Returns (audio_bytes, provider_name). Raises RuntimeError if any
-    chunk fails across all providers.
+    Returns (audio_bytes, provider_name, cache_path). The cache_path is
+    the file that actually exists on disk — its extension matches the
+    real container, which differs between providers. Raises RuntimeError
+    if any chunk fails across all providers.
     """
     voice = voice or settings.tts_default_voice
     provider = provider or settings.tts_default_provider
 
     cache = _cache_path(text, voice, provider)
-    if cache.exists():
-        return cache.read_bytes(), provider
+    cached = _find_cached(cache)
+    if cached is not None:
+        return cached.read_bytes(), provider, cached
 
     chunks = _chunk_text(text)
     if not chunks:
@@ -218,6 +245,7 @@ async def synthesize_study_audio(
     chunk_files: list[Path] = []
     chunk_bytes_list: list[bytes] = []
     last_provider = provider
+    final_cache = cache
     try:
         for chunk in chunks:
             chunk_cache = _cache_path(chunk, voice, provider)
@@ -240,26 +268,16 @@ async def synthesize_study_audio(
                 raise RuntimeError(f"TTS failed for chunk: {chunk[:80]}...")
 
             # Cache with correct extension based on actual audio format
-            ext = "wav"
-            if chunk_bytes[:2] == b"ID3" or chunk_bytes[:3] in (b"\xff\xfb", b"\xff\xf3"):
-                ext = "mp3"
-            elif chunk_bytes[:4] == b"RIFF" and chunk_bytes[8:12] == b"WAVE":
-                ext = "wav"
-            chunk_cache = chunk_cache.with_suffix(f".{ext}")
+            chunk_cache = chunk_cache.with_suffix(f".{_audio_ext(chunk_bytes)}")
             chunk_cache.write_bytes(chunk_bytes)
             chunk_bytes_list.append(chunk_bytes)
             chunk_files.append(chunk_cache)
 
         final_bytes = _concat_audio(chunk_bytes_list)
         # Write final with correct extension
-        final_ext = "wav"
-        if final_bytes[:2] == b"ID3" or final_bytes[:3] in (b"\xff\xfb", b"\xff\xf3"):
-            final_ext = "mp3"
-        elif final_bytes[:4] == b"RIFF" and final_bytes[8:12] == b"WAVE":
-            final_ext = "wav"
-        final_cache = cache.with_suffix(f".{final_ext}")
+        final_cache = cache.with_suffix(f".{_audio_ext(final_bytes)}")
         final_cache.write_bytes(final_bytes)
-        return final_bytes, last_provider
+        return final_bytes, last_provider, final_cache
     finally:
         for path in chunk_files:
             try:

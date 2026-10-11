@@ -19,6 +19,19 @@ interface BenefitRowProps {
   tokens: any;
 }
 
+/** Display names for the paid tier keys held by `UserTier`. */
+const TIER_LABELS: Record<string, string> = {
+  free: 'Free',
+  study_plus_monthly: 'Study Plus Monthly',
+  study_plus_yearly: 'Study Plus Yearly',
+  complete_plus_monthly: 'Complete Plus Monthly',
+  complete_plus_yearly: 'Complete Plus Yearly',
+};
+
+function getTierLabel(tier: string): string {
+  return TIER_LABELS[tier] ?? 'Free';
+}
+
 function BenefitRow({ feature, free, premium, highlight, tokens }: BenefitRowProps) {
   return (
     <View style={[
@@ -211,7 +224,7 @@ export function PremiumBenefitsComparison() {
             color="#fff" 
           />
           <Text style={styles.currentTierText}>
-            Your current plan: {tierStatus.tier === 'premium_monthly' ? 'Premium Monthly' : tierStatus.tier === 'premium_yearly' ? 'Premium Yearly' : 'Free'}
+            Your current plan: {getTierLabel(tierStatus.tier)}
           </Text>
         </View>
       )}

@@ -1,6 +1,7 @@
 """Phase 3: Exam mode endpoint tests."""
 
 import json
+import re
 from datetime import datetime, timedelta
 
 import pytest
@@ -16,21 +17,29 @@ def _auth_header(user_id: int) -> dict[str, str]:
     return {"Authorization": f"Bearer {create_access_token(user_id)}"}
 
 
+# Mirrors what MCQ_ALL_TOPICS_GENERATOR actually asks the model to
+# return: `correct_index` plus no per-question id and no literal answer.
+# Deliberately NOT the normalized shape — emitting the normalized shape
+# here would hide the field-mismatch bug _normalize_exam_questions fixes.
+_FAKE_OPTIONS = ["Option A", "Option B", "Option C", "Option D"]
+_FAKE_CORRECT_INDEX = 1
+
+
 def _fake_mcq_response(count: int = 5) -> str:
     questions = []
     for i in range(count):
         questions.append({
-            "id": i + 1,
             "question": f"Test question {i + 1}?",
-            "options": [f"Option A", f"Option B", f"Option C", f"Option D"],
-            "answer": f"Option A",
+            "options": list(_FAKE_OPTIONS),
+            "correct_index": _FAKE_CORRECT_INDEX,
             "explanation": f"Explanation for question {i + 1}",
+            "topic": "T1",
         })
     return json.dumps({"questions": questions})
 
 
 def _correct_answer_for_question(qid: int) -> str:
-    return "Option A"
+    return _FAKE_OPTIONS[_FAKE_CORRECT_INDEX]
 
 
 @pytest.mark.asyncio
@@ -65,7 +74,7 @@ async def test_start_exam_creates_session(client: AsyncClient, db_session, monke
     assert data["session_id"] > 0
     assert data["exam_type"] == "jamb"
     assert data["total_questions"] == 5
-    assert data["duration_seconds"] == 3600
+    assert data["duration_seconds"] == 1200
     assert len(data["questions"]) == 5
     assert data["questions"][0]["question"] == "Test question 1?"
     assert "answer" not in data["questions"][0]
@@ -181,7 +190,7 @@ async def test_submit_exam_answer_upsert(client: AsyncClient, db_session, monkey
 
     res = await client.post(
         f"/api/v1/study/exam/{session_id}/answer",
-        json={"session_id": session_id, "question_id": 1, "selected_answer": "Option A"},
+        json={"session_id": session_id, "question_id": 1, "selected_answer": _correct_answer_for_question(1)},
         headers=_auth_header(user.id),
     )
     assert res.status_code == 200
@@ -350,7 +359,7 @@ async def test_exam_result_detail(client: AsyncClient, db_session, monkeypatch):
     assert data["score"] == 100
     assert len(data["questions"]) == 2
     assert data["questions"][0]["is_correct"] is True
-    assert data["questions"][0]["correct_answer"] == "Option A"
+    assert data["questions"][0]["correct_answer"] == _FAKE_OPTIONS[_FAKE_CORRECT_INDEX]
 
 
 @pytest.mark.asyncio
@@ -456,3 +465,225 @@ async def test_exam_history_empty_when_none(client: AsyncClient, db_session):
     )
     assert res.status_code == 200
     assert res.json() == []
+
+
+# ── Exam-type registry: single source of truth / client sync ─────────
+
+
+def test_exam_types_registry_is_consistent():
+    """The derived dicts must agree with the registry they come from.
+
+    Guards against a board being added to the registry without its
+    duration or question count being picked up, and against the
+    re-exported EXAM_DURATIONS in the router drifting from the spec.
+    """
+    from app.exam_types import (
+        EXAM_TYPE_KEYS,
+        EXAM_TYPE_SPECS,
+        EXAM_DURATIONS,
+        EXAM_QUESTION_COUNTS,
+    )
+
+    assert EXAM_TYPE_KEYS == tuple(spec.key for spec in EXAM_TYPE_SPECS)
+    assert len(set(EXAM_TYPE_KEYS)) == len(EXAM_TYPE_KEYS), "keys must be unique"
+    assert EXAM_DURATIONS == {s.key: s.duration_minutes for s in EXAM_TYPE_SPECS}
+    assert EXAM_QUESTION_COUNTS == {s.key: s.question_count for s in EXAM_TYPE_SPECS}
+
+    # The router re-exports these names; they must be the same objects.
+    assert study_router.EXAM_DURATIONS == EXAM_DURATIONS
+    assert study_router.EXAM_QUESTION_COUNTS == EXAM_QUESTION_COUNTS
+
+    for spec in EXAM_TYPE_SPECS:
+        assert spec.duration_minutes > 0
+        assert spec.question_count > 0
+        assert spec.label
+
+
+def test_normalize_exam_type_accepts_casing_and_whitespace():
+    from app.exam_types import normalize_exam_type
+
+    assert normalize_exam_type("JAMB") == "jamb"
+    assert normalize_exam_type("  waec  ") == "waec"
+    assert normalize_exam_type("Nabteb") == "nabteb"
+    assert normalize_exam_type(None) is None
+    assert normalize_exam_type("   ") is None
+
+    with pytest.raises(ValueError):
+        normalize_exam_type("postutme")
+
+
+def test_exam_types_match_client():
+    """The client registry must mirror the backend one.
+
+    Parses page/src/shared/lib/exam-types.ts and asserts the keys,
+    durations and question counts match. This is the guard that keeps
+    the Exam Mode setup screen from showing a duration the server
+    disagrees with — a drift that shipped once already.
+    """
+    import re
+    from pathlib import Path
+    from app.exam_types import EXAM_TYPE_SPECS
+
+    spec_by_key = {spec.key: spec for spec in EXAM_TYPE_SPECS}
+
+    # Repo root is two levels above this file's directory (backend/tests).
+    repo_root = Path(__file__).resolve().parents[2]
+    ts_path = repo_root / "page" / "src" / "shared" / "lib" / "exam-types.ts"
+    assert ts_path.exists(), f"client registry not found at {ts_path}"
+
+    source = ts_path.read_text(encoding="utf-8")
+
+    # Each entry looks like:
+    #   { key: "jamb", label: "JAMB", duration: 20, questions: 20 },
+    parsed = {
+        m.group("key"): (
+            m.group("label"),
+            int(m.group("duration")),
+            int(m.group("questions")),
+        )
+        for m in re.finditer(
+            r'\{\s*key:\s*"(?P<key>\w+)"\s*,\s*'
+            r'label:\s*"(?P<label>[^"]*)"\s*,\s*'
+            r'duration:\s*(?P<duration>\d+)\s*,\s*'
+            r'questions:\s*(?P<questions>\d+)\s*\}',
+            source,
+        )
+    }
+    assert parsed, "no exam type entries parsed from client registry"
+
+    assert set(parsed) == set(spec_by_key), (
+        f"client keys {sorted(parsed)} != backend keys {sorted(spec_by_key)}"
+    )
+
+    for key, spec in spec_by_key.items():
+        client_label, client_duration, client_questions = parsed[key]
+        assert client_duration == spec.duration_minutes, (
+            f"{key}: client duration {client_duration} != "
+            f"backend {spec.duration_minutes}"
+        )
+        assert client_questions == spec.question_count, (
+            f"{key}: client questions {client_questions} != "
+            f"backend {spec.question_count}"
+        )
+        assert client_label == spec.label, (
+            f"{key}: client label {client_label!r} != backend {spec.label!r}"
+        )
+
+
+# ── MCQ context builder: real content, not just the outline ─────────
+
+
+class _FakeMaterial:
+    def __init__(self, parsed, raw):
+        self.parsed_structure = parsed
+        self.raw_input = raw
+
+
+_TEST_OUTLINE = (
+    '{"topics": [{"name": "Cell Biology", '
+    '"subtopics": ["Mitochondria"], '
+    '"key_concepts": ["ATP synthesis"]}]}'
+)
+_TEST_RAW = (
+    "The mitochondrion is the site of aerobic respiration. Its inner "
+    "membrane is folded into cristae, which increase surface area for "
+    "the electron transport chain. ATP synthase enzymes use the proton "
+    "gradient to phosphorylate ADP into ATP."
+)
+
+
+def test_mcq_context_includes_real_material():
+    """The generator must receive explanatory content, not only an outline.
+
+    Questions built from topic headings alone come out shallow and
+    purely recall-shaped, which is what the outline-only context
+    produced. The raw material is the primary source; the outline is
+    kept only so the model knows how to distribute questions.
+    """
+    from app.routers.study import _build_mcq_context
+
+    ctx = _build_mcq_context(_FakeMaterial(_TEST_OUTLINE, _TEST_RAW))
+    assert "Cell Biology" in ctx, "topic outline should be included"
+    assert "Mitochondria" in ctx
+    assert "ATP synthase" in ctx, "raw material content must be included"
+    assert "electron transport chain" in ctx
+    assert "Study material:" in ctx
+
+
+def test_mcq_context_falls_back_when_raw_empty():
+    from app.routers.study import _build_mcq_context
+
+    ctx = _build_mcq_context(_FakeMaterial(_TEST_OUTLINE, ""))
+    assert "Cell Biology" in ctx
+    assert "truncated" not in ctx
+
+
+def test_mcq_context_handles_missing_fields():
+    from app.routers.study import _build_mcq_context
+
+    ctx = _build_mcq_context(_FakeMaterial(None, _TEST_RAW))
+    assert "ATP synthase" in ctx
+    assert "Syllabus outline" not in ctx
+
+    # Nothing at all must degrade gracefully rather than raise.
+    empty = _build_mcq_context(_FakeMaterial(None, ""))
+    assert "no study material" in empty
+
+
+def test_mcq_context_truncates_oversized_material():
+    from app.routers.study import _build_mcq_context, _MCQ_CONTEXT_CHARS
+
+    big = _TEST_RAW * 200
+    assert len(big) > _MCQ_CONTEXT_CHARS
+    ctx = _build_mcq_context(_FakeMaterial(_TEST_OUTLINE, big))
+    assert len(ctx) < len(big)
+    assert "truncated" in ctx
+    assert "mitochondrion is the site" in ctx, "head of material preserved"
+
+
+# ── Prompt wiring: difficulty and board style actually reach the prompt ─
+
+
+def test_mcq_prompt_has_no_literal_difficulty():
+    """`difficulty` must be interpolated, not baked as the literal 'medium'.
+
+    The template previously contained "- Difficulty: medium" while
+    callers passed difficulty=... which Python silently ignored, making
+    the difficulty control a no-op.
+    """
+    from app.ai.prompts import MCQ_ALL_TOPICS_GENERATOR
+
+    assert "{difficulty}" in MCQ_ALL_TOPICS_GENERATOR
+    assert "{exam_style}" in MCQ_ALL_TOPICS_GENERATOR
+    assert "Difficulty: medium" not in MCQ_ALL_TOPICS_GENERATOR
+
+
+def test_mcq_prompt_renders_all_fields():
+    from app.ai.prompts import (
+        MCQ_ALL_TOPICS_GENERATOR,
+        EXAM_STYLE_GUIDES,
+        DIFFICULTY_GUIDES,
+    )
+
+    rendered = MCQ_ALL_TOPICS_GENERATOR.format(
+        context="ctx",
+        count=5,
+        exam_style=EXAM_STYLE_GUIDES["jamb"],
+        difficulty=DIFFICULTY_GUIDES["hard"],
+    )
+    assert "ctx" in rendered
+    assert "Exactly 5 questions" in rendered
+    assert "Application and analysis" in rendered
+    assert "JAMB-style objective questions" in rendered
+    assert not re.search(r"\{[a-z_]+\}", rendered), "no unformatted placeholders"
+
+
+def test_exam_style_guides_cover_every_board():
+    from app.ai.prompts import DIFFICULTY_GUIDES, EXAM_STYLE_GUIDES
+    from app.exam_types import EXAM_TYPE_KEYS
+
+    missing = set(EXAM_TYPE_KEYS) - set(EXAM_STYLE_GUIDES)
+    assert not missing, f"no style guide for: {sorted(missing)}"
+    # Difficulty must include all three levels a caller can request.
+    for level in ("easy", "medium", "hard"):
+        assert level in DIFFICULTY_GUIDES, f"no difficulty guide for {level}"

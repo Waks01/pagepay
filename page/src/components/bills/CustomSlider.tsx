@@ -19,6 +19,7 @@ import {
 interface CustomSliderProps {
   value: number;
   onValueChange: (value: number) => void;
+  onSlidingComplete?: (value: number) => void;
   minimumValue?: number;
   maximumValue?: number;
   step?: number;
@@ -32,6 +33,7 @@ interface CustomSliderProps {
 export function CustomSlider({
   value,
   onValueChange,
+  onSlidingComplete,
   minimumValue = 0,
   maximumValue = 100,
   step = 1,
@@ -103,6 +105,7 @@ export function CustomSlider({
   const handleTouchEnd = () => {
     if (disabled) return;
     setIsDragging(false);
+    onSlidingComplete?.(value);
 
     // Animate to final position
     const finalPosition = valueToPosition(value);
