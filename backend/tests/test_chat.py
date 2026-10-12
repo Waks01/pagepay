@@ -201,7 +201,12 @@ async def test_chat_survives_malformed_parsed_structure(
     client: AsyncClient, db_session, monkeypatch
 ):
     """A material whose parsed_structure is not valid JSON (or has
-    unexpected topic shapes) must not 500 the chat endpoint."""
+    unexpected topic shapes) must not 500 the chat endpoint.
+
+    The broken structure must also not cost the student their material:
+    `raw_input` is still usable, and a model that can see only headings
+    cannot teach. So the raw text has to reach the prompt.
+    """
     user = User(email="chat4@test.com", password_hash="hash")
     db_session.add(user)
     await db_session.commit()
@@ -209,7 +214,7 @@ async def test_chat_survives_malformed_parsed_structure(
     material = StudyMaterial(
         user_id=user.id,
         title="Broken Material",
-        raw_input="raw",
+        raw_input="The mitochondrion is the powerhouse of the cell.",
         parsed_structure="not json at all",
     )
     db_session.add(material)
@@ -218,7 +223,10 @@ async def test_chat_survives_malformed_parsed_structure(
 
     async def fake_route_ai(prompt, task_type, max_tokens=None, db=None,
                             system_prompt=None, history=None):
-        assert "No structured context available." in (system_prompt or "")
+        # The material survives the unparseable structure.
+        assert "powerhouse of the cell" in (system_prompt or "")
+        # And it is not silently presented as the whole story.
+        assert "No structured context available." not in (system_prompt or "")
         return {"response": "still here", "provider": "stub", "model": "stub", "usage": {}}
 
     monkeypatch.setattr(study_router, "route_ai", fake_route_ai)
@@ -230,3 +238,62 @@ async def test_chat_survives_malformed_parsed_structure(
     )
     assert res.status_code == 200
     assert res.text.strip() == "still here"
+
+
+@pytest.mark.asyncio
+async def test_chat_sends_the_full_material_not_just_the_outline(
+    client: AsyncClient, db_session, monkeypatch
+):
+    """The tutor must receive the student's actual material.
+
+    This regressed to outline-only: chat built its context from the
+    `topics`/`subtopics` names and nothing else, so the model was asked
+    to teach from a table of contents. `raw_input` was right there and
+    unused.
+    """
+    user = User(email="chat5@test.com", password_hash="hash")
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    material = StudyMaterial(
+        user_id=user.id,
+        title="Full Material",
+        raw_input=(
+            "The cell membrane is selectively permeable. Water moves "
+            "across it by osmosis, from a dilute solution to a "
+            "concentrated one. A red blood cell bursts in distilled "
+            "water for exactly this reason."
+        ),
+        parsed_structure=(
+            '{"topics": [{"name": "Cell Structure", '
+            '"subtopics": ["Cell Membrane"], "key_concepts": ["Osmosis"]}]}'
+        ),
+    )
+    db_session.add(material)
+    await db_session.commit()
+    await db_session.refresh(material)
+
+    seen: dict[str, str] = {}
+
+    async def fake_route_ai(prompt, task_type, max_tokens=None, db=None,
+                            system_prompt=None, history=None):
+        seen["system"] = system_prompt or ""
+        return {"response": "ok", "provider": "stub", "model": "stub", "usage": {}}
+
+    monkeypatch.setattr(study_router, "route_ai", fake_route_ai)
+
+    res = await client.post(
+        "/api/v1/study/chat",
+        json={"material_id": material.id, "message": "why does a cell burst?"},
+        headers=_auth_header(user.id),
+    )
+    assert res.status_code == 200
+
+    prompt = seen["system"]
+    # The outline still arrives, so the model knows the structure.
+    assert "Cell Structure" in prompt
+    assert "Cell Membrane" in prompt
+    # But the material itself must be there too — not a substitute.
+    assert "selectively permeable" in prompt, "material text missing"
+    assert "red blood cell bursts" in prompt, "tail of material missing"
+    assert "No structured context available." not in prompt

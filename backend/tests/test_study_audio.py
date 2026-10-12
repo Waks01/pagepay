@@ -402,3 +402,119 @@ def test_points_and_sv_share_one_rate():
     # ₦100 → 1,000 points at the default 10 points per naira.
     assert kobo_to_points(10000) == 1000
     assert settings.points_per_naira == 10
+# ── Material context: budget-based, never omitted ───────────────────
+
+
+_PARSED_FOR_CONTEXT = (
+    '{"topics": [{"name": "Cell Structure", '
+    '"subtopics": ["Membrane"], '
+    '"key_concepts": ["Osmosis"]}]}'
+)
+_RAW_FOR_CONTEXT = (
+    "The cell membrane is selectively permeable. Water moves across it "
+    "by osmosis, from a dilute solution to a concentrated one. This is "
+    "why a red blood cell bursts in distilled water."
+)
+
+
+def test_full_material_reaches_the_tutor():
+    """The tutor must see the student's material, not just headings.
+
+    Chat used to send only the topic outline — a table of contents — so
+    the model could not answer questions about the text it was supposed
+    to teach.
+    """
+    from app.routers.study import build_material_context
+
+    ctx = build_material_context(
+        _PARSED_FOR_CONTEXT,
+        _RAW_FOR_CONTEXT,
+        budget=100_000,
+        outline_label="Outline:",
+    )
+    assert "Cell Structure" in ctx, "outline should be included too"
+    assert "selectively permeable" in ctx, "the material text must be present"
+    assert "osmosis" in ctx
+    assert "red blood cell bursts" in ctx, "the tail of the material must be present"
+
+
+def test_small_material_is_not_truncated():
+    from app.routers.study import build_material_context
+
+    ctx = build_material_context(
+        _PARSED_FOR_CONTEXT,
+        _RAW_FOR_CONTEXT,
+        budget=100_000,
+        outline_label="Outline:",
+    )
+    assert "truncated" not in ctx
+
+
+def test_oversized_material_is_marked_not_silently_cut():
+    """A sliced material must say so, or the model answers as if complete."""
+    from app.routers.study import build_material_context, _CHAT_CONTEXT_CHARS
+
+    big = _RAW_FOR_CONTEXT * 2000  # far beyond any budget
+    ctx = build_material_context(
+        _PARSED_FOR_CONTEXT,
+        big,
+        budget=_CHAT_CONTEXT_CHARS,
+        outline_label="Outline:",
+    )
+    assert "truncated" in ctx
+    assert len(ctx) < len(big)
+    # Head is preserved: opening definitions survive.
+    assert "selectively permeable" in ctx
+    # Outline still arrives alongside the slice.
+    assert "Cell Structure" in ctx
+
+
+def test_material_only_material_falls_back_to_text():
+    """No parsed structure must not mean no material."""
+    from app.routers.study import build_material_context
+
+    ctx = build_material_context(
+        None,
+        _RAW_FOR_CONTEXT,
+        budget=100_000,
+        outline_label="Outline:",
+    )
+    assert "selectively permeable" in ctx
+    assert "Syllabus outline" not in ctx
+
+
+def test_unparseable_parsed_structure_does_not_raise():
+    """A corrupted parsed_structure must degrade, not 500 the tutor."""
+    from app.routers.study import build_material_context
+
+    ctx = build_material_context(
+        "{not valid json",
+        _RAW_FOR_CONTEXT,
+        budget=100_000,
+        outline_label="Outline:",
+    )
+    assert "selectively permeable" in ctx
+
+
+def test_no_material_at_all_is_explicit():
+    from app.routers.study import build_material_context
+
+    ctx = build_material_context(
+        None, "", budget=100_000, outline_label="Outline:"
+    )
+    assert "no study material" in ctx
+
+
+def test_chat_budget_covers_a_full_text_upload():
+    """The budget must exceed the 50k-char upload cap so text is never cut."""
+    from app.routers.study import _CHAT_CONTEXT_CHARS
+
+    # SowUploadRequest.text caps at 50k chars.
+    assert _CHAT_CONTEXT_CHARS >= 50_000
+
+
+def test_mcq_budget_is_tighter_than_chat():
+    """MCQ generation can afford a smaller slice; chat needs the room."""
+    from app.routers.study import _CHAT_CONTEXT_CHARS, _MCQ_CONTEXT_CHARS
+
+    assert _MCQ_CONTEXT_CHARS < _CHAT_CONTEXT_CHARS

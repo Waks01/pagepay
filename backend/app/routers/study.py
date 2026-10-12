@@ -1829,25 +1829,12 @@ async def chat_study(
             detail=f"Daily AI chat limit reached ({daily_limit}/day). Try again tomorrow.",
         )
 
-    context = ""
-    if material.parsed_structure:
-        import json as _json
-        try:
-            parsed = _json.loads(material.parsed_structure)
-        except (ValueError, TypeError):
-            parsed = None
-            logger.error(
-                "Material %s has unparseable parsed_structure", material.id
-            )
-        if isinstance(parsed, dict):
-            context_parts = []
-            for topic in parsed.get("topics") or []:
-                if not isinstance(topic, dict):
-                    continue
-                context_parts.append(f"Topic: {topic.get('name') or 'Untitled topic'}")
-                for st in topic.get("subtopics") or []:
-                    context_parts.append(f"  - {st}")
-            context = "\n".join(context_parts)
+    context = build_material_context(
+        material.parsed_structure,
+        material.raw_input,
+        budget=_CHAT_CONTEXT_CHARS,
+        outline_label="Syllabus outline (the topics this material covers):",
+    )
 
     system_prompt = CHAT_TUTOR_SYSTEM.format(
         context=context or "No structured context available.",
@@ -2656,29 +2643,55 @@ def _normalize_exam_questions(raw: list[dict]) -> list[dict]:
     return out
 
 
-# Max characters of the raw material fed to the MCQ generator. Large
-# enough to carry real explanatory content, small enough to stay well
-# inside the model's context window once the prompt wrapper is added.
+# Character budgets for the material context. A budget — not an
+# omission — is what keeps a prompt inside the model's context window:
+# the tutor and the exam generator both get the student's actual
+# material, and only genuinely oversized documents are sliced.
 _MCQ_CONTEXT_CHARS = 12_000
+_CHAT_CONTEXT_CHARS = 100_000
 
 
-def _build_mcq_context(material: StudyMaterial) -> str:
-    """Build the study-material context sent to the MCQ generator.
+def build_material_context(
+    parsed_structure: object,
+    raw_input: str | None,
+    *,
+    budget: int,
+    outline_label: str,
+) -> str:
+    """Build the study-material context for an AI prompt.
 
-    The topic outline alone is only a table of contents — questions
-    generated from it come out shallow and recall-shaped. So the raw
-    material text is included as the primary source, with the topic
-    outline prepended so the model knows how to distribute questions.
+    The student's own material is the primary source. The topic outline
+    is included alongside it so the model knows the structure, but it is
+    a supplement, never a substitute — an outline alone is only a table
+    of contents, and a model taught from headings cannot answer
+    questions about the text.
+
+    `budget` bounds the raw material so a document with no upload-time
+    character cap cannot blow the context window. When the material
+    exceeds it, the head is kept (it carries the opening definitions and
+    framing) with a truncation marker so the model knows it is partial
+    rather than silently answering as though it had everything.
 
     Falls back to the outline when there is no usable raw text.
     """
     import json as _json
 
-    parsed = _json.loads(material.parsed_structure) if material.parsed_structure else {}
+    parsed: dict = {}
+    if isinstance(parsed_structure, str) and parsed_structure.strip():
+        try:
+            loaded = _json.loads(parsed_structure)
+        except (ValueError, TypeError):
+            # A corrupted structure must degrade to the raw material,
+            # not fail the whole request.
+            loaded = None
+        if isinstance(loaded, dict):
+            parsed = loaded
     topics = parsed.get("topics") or []
 
     outline_parts = []
     for topic in topics:
+        if not isinstance(topic, dict):
+            continue
         outline_parts.append(f"Topic: {topic.get('name', '')}")
         for st in topic.get("subtopics", []):
             outline_parts.append(f"  - {st}")
@@ -2686,24 +2699,38 @@ def _build_mcq_context(material: StudyMaterial) -> str:
             outline_parts.append(f"    * {cc}")
     outline = "\n".join(outline_parts)
 
-    raw_text = (material.raw_input or "").strip()
+    raw_text = (raw_input or "").strip()
 
     if not raw_text:
         return outline or "(no study material available)"
 
-    if len(raw_text) > _MCQ_CONTEXT_CHARS:
+    if len(raw_text) > budget:
         # Keep the head, which carries the opening definitions and
         # framing, rather than a truncated middle.
-        raw_text = raw_text[:_MCQ_CONTEXT_CHARS].rstrip() + "\n[... truncated ...]"
+        raw_text = (
+            raw_text[:budget].rstrip()
+            + "\n\n[... truncated: the material is longer than the "
+            "space available here ...]"
+        )
 
     if not outline:
         return raw_text
 
     return (
-        "Syllabus outline (use to distribute questions across topics):\n"
+        f"{outline_label}\n"
         f"{outline}\n\n"
-        "Study material:\n"
+        "The student's study material in full:\n"
         f"{raw_text}"
+    )
+
+
+def _build_mcq_context(material: StudyMaterial) -> str:
+    """Context for the MCQ generator: material at the exam budget."""
+    return build_material_context(
+        material.parsed_structure,
+        material.raw_input,
+        budget=_MCQ_CONTEXT_CHARS,
+        outline_label="Syllabus outline (use to distribute questions across topics):",
     )
 
 

@@ -607,7 +607,7 @@ def test_mcq_context_includes_real_material():
     assert "Mitochondria" in ctx
     assert "ATP synthase" in ctx, "raw material content must be included"
     assert "electron transport chain" in ctx
-    assert "Study material:" in ctx
+    assert "study material in full" in ctx
 
 
 def test_mcq_context_falls_back_when_raw_empty():

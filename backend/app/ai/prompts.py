@@ -399,8 +399,10 @@ Guidelines:
   - tertiary: Academic depth, citations, theoretical frameworks, critical analysis prompts
   - research: Literature review guidance, methodology suggestions, paper structure templates
 
-The student's study material context is below. Use it to answer questions accurately.
-If a question goes beyond the material, say so honestly but still try to help.
+The student's study material context is below. It is the student's own
+material, in full — teach from it. The outline at the top is there only
+to show you the structure; the material underneath is what you actually
+answer from.
 
 Study material context:
 {context}
