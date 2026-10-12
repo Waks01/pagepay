@@ -49,7 +49,15 @@ async def test_list_materials_empty(client: AsyncClient, db_session):
 
 @pytest.mark.asyncio
 async def test_unlock_with_points(client: AsyncClient, db_session):
-    user = User(email="unlock@test.com", password_hash="hash", points_balance=200)
+    # With the wallet split on, `points` (and its `sv` alias) debits
+    # `service_credit_balance` — fund that wallet, not the legacy
+    # `points_balance`.
+    user = User(
+        email="unlock@test.com",
+        password_hash="hash",
+        points_balance=200,
+        service_credit_balance=200,
+    )
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
@@ -104,7 +112,14 @@ async def test_unlock_insufficient_points(client: AsyncClient, db_session):
 
 
 @pytest.mark.asyncio
-async def test_unlock_ad_creates_pending_transaction(client: AsyncClient, db_session):
+async def test_unlock_ad_method_is_rejected(client: AsyncClient, db_session):
+    """Asset unlock is points/service-credits only.
+
+    The "ad" unlock method was UI fiction — the rewarded-ad pipeline was
+    removed backend-wide, so the endpoint used to reject it after the
+    fact (400) and the schema now refuses it at validation (422). Either
+    way: no unlock, no ledger row.
+    """
     user = User(email="ad@test.com", password_hash="hash", points_balance=200)
     db_session.add(user)
     await db_session.commit()
@@ -125,10 +140,10 @@ async def test_unlock_ad_creates_pending_transaction(client: AsyncClient, db_ses
         json={"asset_id": asset.id, "method": "ad"},
         headers=_auth_header(user.id),
     )
-    assert res.status_code == 200
-    data = res.json()
-    assert data["unlocked"] is False
-    assert data["method"] == "ad"
+    assert res.status_code in (400, 422)
+
+    txn = await db_session.execute(select(StudyTransaction).where(StudyTransaction.asset_id == asset.id))
+    assert txn.scalar_one_or_none() is None
 
 
 # ── Async SOW job flow (image / document) ───────────────────────────

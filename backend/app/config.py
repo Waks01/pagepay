@@ -416,8 +416,17 @@ class Settings(BaseSettings):
         "research": 25,
     }
     # SV charged per char_step, by level.
+    #
+    # Rate floor rationale: producing 1,000 characters of narration
+    # costs ~₦0.43 at current Cloudflare rates (MeloTTS $0.0002/audio
+    # minute is ~69% of that; GLM output the rest). At 10 SV = ₦1, the
+    # minimum rate must exceed ₦0.43 per 1k chars, i.e. > 4.3 SV per
+    # char_step. `primary` was 4 SV, which was below cost and only
+    # stayed solvent because `base_sv` subsidised it — raised to 6 so
+    # every level clears marginal cost on its own. Revisit if either
+    # the Cloudflare rate or the SV↔naira rate changes.
     audio_narration_rate_sv: dict[str, int] = {
-        "primary": 4,
+        "primary": 6,
         "secondary": 6,
         "tertiary": 8,
         "research": 10,

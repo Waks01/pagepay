@@ -391,7 +391,6 @@ export default function MaterialReaderScreen() {
           visible={audioUnlockVisible}
           materialId={materialId}
           materialTitle={materialQ.data.title}
-          contentLength={materialQ.data.content?.length ?? 0}
           onClose={() => setAudioUnlockVisible(false)}
           onUnlocked={() => {
             // Set the ref synchronously so the handler called below sees it.

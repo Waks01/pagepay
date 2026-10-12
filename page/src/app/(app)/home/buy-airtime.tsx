@@ -494,7 +494,7 @@ export default function BuyAirtimeScreen() {
               {t("bills.airtime.points_earned_label")}
             </Text>
             <Text style={[styles.summaryValue, { color: tokens.mint }]}>
-              +{successData.points_earned} sp
+              +{successData.points_earned} SV
             </Text>
           </View>
           <View style={[styles.divider, { backgroundColor: tokens.border }]} />
@@ -955,7 +955,7 @@ export default function BuyAirtimeScreen() {
                     ₦{a.toLocaleString()}
                   </Text>
                   <Text style={[styles.amountPoints, { color: tokens.mint }]}>
-                    +{Math.floor(a * 0.018 * 0.67 * 10)} sp
+                      +{Math.floor(a * 0.018 * 0.67 * 10)} SV
                   </Text>
                 </TouchableOpacity>
               );
@@ -1078,7 +1078,7 @@ export default function BuyAirtimeScreen() {
           onSuccess={(result) => {
             Alert.alert(
               "Bulk Purchase Complete",
-              `${result.total_successful} of ${result.total_successful + result.total_failed} purchases succeeded.\n\nTotal: ₦${result.total_amount.toLocaleString()}\nSP Earned: ${result.total_points_earned}`,
+              `${result.total_successful} of ${result.total_successful + result.total_failed} purchases succeeded.\n\nTotal: ₦${result.total_amount.toLocaleString()}\nSV Earned: ${result.total_points_earned}`,
             );
             queryClient.invalidateQueries({ queryKey: ["me"] });
           }}

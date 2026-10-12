@@ -788,8 +788,13 @@ class ChatResponse(BaseModel):
 
 
 class UnlockRequest(BaseModel):
+    # `points` is the legacy name for the spendable wallet and `sv` its
+    # modern alias (both debit the same balance); `cashable` spends the
+    # withdrawable side. Both are the same unit — POINTS_PER_NAIRA — so
+    # the price is identical whichever the user picks. The "ad" method
+    # is not accepted: the rewarded-ad pipeline has no backend.
     asset_id: int
-    method: Literal["points", "ad"] = "points"
+    method: Literal["points", "sv", "cashable"] = "points"
 
 
 class UnlockResponse(BaseModel):

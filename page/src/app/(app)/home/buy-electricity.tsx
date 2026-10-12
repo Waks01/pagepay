@@ -457,10 +457,10 @@ export default function BuyElectricityScreen() {
           <View style={[styles.divider, { backgroundColor: tokens.border }]} />
           <View style={styles.summaryRow}>
             <Text style={[styles.summaryKey, { color: tokens.inkMuted }]}>
-              Points Earned
+              SV Earned
             </Text>
             <Text style={[styles.summaryValue, { color: tokens.mint }]}>
-              +{successData.points_earned} pts
+              +{successData.points_earned} SV
             </Text>
           </View>
           {successData.token && (
@@ -940,7 +940,7 @@ export default function BuyElectricityScreen() {
                     ₦{a.toLocaleString()}
                   </Text>
                   <Text style={[styles.amountPoints, { color: tokens.mint }]}>
-                    +{Math.floor(a * 0.012 * 0.67 * 10)} pts
+                     +{Math.floor(a * 0.012 * 0.67 * 10)} SV
                   </Text>
                 </TouchableOpacity>
               );

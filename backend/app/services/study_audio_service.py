@@ -90,22 +90,26 @@ def quote(*, parsed_structure: object, topic_indexes: list[int], level: str) -> 
 
     for index in topic_indexes:
         plan = study_narration.topic_episode_plan(parsed_structure, index)
-        char_count = plan["char_count"]
+        source_chars = plan["char_count"]
         episodes = plan["episodes"]
-        breakdown = audio_pricing.quote_detailed(level, char_count)
+        # Bill on what generation will actually produce — `billing_chars`
+        # scales with the episode count, because each episode is
+        # generated with a fixed word target regardless of source size.
+        output_chars = audio_pricing.billing_chars(source_chars, episodes)
+        breakdown = audio_pricing.quote_detailed(level, output_chars)
 
         topics.append(
             {
                 "topic_index": index,
                 "topic_name": plan["topic_name"],
-                "char_count": char_count,
+                "char_count": output_chars,
                 "episodes": episodes,
                 "estimated_seconds": breakdown["estimated_seconds"],
                 "cost_sv": breakdown["cost_sv"],
             }
         )
         total_cost += breakdown["cost_sv"]
-        total_chars += char_count
+        total_chars += output_chars
         total_episodes += episodes
 
     return {

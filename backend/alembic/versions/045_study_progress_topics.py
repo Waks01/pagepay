@@ -1,8 +1,13 @@
 """Attributable study progress: study_assets.topic + one progress row per topic.
 
-Revision ID: 045_study_progress_topic_attribution
+Revision ID: 045_study_progress_topics
 Revises: 044_study_audio_batches
 Create Date: 2026-10-11 00:00:00.000000
+
+NOTE: `alembic_version.version_num` is VARCHAR(32), so revision ids must
+stay within 32 characters. A longer id runs the migration's DDL and
+then fails the version-bookkeeping UPDATE, which rolls the whole
+migration back — schema unchanged, alembic_version unchanged.
 
 Schema additions:
   study_assets:
@@ -32,7 +37,7 @@ from typing import Sequence, Union
 from alembic import op
 
 
-revision: str = "045_study_progress_topic_attribution"
+revision: str = "045_study_progress_topics"
 down_revision: Union[str, None] = "044_study_audio_batches"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

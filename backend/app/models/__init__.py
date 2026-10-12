@@ -375,7 +375,13 @@ class PayoutTransaction(Base):
     so a retried-withdraw call can't double-charge.
 
     `amount_kobo` is stored in kobo (1/100 NGN) to avoid float-rounding
-    in money math. The wallet's points are 1:1 with kobo.
+    in money math.
+
+    Note: wallet points are NOT 1:1 with kobo. They are converted via
+    `services.money.kobo_to_points`, which uses
+    `settings.points_per_naira` (default 10) — so 10 points = ₦1. The
+    `amount_points` column on this table holds that converted figure,
+    not `amount_kobo` verbatim.
 
     `fee_kobo` is the flat fee the user paid on top of `amount_kobo`
     (set from `settings.withdrawal_fee_tiers`). The user's wallet is

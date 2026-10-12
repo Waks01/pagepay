@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "expo-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  Alert,
   Image,
   Linking,
   Modal,
@@ -27,16 +26,9 @@ import {
 import { useTranslation } from "react-i18next";
 import { formatDateTime } from "@/src/shared/utils/dateFormatter";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
-import { useAudioPlayer } from "expo-audio";
-import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system";
 
-import { apiFetch, apiUpload, API_URL } from "@/src/shared/api/client";
-import { cacheDirectory } from "@/src/shared/lib/file-paths";
-import {
-  EXAM_TYPE_KEYS,
-  getExamTypeLabel,
-} from "@/src/shared/lib/exam-types";
+import { apiFetch, apiUpload } from "@/src/shared/api/client";
+import { getExamTypeLabel } from "@/src/shared/lib/exam-types";
 import { pollSowJob } from "@/src/features/study/api";
 import {
   useMaterials,
@@ -55,12 +47,8 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import NotificationBell from "@/components/NotificationBell";
-import { SkeletonPage, SkeletonDetailPage } from "@/components/skeletons";
+import { SkeletonPage } from "@/components/skeletons";
 import { Skeleton as SkeletonBase } from "@/components/Skeleton";
-import { PagePaySpinner } from "@/components/PagePaySpinner";
-import AudioUnlockModal from "@/components/AudioUnlockModal";
-import { cacheAsset, getCachedAsset } from "@/src/features/study/storage";
-import { saveLastRoute, getLastRoute } from "@/src/shared/lib/screen-memory";
 
 // Pass the server's actual error message through unchanged so the user
 // can see exactly what failed. Only translate when the message is empty
@@ -139,11 +127,6 @@ export default function StudyScreen() {
   const qc = useQueryClient();
 
   const materialsQ = useMaterials();
-  const [selectedMaterialId, setSelectedMaterialId] = useState<number | null>(
-    null,
-  );
-  const [selectedMaterial, setSelectedMaterial] =
-    useState<MaterialDetail | null>(null);
   const [unlockedAssets, setUnlockedAssets] = useState<Record<number, unknown>>(
     {},
   );
@@ -158,27 +141,13 @@ export default function StudyScreen() {
   );
   const [aiProcessing, setAiProcessing] = useState(false);
   const [uploadJustCompleted, setUploadJustCompleted] = useState(false);
-  const studySessionIdRef = useRef<number | null>(null);
   const [examType, setExamType] = useState<string | null>(null);
   const [materialLoading, setMaterialLoading] = useState(false);
   const materialFetchIdRef = useRef(0);
   const [generateMode, setGenerateMode] = useState<"topic" | "all">("all");
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [generateCount, setGenerateCount] = useState<number>(15);
-  const [showReader, setShowReader] = useState(false);
-  const [ttsUrl, setTtsUrl] = useState<string | null>(null);
-  const [ttsPlaying, setTtsPlaying] = useState(false);
-  const [ttsLoading, setTtsLoading] = useState(false);
-  const player = useAudioPlayer(ttsUrl);
-  const [audioUnlockVisible, setAudioUnlockVisible] = useState(false);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const [actionMenuVisible, setActionMenuVisible] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
-  const [editTitle, setEditTitle] = useState("");
-  const [editExamType, setEditExamType] = useState<string | null>(null);
-  const [shareFormatVisible, setShareFormatVisible] = useState(false);
-const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [previewFiles, setPreviewFiles] = useState<Array<{ uri: string; name: string; type: string }>>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [selectedPages, setSelectedPages] = useState<number[]>([]);
@@ -189,157 +158,6 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
-
-  // Load cached assets on mount
-  useEffect(() => {
-    let cancelled = false;
-    if (selectedMaterial) {
-      loadCachedAssets(selectedMaterial.id);
-      const begin = async () => {
-        try {
-          const res = await apiFetch("/api/v1/study/session/start", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ material_id: selectedMaterial.id }),
-          });
-          if (cancelled || !res.ok) return;
-          const data = await res.json();
-          if (cancelled) return;
-          studySessionIdRef.current = data.session_id;
-        } catch (error) {
-          if (__DEV__) console.error("Failed to start study session:", error);
-        }
-      };
-      begin();
-      setSelectedTopic(null);
-      setGenerateMode("all");
-    }
-
-    return () => {
-      cancelled = true;
-      if (studySessionIdRef.current) {
-        const sid = studySessionIdRef.current;
-        studySessionIdRef.current = null;
-        endStudySession(sid);
-      }
-    };
-  }, [selectedMaterial]);
-
-  // Restore last selected material on mount
-  useEffect(() => {
-    // Navigation to last route removed to ensure Study tab lands on main index page
-  }, []);
-
-  // Persist selected material to route memory
-  useEffect(() => {
-    if (selectedMaterialId) {
-      saveLastRoute(`/study/materials/${selectedMaterialId}`);
-    }
-  }, [selectedMaterialId]);
-
-  const loadCachedAssets = async (materialId: number) => {
-    try {
-      if (!selectedMaterial) return;
-
-      for (const asset of selectedMaterial.assets) {
-        if (!(asset.id in unlockedAssets)) {
-          const cached = await getCachedAsset(asset.id);
-          if (cached && cached.materialId === materialId) {
-            setUnlockedAssets((prev) => ({
-              ...prev,
-              [asset.id]: cached.content,
-            }));
-          }
-        }
-      }
-    } catch (error) {
-      if (__DEV__) console.error("Failed to load cached assets:", error);
-    }
-  };
-
-  const endStudySession = async (sessionId: number) => {
-    try {
-      const res = await apiFetch("/api/v1/study/session/end", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId }),
-      });
-
-      if (res.ok) {
-        // duration_seconds is returned for analytics; the value is
-        // available on the server-side session log.
-        await res.json();
-      }
-    } catch (error) {
-      if (__DEV__) console.error("Failed to end study session:", error);
-    }
-  };
-
-  const handleTtsPress = async () => {
-    if (!selectedMaterial?.content) return;
-    if (ttsPlaying) {
-      player.pause();
-      setTtsPlaying(false);
-      return;
-    }
-    if (ttsUrl) {
-      player.play();
-      setTtsPlaying(true);
-      return;
-    }
-
-    if (!audioUnlocked) {
-      setAudioUnlockVisible(true);
-      return;
-    }
-
-    try {
-      setTtsLoading(true);
-      const res = await apiFetch("/api/v1/study/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: selectedMaterial.content,
-          // Voice/provider are omitted so the server applies its configured
-          // defaults — the same defaults the material reader relies on, which
-          // keeps the audio cache key identical across both entry points.
-          material_id: selectedMaterial.id,
-        }),
-      });
-      if (!res.ok) {
-        if (res.status === 403) {
-          setAudioUnlockVisible(true);
-          return;
-        }
-        const errText = await res.text();
-        throw new Error(errText || "TTS request failed");
-      }
-      const data = (await res.json()) as { url: string };
-      const fullUrl = data.url.startsWith("http")
-        ? data.url
-        : `${API_URL}${data.url}`;
-      setTtsUrl(fullUrl);
-      setTtsPlaying(true);
-    } catch (error) {
-      if (__DEV__) console.error("TTS failed:", error);
-      Alert.alert(
-        "Playback Unavailable",
-        "Audio generation failed. Please try again later.",
-      );
-    } finally {
-      setTtsLoading(false);
-    }
-  };
-
-  const handleBack = () => {
-    if (studySessionIdRef.current) {
-      const sid = studySessionIdRef.current;
-      endStudySession(sid);
-      studySessionIdRef.current = null;
-    }
-    setSelectedMaterialId(null);
-    setSelectedMaterial(null);
-  };
 
   // Read the user from the global store. The user object is loaded
   // once at app start — no per-screen /me fetch.
@@ -374,13 +192,10 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
         text,
         exam_type: examType,
       });
-      setSelectedMaterialId(result.material_id);
-      const res = await apiFetch(
-        `/api/v1/study/materials/${result.material_id}`,
-      );
-      if (res.ok) {
-        setSelectedMaterial(await res.json());
-      }
+      // Navigate to the dedicated material detail screen. The Study
+      // screen intentionally holds no inline detail view — everything
+      // material-specific lives on /study/{id}.
+      router.replace(`/study/${result.material_id}`);
       setUploadProgress(100);
       setTimeout(() => setUploadProgress(undefined), 2000);
     } catch (err) {
@@ -411,23 +226,18 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
     });
   };
 
-  // Shared tail: after the SOW job is completed, fetch the full
-  // MaterialDetail so the screen can render the asset browser. The
-  // 100% tick is held until this fetch resolves so the success banner
-  // only shows when there's actually something to show.
+  // Shared tail: after the SOW job is completed, hand off to the
+  // dedicated material detail screen. The 100% tick is shown here so
+  // the success banner renders before the handoff.
   const finalizeUploadSuccess = async (materialId: number) => {
-    setSelectedMaterialId(materialId);
     setUploadJustCompleted(true);
-    const res = await apiFetch(`/api/v1/study/materials/${materialId}`);
-    if (res.ok) {
-      setSelectedMaterial(await res.json());
-    }
     setUploadProgress(100);
     qc.invalidateQueries({ queryKey: ["study", "materials"] });
     setTimeout(() => {
       setUploadProgress(undefined);
       setUploadJustCompleted(false);
     }, 3000);
+    router.replace(`/study/${materialId}`);
   };
 
   const handleUploadImage = async (examType: string | null) => {
@@ -617,7 +427,7 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
         score,
       });
       if (result.bonus_awarded) {
-        setBonusNotification(`+${result.bonus_points} pts! Score: ${score}%`);
+        setBonusNotification(`+${result.bonus_points} SV! Score: ${score}%`);
         setTimeout(() => setBonusNotification(null), 4000);
       }
       qc.invalidateQueries({ queryKey: ["me"] });
@@ -643,16 +453,6 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
     const data = await res.json();
     if (data.unlocked && data.content) {
       setUnlockedAssets((prev) => ({ ...prev, [assetId]: data.content }));
-
-      // Cache the unlocked asset for offline access
-      if (selectedMaterialId) {
-        try {
-          await cacheAsset(assetId, data.content, selectedMaterialId);
-        } catch (error) {
-          if (__DEV__) console.error("Failed to cache unlocked asset:", error);
-          // Don't throw - caching is optional
-        }
-      }
     }
     qc.invalidateQueries({ queryKey: ["me"] });
     return data;
@@ -662,196 +462,24 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
     router.push(`/study/${materialId}`);
   };
 
-  const handleChatPress = (materialId: number) => {
-    router.push(`/study/chat/${materialId}`);
-  };
-
-  const handleEditPress = () => {
-    if (!selectedMaterial) return;
-    setEditTitle(selectedMaterial.title.replace(/^[A-Z]+ · /, ""));
-    setEditExamType(selectedMaterial.exam_type);
-    setActionMenuVisible(false);
-    setEditModalVisible(true);
-  };
-
-  const handleDeletePress = () => {
-    setActionMenuVisible(false);
-    setDeleteConfirmVisible(true);
-  };
-
-  const handleSharePress = async (format: "pdf" | "docx" | "txt" | "image") => {
-    if (!selectedMaterial) return;
-    setShareFormatVisible(false);
-    try {
-      const res = await apiFetch(
-        `/api/v1/study/materials/${selectedMaterial.id}/export?format=${format}`,
-      );
-      if (!res.ok) throw new Error("Export failed");
-      const blob = await res.blob();
-      const contentDisposition = res.headers.get("Content-Disposition");
-      const filename =
-        contentDisposition?.match(/filename="?([^"]+)"?/)?.[1] ||
-        `material.${format}`;
-      const destPath = `${cacheDirectory}${filename}`;
-
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        await FileSystem.writeAsStringAsync(destPath, base64, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(destPath, {
-            mimeType:
-              res.headers.get("Content-Type") || "application/octet-stream",
-            dialogTitle: selectedMaterial.title,
-          });
-        }
-      };
-      reader.readAsDataURL(blob);
-    } catch (err) {
-      if (__DEV__) console.error("Share failed:", err);
-    }
-  };
-
-  const handleEditSubmit = async () => {
-    if (!selectedMaterial || !editTitle.trim()) return;
-    try {
-      const res = await apiFetch(
-        `/api/v1/study/materials/${selectedMaterial.id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: editTitle.trim(),
-            exam_type: editExamType,
-          }),
-        },
-      );
-      if (!res.ok) throw new Error("Failed to update material");
-      const updated = await res.json();
-      setSelectedMaterial(updated);
-      setEditModalVisible(false);
-      qc.invalidateQueries({ queryKey: ["study", "materials"] });
-    } catch (err) {
-      if (__DEV__) console.error("Edit failed:", err);
-    }
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!selectedMaterial) return;
-    try {
-      const res = await apiFetch(
-        `/api/v1/study/materials/${selectedMaterial.id}`,
-        {
-          method: "DELETE",
-        },
-      );
-      if (!res.ok) throw new Error("Failed to delete material");
-      setSelectedMaterial(null);
-      setSelectedMaterialId(null);
-      setDeleteConfirmVisible(false);
-      qc.invalidateQueries({ queryKey: ["study", "materials"] });
-    } catch (err) {
-      if (__DEV__) console.error("Delete failed:", err);
-    }
-  };
-
   const materials = materialsQ.data ?? [];
   const balance = meQ?.service_credit_balance ?? 0;
   const isLoading = materialsQ.isLoading;
-  const totalAssets = selectedMaterial?.assets.length ?? 0;
 
   return (
     <SafeAreaView
       edges={["top"]}
       style={{ flex: 1, backgroundColor: tokens.paper }}
     >
-      {selectedMaterialId != null ? (
-        <PageHeader
-          title={selectedMaterial?.title ?? t("study.loading_material_title")}
-          subtitle={
-            selectedMaterial
-              ? t("study.assets_generated", { count: totalAssets })
-              : t("study.loading_material_subtitle")
-          }
-          showBack
-          onBack={handleBack}
-          backgroundColor={tokens.card}
-          borderBottomColor={tokens.border}
-          tokens={tokens}
-          left={
-            <View style={styles.headerLeft}>
-              <Pressable
-                onPress={handleBack}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel={t("common.back")}
-                style={({ pressed }) => [
-                  styles.headerBackBtn,
-                  { opacity: pressed ? 0.6 : 1 },
-                ]}
-              >
-                <Ionicons name="chevron-back" size={22} color={tokens.ink} />
-              </Pressable>
-              <UserAvatar size={28} />
-            </View>
-          }
-          right={
-            <View style={styles.headerRight}>
-              <Pressable
-                onPress={() => handleChatPress(selectedMaterialId)}
-                accessibilityRole="button"
-                accessibilityLabel={t("study.chat_ai")}
-                style={({ pressed }) => [
-                  styles.headerIconBtn,
-                  {
-                    borderColor: tokens.border,
-                    backgroundColor: tokens.card,
-                    opacity: pressed ? 0.7 : 1,
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={18}
-                  color={tokens.ink}
-                />
-              </Pressable>
-              <Pressable
-                onPress={() => setActionMenuVisible(true)}
-                accessibilityRole="button"
-                accessibilityLabel="Material actions"
-                style={({ pressed }) => [
-                  styles.headerIconBtn,
-                  {
-                    borderColor: tokens.border,
-                    backgroundColor: tokens.card,
-                    opacity: pressed ? 0.7 : 1,
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="ellipsis-vertical"
-                  size={18}
-                  color={tokens.ink}
-                />
-              </Pressable>
-              <NotificationBell />
-            </View>
-          }
-        />
-      ) : (
-        <PageHeader
-          title={t("study.title")}
-          subtitle={t("study.materials_count", { count: materials.length })}
-          backgroundColor={tokens.card}
-          borderBottomColor={tokens.border}
-          tokens={tokens}
-          left={<UserAvatar size={28} />}
-          right={<NotificationBell />}
-        />
-      )}
+      <PageHeader
+        title={t("study.title")}
+        subtitle={t("study.materials_count", { count: materials.length })}
+        backgroundColor={tokens.card}
+        borderBottomColor={tokens.border}
+        tokens={tokens}
+        left={<UserAvatar size={28} />}
+        right={<NotificationBell />}
+      />
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
@@ -864,75 +492,6 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
           />
         }
       >
-        {selectedMaterial && (
-          <Animated.View
-            entering={FadeInDown.duration(240).springify()}
-            style={styles.headerWrap}
-          >
-            <View
-              style={[
-                styles.detailHero,
-                { backgroundColor: tokens.card, borderColor: tokens.border },
-              ]}
-            >
-              {selectedMaterial.exam_type && (
-                <View
-                  style={[
-                    styles.eyebrowPill,
-                    { backgroundColor: tokens.mintSoft },
-                  ]}
-                >
-                  <Ionicons
-                    name="ribbon-outline"
-                    size={12}
-                    color={tokens.mint}
-                  />
-                  <Text style={[styles.eyebrowText, { color: tokens.mint }]}>
-                    {t("study.material_eyebrow", {
-                      exam: selectedMaterial.exam_type.toUpperCase(),
-                    })}
-                  </Text>
-                </View>
-              )}
-              <Text
-                style={[
-                  styles.heroTitle,
-                  {
-                    color: tokens.ink,
-                    fontFamily: Fonts.editorialSemiBold as string,
-                  },
-                ]}
-              >
-                {selectedMaterial.title.replace(/^[A-Z]+ · /, "")}
-              </Text>
-              <View style={styles.heroMetaRow}>
-                <View style={[styles.heroChip, { borderColor: tokens.border }]}>
-                  <Ionicons
-                    name="list-outline"
-                    size={12}
-                    color={tokens.inkMuted}
-                  />
-                  <Text style={[styles.heroChipText, { color: tokens.ink }]}>
-                    {t("study.topics_chip", {
-                      count: getTopicNames(selectedMaterial.parsed_structure)
-                        .length,
-                    })}
-                  </Text>
-                </View>
-                <View style={[styles.heroChip, { borderColor: tokens.border }]}>
-                  <Ionicons
-                    name="albums-outline"
-                    size={12}
-                    color={tokens.inkMuted}
-                  />
-                  <Text style={[styles.heroChipText, { color: tokens.ink }]}>
-                    {t("study.assets_chip", { count: totalAssets })}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </Animated.View>
-        )}
         {error && (
           <Animated.View
             entering={FadeIn.duration(180)}
@@ -1196,290 +755,6 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
         </View>
       </ScrollView>
 
-      {/* Action Menu */}
-      <Modal
-        visible={actionMenuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setActionMenuVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setActionMenuVisible(false)}
-        >
-          <View
-            style={[
-              styles.actionMenu,
-              { backgroundColor: tokens.card, borderColor: tokens.border },
-            ]}
-          >
-            <TouchableOpacity
-              onPress={handleEditPress}
-              style={styles.actionMenuItem}
-              accessibilityRole="button"
-              accessibilityLabel="Edit material"
-            >
-              <Ionicons name="pencil-outline" size={20} color={tokens.ink} />
-              <Text style={[styles.actionMenuText, { color: tokens.ink }]}>
-                Edit
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                setActionMenuVisible(false);
-                setShareFormatVisible(true);
-              }}
-              style={styles.actionMenuItem}
-              accessibilityRole="button"
-              accessibilityLabel="Share material"
-            >
-              <Ionicons name="share-outline" size={20} color={tokens.ink} />
-              <Text style={[styles.actionMenuText, { color: tokens.ink }]}>
-                Share
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleDeletePress}
-              style={styles.actionMenuItem}
-              accessibilityRole="button"
-              accessibilityLabel="Delete material"
-            >
-              <Ionicons name="trash-outline" size={20} color={tokens.signal} />
-              <Text style={[styles.actionMenuText, { color: tokens.signal }]}>
-                Delete
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* Share Format Picker */}
-      <Modal
-        visible={shareFormatVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShareFormatVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShareFormatVisible(false)}
-        >
-          <View
-            style={[
-              styles.shareFormatModal,
-              { backgroundColor: tokens.card, borderColor: tokens.border },
-            ]}
-          >
-            <Text style={[styles.shareFormatTitle, { color: tokens.ink }]}>
-              Share as
-            </Text>
-            {[
-              {
-                format: "pdf" as const,
-                label: "PDF",
-                icon: "document-text-outline",
-                desc: "Formatted document",
-              },
-              {
-                format: "docx" as const,
-                label: "DOCX",
-                icon: "document-outline",
-                desc: "Word document",
-              },
-              {
-                format: "txt" as const,
-                label: "TXT",
-                icon: "document-attach-outline",
-                desc: "Plain text",
-              },
-              {
-                format: "image" as const,
-                label: "Image",
-                icon: "image-outline",
-                desc: "PNG image",
-              },
-            ].map((item) => (
-              <TouchableOpacity
-                key={item.format}
-                onPress={() => handleSharePress(item.format)}
-                style={[
-                  styles.shareFormatItem,
-                  { borderBottomColor: tokens.border },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={`Share as ${item.label}`}
-              >
-                <View
-                  style={[
-                    styles.shareFormatIcon,
-                    { backgroundColor: tokens.mintSoft },
-                  ]}
-                >
-                  <Ionicons
-                    name={item.icon as any}
-                    size={22}
-                    color={tokens.mint}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={[styles.shareFormatLabel, { color: tokens.ink }]}
-                  >
-                    {item.label}
-                  </Text>
-                  <Text
-                    style={[styles.shareFormatDesc, { color: tokens.inkMuted }]}
-                  >
-                    {item.desc}
-                  </Text>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={tokens.inkMuted}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* Edit Modal */}
-      <Modal
-        visible={editModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.editModal,
-              { backgroundColor: tokens.card, borderColor: tokens.border },
-            ]}
-          >
-            <Text style={[styles.editModalTitle, { color: tokens.ink }]}>
-              Edit Material
-            </Text>
-            <TextInput
-              style={[
-                styles.editInput,
-                {
-                  backgroundColor: tokens.paper,
-                  borderColor: tokens.border,
-                  color: tokens.ink,
-                },
-              ]}
-              value={editTitle}
-              onChangeText={setEditTitle}
-              placeholder="Material title"
-              placeholderTextColor={tokens.inkFaint}
-              autoFocus
-            />
-            <Text style={[styles.editLabel, { color: tokens.inkMuted }]}>
-              Exam Type
-            </Text>
-            <View style={styles.editExamChips}>
-              {EXAM_TYPE_KEYS.map((et) => (
-                <TouchableOpacity
-                  key={et}
-                  onPress={() =>
-                    setEditExamType(editExamType === et ? null : et)
-                  }
-                  style={[
-                    styles.editChip,
-                    {
-                      backgroundColor:
-                        editExamType === et ? tokens.mintSoft : tokens.paper2,
-                      borderColor:
-                        editExamType === et ? tokens.mint : tokens.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.editChipText,
-                      {
-                        color:
-                          editExamType === et ? tokens.mint : tokens.inkMuted,
-                      },
-                    ]}
-                  >
-                    {t(`study.sow_upload.exam_types.${et}`)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={styles.editActions}>
-              <Pressable
-                onPress={() => setEditModalVisible(false)}
-                style={[styles.editBtn, { borderColor: tokens.border }]}
-              >
-                <Text style={[styles.editBtnText, { color: tokens.inkMuted }]}>
-                  Cancel
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={handleEditSubmit}
-                style={[styles.editBtn, { backgroundColor: tokens.mint }]}
-              >
-                <Text style={[styles.editBtnText, { color: tokens.mintText }]}>
-                  Save
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Delete Confirmation */}
-      <Modal
-        visible={deleteConfirmVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDeleteConfirmVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setDeleteConfirmVisible(false)}
-        >
-          <View
-            style={[
-              styles.deleteDialog,
-              { backgroundColor: tokens.card, borderColor: tokens.border },
-            ]}
-          >
-            <Ionicons name="warning-outline" size={32} color={tokens.signal} />
-            <Text style={[styles.deleteTitle, { color: tokens.ink }]}>
-              Delete Material?
-            </Text>
-            <Text style={[styles.deleteMessage, { color: tokens.inkMuted }]}>
-              This will permanently delete "{selectedMaterial?.title}" and all
-              its generated assets. This action cannot be undone.
-            </Text>
-            <View style={styles.deleteActions}>
-              <Pressable
-                onPress={() => setDeleteConfirmVisible(false)}
-                style={[styles.deleteBtn, { borderColor: tokens.border }]}
-              >
-                <Text
-                  style={[styles.deleteBtnText, { color: tokens.inkMuted }]}
-                >
-                  Cancel
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={handleDeleteConfirm}
-                style={[styles.deleteBtn, { backgroundColor: tokens.signal }]}
-              >
-                <Text style={[styles.deleteBtnText, { color: "#fff" }]}>
-                  Delete
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </Pressable>
-      </Modal>
 
       {/* Pre-upload preview */}
       <Modal
@@ -1662,20 +937,6 @@ const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type
           </Pressable>
         </Pressable>
       </Modal>
-
-      {selectedMaterial && (
-        <AudioUnlockModal
-          visible={audioUnlockVisible}
-          materialId={selectedMaterial.id}
-          materialTitle={selectedMaterial.title}
-          contentLength={selectedMaterial.content?.length ?? 0}
-          onClose={() => setAudioUnlockVisible(false)}
-          onUnlocked={() => {
-            setAudioUnlocked(true);
-            setAudioUnlockVisible(false);
-          }}
-        />
-      )}
     </SafeAreaView>
   );
 }
@@ -1685,321 +946,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 48,
   },
-  headerWrap: {
-    gap: 14,
-  },
-  headerIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerBackBtn: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 18,
-  },
-  detailHero: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 18,
-    gap: 12,
-  },
-  eyebrowPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  eyebrowText: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
-  heroTitle: {
-    fontSize: 26,
-    lineHeight: 32,
-    letterSpacing: -0.5,
-  },
-  heroMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  heroChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  heroChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  chatBtnFull: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 13,
-    borderRadius: 14,
-  },
-  chatBtnFullText: {
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  detailView: {
-    gap: 16,
-  },
-  successBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  successBannerText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  outlineCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    gap: 12,
-  },
-  outlineTitle: {
-    fontSize: 16,
-    letterSpacing: -0.2,
-  },
+
   outlineMeta: {
     fontSize: 11,
     fontWeight: "600",
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
-  outlineList: {
-    gap: 8,
-  },
-  outlineItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  outlineNum: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    width: 22,
-  },
-  outlineDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  outlineText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 18,
-  },
-  generateBlock: {
-    gap: 12,
-  },
-  genHeading: {
-    fontSize: 16,
-    letterSpacing: -0.2,
-  },
+
   sectionHeaderRow: {
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "space-between",
     gap: 8,
   },
-  generateRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  genBtn: {
-    flex: 1,
-    minWidth: 90,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  genBtnFull: {
-    flexBasis: "100%",
-  },
-  genBtnShimmer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  genText: {
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: -0.1,
-  },
-  generateOptions: {
-    gap: 10,
-    paddingTop: 12,
-    borderTopWidth: 1,
-  },
-  generateOptionsLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  modeSelector: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  modeBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  modeBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
-  topicSelector: {
-    gap: 8,
-  },
-  topicSelectorLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  topicChips: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  topicChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  topicChipText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  readBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingVertical: 13,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  readBtnText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "700",
-    letterSpacing: -0.1,
-  },
-  materialPreviewCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    gap: 12,
-  },
-  materialPreviewImage: {
-    width: "100%",
-    height: 220,
-    borderRadius: 10,
-    backgroundColor: "#F3F4F6",
-  },
-  materialPreviewText: {
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  readerHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  readerTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  readerCloseBtn: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  readerHeaderActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  readerTtsBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  readerTtsText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  readerContent: {
-    flex: 1,
-    padding: 16,
-  },
-  readerText: {
-    fontSize: 15,
-    lineHeight: 24,
-  },
+
   listView: {
     gap: 16,
   },
+
   quickActionsRow: {
     flexDirection: "row",
     gap: 8,
   },
+
   quickAction: {
     flex: 1,
     flexDirection: "row",
@@ -2010,22 +980,27 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
   },
+
   quickActionPrimary: {
     borderWidth: 0,
   },
+
   quickActionText: {
     flex: 1,
     fontSize: 14,
     fontWeight: "700",
     letterSpacing: -0.1,
   },
+
   materialList: {
     gap: 10,
   },
+
   listTitle: {
     fontSize: 18,
     letterSpacing: -0.3,
   },
+
   materialCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -2034,6 +1009,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 14,
   },
+
   materialIcon: {
     width: 36,
     height: 36,
@@ -2041,16 +1017,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   materialTitle: {
     fontSize: 14,
     fontWeight: "700",
     letterSpacing: -0.1,
     marginBottom: 2,
   },
+
   materialMeta: {
     fontSize: 11,
     letterSpacing: 0.2,
   },
+
   stateBlock: {
     borderRadius: 14,
     borderWidth: 1,
@@ -2058,10 +1037,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+
   stateText: {
     fontSize: 13,
     textAlign: "center",
   },
+
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -2070,11 +1051,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 12,
   },
+
   errorText: {
     flex: 1,
     fontSize: 13,
     lineHeight: 18,
   },
+
   retryBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -2084,11 +1067,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 8,
   },
+
   retryText: {
     color: "#fff",
     fontSize: 12,
     fontWeight: "600",
   },
+
   bonusBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -2097,12 +1082,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 12,
   },
+
   bonusText: {
     flex: 1,
     fontSize: 13,
     fontWeight: "600",
     lineHeight: 18,
   },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -2112,154 +1099,7 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     elevation: 9999,
   },
-  actionMenu: {
-    width: "100%",
-    maxWidth: 320,
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  actionMenuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  actionMenuText: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  editModal: {
-    width: "100%",
-    maxWidth: 360,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 20,
-    gap: 16,
-  },
-  editModalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    letterSpacing: -0.3,
-  },
-  editInput: {
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-  },
-  editLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  editExamChips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  editChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  editChipText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  editActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  editBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 10,
-    alignItems: "center",
-    borderWidth: 1,
-  },
-  editBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  deleteDialog: {
-    width: "100%",
-    maxWidth: 320,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 24,
-    gap: 16,
-    alignItems: "center",
-  },
-  deleteTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    letterSpacing: -0.3,
-  },
-  deleteMessage: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: "center",
-  },
-  deleteActions: {
-    flexDirection: "row",
-    gap: 10,
-    width: "100%",
-  },
-  deleteBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 10,
-    alignItems: "center",
-    borderWidth: 1,
-  },
-  deleteBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  shareFormatModal: {
-    width: "100%",
-    maxWidth: 320,
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  shareFormatTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: -0.2,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  shareFormatItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  shareFormatIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  shareFormatLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  shareFormatDesc: {
-    fontSize: 12,
-    marginTop: 2,
-  },
+
   previewModal: {
     width: "100%",
     maxWidth: 360,
@@ -2268,25 +1108,30 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 16,
   },
+
   previewTitle: {
     fontSize: 18,
     fontWeight: "700",
     letterSpacing: -0.3,
   },
+
   previewFileName: {
     fontSize: 13,
   },
+
   previewImage: {
     width: "100%",
     height: 220,
     borderRadius: 10,
     backgroundColor: "#F3F4F6",
   },
+
   previewThumbs: {
     flexDirection: "row",
     gap: 8,
     marginBottom: 8,
   },
+
   previewThumb: {
     width: 56,
     height: 56,
@@ -2295,34 +1140,42 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     overflow: "hidden",
   },
+
   previewThumbImg: {
     width: "100%",
     height: "100%",
   },
+
   previewPdfPlaceholder: {
     alignItems: "center",
     gap: 12,
     paddingVertical: 24,
   },
+
   previewPdfContainer: {
     maxHeight: 420,
   },
+
   loadingPages: {
     paddingVertical: 12,
   },
+
   pdfScroll: {
     width: "100%",
   },
+
   pdfPageItem: {
     width: 280,
     marginRight: 12,
   },
+
   pdfPageImage: {
     width: 280,
     height: 360,
     borderRadius: 10,
     backgroundColor: "#F3F4F6",
   },
+
   pdfPageCheck: {
     position: "absolute",
     bottom: 8,
@@ -2331,18 +1184,22 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
+
   pdfPageCheckText: {
     fontSize: 12,
     fontWeight: "700",
   },
+
   previewPdfText: {
     fontSize: 13,
     textAlign: "center",
   },
+
   previewActions: {
     flexDirection: "row",
     gap: 10,
   },
+
   previewBtn: {
     flex: 1,
     paddingVertical: 13,
@@ -2350,13 +1207,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
   },
+
   previewBtnText: {
     fontSize: 14,
     fontWeight: "700",
   },
+
   previewThumbWrap: {
     position: "relative",
   },
+
   previewThumbRemove: {
     position: "absolute",
     top: -6,
@@ -2365,21 +1225,25 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 1,
   },
+
   imageViewerOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.9)",
     justifyContent: "center",
     alignItems: "center",
   },
+
   imageViewerWrap: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
+
   imageViewerImage: {
     width: "100%",
     height: "100%",
   },
+
   imageViewerClose: {
     position: "absolute",
     top: 48,

@@ -48,6 +48,28 @@ def estimate_output_chars(source_chars: int) -> int:
     return int(min(MAX_OUTPUT_CHARS, max(MIN_OUTPUT_CHARS, source_chars * 2)))
 
 
+def billing_chars(source_chars: int, episodes: int = 1) -> int:
+    """Characters a request should actually be billed for.
+
+    One episode is generated with a fixed target of ~900 words no matter
+    how much source it draws on, so the cost driver is
+    `episodes × the per-episode output cap`. `estimate_output_chars`
+    alone caps at that figure for the whole topic, which under-billed any
+    topic long enough to split — a 20k-char topic generates 2+ episodes
+    of script but billed for one.
+
+    A single episode keeps the estimate-based figure (bounded below by
+    MIN_OUTPUT_CHARS) so a short topic is not charged for a cap it never
+    reaches.
+    """
+    if source_chars <= 0:
+        return 0
+    episodes = max(1, int(episodes))
+    if episodes <= 1:
+        return estimate_output_chars(source_chars)
+    return episodes * MAX_OUTPUT_CHARS
+
+
 def estimate_episode_seconds(source_chars: int) -> int:
     """Estimated audio length for one episode of a topic."""
     return estimate_duration_seconds(estimate_output_chars(source_chars))

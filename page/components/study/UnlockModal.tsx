@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   FadeIn,
@@ -16,11 +16,14 @@ import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePaySpinner } from '@/components/PagePaySpinner';
 
+type UnlockMethod = 'sv' | 'cashable';
+
 type UnlockModalProps = {
   visible: boolean;
   pointsCost: number;
-  userBalance: number;
-  onUnlockPoints: () => Promise<void>;
+  svBalance: number;
+  cashableBalance: number;
+  onUnlock: (method: UnlockMethod) => Promise<void>;
   onClose: () => void;
 };
 
@@ -64,22 +67,38 @@ function AnimatedLockIcon({ color }: { color: string }) {
 export function UnlockModal({
   visible,
   pointsCost,
-  userBalance,
-  onUnlockPoints,
+  svBalance,
+  cashableBalance,
+  onUnlock,
   onClose,
 }: UnlockModalProps) {
   const [loading, setLoading] = useState(false);
+  // SV is the primary wallet; the choice sticks across opens so a user
+  // who prefers spending earnings isn't re-prompted every unlock.
+  const [method, setMethod] = useState<UnlockMethod>('sv');
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
-  const canAfford = userBalance >= pointsCost;
 
-  const handlePointsUnlock = async () => {
+  const wallets: { key: UnlockMethod; label: string; name: string; balance: number }[] = [
+    { key: 'sv', label: 'Service credits', name: 'sv', balance: svBalance },
+    { key: 'cashable', label: 'Cashable points', name: 'pts', balance: cashableBalance },
+  ];
+  const canAfford = (balance: number) => balance >= pointsCost;
+  const anyAffordable = wallets.some((w) => canAfford(w.balance));
+
+  const handleUnlock = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
-      await onUnlockPoints();
+      await onUnlock(method);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onClose();
+    } catch (error) {
+      // The backend 402 carries the real price and balance ("Need 50
+      // cashable points. You have 10.") — show it verbatim rather than
+      // leaving the sheet to just do nothing.
+      const message = error instanceof Error ? error.message : 'Unlock failed';
+      Alert.alert('Unlock failed', message);
     } finally {
       setLoading(false);
     }
@@ -134,35 +153,82 @@ export function UnlockModal({
             </Text>
 
             <View style={styles.choices}>
-              <Pressable
-                onPress={canAfford ? handlePointsUnlock : undefined}
-                disabled={!canAfford || loading}
-                accessibilityRole="button"
-                accessibilityLabel={`Spend ${pointsCost} points`}
-                accessibilityState={{ disabled: !canAfford }}
-                style={({ pressed }) => [
-                  styles.choice,
-                  {
-                    borderColor: tokens.border,
-                    backgroundColor: tokens.card,
-                    opacity: !canAfford ? 0.55 : pressed ? 0.92 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.choiceLabel, { color: tokens.inkMuted }]}>
-                  Pay with points
-                </Text>
-                <Text
-                  style={[styles.choicePrice, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}
-                >
-                  {pointsCost}
-                </Text>
-                <Text style={[styles.choiceSub, { color: tokens.inkMuted }]}>
-                  {canAfford ? 'Instant access' : `Need ${pointsCost - userBalance} more`}
-                </Text>
-                {loading && <PagePaySpinner size={18} />}
-              </Pressable>
+              {wallets.map((wallet) => {
+                const affordable = canAfford(wallet.balance);
+                const selected = method === wallet.key;
+                return (
+                  <Pressable
+                    key={wallet.key}
+                    onPress={() => setMethod(wallet.key)}
+                    disabled={loading}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Pay with ${wallet.label}`}
+                    accessibilityState={{ selected, disabled: !affordable }}
+                    style={({ pressed }) => [
+                      styles.choice,
+                      {
+                        borderColor: selected ? tokens.mint : tokens.border,
+                        backgroundColor: selected ? tokens.mintFaint : tokens.card,
+                        opacity: !affordable ? 0.55 : pressed ? 0.92 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={styles.choiceTopRow}>
+                      <View
+                        style={[
+                          styles.radio,
+                          { borderColor: selected ? tokens.mint : tokens.border },
+                        ]}
+                      >
+                        {selected && (
+                          <View style={[styles.radioDot, { backgroundColor: tokens.mint }]} />
+                        )}
+                      </View>
+                      <Text style={[styles.choiceLabel, { color: tokens.inkMuted }]}>
+                        {wallet.label}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.choicePrice,
+                        { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string },
+                      ]}
+                    >
+                      {pointsCost} {wallet.name}
+                    </Text>
+                    <Text style={[styles.choiceSub, { color: tokens.inkMuted }]}>
+                      {affordable
+                        ? `Balance ${wallet.balance} · instant access`
+                        : `Need ${pointsCost - wallet.balance} more`}
+                    </Text>
+                    {loading && selected && <PagePaySpinner size={18} />}
+                  </Pressable>
+                );
+              })}
             </View>
+
+            <Pressable
+              onPress={anyAffordable ? handleUnlock : undefined}
+              disabled={!anyAffordable || loading}
+              accessibilityRole="button"
+              accessibilityLabel="Pay and unlock"
+              accessibilityState={{ disabled: !anyAffordable }}
+              style={({ pressed }) => [
+                styles.payCta,
+                {
+                  backgroundColor: tokens.mint,
+                  opacity: !anyAffordable ? 0.55 : pressed ? 0.92 : 1,
+                },
+              ]}
+            >
+              <Text style={styles.payCtaText}>
+                {loading
+                  ? 'Unlocking…'
+                  : anyAffordable
+                    ? `Pay ${pointsCost} ${method === 'sv' ? 'sv' : 'pts'} to unlock`
+                    : 'Not enough balance'}
+              </Text>
+            </Pressable>
 
             <Pressable
               onPress={onClose}
@@ -259,6 +325,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     position: 'relative',
+  },
+  choiceTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  radio: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  payCta: {
+    marginTop: 14,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  payCtaText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
   choiceLabel: {
     fontSize: 11,

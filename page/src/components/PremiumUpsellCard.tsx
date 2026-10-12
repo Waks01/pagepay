@@ -21,17 +21,17 @@ const contextMessages = {
   reading: {
     icon: 'book',
     title: 'Earn 2x Reading Points',
-    subtitle: 'Premium users earn 4 points per slice instead of 2',
+    subtitle: 'Premium users earn 4 SV per slice instead of 2',
   },
   ads: {
     icon: 'tv',
     title: 'Earn 1.5x Ad Rewards',
-    subtitle: 'Get 30 points per ad (vs 20) and skip ads on novels',
+    subtitle: 'Get 30 SV per ad (vs 20) and skip ads on novels',
   },
   tasks: {
     icon: 'checkmark-circle',
     title: 'Earn 2x Task Rewards',
-    subtitle: 'Double your points on every task completion',
+    subtitle: 'Double your SV on every task completion',
   },
   daily: {
     icon: 'gift',

@@ -226,7 +226,7 @@ export default function HomeScreen() {
               ]}
               numberOfLines={1}
             >
-              {formatPointsCompact(serviceCreditPoints)} SP
+              {formatPointsCompact(serviceCreditPoints)} SV
             </Text>
             <Text style={[styles.balanceSeparator, { color: tokens.inkMuted }]}>
               ·

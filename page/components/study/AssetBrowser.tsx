@@ -89,10 +89,15 @@ type ExampleContent = {
 
 type AssetContent = McqContent | FlashcardContent | EssayContent | DiagramContent | VideoContent | ExampleContent;
 
+type UnlockMethod = 'sv' | 'cashable';
+
 type AssetBrowserProps = {
   assets: AssetInfo[];
+  /** Service credit balance — the primary wallet for unlocks. */
   userBalance: number;
-  onUnlock: (assetId: number) => Promise<void>;
+  /** Cashable (withdrawable) balance — the alternative unlock wallet. */
+  cashableBalance: number;
+  onUnlock: (assetId: number, method: UnlockMethod) => Promise<void>;
   unlockedAssets: Record<number, unknown>;
   onQuizComplete?: (assetId: number, score: number) => Promise<void>;
 };
@@ -104,7 +109,7 @@ type AccordionSection = {
   assets: AssetInfo[];
 };
 
-export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, onQuizComplete }: AssetBrowserProps) {
+export function AssetBrowser({ assets, userBalance, cashableBalance, onUnlock, unlockedAssets, onQuizComplete }: AssetBrowserProps) {
   const { t } = useTranslation();
   const isAssetUnlocked = (assetId: number) =>
     assetId in unlockedAssets;
@@ -227,9 +232,9 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
     });
   };
 
-  const handleUnlock = async (asset: AssetInfo) => {
+  const handleUnlock = async (asset: AssetInfo, method: UnlockMethod) => {
     try {
-      await onUnlock(asset.id);
+      await onUnlock(asset.id, method);
     } catch (error) {
       if (__DEV__) {
         console.error('[AssetBrowser] Unlock failed:', error);
@@ -409,7 +414,10 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
                           <PrimaryButton
                             title={t('study.asset_browser.unlock')}
                             onPress={() => setPendingUnlock(asset)}
-                            disabled={userBalance < asset.points_to_unlock}
+                            disabled={
+                              userBalance < asset.points_to_unlock &&
+                              cashableBalance < asset.points_to_unlock
+                            }
                           />
                         </View>
                       )}
@@ -426,8 +434,9 @@ export function AssetBrowser({ assets, userBalance, onUnlock, unlockedAssets, on
         <UnlockModal
           visible
           pointsCost={pendingUnlock.points_to_unlock}
-          userBalance={userBalance}
-          onUnlockPoints={() => handleUnlock(pendingUnlock)}
+          svBalance={userBalance}
+          cashableBalance={cashableBalance}
+          onUnlock={(method) => handleUnlock(pendingUnlock, method)}
           onClose={() => setPendingUnlock(null)}
         />
       )}

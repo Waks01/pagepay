@@ -153,7 +153,7 @@ export function ReceiptShareModal({ visible, onClose, receipt }: Props) {
       "",
       `Service: ${data.service.toUpperCase().replace("_", " ")}`,
       `Amount: ₦${data.amount.toLocaleString()}`,
-      `Points Earned: ${data.points_earned} pts`,
+      `SV Earned: ${data.points_earned} SV`,
       `Reference: ${data.reference}`,
       `Date: ${formatDateTime(data.date)}`,
       `Status: ${data.status.toUpperCase()}`,
@@ -228,8 +228,8 @@ export function ReceiptShareModal({ visible, onClose, receipt }: Props) {
                 tokens={tokens}
               />
               <ReceiptRow
-                label="Points Earned"
-                value={`${receipt.points_earned} pts`}
+                label="SV Earned"
+                value={`${receipt.points_earned} SV`}
                 valueColor={tokens.mint}
                 tokens={tokens}
               />

@@ -183,7 +183,7 @@
   "wallet": {
     "title": "PagePay",
     "balance_label": "Your balance",
-    "points_suffix": "SP",
+    "points_suffix": "SV",
     "approx": "≈",
     "service_credits_label": "SP",
     "cashable_label": "C",
@@ -308,7 +308,7 @@
     },
     "remaining": "{{count}} left",
     "expires": "Expires",
-    "points_unit": "pts"
+    "points_unit": "SV"
   },
   "study": {
     "title": "Study",
@@ -502,11 +502,18 @@
     "audio_unlock": {
       "title": "Unlock Audio",
       "cost_label": "Unlock cost",
-      "cost_sub": "~{{count}} ads",
-      "slider_label": "Equivalent ads",
-      "hint": "Watch rewarded ads or spend service credits to unlock audio permanently.",
-      "cta": "Unlock Audio",
-      "unlocking": "Unlocking...",
+      "once": "One-time · listen forever",
+      "balance_label": "Your balance",
+      "wallet_sv": "Service credits",
+      "wallet_cashable": "Cashable points",
+      "hint": "Unlock instantly with service credits or cashable points. Audio is generated once and yours forever.",
+      "cta": "Unlock for {{cost}} {{unit}}",
+      "cta_short": "Not enough balance",
+      "need_more": "Need {{count}} more",
+      "shortfall": "You need {{count}} more. Score 80%+ on quizzes to earn more.",
+      "unlocking": "Unlocking…",
+      "error_title": "Unlock Failed",
+      "status_error": "Could not load the unlock price. Close and try again.",
       "unlocked_title": "Audio Unlocked",
       "unlocked_body": "You can now listen to this material anytime."
     }
@@ -652,7 +659,7 @@
       "confirm_points": "Points",
       "confirm_unit_price": "Unit Price",
       "confirm_reference": "Reference",
-      "points_earned_label": "Points Earned",
+      "points_earned_label": "SV Earned",
       "reference_label": "Reference",
       "errors": {
         "phone_required": "Enter phone number",
@@ -695,7 +702,7 @@
       "confirm_phone": "Phone",
       "confirm_points": "Points",
       "confirm_reference": "Reference",
-      "points_earned_label": "Points Earned",
+      "points_earned_label": "SV Earned",
       "reference_label": "Reference",
       "errors": {
         "phone_required": "Enter phone number",
@@ -1238,7 +1245,7 @@
     "paused": "⏸ Paused",
     "active": "✅ Active",
     "waiting": "⏳ Waiting",
-    "points_suffix": "+{{points}} pts",
+    "points_suffix": "+{{points}} SV",
     "no_content": "No content available.",
     "end_label_reached": "1 minute reached — ready when you are",
     "finish_claim": "Finish & claim",
@@ -1408,7 +1415,7 @@
   "task_detail": {
     "title": "Task Details",
     "you_earn": "You'll Earn",
-    "points_unit": "pts",
+    "points_unit": "SV",
     "after_fee": "After {{percent}}% platform fee",
     "description_title": "Description",
     "instructions_title": "Instructions",
@@ -1486,7 +1493,7 @@
   },
   "task_history": {
     "title": "Submission History",
-    "points_unit": "pts",
+    "points_unit": "SV",
     "filter_all": "All",
     "filter_pending": "Pending",
     "filter_validating": "Validating",
@@ -1554,7 +1561,7 @@
     "no_transactions": "No transactions yet",
     "no_transactions_hint": "Your transaction history will appear here",
     "available_balance": "Available Balance",
-    "points_suffix": "pts",
+    "points_suffix": "SV",
     "filter_all": "All",
     "filter_earned": "Earned",
     "filter_spent": "Spent",
@@ -1625,7 +1632,7 @@
     "claim_button": "Claim Today's Reward",
     "claiming": "Claiming...",
     "day_label": "Day {{day}}",
-    "reward_points": "sp",
+    "reward_points": "SV",
     "reward_multiplier": "% bonus",
     "claim_failed": "Failed to claim reward",
     "notification_title": "Reward Claimed!",
@@ -1747,7 +1754,7 @@
       "network": "Network",
       "phone_number": "Phone Number",
       "amount_paid": "Amount Paid",
-      "points_earned": "Points Earned",
+      "points_earned": "SV Earned",
       "plan": "Plan",
       "validity": "Validity",
       "disco": "Disco",

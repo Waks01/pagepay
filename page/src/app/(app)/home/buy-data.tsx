@@ -316,7 +316,7 @@ export default function BuyDataScreen() {
                   {t("bills.data.points_earned_label")}
                 </Text>
                 <Text style={[styles.summaryValue, { color: tokens.mint }]}>
-                  +{successData.points_earned} pts
+                  +{successData.points_earned} SV
                 </Text>
               </View>
               <View

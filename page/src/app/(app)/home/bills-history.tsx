@@ -144,7 +144,7 @@ export default function BillsHistoryScreen() {
           </Text>
           {item.points_earned > 0 && (
             <Text style={[styles.itemPoints, { color: tokens.mint }]}>
-              +{item.points_earned} pts
+              +{item.points_earned} SV
             </Text>
           )}
           <View style={styles.statusRow}>

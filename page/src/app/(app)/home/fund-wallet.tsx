@@ -264,7 +264,7 @@ export default function FundWalletScreen() {
                   { color: amount === a ? tokens.mintText : tokens.mint },
                 ]}
               >
-                {(a * 10).toLocaleString()} pts
+                 {(a * 10).toLocaleString()} SV
               </Text>
             </TouchableOpacity>
           ))}
@@ -349,7 +349,7 @@ export default function FundWalletScreen() {
                   { color: tokens.mint, fontWeight: "700" },
                 ]}
               >
-                {pointsToReceive.toLocaleString()} pts
+                 {pointsToReceive.toLocaleString()} SV
               </Text>
             </View>
             <View

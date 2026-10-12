@@ -313,7 +313,7 @@ export default function BuyEducationScreen() {
                   { color: tokens.mint, fontWeight: "700" },
                 ]}
               >
-                +{estPoints} pts
+                +{estPoints} SV
               </Text>
             </View>
           </SectionCard>

@@ -1897,6 +1897,62 @@ async def chat_study(
 
 # ── POST /study/unlock ──────────────────────────────────────────────
 
+# Payment methods study spends accept. `points` is the legacy name for
+# the spendable wallet and `sv` is its modern alias — both hit the same
+# balance; `cashable` hits the withdrawable side. Both sides are the
+# same unit (POINTS_PER_NAIRA = 10, so 1 pt = ₦0.10), which is why a
+# price quoted in sv is paid from either wallet at face value.
+_SV_METHODS = {"points", "sv"}
+
+
+def _wallet_field_for(method: str) -> str:
+    """The balance column a study payment debits.
+
+    `cashable` -> `cashable_balance` when the wallet split is on (the
+    user spends withdrawable earnings), otherwise the legacy
+    `points_balance` — pre-split wallets only ever had the one balance.
+    `sv`/`points` -> `service_credit_balance` when split, same fallback.
+    """
+    if not settings.wallet_split_enabled:
+        return "points_balance"
+    return "cashable_balance" if method == "cashable" else "service_credit_balance"
+
+
+async def _debit_wallet(
+    db: AsyncSession,
+    user_id: int,
+    method: str,
+    amount: int,
+) -> int:
+    """Debit `amount` points from the wallet the user chose, or 402.
+
+    Returns the wallet's new balance. The caller owns the commit so the
+    debit can share a transaction with its ledger row — a rejected
+    payment therefore never writes anything.
+    """
+    field = _wallet_field_for(method)
+    label = "cashable points" if method == "cashable" else "service credits"
+
+    result = await db.execute(
+        select(getattr(User, field)).where(User.id == user_id)
+    )
+    balance = result.scalar_one() or 0
+    if balance < amount:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Need {amount} {label}. You have {balance}.",
+        )
+
+    await db.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values({getattr(User, field): getattr(User, field) - amount})
+    )
+    result = await db.execute(
+        select(getattr(User, field)).where(User.id == user_id)
+    )
+    return result.scalar_one() or 0
+
 
 @router.post("/unlock", response_model=UnlockResponse)
 async def unlock_asset(
@@ -1944,68 +2000,38 @@ async def unlock_asset(
             points_spent=0,
         )
 
-    if payload.method == "points":
-        if settings.wallet_split_enabled:
-            balance_result = await db.execute(
-                select(User.service_credit_balance).where(User.id == current_user.id)
-            )
-            balance = balance_result.scalar_one() or 0
-            if balance < asset.points_to_unlock:
-                raise HTTPException(
-                    status_code=402,
-                    detail=f"Need {asset.points_to_unlock} service credits. You have {balance}.",
-                )
-            await db.execute(
-                update(User)
-                .where(User.id == current_user.id)
-                .values(service_credit_balance=User.service_credit_balance - asset.points_to_unlock)
-            )
-        else:
-            balance_result = await db.execute(
-                select(User.points_balance).where(User.id == current_user.id)
-            )
-            balance = balance_result.scalar_one() or 0
-            if balance < asset.points_to_unlock:
-                raise HTTPException(
-                    status_code=402,
-                    detail=f"Need {asset.points_to_unlock} pts. You have {balance}.",
-                )
-            await db.execute(
-                update(User)
-                .where(User.id == current_user.id)
-                .values(points_balance=User.points_balance - asset.points_to_unlock)
-            )
+    # The user picks the wallet: `sv` (alias of the legacy `points`) is
+    # the spendable side, `cashable` spends withdrawable earnings. Both
+    # are the same unit, so the price is identical either way — the
+    # choice only decides which balance goes down.
+    method = payload.method
+    if method in _SV_METHODS:
+        method = "points"
+    if method not in {"points", "cashable"}:
+        raise HTTPException(status_code=400, detail="Invalid method")
 
-        txn = StudyTransaction(
-            user_id=current_user.id,
-            asset_id=asset.id,
-            method="points",
-            points_spent=asset.points_to_unlock,
-            reward_granted=True,
-        )
-        db.add(txn)
-        await db.commit()
+    new_balance = await _debit_wallet(
+        db, current_user.id, method, asset.points_to_unlock
+    )
 
-        if settings.wallet_split_enabled:
-            new_balance_result = await db.execute(
-                select(User.service_credit_balance).where(User.id == current_user.id)
-            )
-        else:
-            new_balance_result = await db.execute(
-                select(User.points_balance).where(User.id == current_user.id)
-            )
-        new_balance = new_balance_result.scalar_one() or 0
+    txn = StudyTransaction(
+        user_id=current_user.id,
+        asset_id=asset.id,
+        method=method,
+        points_spent=asset.points_to_unlock,
+        reward_granted=True,
+    )
+    db.add(txn)
+    await db.commit()
 
-        import json as _json
-        return UnlockResponse(
-            unlocked=True,
-            content=_json.loads(asset.content_json),
-            new_balance=new_balance,
-            method="points",
-            points_spent=asset.points_to_unlock,
-        )
-
-    raise HTTPException(status_code=400, detail="Invalid method")
+    import json as _json
+    return UnlockResponse(
+        unlocked=True,
+        content=_json.loads(asset.content_json),
+        new_balance=new_balance,
+        method=method,
+        points_spent=asset.points_to_unlock,
+    )
 
 
 # ── POST /study/materials/{material_id}/unlock-audio ───────────────────
@@ -2036,9 +2062,16 @@ async def unlock_material_audio(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Payment is sv or cashable — the spendable wallet first, with
+    # withdrawable earnings as the alternative. (The rewarded-ad method
+    # the old UI advertised has no pipeline behind it and stays
+    # rejected.) The request is validated explicitly so it can never
+    # fall off the end of the handler into a None-return 500. `sv` is
+    # stored as-is: it's this endpoint's historical value, unlike the
+    # asset unlock where `sv` is an alias of the legacy `points`.
     method = str(payload.get("method") or "sv").lower()
-    if method not in {"sv", "ad"}:
-        raise HTTPException(status_code=400, detail="method must be 'sv' or 'ad'")
+    if method not in {"sv", "cashable"}:
+        raise HTTPException(status_code=400, detail="method must be 'sv' or 'cashable'")
 
     material_result = await db.execute(
         select(StudyMaterial).where(
@@ -2056,78 +2089,51 @@ async def unlock_material_audio(
             AudioUnlock.material_id == material_id,
         )
     )
-    if existing_result.scalar_one_or_none():
+    existing = existing_result.scalar_one_or_none()
+    if existing:
+        # Report the balance of the wallet the unlock was actually paid
+        # from — a cashable unlock must not show the sv balance as if it
+        # had been charged.
+        field = _wallet_field_for(
+            "cashable" if existing.method == "cashable" else "sv"
+        )
+        balance_result = await db.execute(
+            select(getattr(User, field)).where(User.id == current_user.id)
+        )
         return AudioUnlockResponse(
             unlocked=True,
             material_id=material_id,
             cost_sv=0,
             method="existing",
-            new_balance=(
-                current_user.service_credit_balance
-                if settings.wallet_split_enabled
-                else current_user.points_balance
-            ),
+            new_balance=balance_result.scalar_one() or 0,
             url=f"/api/v1/study/tts/audio/{material_id}_cached.mp3",
             provider="cached",
         )
 
     cost_sv = _audio_unlock_cost_sv(material.content)
 
-    if method == "sv":
-        if settings.wallet_split_enabled:
-            balance_result = await db.execute(
-                select(User.service_credit_balance).where(User.id == current_user.id)
-            )
-            balance = balance_result.scalar_one() or 0
-            if balance < cost_sv:
-                raise HTTPException(
-                    status_code=402,
-                    detail=f"Need {cost_sv} sv to unlock audio. You have {balance}.",
-                )
-            await db.execute(
-                update(User)
-                .where(User.id == current_user.id)
-                .values(service_credit_balance=User.service_credit_balance - cost_sv)
-            )
-        else:
-            balance_result = await db.execute(
-                select(User.points_balance).where(User.id == current_user.id)
-            )
-            balance = balance_result.scalar_one() or 0
-            if balance < cost_sv:
-                raise HTTPException(
-                    status_code=402,
-                    detail=f"Need {cost_sv} pts to unlock audio. You have {balance}.",
-                )
-            await db.execute(
-                update(User)
-                .where(User.id == current_user.id)
-                .values(points_balance=User.points_balance - cost_sv)
-            )
+    new_balance = await _debit_wallet(
+        db, current_user.id, method, cost_sv
+    )
 
-        unlock = AudioUnlock(
-            user_id=current_user.id,
-            material_id=material_id,
-            method="sv",
-            cost_sv=cost_sv,
-        )
-        db.add(unlock)
-        await db.commit()
+    unlock = AudioUnlock(
+        user_id=current_user.id,
+        material_id=material_id,
+        method=method,
+        cost_sv=cost_sv,
+    )
+    db.add(unlock)
+    await db.commit()
 
-        new_balance = (
-            current_user.service_credit_balance
-            if settings.wallet_split_enabled
-            else current_user.points_balance
-        )
-        return AudioUnlockResponse(
-            unlocked=True,
-            material_id=material_id,
-            cost_sv=cost_sv,
-            method="sv",
-            new_balance=new_balance,
-            url=f"/api/v1/study/tts/audio/{material_id}_cached.mp3",
-            provider="unlocked",
-        )
+    return AudioUnlockResponse(
+        unlocked=True,
+        material_id=material_id,
+        cost_sv=cost_sv,
+        method=method,
+        new_balance=new_balance,
+        url=f"/api/v1/study/tts/audio/{material_id}_cached.mp3",
+        provider="unlocked",
+    )
 
 
 

@@ -372,7 +372,7 @@ export default function BuySmsScreen() {
                   { color: tokens.mint, fontWeight: "700" },
                 ]}
               >
-                +{estPoints} pts
+                +{estPoints} SV
               </Text>
             </View>
           </SectionCard>

@@ -264,3 +264,141 @@ def test_r2_empty_upload_is_refused(monkeypatch):
     monkeypatch.setattr(r2_storage, "_client", lambda: None)
     with pytest.raises(r2_storage.R2NotConfigured):
         r2_storage.upload_bytes("study-audio/a.mp3", b"")
+
+
+# ── Narration pricing must clear Cloudflare cost ────────────────────
+
+
+#: Cost in USD of producing 1,000 characters of narration at current
+#: Cloudflare rates: MeloTTS $0.0002/audio-minute (~1.11 min per 1k chars
+#: at the codebase's own 6 chars/word, 150 wpm assumption) plus GLM-4.7
+#: output at $0.400/M tokens (~250 tokens per 1k chars).
+COST_USD_PER_1K_CHARS = (1.11 * 0.0002) + (250 / 1_000_000 * 0.400)
+
+#: Naira per USD, used only to express that cost in the unit SV is
+#: priced in. CBN NFEM closing rate 9 Oct 2026. Refresh when the naira
+#: moves materially — the assertion is about the rate being above cost,
+#: not about this exact figure.
+USD_TO_NGN = 1332.5
+
+
+def test_marginal_revenue_covers_marginal_cost():
+    """Every level's per-step rate must exceed the cost it pays for.
+
+    `rate_sv` is charged per `char_step` (500) characters of generated
+    script. At `points_per_naira` = 10, one SV is ₦0.10, so the floor is
+    the naira cost of 500 characters converted to SV.
+    """
+    step = settings.audio_narration_char_step
+    # Cost of `step` chars of narration, in naira.
+    cost_naira = step / 1000 * COST_USD_PER_1K_CHARS * USD_TO_NGN
+    cost_sv = cost_naira * settings.points_per_naira
+
+    for level in audio_pricing.VALID_LEVELS:
+        rate = settings.audio_narration_rate_sv[level]
+        assert rate > cost_sv, (
+            f"{level}: rate {rate} SV does not cover marginal cost "
+            f"≈{cost_sv:.2f} SV "
+            f"({step} chars ≈ ₦{cost_naira:.3f} at "
+            f"{settings.points_per_naira} SV/₦)"
+        )
+
+
+def test_primary_is_not_the_cheapest_below_cost():
+    """The cheapest tier must not be the one that loses money."""
+    rates = settings.audio_narration_rate_sv
+    # With the fix, primary ties secondary; both must be >= the floor.
+    assert rates["primary"] >= 6
+
+
+def test_quote_bills_on_output_not_source():
+    """`quote()` must charge for generated characters, not source ones.
+
+    Billing on source under-charged by ~2x, because
+    `estimate_output_chars` expands source into a longer script.
+    """
+    from app.services import study_audio_service
+
+    # A topic with ~1,200 source chars estimates to min(5400, max(600,
+    # 2400)) = 2,400 output chars.
+    parsed = {
+        "topics": [{"name": "T", "subtopics": ["s"], "key_concepts": ["c"]}],
+        "content_blocks": [
+            {"type": "heading", "text": "T"},
+            {"type": "body", "text": "x" * 1200},
+        ],
+    }
+    from app.services import study_audio_service, study_narration
+
+    parsed = {
+        "topics": [{"name": "T", "subtopics": ["s"], "key_concepts": ["c"]}],
+        "content_blocks": [
+            {"type": "heading", "text": "T"},
+            {"type": "body", "text": "x" * 1200},
+        ],
+    }
+    source_chars = study_narration.topic_episode_plan(parsed, 0)["char_count"]
+
+    quote = study_audio_service.quote(
+        parsed_structure=parsed, topic_indexes=[0], level="secondary"
+    )
+    billed = quote["topics"][0]["char_count"]
+    # Billing on the rendered source length would give ~1.2k; billing on
+    # output gives the 2x-expanded estimate.
+    assert billed > source_chars, f"billed {billed} <= source {source_chars}"
+    assert billed == audio_pricing.billing_chars(source_chars, 1)
+    # One episode, so it stays within a single episode's cap.
+    assert billed <= audio_pricing.MAX_OUTPUT_CHARS
+
+
+def test_quote_scales_with_episode_count():
+    """A topic split into N episodes bills for N episodes of script.
+
+    `estimate_output_chars` caps per topic at MAX_OUTPUT_CHARS, but N
+    episodes generate up to N x that cap. Without scaling by episode
+    count, long topics under-bill.
+    """
+    from app.services import study_audio_service
+
+    blocks = [{"type": "heading", "text": "T"}]
+    # Plenty of source so the topic splits into several episodes.
+    blocks.append({"type": "body", "text": "y" * 20000})
+    parsed = {
+        "topics": [{"name": "T", "subtopics": ["s"], "key_concepts": ["c"]}],
+        "content_blocks": blocks,
+    }
+    quote = study_audio_service.quote(
+        parsed_structure=parsed, topic_indexes=[0], level="secondary"
+    )
+    topic = quote["topics"][0]
+    assert topic["episodes"] > 1
+    # Billing must scale past a single episode's worth of script.
+    assert topic["char_count"] > audio_pricing.MAX_OUTPUT_CHARS
+
+
+def test_billing_chars_scales_linearly_with_episodes():
+    """Each extra episode adds one cap's worth of billable script."""
+    assert audio_pricing.billing_chars(2000, 1) <= audio_pricing.MAX_OUTPUT_CHARS
+    two = audio_pricing.billing_chars(2000, 2)
+    three = audio_pricing.billing_chars(2000, 3)
+    assert two == 2 * audio_pricing.MAX_OUTPUT_CHARS
+    assert three == 3 * audio_pricing.MAX_OUTPUT_CHARS
+    assert three > two > 0
+
+
+def test_billing_chars_empty_is_free():
+    assert audio_pricing.billing_chars(0, 1) == 0
+    assert audio_pricing.billing_chars(0, 4) == 0
+
+
+def test_points_and_sv_share_one_rate():
+    """SV and wallet points are the same currency at the same rate.
+
+    `service_credit_balance` is debited via `kobo_to_points`, so
+    renaming the display unit to SV must not imply a different rate.
+    """
+    from app.services.money import kobo_to_points
+
+    # ₦100 → 1,000 points at the default 10 points per naira.
+    assert kobo_to_points(10000) == 1000
+    assert settings.points_per_naira == 10

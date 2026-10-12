@@ -31,7 +31,6 @@ import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { useCurrentUser } from "@/src/shared/lib/current-user";
 import { PageHeader } from "@/components/PageHeader";
-import AudioUnlockModal from "@/components/AudioUnlockModal";
 import { getTopicNames } from "@/src/app/(app)/study";
 import { ProgressDashboard } from "@/components/study/ProgressDashboard";
 import { AssetBrowser } from "@/components/study/AssetBrowser";
@@ -74,8 +73,6 @@ export default function MaterialDetailScreen() {
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [generateCount, setGenerateCount] = useState<number>(15);
   const [generatingType, setGeneratingType] = useState<string | null>(null);
-  const [audioUnlockVisible, setAudioUnlockVisible] = useState(false);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [actionMenuVisible, setActionMenuVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -246,12 +243,12 @@ export default function MaterialDetailScreen() {
     };
   }, [selectedMaterial?.id]);
 
-  const handleAssetUnlock = async (assetId: number) => {
+  const handleAssetUnlock = async (assetId: number, method: "sv" | "cashable") => {
     setError(null);
     const res = await apiFetch("/api/v1/study/unlock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ asset_id: assetId }),
+      body: JSON.stringify({ asset_id: assetId, method }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: "Unlock failed" }));
@@ -370,6 +367,12 @@ export default function MaterialDetailScreen() {
       setError(t("study.errors.no_parsed_structure", "Material has no parsed structure. Re-upload or try again."));
       return;
     }
+    if (mode === "topic" && !topic) {
+      // Defense in depth: the backend requires a topic name in topic mode,
+      // so failing here with an actionable message beats a 400 round-trip.
+      setError(t("study.errors.select_topic", "Select a topic to generate from."));
+      return;
+    }
     setGeneratingType(assetType);
     setError(null);
     try {
@@ -476,30 +479,6 @@ export default function MaterialDetailScreen() {
       qc.invalidateQueries({ queryKey: ["study", "materials"] });
     } catch (err) {
       if (__DEV__) console.error("Delete failed:", err);
-    }
-  };
-
-  const handleUnlock = async () => {
-    if (!selectedMaterial) return;
-    try {
-      const res = await apiFetch(
-        `/api/v1/study/materials/${selectedMaterial.id}/unlock-audio`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method: "sv" }),
-        },
-      );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: "Unlock failed" }));
-        throw new Error(err.detail || "Unlock failed");
-      }
-      qc.invalidateQueries({ queryKey: ["audio-unlock-status"] });
-      qc.invalidateQueries({ queryKey: ["me"] });
-      setAudioUnlocked(true);
-      setAudioUnlockVisible(false);
-    } catch (error) {
-      console.error("Audio unlock failed:", error);
     }
   };
 
@@ -896,7 +875,15 @@ export default function MaterialDetailScreen() {
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => setGenerateMode("topic")}
+                  onPress={() => {
+                    setGenerateMode("topic");
+                    // Entering topic mode must never leave the material
+                    // without a selection — the backend rejects topic-mode
+                    // generation without a topic name (400), so default to
+                    // the first topic instead of letting the user fire a
+                    // request that can only fail.
+                    setSelectedTopic((prev) => prev ?? topicNames[0] ?? null);
+                  }}
                   style={[
                     styles.modeBtn,
                     {
@@ -945,7 +932,7 @@ export default function MaterialDetailScreen() {
                 icon="list-outline"
                 assetType="mcq"
                 loading={generatingType === "mcq"}
-                disabled={!selectedMaterial?.parsed_structure}
+                disabled={!selectedMaterial?.parsed_structure || (generateMode === "topic" && !selectedTopic)}
                 tokens={tokens}
                 onPress={() => handleGenerateAsset("mcq", generateCount, selectedTopic, generateMode)}
               />
@@ -954,7 +941,7 @@ export default function MaterialDetailScreen() {
                 icon="layers-outline"
                 assetType="flashcard"
                 loading={generatingType === "flashcard"}
-                disabled={!selectedMaterial?.parsed_structure}
+                disabled={!selectedMaterial?.parsed_structure || (generateMode === "topic" && !selectedTopic)}
                 tokens={tokens}
                 onPress={() => handleGenerateAsset("flashcard", generateCount, selectedTopic, generateMode)}
               />
@@ -964,24 +951,13 @@ export default function MaterialDetailScreen() {
           <AssetBrowser
             assets={selectedMaterial.assets}
             userBalance={currentUser?.service_credit_balance ?? 0}
+            cashableBalance={currentUser?.cashable_balance ?? 0}
             onUnlock={handleAssetUnlock}
             unlockedAssets={unlockedAssets}
             onQuizComplete={handleQuizComplete}
           />
         </View>
       </ScrollView>
-
-      <AudioUnlockModal
-        visible={audioUnlockVisible}
-        materialId={selectedMaterial.id}
-        materialTitle={selectedMaterial.title}
-        contentLength={selectedMaterial.content?.length ?? 0}
-        onClose={() => setAudioUnlockVisible(false)}
-        onUnlocked={() => {
-          setAudioUnlocked(true);
-          setAudioUnlockVisible(false);
-        }}
-      />
 
       {/* Action Menu */}
       <Modal
