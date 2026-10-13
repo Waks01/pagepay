@@ -16,20 +16,24 @@
 ## 1. TL;DR
 
 1. **Only two of six AI features are priced above cost.** Narration and asset
-   unlocks are healthy (2.2×). Chat, exams, asset *generation*, uploads and
+   unlocks are healthy (2.2x). Chat, exams, asset *generation*, uploads and
    OCR are free and cost real money.
-2. **The biggest single lever is not price — it is model routing.** We send
+2. **The biggest single lever is not price - it is model routing.** We send
    every chat turn to GLM-4.7-Flash at ₦2.43/turn when Cloudflare's
-   Granite 4.0 H-Micro would do the same job for **₦0.68/turn**, a 3.6× cut.
-3. **Bills/VTU — our only cash margin — roughly breaks even** against the
-   credits its cashback issues. ₦10.50 kept on ₦1,000 airtime funds ~₦10.45
-   of asset unlocks.
-4. **Recommended structure:** one tier at **₦3,000/mo**, hybrid
-   (allowance + top-up), with **Granite for simple turns and GLM reserved
-   for complex ones**, plus an optional rewarded-ad economy for free users.
-5. **Ads are worth adding but only as rewarded video, never interstitial
-   during study** — and the payout must be tied to measured eCPM or it
-   becomes a loss at low eCPM.
+   Granite 4.0 H-Micro would do the same job for **₦0.68/turn**, a 3.6x cut.
+3. **Bills/VTU - our only cash margin - roughly breaks even** against the
+   credits its cashback issues. ₦10.50 kept on ₦1,000 airtime funds
+   ~₦10.45 of asset unlocks.
+4. **Recommended structure (decided):** one tier at **₦3,000/mo or
+   ₦30,000/yr**, hybrid (allowance + top-up discount), **Granite for
+   standard chat and GLM reserved for Premium chat**, with a **flat 16 SV per
+   rewarded ad** for free and paid users alike.
+5. **Ads are the leg that makes the free tier affordable** - ~60% net per ad
+   at a $1.50 eCPM, because the payout is spendable service (costing
+   ~₦0.81) rather than cash. Interstitials only at natural breakpoints.
+6. **The one condition:** ad-earned SV must land in `service_credit_balance`,
+   never `cashable_balance`. Withdrawable, the 60% margin collapses to 20% and
+   a bad eCPM quarter turns it into a loss.
 
 ---
 
@@ -166,7 +170,7 @@ is the recurring unbounded cost.
 | Top-up discount | — | **30% off** (₦0.07/SV) |
 | Exams | 3/day | unlimited (≤20/day) |
 | Uploads | 2/month | 6/month |
-| Ads | **optional rewarded** | **none** |
+| Ads | **optional rewarded** (16 SV/ad) | **none — ad-free is the upgrade reason** |
 | Asset unlock / narration | paid | paid, drawn from allowance |
 
 | PagePay+ at full use | |
@@ -194,89 +198,112 @@ premise is worse than one tier priced correctly.
 
 ---
 
-## 6. Ads — analysis
+## 6. Ads — decided structure
 
-The ad economy was **designed and then mostly deleted.** The SSV pipeline is
-gone (no `ads.py` router, no AdMob/AppLovin code), but the payout constants,
-the revenue split, and the tier-benefits rows advertising ad rewards all
-remain. Reading rewards, daily rewards and referrals are currently
-**unfunded platform money** — ads were meant to be the offset.
+**Strategy:** ads run alongside the user, not in their way. *They do their
+thing, we do ours.* Users are never blocked from studying.
 
-### What exists
-
-| Setting | Value | Where |
+| Format | Placement | Notes |
 |---|---|---|
-| `rewarded_ad_payout_points` | **20** pts (₦2.00) | `config.py:127` |
-| `platform_ad_revenue_percent` | **0.20** | `config.py:603` |
-| `daily_ad_impression_cap` | 200 | `config.py:151` |
-| `SV_PER_AD_FREE_TIER` | **16** pts | `services/discount.py:22` |
-| `SV_PER_AD_PREMIUM_TIER` | **24** pts | `services/discount.py:23` |
+| **Native advanced rewarded** | User-initiated, opt-in | The primary earner. A student who wants SV watches one; one who doesn't, doesn't. |
+| **Small banner** | Persistent, low-profile (tab roots, below content) | Minimal revenue, must not eat reader screen space |
+| **Interstitial** | **Natural breakpoints only** — after finishing an exam, leaving the reader, returning to a tab root | Never mid-exam, never mid-lesson, never on app open |
 
-⚠️ **Already inconsistent:** config says pay 20 pts per ad; `discount.py`
-pays 16 (free) / 24 (premium). And 24 pts implies ₦3.00 of ad revenue at 80%
-share — an eCPM ~50% higher than the 16-pt figure assumes. Pick one.
+Interstitial placement rules are not negotiable for a study product: a
+full-screen ad interrupting an exam or a reading session is the fastest way
+to destroy retention, and AdMob policy independently prohibits interstitials
+that interfere with app use or appear unexpectedly on app open.
 
-### Economics
+### The payout — no tier multiplier
 
-Assuming **$1.50 eCPM** (₦2.00 per 1,000 impressions, a defensible Nigerian
-rewarded-video mid-range) and 10 ads/day per active free user:
+**Free and paid users both get 16 SV per rewarded ad.** No multiplier, ever.
+The tier difference is simply **ad-free vs ads**, not a bigger payout.
 
-| | |
+Rejecting the earlier SV_PER_AD_PREMIUM_TIER = 24: a higher paid payout
+means paying more to the users who can most afford to watch more, and it
+makes the unit economics depend on tier mix. Flat is simpler and cheaper.
+
+### The economics — and a correction
+
+> **Correction to an earlier claim:** I first modelled the 16 SV payout as
+> ₦1.60 of *cash* and concluded ads lose money below .50 eCPM. That was
+> wrong. SV is a **spendable service credit**, not cash, so its cost to us
+> is what it costs to *serve* — roughly **₦0.81** for 16 SV.
+
+Cost to serve one SV, from measured action costs (blended, ₦0.0505/SV):
+
+| Action | SV | Our cost | Per SV |
+|---|---|---|---|
+| Asset unlock | 50 | ₦2.13 | ₦0.043 |
+| Narration episode | 76 | ₦3.38 | ₦0.045 |
+| Chat, Standard | 15 | ₦0.68 | ₦0.045 |
+| Chat, Premium | 35 | ₦2.43 | ₦0.069 |
+
+So at the target .50 eCPM (₦2.00 per impression, and ₦2.00 is exactly
+20 SV — the 80/20 split in platform_ad_revenue_percent):
+
+| | ₦ |
 |---|---|
-| 300 ads/month per user | |
-| Ad revenue | 300 × ₦2.00 = **₦600** |
-| Paid out at 16 pts | 300 × ₦1.60 = **₦480** |
-| **Platform keeps** | **₦120/month** |
+| AdMob pays us (₦2.00/ad) | **₦2.00** |
+| Cost to serve 16 SV | **₦0.81** |
+| **Net per ad** | **₦1.19 — 60%** |
 
-That ₦120 is what funds the reading (2 pts/slice), daily (50 pts/day) and
-referral (500+200 pts) rewards — currently pure cost. It covers ~80% of the
-daily reward alone. **Ads make the reward economy roughly neutral instead of
-a straight loss.**
+| eCPM | Revenue/ad | Service cost | Net | Margin |
+|---|---|---|---|---|
+| .80 (Nigerian trough) | ₦1.07 | ₦0.81 | **+₦0.26** | **24%** |
+| .50 (target) | ₦2.00 | ₦0.81 | **+₦1.19** | **60%** |
+| .00 (good quarter) | ₦4.00 | ₦0.81 | **+₦3.19** | **80%** |
 
-### The risk that decides it
+**Break-even is ~.61 eCPM** — below any plausible Nigerian rewarded-video
+rate. This is a far more robust model than the 80/20 framing suggests, and it
+stays positive through a bad quarter.
 
-eCPM in West Africa swings hard. At **$0.80 eCPM** (₦1.07/ad):
+### The one condition that makes it work
 
-- Revenue: 300 × ₦1.07 = ₦320
-- Payout at 16 pts: ₦480
-- **Loss of ₦160/month per active ad-watcher**
+**Ad-earned SV must land in service_credit_balance, never
+cashable_balance.** The 60% margin exists only because the liability is
+service, not cash:
 
-**The payout must be config-driven and monitored against measured eCPM**, or
-a bad quarter turns the reward economy into a cash drain. Cap the payout
-headroom, and re-derive `SV_PER_AD` from the trailing 7-day eCPM rather than
-hardcoding it.
+- spendable → our cost is ~₦0.81 per 16 SV → **60% margin**
+- withdrawable → our cost is the full ₦1.60 of cash → **20% margin**, and at
+  .80 eCPM it becomes a **loss**
 
-### How to structure it (if added)
+This is the same guard already applied to bills commission in commit
+c5a8011 — fabricate nothing, and never route an estimate to a withdrawable
+balance. Worth an explicit test.
 
-| | Free | PagePay+ |
-|---|---|---|
-| Rewarded video | Optional, +16 SV, max **10/day** | **None — ad-free is the upgrade reason** |
-| Banner | Study hub only, never mid-session | None |
-| Interstitial | **Never during study or exam** | None |
+### Naming fix needed
 
-Rules that follow from this:
-- **Never interrupt a study session or an exam with an interstitial.** It is
-  the single fastest way to destroy retention in an education product.
-- **Ad-free becomes the real Study+/Complete+ differentiator** — which solves
-  the "tiers differ only on bills" problem created by removing tasks.
-- **Rewarded ads are optional and user-initiated** — a student who wants SV
-  watches one; one who doesn't, doesn't.
-- `react-native-google-mobile-ads` is already a dependency; the ad *code* is
-  not. App size and battery cost of the SDK is real and worth measuring
-  before committing.
+config.rewarded_ad_payout_points = 20 is the **gross** ad value, not the
+payout — the payout is 16 (80%). The name invites exactly the mistake I made.
+Rename to 
+ewarded_ad_gross_points and add
 
-### My recommendation on ads
+ewarded_ad_payout_points = 16, or derive the payout from
+platform_ad_revenue_percent so the two can never disagree.
 
-**Yes, but scoped: rewarded video only, 10/day free tier, ad-free for
-PagePay+, no interstitals.** It funds an existing reward economy, it gives
-the paid tier a genuine reason to exist, and it is the only revenue that
-scales with engagement without charging a price-sensitive user more.
+### What funds what
 
-**Do it after model routing**, because routing changes the cost the ads need
-to subsidise — and doing ads first means calibrating payouts against costs
-that are about to drop 3.6×.
+At 10 ads/day per active free user (300/month):
 
----
+| | ₦/user/month |
+|---|---|
+| Ad revenue | ₦600 |
+| Service cost issued | ₦243 |
+| **Net** | **₦357** |
+
+Against current unfunded rewards — daily reward ₦150, referrals ₦70 (capped),
+welcome ₦10 — ads do more than cover the reward economy, with ₦120+ left for
+infrastructure. **This is the leg that makes the free tier affordable.**
+
+### AdMob compliance (non-negotiable)
+
+- Never incentivise *clicks* — reward the completed view only.
+- Rewarded ads must not gate essential functionality.
+- No interstitials on app open or mid-activity.
+- 
+eact-native-google-mobile-ads is already a dependency; no ad code
+  exists yet. App size and battery cost is real — measure before committing.
 
 ## 7. Implementation order
 
@@ -285,9 +312,10 @@ that are about to drop 3.6×.
 | 1 | **Model routing** (Standard/Premium split) | 2–3 days + eval set | 3.6× cost cut; every later decision depends on it |
 | 2 | **Fix the ad payout inconsistency** (20 vs 16/24) | 1 hour | Cheap; blocks any ad work |
 | 3 | **Meter chat** at 15/35 SV by tier | 1 day | Closes the ₦3,645/user/month hole |
+| 3b | **Rename `rewarded_ad_payout_points` to gross; derive payout from `platform_ad_revenue_percent`** | 1 hr | Prevents the 20-vs-16 confusion that misled this analysis |
 | 4 | **Cap generation behind unlock** | 0.5 day | Stops paying ₦2.13 for unbought assets |
 | 5 | **Quotas**: uploads 2/mo, exams 3/day, chat 5/day | 0.5 day | Bounds free-tier cost |
-| 6 | **Add rewarded ads** (optional) | 3–4 days | Funds the reward economy; differentiates paid tier |
+| 6 | **Ad formats**: native rewarded + small banner + breakpoint interstitials | 4–5 days | Funds the reward economy (~60% margin); gives the paid tier a real ad-free reason |
 | 7 | **Collapse to one tier at ₦3,000** | 1 day | After the multipliers are trustworthy |
 | 8 | **Per-user cost logging** (p50/p90/p99 by cohort) | 1 day | Without this, none of the above is measurable |
 
@@ -297,16 +325,28 @@ paid.
 
 ---
 
-## 8. Open decisions
+## 8. Decisions taken and still open
 
-1. **Routing eval set** — what's the minimum quality bar Granite must clear on
-   student questions before it answers anything? Needs a labelled set of real
-   student questions per subject.
-2. **Ad eCPM baseline** — do we have any AdMob account history, or start from
-   the $1.50 assumption and recalibrate after 30 days?
-3. **Tier count** — one tier, or two once ad-free and Premium-AI limits give a
-   genuine reason for a higher tier?
-4. **Narration pricing** — 76 SV/episode is our healthiest margin. Should
+**Taken:**
+
+1. **One tier** at ₦3,000/mo or ₦30,000/yr for now. A second tier can
+   be added later, once ad-free and Premium-AI limits give a genuine reason
+   for one.
+2. **Ad payout is 16 SV flat**, for free and paid users alike, with no
+   multiplier. The tier difference is ad-free vs ads, not payout size.
+3. **Ad formats:** native advanced rewarded (user-initiated) plus small
+   banners, with interstitials at natural breakpoints only — never
+   mid-exam, never mid-lesson, never on app open.
+4. **Ad revenue model:** ₦2.00 gross per ad (20 SV) at the $1.50 eCPM
+   assumption; 16 SV credited to the user. Net ₦1.19 per ad, because the
+   payout is service (costing ~₦0.81) not cash.
+
+**Still open:**
+
+5. **Routing eval set** — what is the minimum quality bar Granite must
+   clear on student questions before it answers anything? Needs a labelled
+   set of real student questions per subject.
+6. **Narration pricing** — 76 SV/episode is our healthiest margin. Should
    PagePay+ include a small narration allowance instead of requiring SV?
 
 ---
