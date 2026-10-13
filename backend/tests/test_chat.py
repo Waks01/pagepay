@@ -52,7 +52,7 @@ async def test_chat_passes_level_difficulty_language_and_history(
     captured: dict = {}
 
     async def fake_route_ai(prompt, task_type, max_tokens=None, db=None,
-                            system_prompt=None, history=None):
+                            system_prompt=None, history=None, model_tier=None):
         captured.update(
             prompt=prompt,
             task_type=task_type,
@@ -165,7 +165,7 @@ async def test_chat_daily_quota_and_refund(
     calls = {"n": 0}
 
     async def fake_route_ai(prompt, task_type, max_tokens=None, db=None,
-                            system_prompt=None, history=None):
+                            system_prompt=None, history=None, model_tier=None):
         calls["n"] += 1
         if calls["n"] == 1:
             raise HTTPException(status_code=503, detail="Cloudflare AI unavailable")
@@ -222,7 +222,7 @@ async def test_chat_survives_malformed_parsed_structure(
     await db_session.refresh(material)
 
     async def fake_route_ai(prompt, task_type, max_tokens=None, db=None,
-                            system_prompt=None, history=None):
+                            system_prompt=None, history=None, model_tier=None):
         # The material survives the unparseable structure.
         assert "powerhouse of the cell" in (system_prompt or "")
         # And it is not silently presented as the whole story.
@@ -276,7 +276,7 @@ async def test_chat_sends_the_full_material_not_just_the_outline(
     seen: dict[str, str] = {}
 
     async def fake_route_ai(prompt, task_type, max_tokens=None, db=None,
-                            system_prompt=None, history=None):
+                            system_prompt=None, history=None, model_tier=None):
         seen["system"] = system_prompt or ""
         return {"response": "ok", "provider": "stub", "model": "stub", "usage": {}}
 
@@ -297,3 +297,93 @@ async def test_chat_sends_the_full_material_not_just_the_outline(
     assert "selectively permeable" in prompt, "material text missing"
     assert "red blood cell bursts" in prompt, "tail of material missing"
     assert "No structured context available." not in prompt
+
+
+@pytest.mark.asyncio
+async def test_chat_routes_by_question_complexity(client, db_session, monkeypatch):
+    """The endpoint must pass a model tier, not let route_ai default.
+
+    Without this, every chat turn hits the premium model and the 3.6x
+    saving from routing never materialises.
+    """
+    user = User(email="route1@test.com", password_hash="hash")
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    material = StudyMaterial(
+        user_id=user.id,
+        title="Cell Biology",
+        raw_input="Osmosis is the movement of water across a membrane.",
+        parsed_structure='{"topics": [{"name": "Cells", "subtopics": [], "key_concepts": []}]}',
+    )
+    db_session.add(material)
+    await db_session.commit()
+    await db_session.refresh(material)
+
+    seen_tiers: list[str] = []
+
+    async def fake_route_ai(prompt, task_type, max_tokens=None, db=None,
+                            system_prompt=None, history=None, model_tier=None):
+        seen_tiers.append(model_tier)
+        return {"response": "ok", "provider": "stub", "model": "stub", "usage": {}}
+
+    monkeypatch.setattr(study_router, "route_ai", fake_route_ai)
+
+    # A plain recall question should reach the cheap model.
+    res = await client.post(
+        "/api/v1/study/chat",
+        json={"material_id": material.id, "message": "Define osmosis"},
+        headers=_auth_header(user.id),
+    )
+    assert res.status_code == 200
+    assert seen_tiers[-1] == "standard", f"recall went to {seen_tiers[-1]!r}"
+
+    # A reasoning question must reach the better model.
+    res = await client.post(
+        "/api/v1/study/chat",
+        json={"material_id": material.id, "message": "Why does a cell burst?"},
+        headers=_auth_header(user.id),
+    )
+    assert res.status_code == 200
+    assert seen_tiers[-1] == "premium", f"reasoning went to {seen_tiers[-1]!r}"
+
+
+@pytest.mark.asyncio
+async def test_chat_routing_can_be_disabled(client, db_session, monkeypatch):
+    """`ai_routing_enabled = False` must force premium, as the escape hatch.
+
+    This is how we roll the split out: ship with routing on, and if a
+    quality problem shows up, flip the flag instead of deploying.
+    """
+    user = User(email="route2@test.com", password_hash="hash")
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    material = StudyMaterial(
+        user_id=user.id,
+        title="Cell Biology",
+        raw_input="Osmosis is the movement of water across a membrane.",
+        parsed_structure=None,
+    )
+    db_session.add(material)
+    await db_session.commit()
+    await db_session.refresh(material)
+
+    monkeypatch.setattr(study_router.settings, "ai_routing_enabled", False)
+
+    seen: list = []
+
+    async def fake_route_ai(prompt, task_type, max_tokens=None, db=None,
+                            system_prompt=None, history=None, model_tier=None):
+        seen.append(model_tier)
+        return {"response": "ok", "provider": "stub", "model": "stub", "usage": {}}
+
+    monkeypatch.setattr(study_router, "route_ai", fake_route_ai)
+
+    res = await client.post(
+        "/api/v1/study/chat",
+        json={"material_id": material.id, "message": "Define osmosis"},
+        headers=_auth_header(user.id),
+    )
+    assert res.status_code == 200
+    assert seen == ["premium"], f"expected premium only, got {seen}"

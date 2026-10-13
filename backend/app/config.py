@@ -374,6 +374,29 @@ class Settings(BaseSettings):
     max_json_body_bytes: int = 1 * 1024 * 1024         # 1 MB
     max_multipart_body_bytes: int = 10 * 1024 * 1024   # 10 MB
 
+    # ── AI model routing ─────────────────────────────────────────────
+    # Student chat is served by one of two models, chosen by question
+    # complexity. The cheap model handles definitions and recall; the
+    # premium model is reserved for multi-step reasoning, where getting
+    # it wrong costs a student an exam.
+    #
+    # Measured at 17k input + 2k output tokens, ₦1,332/USD:
+    #   premium ~₦2.43/turn, standard ~₦0.68/turn — a 3.6x cut on any
+    #   turn the standard model can answer correctly.
+    #
+    # The classifier errs toward premium: a cheap wrong answer is worse
+    # than an expensive right one. Turn `enabled` off to route
+    # everything to premium while validating the split.
+    # Override via env `AI_ROUTING_ENABLED` / `AI_STANDARD_MODEL` /
+    # `AI_PREMIUM_MODEL`.
+    ai_routing_enabled: bool = True
+    ai_standard_model: str = "@cf/ibm-granite/granite-4.0-h-micro"
+    ai_premium_model: str = "@cf/zai-org/glm-4.7-flash"
+    # Target share of turns sent to the standard model. Logged per call
+    # so the actual split can be compared against this once real data
+    # exists; not enforced — complexity decides, not a quota.
+    ai_standard_share_target: float = 0.70
+
     # ── Content slicer tuning ────────────────────────────────────────
     # Casual-reader slicer (slicer.py): target chars per slice, hard
     # cap, and "don't bother slicing if shorter than this" threshold.

@@ -1848,6 +1848,14 @@ async def chat_study(
             "in parentheses where students will need the exam wording."
         )
 
+    # Decide the model before calling, so the choice is logged and the
+    # cost is intended rather than incidental. Generation tasks keep
+    # using premium; chat is the one place complexity varies.
+    from app.ai.routing import classify_turn
+
+    decision = classify_turn(payload.message, material_title=material.title)
+    tier = decision.model_tier if settings.ai_routing_enabled else "premium"
+
     try:
         ai_result = await route_ai(
             payload.message,
@@ -1856,6 +1864,7 @@ async def chat_study(
             db=db,
             system_prompt=system_prompt,
             history=[turn.model_dump() for turn in payload.history],
+            model_tier=tier,
         )
     except HTTPException:
         # Provider failed after we admitted the call — give the slot
@@ -1864,9 +1873,12 @@ async def chat_study(
         raise
     text = ai_result["response"]
     logger.info(
-        "study chat: user=%s material=%s model=%s usage=%s",
+        "study chat: user=%s material=%s tier=%s reason=%s score=%s model=%s usage=%s",
         current_user.id,
         material.id,
+        tier,
+        decision.reason,
+        decision.score,
         ai_result.get("model"),
         ai_result.get("usage"),
     )

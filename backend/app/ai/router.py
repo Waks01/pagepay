@@ -1,12 +1,22 @@
 """AI provider router — Cloudflare Workers AI only.
 
-Single text-generation provider: Cloudflare Workers AI running
-`@cf/zai-org/glm-4.7-flash`.
+Text generation runs on Cloudflare Workers AI. Two models are in play for
+student chat, chosen by question complexity (see `app/ai/routing.py`):
+
+- `settings.ai_standard_model` — cheap, handles definitions and recall
+- `settings.ai_premium_model` — reasoning, reserved for "why" questions
+
+Callers pass `model_tier="standard"` or `"premium"` to pick one explicitly.
+Anything else (`task_type` alone, as every non-chat caller uses) goes to
+premium, because a wrong answer costs a student more than a saved fraction
+of a cent. Generation tasks — SOW parsing, exam questions, assets — are
+always premium: a misparsed syllabus or a wrong answer key is not something
+to economise on.
 
 Two provider-specific details matter here:
 
 1. Reasoning (thinking) must be disabled per call via
-   `chat_template_kwargs: {"enable_thinking": false}`. The model is a
+   `chat_template_kwargs: {"enable_thinking": false}`. The premium model is a
    reasoning model; with thinking on, hidden reasoning tokens are
    billed as output tokens (~3x cost measured on a tutor prompt) and
    can consume the whole `max_tokens` budget, leaving `content: null`.
@@ -18,11 +28,23 @@ import logging
 
 from fastapi import HTTPException
 
+from app.ai.routing import PREMIUM, STANDARD
 from app.config import settings
 
 logger = logging.getLogger("uvicorn.error")
 
-MODEL = "@cf/zai-org/glm-4.7-flash"
+
+def resolve_model(model_tier: str | None = None) -> str:
+    """Map a tier to a model id.
+
+    An unknown or missing tier resolves to premium. That is deliberate:
+    `route_ai` predates routing and its callers pass no tier, so defaulting
+    to premium keeps every existing generation task on the better model
+    until chat is explicitly migrated.
+    """
+    if model_tier == STANDARD:
+        return settings.ai_standard_model
+    return settings.ai_premium_model
 
 
 async def route_ai(
@@ -33,8 +55,12 @@ async def route_ai(
     prefer_vision: bool = True,
     system_prompt: str | None = None,
     history: list[dict] | None = None,
+    model_tier: str | None = None,
 ) -> dict:
     """Send a prompt to Cloudflare Workers AI and return the text.
+
+    `model_tier` selects the model for chat turns — see `resolve_model`.
+    Omit it for generation tasks, which always use the premium model.
 
     `system_prompt` is sent with the system role; `history` is an
     optional list of prior {"role": "user"|"assistant", "content": ...}
@@ -57,6 +83,8 @@ async def route_ai(
             detail="Cloudflare Workers AI not configured. Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN.",
         )
 
+    model = resolve_model(model_tier)
+
     temperature = (
         settings.ai_temperature_chat
         if task_type == "chat"
@@ -75,7 +103,7 @@ async def route_ai(
 
     url = (
         f"https://api.cloudflare.com/client/v4/accounts/"
-        f"{account_id}/ai/run/{MODEL}"
+        f"{account_id}/ai/run/{model}"
     )
 
     try:
@@ -118,7 +146,7 @@ async def route_ai(
             return {
                 "response": text,
                 "provider": "cloudflare",
-                "model": result.get("model") or MODEL,
+                "model": result.get("model") or model,
                 "usage": {
                     "prompt_tokens": usage.get("prompt_tokens"),
                     "completion_tokens": usage.get("completion_tokens"),
@@ -133,3 +161,4 @@ async def route_ai(
             status_code=503,
             detail=f"Cloudflare AI unavailable: {exc}",
         ) from exc
+
