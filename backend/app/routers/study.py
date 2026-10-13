@@ -16,7 +16,7 @@ import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.prompts import (
@@ -46,8 +46,10 @@ from app.exam_types import (
     EXAM_TYPE_SPECS,
     normalize_exam_type,
 )
+from app.services.ai_cost import log_usage, model_cost_usd
 from app.services import tts_hybrid
 from app.models import (
+    AiUsageLog,
     AudioUnlock,
     ExamAnswer,
     ExamSession,
@@ -1465,6 +1467,20 @@ async def generate_asset(
     await db.commit()
     await db.refresh(asset)
 
+    # Record generation cost against what we charged for it. The premium
+    # path charges 0 and still costs money, which is exactly the gap this
+    # table exists to surface.
+    gen_usage = ai_result.get("usage") or {}
+    await log_usage(
+        db,
+        user_id=current_user.id,
+        endpoint="generate",
+        model=ai_result.get("model") or "",
+        prompt_tokens=gen_usage.get("prompt_tokens") or 0,
+        completion_tokens=gen_usage.get("completion_tokens") or 0,
+        sv_charged=points_cost,
+    )
+
     return GenerateAssetResponse(assets=[content])
 
 
@@ -1989,6 +2005,7 @@ async def chat_study(
             await _refund_chat_payment(db, current_user.id, paid_price)
         raise
     text = ai_result["response"]
+    usage = ai_result.get("usage") or {}
     logger.info(
         "study chat: user=%s material=%s tier=%s reason=%s score=%s "
         "billable=%s sv=%s model=%s usage=%s",
@@ -2000,7 +2017,19 @@ async def chat_study(
         is_billable,
         paid_price,
         ai_result.get("model"),
-        ai_result.get("usage"),
+        usage,
+    )
+    # Record the call so margin is measurable. Fire-and-forget: a
+    # logging failure must not fail an answer the student already has.
+    await log_usage(
+        db,
+        user_id=current_user.id,
+        endpoint="chat",
+        model=ai_result.get("model") or "",
+        prompt_tokens=usage.get("prompt_tokens") or 0,
+        completion_tokens=usage.get("completion_tokens") or 0,
+        tier=tier,
+        sv_charged=paid_price,
     )
 
     async def generate():
@@ -3712,3 +3741,117 @@ def study_narration_topic_names(parsed: dict) -> list[dict]:
                 }
             )
     return items
+
+# ── GET /study/ai-usage/summary ─────────────────────────────────────
+
+
+@router.get("/ai-usage/summary")
+async def ai_usage_summary(
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-user AI cost and margin over a window.
+
+    The whole metering model is only defensible if it can be measured:
+    cost per active user, split free vs paid, and what we charged
+    against what the call cost. Returns the total, percentiles, the
+    split by endpoint, and the count of free calls that still cost
+    money (the premium gap).
+    """
+    from datetime import datetime, timedelta
+
+    since = datetime.utcnow() - timedelta(days=min(max(days, 1), 365))
+
+    rows = (
+        await db.execute(
+            select(
+                AiUsageLog.endpoint,
+                AiUsageLog.model,
+                AiUsageLog.tier,
+                func.count(AiUsageLog.id),
+                func.coalesce(func.sum(AiUsageLog.prompt_tokens), 0),
+                func.coalesce(func.sum(AiUsageLog.completion_tokens), 0),
+                func.coalesce(func.sum(AiUsageLog.sv_charged), 0),
+                func.coalesce(func.sum(AiUsageLog.cost_usd), 0.0),
+            )
+            .where(AiUsageLog.created_at >= since)
+            .group_by(AiUsageLog.endpoint, AiUsageLog.model, AiUsageLog.tier)
+        )
+    ).all()
+
+    total_cost_usd = 0.0
+    total_sv = 0
+    total_calls = 0
+    free_cost_calls = 0
+    free_cost_usd = 0.0
+    by_endpoint: dict[str, dict] = {}
+
+    for endpoint, model, tier, calls, ptok, ctok, sv, cost in rows:
+        total_cost_usd += cost
+        total_sv += int(sv or 0)
+        total_calls += int(calls or 0)
+        if not sv:
+            free_cost_calls += int(calls or 0)
+            free_cost_usd += cost
+        bucket = by_endpoint.setdefault(
+            endpoint, {"calls": 0, "cost_usd": 0.0, "sv_charged": 0}
+        )
+        bucket["calls"] += int(calls or 0)
+        bucket["cost_usd"] += cost
+        bucket["sv_charged"] += int(sv or 0)
+
+    # Revenue in USD, so margin is comparable to cost_usd.
+    revenue_usd = 0.0
+    if total_sv:
+        revenue_usd = (total_sv / settings.points_per_naira) / 1332.5
+
+    per_user = (
+        await db.execute(
+            select(
+                AiUsageLog.user_id,
+                func.coalesce(func.sum(AiUsageLog.cost_usd), 0.0),
+                func.coalesce(func.sum(AiUsageLog.sv_charged), 0),
+            )
+            .where(AiUsageLog.created_at >= since)
+            .group_by(AiUsageLog.user_id)
+        )
+    ).all()
+
+    per_user_costs = sorted(cost for _, cost, _ in per_user)
+
+    def _pct(values: list[float], p: float) -> float:
+        if not values:
+            return 0.0
+        idx = min(len(values) - 1, int(p * len(values)))
+        return values[idx]
+
+    return {
+        "window_days": min(max(days, 1), 365),
+        "calls": total_calls,
+        "total_cost_usd": round(total_cost_usd, 6),
+        "revenue_usd": round(revenue_usd, 6),
+        "margin_usd": round(revenue_usd - total_cost_usd, 6),
+        "margin_ratio": round(
+            (revenue_usd / total_cost_usd) if total_cost_usd else 0.0, 3
+        ),
+        "per_user_cost": {
+            "p50": round(_pct(per_user_costs, 0.50), 6),
+            "p90": round(_pct(per_user_costs, 0.90), 6),
+            "p99": round(_pct(per_user_costs, 0.99), 6),
+            "max": round(per_user_costs[-1] if per_user_costs else 0.0, 6),
+            "active_users": len(per_user_costs),
+        },
+        "free_calls_still_costing": {
+            "calls": free_cost_calls,
+            "cost_usd": round(free_cost_usd, 6),
+        },
+        "by_endpoint": {
+            endpoint: {
+                "calls": data["calls"],
+                "cost_usd": round(data["cost_usd"], 6),
+                "sv_charged": data["sv_charged"],
+            }
+            for endpoint, data in by_endpoint.items()
+        },
+    }

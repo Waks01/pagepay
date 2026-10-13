@@ -435,6 +435,30 @@ class Settings(BaseSettings):
     # everything to premium while validating the split.
     # Override via env `AI_ROUTING_ENABLED` / `AI_STANDARD_MODEL` /
     # `AI_PREMIUM_MODEL`.
+    # Publishing cost per M tokens, USD, keyed by model id. Used to
+    # compute `AiUsageLog.cost_usd` at write time, so usage telemetry
+    # stays comparable across a price change rather than being rewritten
+    # by one. Values are the published list prices from Cloudflare's
+    # pricing page (workers-ai/platform/pricing).
+    # TTS is not token-priced: MeloTTS is $0.0002/audio-minute, logged
+    # separately by the narration path.
+    ai_model_cost_usd: dict[str, dict[str, float]] = {
+        "@cf/ibm-granite/granite-4.0-h-micro": {
+            "input": 0.017,
+            "output": 0.112,
+        },
+        "@cf/zai-org/glm-4.7-flash": {
+            "input": 0.060,
+            "output": 0.400,
+        },
+        "@cf/meta/llama-3.2-11b-vision-instruct": {
+            "input": 0.049,
+            "output": 0.676,
+        },
+    }
+    # Cost per audio-minute for MeloTTS, logged by the narration path.
+    ai_tts_cost_usd_per_minute: float = 0.0002
+
     ai_routing_enabled: bool = True
     ai_standard_model: str = "@cf/ibm-granite/granite-4.0-h-micro"
     ai_premium_model: str = "@cf/zai-org/glm-4.7-flash"

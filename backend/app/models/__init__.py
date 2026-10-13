@@ -577,6 +577,43 @@ class StudyAsset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class AiUsageLog(Base):
+    """One AI call that cost money, written where the money is spent.
+
+    This is the table that makes the pricing model measurable. Every
+    source on AI unit economics says the same thing: you cannot manage
+    metered AI on instinct, you need cost-per-active-user telemetry
+    split by cohort. Without this, the chat quota, the paid-turn prices,
+    and the generation charge are all guesses.
+
+    Written fire-and-forget: a logging failure must never fail a request
+    that already succeeded.
+
+    `cost_usd` is computed at write time from the model's published
+    price, so a later price change does not silently rewrite history.
+    """
+
+    __tablename__ = "ai_usage_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    # Which endpoint spent the money: chat, generate, sow_parse, exam, ocr.
+    endpoint: Mapped[str] = mapped_column(String(50), index=True)
+    # The model id that actually ran, so routing can be evaluated.
+    model: Mapped[str] = mapped_column(String(120))
+    # Routing tier for chat (standard/premium); NULL where it does not apply.
+    tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    # What we charged the user. 0 for free-tier and premium turns.
+    sv_charged: Mapped[int] = mapped_column(Integer, default=0)
+    # Our cost in USD, derived from the model price at write time.
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, index=True
+    )
+
+
 class StudyTransaction(Base):
     """One spend-or-earn event on a study asset.
 
