@@ -2,18 +2,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   Linking,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  RefreshControl,
-  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
@@ -373,6 +374,34 @@ export default function MaterialDetailScreen() {
       setError(t("study.errors.select_topic", "Select a topic to generate from."));
       return;
     }
+
+    // Generation is charged up front, so confirm the price before spending.
+    // Premium generates free, matching its free unlocks.
+    const isPremium = currentUser && currentUser.tier !== 'free';
+    if (!isPremium) {
+      const price = assetType === "video" ? 200 : 50;
+      const balance = currentUser?.service_credit_balance ?? 0;
+      const label =
+        assetType === "mcq"
+          ? "MCQs"
+          : assetType === "flashcard"
+            ? "flashcards"
+            : assetType === "video"
+              ? "video script"
+              : assetType;
+      const proceed = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          `Generate ${label}`,
+          `This costs ${price} SV. You have ${balance}.`,
+          [
+            { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+            { text: `Use ${price} SV`, onPress: () => resolve(true) },
+          ],
+        );
+      });
+      if (!proceed) return;
+    }
+
     setGeneratingType(assetType);
     setError(null);
     try {
@@ -392,6 +421,7 @@ export default function MaterialDetailScreen() {
         throw new Error(err.detail || "Generation failed");
       }
       qc.invalidateQueries({ queryKey: ["study", "material", materialId] });
+      qc.invalidateQueries({ queryKey: ["me"] });
     } catch (err) {
       if (__DEV__) console.error("Generation failed:", err);
     } finally {

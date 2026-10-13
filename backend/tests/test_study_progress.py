@@ -290,6 +290,10 @@ async def test_generate_topic_asset_persists_topic_and_rolls_up(
     client: AsyncClient, db_session, monkeypatch, silence_background_notifications
 ):
     user = await _make_user(db_session, "generate@test.com")
+    # Generation is charged up front, so the user needs SV to fund it.
+    user.service_credit_balance = 500
+    await db_session.commit()
+    await db_session.refresh(user)
     material = await _make_material(db_session, user)
     headers = _auth_header(user.id)
 

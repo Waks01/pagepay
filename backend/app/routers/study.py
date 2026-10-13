@@ -1298,6 +1298,37 @@ async def generate_asset(
     if not material.parsed_structure:
         raise HTTPException(status_code=400, detail="Material has no parsed structure. Re-upload or try again.")
 
+    # Charge at generation, not at unlock. Generation is the expensive
+    # step — the model call costs ~NGN2.13 regardless of whether the
+    # student ever reads the result — so a free generate with a paid
+    # unlock let anyone burn compute by generating repeatedly and
+    # unlocking nothing. Premium keeps generating free, matching its
+    # free unlocks.
+    #
+    # Debit happens BEFORE the model call so a rejected payment writes
+    # nothing and costs no tokens.
+    if is_premium(current_user):
+        points_cost = 0
+    else:
+        points_cost = (
+            VIDEO_UNLOCK_POINTS_COST
+            if payload.asset_type == "video"
+            else UNLOCK_POINTS_COST
+        )
+        await _debit_wallet(db, current_user.id, "points", points_cost)
+        db.add(
+            StudyTransaction(
+                user_id=current_user.id,
+                # Set once the asset row exists, so the unlock endpoint
+                # can recognise a generation the user already paid for.
+                asset_id=None,
+                method="generate",
+                points_spent=points_cost,
+                reward_granted=True,
+            )
+        )
+        await db.commit()
+
     import json as _json
     parsed = _json.loads(material.parsed_structure)
 
@@ -1373,13 +1404,22 @@ async def generate_asset(
         else:
             raise HTTPException(status_code=400, detail=f"Unknown asset type: {payload.asset_type}")
 
-    ai_result = await route_ai(prompt, task_type="fast", db=db)
+    try:
+        ai_result = await route_ai(prompt, task_type="fast", db=db)
+    except HTTPException:
+        # Provider failed after we took payment — refund, so an outage
+        # never costs the student for content that does not exist.
+        if points_cost:
+            await _refund_chat_payment(db, current_user.id, points_cost)
+        raise
 
     content = None
     try:
         content = _json.loads(ai_result["response"])
     except Exception:
         logger.error("Asset generator returned non-JSON: %s", ai_result["response"][:200])
+        if points_cost:
+            await _refund_chat_payment(db, current_user.id, points_cost)
         raise HTTPException(status_code=502, detail="AI returned invalid format. Try again.")
 
     if payload.asset_type == "mcq" and isinstance(content, dict) and isinstance(
@@ -1407,6 +1447,21 @@ async def generate_asset(
         topic=payload.topic if payload.mode == "topic" else None,
     )
     db.add(asset)
+    await db.flush()
+
+    # Backfill the pending transaction so the unlock endpoint can see this
+    # generation was already paid for.
+    pending = await db.execute(
+        select(StudyTransaction)
+        .where(StudyTransaction.user_id == current_user.id)
+        .where(StudyTransaction.asset_id.is_(None))
+        .where(StudyTransaction.method == "generate")
+        .order_by(StudyTransaction.id.desc())
+        .limit(1)
+    )
+    row = pending.scalar_one_or_none()
+    if row is not None:
+        row.asset_id = asset.id
     await db.commit()
     await db.refresh(asset)
 
@@ -1972,12 +2027,12 @@ _SV_METHODS = {"points", "sv"}
 async def _refund_chat_payment(
     db: AsyncSession, user_id: int, amount: int
 ) -> None:
-    """Refund a paid chat turn when the model call fails.
+    """Refund a paid operation when the model call failed.
 
-    Without this, a Cloudflare outage costs the student real SV for an
-    answer they never got. Credits back to the spendable wallet the
-    debit came from and commits, so a failure path never leaves a
-    half-written ledger.
+    Used by both paid chat turns and asset generation: an outage must
+    never cost the student for content that was never delivered. Credits
+    back to the spendable wallet the debit came from and commits, so a
+    failure path never leaves a half-written ledger.
     """
     if amount <= 0:
         return
@@ -1988,6 +2043,26 @@ async def _refund_chat_payment(
         .values({getattr(User, field): getattr(User, field) + amount})
     )
     await db.commit()
+
+
+async def _paid_at_generation(
+    db: AsyncSession, user_id: int, asset_id: int
+) -> bool:
+    """True when the user already paid to generate this asset.
+
+    Generation is charged up front, so reading one of your own generated
+    assets must not be billed again.
+    """
+    row = await db.execute(
+        select(StudyTransaction.id)
+        .where(
+            StudyTransaction.user_id == user_id,
+            StudyTransaction.asset_id == asset_id,
+            StudyTransaction.method == "generate",
+        )
+        .limit(1)
+    )
+    return row.scalar_one_or_none() is not None
 
 
 def _wallet_field_for(method: str) -> str:
@@ -2047,7 +2122,7 @@ async def unlock_asset(
 ):
     # Check if user is premium (imports at top needed)
     from app.services.subscription import is_premium
-    
+
     asset_result = await db.execute(
         select(StudyAsset).where(StudyAsset.id == payload.asset_id)
     )
@@ -2065,13 +2140,18 @@ async def unlock_asset(
     if not material_result.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="Not your material")
 
+    # Already paid for at generation. Generation is charged up front, so
+    # an asset the user generated themselves must not be charged a
+    # second time to read it.
+    already_generated = await _paid_at_generation(db, current_user.id, asset.id)
+
     # Premium users unlock for free
-    if is_premium(current_user):
+    if already_generated or is_premium(current_user):
         import json as _json
         txn = StudyTransaction(
             user_id=current_user.id,
             asset_id=asset.id,
-            method="premium",
+            method="generate" if already_generated else "premium",
             points_spent=0,
             reward_granted=True,
         )
@@ -2081,7 +2161,7 @@ async def unlock_asset(
             unlocked=True,
             content=_json.loads(asset.content_json),
             new_balance=current_user.points_balance,
-            method="premium",
+            method="generate" if already_generated else "premium",
             points_spent=0,
         )
 
