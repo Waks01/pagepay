@@ -427,18 +427,25 @@ def test_notifications_module_imports_cleanly():
 def test_activation_copy_matches_tier_benefits():
     """Push copy must only claim what the tier actually grants.
 
-    The old body promised "ad-free reading and 2x points" to every
-    tier. Study+ has all multipliers at 1.0, so that was false.
+    The tiers are now unified — every paid key resolves to Premium at
+    N3,000 with identical multipliers — so both billing periods should
+    describe the same benefits.
     """
     from app.models import UserTier
     from app.routers.payouts import _premium_activated_body
 
-    study = _premium_activated_body(UserTier.STUDY_PLUS_MONTHLY)
-    assert "1.5x" not in study, f"Study+ claims a multiplier it does not have: {study}"
+    monthly = _premium_activated_body(UserTier.STUDY_PLUS_MONTHLY)
+    yearly = _premium_activated_body(UserTier.STUDY_PLUS_YEARLY)
 
-    complete = _premium_activated_body(UserTier.COMPLETE_PLUS_MONTHLY)
-    assert "1.5x" in complete, f"Complete+ omits its real multipliers: {complete}"
-    assert "3x" not in complete
+    # Both must describe the unified plan, and neither may claim a
+    # multiplier the benefits table does not grant.
+    for label, copy in (("monthly", monthly), ("yearly", yearly)):
+        assert "1.5x reading points" in copy, f"{label} omits reading: {copy}"
+        assert "3x" not in copy, f"{label} claims a multiplier it lacks: {copy}"
+
+    # Same benefits regardless of billing period.
+    for phrase in ("1.5x reading points", "1.5x task rewards", "1.5x bills cashback"):
+        assert phrase in monthly and phrase in yearly
 
 
 def test_subscription_status_benefits_come_from_data():

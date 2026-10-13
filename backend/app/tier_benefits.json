@@ -1,8 +1,7 @@
 {
   "version": "2.0.0",
-  "description": "PagePay tier benefits: Free, Study+, Complete+",
-  "last_updated": "2026-08-28",
-
+  "description": "PagePay tier benefits: Free, Premium",
+  "last_updated": "2026-10-13",
   "tiers": {
     "free": {
       "tier_id": "free",
@@ -57,7 +56,9 @@
           "notes": "Must complete units sequentially"
         },
         "listen_mode": {
-          "enabled_units": [1],
+          "enabled_units": [
+            1
+          ],
           "full_access": false,
           "notes": "Audio narration only for first unit of each work"
         },
@@ -115,237 +116,15 @@
         "Earn cashback on bills"
       ]
     },
-
     "study_plus_monthly": {
       "tier_id": "study_plus_monthly",
-      "display_name": "Study+ Monthly",
-      "price_kobo": 100000,
-      "duration_days": 30,
-      "multipliers": {
-        "points_earning": 1.0,
-        "reading_points": 1.0,
-        "ad_rewards": 1.0,
-        "task_rewards": 1.0,
-        "bills_cashback": 1.0,
-        "daily_rewards": 1.0
-      },
-      "features": {
-        "reading": {
-          "novels": {
-            "enabled": true,
-            "points_per_slice": 2,
-            "ads_required": true,
-            "ad_reward_points": 20,
-            "total_per_slice_with_ads": 22,
-            "notes": "Novels require ads. 2 reading + 20 ad = 22 total"
-          },
-          "study_materials": {
-            "enabled": true,
-            "points_per_slice": 2,
-            "ads_shown": false,
-            "notes": "Study materials are ad-free for everyone"
-          }
-        },
-        "ads": {
-          "novels_pre_read_required": true,
-          "novels_post_read_required": true,
-          "study_ads_shown": false,
-          "feed_ads_enabled": true,
-          "rewarded_ads_enabled": true,
-          "optional_for_premium": false,
-          "notes": "Ads required on novels. Study materials always ad-free"
-        },
-        "study_materials": {
-          "unlock_method": "free",
-          "free_unlock": true,
-          "points_cost": 0,
-          "video_points_cost": 0,
-          "notes": "All study materials unlock for free"
-        },
-        "education_content": {
-          "unit_1_free": true,
-          "sequential_unlock": false,
-          "skip_unlock": true,
-          "notes": "Access any unit without completing previous units"
-        },
-        "listen_mode": {
-          "enabled_units": "all",
-          "full_access": true,
-          "notes": "Audio narration for all units of all works"
-        },
-        "daily_rewards": {
-          "enabled": true,
-          "base_reward": true,
-          "bonus_multiplier": 1.0,
-          "notes": "Standard daily rewards (no multiplier)"
-        },
-        "tasks": {
-          "enabled": true,
-          "access_level": "standard",
-          "xp_multiplier": 1.0,
-          "points_multiplier": 1.0,
-          "priority_queue": false,
-          "notes": "Standard task access and rewards"
-        },
-        "bills_vtu": {
-          "enabled": true,
-          "cashback_rate": 0.67,
-          "bonus_multiplier": 1.0,
-          "notes": "67% of commission as cashback"
-        },
-        "wallet": {
-          "withdrawal_enabled": true,
-          "special_rates": false,
-          "reduced_fees": false,
-          "notes": "Standard withdrawal fees apply"
-        },
-        "catalog": {
-          "access_level": "full",
-          "exclusive_content": false,
-          "notes": "Access to all public catalog content"
-        },
-        "social": {
-          "enabled": true,
-          "badge": null,
-          "special_features": [],
-          "notes": "Standard community features"
-        }
-      },
-      "limitations": [
-        "Ads still required on novels",
-        "No point multipliers",
-        "No ad-skip privileges"
-      ],
-      "benefits_display": [
-        "Free study material unlocks",
-        "Full audio narration access",
-        "Skip education unit progression",
-        "Standard daily rewards",
-        "Standard task rewards",
-        "Standard bills cashback"
-      ]
-    },
-
-    "study_plus_yearly": {
-      "tier_id": "study_plus_yearly",
-      "display_name": "Study+ Yearly",
-      "price_kobo": 1000000,
-      "duration_days": 365,
-      "multipliers": {
-        "points_earning": 1.0,
-        "reading_points": 1.0,
-        "ad_rewards": 1.0,
-        "task_rewards": 1.0,
-        "bills_cashback": 1.0,
-        "daily_rewards": 1.0
-      },
-      "features": {
-        "reading": {
-          "novels": {
-            "enabled": true,
-            "points_per_slice": 2,
-            "ads_required": true,
-            "ad_reward_points": 20,
-            "total_per_slice_with_ads": 22,
-            "notes": "Novels require ads. 2 reading + 20 ad = 22 total"
-          },
-          "study_materials": {
-            "enabled": true,
-            "points_per_slice": 2,
-            "ads_shown": false,
-            "notes": "Study materials are ad-free for everyone"
-          }
-        },
-        "ads": {
-          "novels_pre_read_required": true,
-          "novels_post_read_required": true,
-          "study_ads_shown": false,
-          "feed_ads_enabled": true,
-          "rewarded_ads_enabled": true,
-          "optional_for_premium": false,
-          "notes": "Ads required on novels. Study materials always ad-free"
-        },
-        "study_materials": {
-          "unlock_method": "free",
-          "free_unlock": true,
-          "points_cost": 0,
-          "video_points_cost": 0,
-          "notes": "All study materials unlock for free"
-        },
-        "education_content": {
-          "unit_1_free": true,
-          "sequential_unlock": false,
-          "skip_unlock": true,
-          "notes": "Access any unit without completing previous units"
-        },
-        "listen_mode": {
-          "enabled_units": "all",
-          "full_access": true,
-          "notes": "Audio narration for all units of all works"
-        },
-        "daily_rewards": {
-          "enabled": true,
-          "base_reward": true,
-          "bonus_multiplier": 1.0,
-          "notes": "Standard daily rewards (no multiplier)"
-        },
-        "tasks": {
-          "enabled": true,
-          "access_level": "standard",
-          "xp_multiplier": 1.0,
-          "points_multiplier": 1.0,
-          "priority_queue": false,
-          "notes": "Standard task access and rewards"
-        },
-        "bills_vtu": {
-          "enabled": true,
-          "cashback_rate": 0.67,
-          "bonus_multiplier": 1.0,
-          "notes": "67% of commission as cashback"
-        },
-        "wallet": {
-          "withdrawal_enabled": true,
-          "special_rates": false,
-          "reduced_fees": false,
-          "notes": "Standard withdrawal fees apply"
-        },
-        "catalog": {
-          "access_level": "full",
-          "exclusive_content": false,
-          "notes": "Access to all public catalog content"
-        },
-        "social": {
-          "enabled": true,
-          "badge": null,
-          "special_features": [],
-          "notes": "Standard community features"
-        }
-      },
-      "limitations": [
-        "Ads still required on novels",
-        "No point multipliers",
-        "No ad-skip privileges"
-      ],
-      "benefits_display": [
-        "Free study material unlocks",
-        "Full audio narration access",
-        "Skip education unit progression",
-        "Standard daily rewards",
-        "Standard task rewards",
-        "Standard bills cashback",
-        "Save ₦2,000 per year"
-      ]
-    },
-
-    "complete_plus_monthly": {
-      "tier_id": "complete_plus_monthly",
-      "display_name": "Complete+ Monthly",
-      "price_kobo": 200000,
+      "display_name": "Premium",
+      "price_kobo": 300000,
       "duration_days": 30,
       "multipliers": {
         "points_earning": 1.5,
         "reading_points": 1.5,
-        "ad_rewards": 1.5,
+        "ad_rewards": 1.0,
         "task_rewards": 1.5,
         "bills_cashback": 1.5,
         "daily_rewards": 1.5
@@ -431,7 +210,9 @@
         "social": {
           "enabled": true,
           "badge": "complete_plus_gold",
-          "special_features": ["priority_support"],
+          "special_features": [
+            "priority_support"
+          ],
           "notes": "Gold Complete+ badge and priority support"
         }
       },
@@ -449,18 +230,18 @@
         "1.5x task rewards",
         "1.5x daily rewards",
         "1.5x cashback on bills"
-      ]
+      ],
+      "notes": "One paid plan (Premium), sold in two billing periods. All four paid tier keys resolve to identical benefits and price; the distinct names are legacy and awaiting an enum consolidation migration."
     },
-
-    "complete_plus_yearly": {
-      "tier_id": "complete_plus_yearly",
-      "display_name": "Complete+ Yearly",
-      "price_kobo": 2000000,
+    "study_plus_yearly": {
+      "tier_id": "study_plus_yearly",
+      "display_name": "Premium",
+      "price_kobo": 3000000,
       "duration_days": 365,
       "multipliers": {
         "points_earning": 1.5,
         "reading_points": 1.5,
-        "ad_rewards": 1.5,
+        "ad_rewards": 1.0,
         "task_rewards": 1.5,
         "bills_cashback": 1.5,
         "daily_rewards": 1.5
@@ -546,7 +327,9 @@
         "social": {
           "enabled": true,
           "badge": "complete_plus_gold",
-          "special_features": ["priority_support"],
+          "special_features": [
+            "priority_support"
+          ],
           "notes": "Gold Complete+ badge and priority support"
         }
       },
@@ -563,12 +346,245 @@
         "Priority task verification",
         "1.5x task rewards",
         "1.5x daily rewards",
-        "1.5x cashback on bills",
-        "Save ₦4,000 per year"
-      ]
+        "1.5x cashback on bills"
+      ],
+      "notes": "One paid plan (Premium), sold in two billing periods. All four paid tier keys resolve to identical benefits and price; the distinct names are legacy and awaiting an enum consolidation migration."
+    },
+    "complete_plus_monthly": {
+      "tier_id": "complete_plus_monthly",
+      "display_name": "Premium",
+      "price_kobo": 300000,
+      "duration_days": 30,
+      "multipliers": {
+        "points_earning": 1.5,
+        "reading_points": 1.5,
+        "ad_rewards": 1.0,
+        "task_rewards": 1.5,
+        "bills_cashback": 1.5,
+        "daily_rewards": 1.5
+      },
+      "features": {
+        "reading": {
+          "novels": {
+            "enabled": true,
+            "points_per_slice": 3,
+            "ads_required": false,
+            "ads_optional": true,
+            "ad_reward_points": 30,
+            "total_per_slice_no_ads": 3,
+            "total_per_slice_with_ads": 33,
+            "notes": "Novels: Skip ads (3 pts) or watch ads (3 reading + 30 ad = 33 total)"
+          },
+          "study_materials": {
+            "enabled": true,
+            "points_per_slice": 3,
+            "ads_shown": false,
+            "notes": "Study materials ad-free. 3 points per slice (1.5x)"
+          }
+        },
+        "ads": {
+          "novels_pre_read_required": false,
+          "novels_post_read_required": false,
+          "novels_ads_optional": true,
+          "study_ads_shown": false,
+          "feed_ads_enabled": false,
+          "rewarded_ads_enabled": true,
+          "optional_for_premium": true,
+          "notes": "Novels: Ads optional. Skip (3 pts) or watch (33 pts). Study always ad-free"
+        },
+        "study_materials": {
+          "unlock_method": "free",
+          "free_unlock": true,
+          "points_cost": 0,
+          "video_points_cost": 0,
+          "notes": "All study materials unlock for free"
+        },
+        "education_content": {
+          "unit_1_free": true,
+          "sequential_unlock": false,
+          "skip_unlock": true,
+          "notes": "Access any unit without completing previous units"
+        },
+        "listen_mode": {
+          "enabled_units": "all",
+          "full_access": true,
+          "notes": "Audio narration for all units of all works"
+        },
+        "daily_rewards": {
+          "enabled": true,
+          "base_reward": true,
+          "bonus_multiplier": 1.5,
+          "notes": "1.5x daily rewards and streak bonuses"
+        },
+        "tasks": {
+          "enabled": true,
+          "access_level": "priority",
+          "xp_multiplier": 1.5,
+          "points_multiplier": 1.5,
+          "priority_queue": true,
+          "notes": "1.5x task rewards and priority verification"
+        },
+        "bills_vtu": {
+          "enabled": true,
+          "cashback_rate": 0.67,
+          "bonus_multiplier": 1.5,
+          "notes": "1.5x cashback on all bill payments"
+        },
+        "wallet": {
+          "withdrawal_enabled": true,
+          "special_rates": false,
+          "reduced_fees": false,
+          "notes": "Standard withdrawal fees apply"
+        },
+        "catalog": {
+          "access_level": "full",
+          "exclusive_content": false,
+          "notes": "Access to all public catalog content"
+        },
+        "social": {
+          "enabled": true,
+          "badge": "complete_plus_gold",
+          "special_features": [
+            "priority_support"
+          ],
+          "notes": "Gold Complete+ badge and priority support"
+        }
+      },
+      "limitations": [],
+      "benefits_display": [
+        "Novels: Optional ads - Skip (3 pts) or Watch (33 pts)",
+        "Study materials: Ad-free, 3 points per slice",
+        "1.5x reading points multiplier",
+        "1.5x ad rewards when choosing to watch",
+        "Free study material unlocks",
+        "Full audio narration access",
+        "Skip education unit progression",
+        "Gold Complete+ badge",
+        "Priority task verification",
+        "1.5x task rewards",
+        "1.5x daily rewards",
+        "1.5x cashback on bills"
+      ],
+      "notes": "One paid plan (Premium), sold in two billing periods. All four paid tier keys resolve to identical benefits and price; the distinct names are legacy and awaiting an enum consolidation migration."
+    },
+    "complete_plus_yearly": {
+      "tier_id": "complete_plus_yearly",
+      "display_name": "Premium",
+      "price_kobo": 3000000,
+      "duration_days": 365,
+      "multipliers": {
+        "points_earning": 1.5,
+        "reading_points": 1.5,
+        "ad_rewards": 1.0,
+        "task_rewards": 1.5,
+        "bills_cashback": 1.5,
+        "daily_rewards": 1.5
+      },
+      "features": {
+        "reading": {
+          "novels": {
+            "enabled": true,
+            "points_per_slice": 3,
+            "ads_required": false,
+            "ads_optional": true,
+            "ad_reward_points": 30,
+            "total_per_slice_no_ads": 3,
+            "total_per_slice_with_ads": 33,
+            "notes": "Novels: Skip ads (3 pts) or watch ads (3 reading + 30 ad = 33 total)"
+          },
+          "study_materials": {
+            "enabled": true,
+            "points_per_slice": 3,
+            "ads_shown": false,
+            "notes": "Study materials ad-free. 3 points per slice (1.5x)"
+          }
+        },
+        "ads": {
+          "novels_pre_read_required": false,
+          "novels_post_read_required": false,
+          "novels_ads_optional": true,
+          "study_ads_shown": false,
+          "feed_ads_enabled": false,
+          "rewarded_ads_enabled": true,
+          "optional_for_premium": true,
+          "notes": "Novels: Ads optional. Skip (3 pts) or watch (33 pts). Study always ad-free"
+        },
+        "study_materials": {
+          "unlock_method": "free",
+          "free_unlock": true,
+          "points_cost": 0,
+          "video_points_cost": 0,
+          "notes": "All study materials unlock for free"
+        },
+        "education_content": {
+          "unit_1_free": true,
+          "sequential_unlock": false,
+          "skip_unlock": true,
+          "notes": "Access any unit without completing previous units"
+        },
+        "listen_mode": {
+          "enabled_units": "all",
+          "full_access": true,
+          "notes": "Audio narration for all units of all works"
+        },
+        "daily_rewards": {
+          "enabled": true,
+          "base_reward": true,
+          "bonus_multiplier": 1.5,
+          "notes": "1.5x daily rewards and streak bonuses"
+        },
+        "tasks": {
+          "enabled": true,
+          "access_level": "priority",
+          "xp_multiplier": 1.5,
+          "points_multiplier": 1.5,
+          "priority_queue": true,
+          "notes": "1.5x task rewards and priority verification"
+        },
+        "bills_vtu": {
+          "enabled": true,
+          "cashback_rate": 0.67,
+          "bonus_multiplier": 1.5,
+          "notes": "1.5x cashback on all bill payments"
+        },
+        "wallet": {
+          "withdrawal_enabled": true,
+          "special_rates": false,
+          "reduced_fees": false,
+          "notes": "Standard withdrawal fees apply"
+        },
+        "catalog": {
+          "access_level": "full",
+          "exclusive_content": false,
+          "notes": "Access to all public catalog content"
+        },
+        "social": {
+          "enabled": true,
+          "badge": "complete_plus_gold",
+          "special_features": [
+            "priority_support"
+          ],
+          "notes": "Gold Complete+ badge and priority support"
+        }
+      },
+      "limitations": [],
+      "benefits_display": [
+        "Novels: Optional ads - Skip (3 pts) or Watch (33 pts)",
+        "Study materials: Ad-free, 3 points per slice",
+        "1.5x reading points multiplier",
+        "1.5x ad rewards when choosing to watch",
+        "Free study material unlocks",
+        "Full audio narration access",
+        "Skip education unit progression",
+        "Gold Complete+ badge",
+        "Priority task verification",
+        "1.5x task rewards",
+        "1.5x daily rewards",
+        "1.5x cashback on bills"
+      ],
+      "notes": "One paid plan (Premium), sold in two billing periods. All four paid tier keys resolve to identical benefits and price; the distinct names are legacy and awaiting an enum consolidation migration."
     }
   },
-
   "comparison": {
     "reading_novels": {
       "free_no_ads": "Not allowed - ads required",
@@ -630,7 +646,6 @@
       "complete_plus": "Optional - choose to skip or watch"
     }
   },
-
   "notes": {
     "content_types": "Two types: Novels (Gutenberg, etc.) with ads, and Study Materials (OpenStax, etc.) always ad-free",
     "novels_ads": "Novels use ads as revenue source. Free and Study+ users must watch. Complete+ users can choose to skip (3 pts) or watch (33 pts)",

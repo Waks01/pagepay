@@ -39,6 +39,7 @@ from app.schemas import (
 from app.routers.auth import get_current_user
 from app.services.notifications import create_notification, create_notification_background
 from app.services.fcm import send_wallet_update_background
+from app.services.tier_benefits import get_multiplier
 
 router = APIRouter(prefix="/session", tags=["session"])
 logger = logging.getLogger("uvicorn.error")
@@ -189,14 +190,20 @@ async def end_session(
     if is_verified_now:
         session.verified = True
 
-        # Credit slice completion bonus immediately upon verification
-        # Free: 2 pts, Premium: 4 pts
+        # Credit slice completion bonus immediately upon verification.
+        # The multiplier comes from tier_benefits.json, not a hardcoded
+        # "any paid tier gets 2x". That hardcode silently paid Study+
+        # users 4 pts/slice when their tier is defined as 1.0x — an
+        # unfunded payout the benefits table never promised.
         base_bonus = settings.reading_slice_bonus_points
-        multiplier = 2.0 if current_user.tier != UserTier.FREE else 1.0
+        multiplier = get_multiplier(current_user.tier, "reading_points", default=1.0)
         total_points = int(base_bonus * multiplier)
 
-        logger.info("END_SESSION: Calculating points for session=%d: base=%d, multiplier=%.1f, total=%d, tier=%s",
-                    session.id, base_bonus, multiplier, total_points, current_user.tier)
+        logger.info(
+            "END_SESSION: Calculating points for session=%d: base=%d, "
+            "multiplier=%.1f, total=%d, tier=%s",
+            session.id, base_bonus, multiplier, total_points, current_user.tier,
+        )
 
         session.pending_points = total_points
         bonus_eligible = True

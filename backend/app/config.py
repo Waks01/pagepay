@@ -719,17 +719,25 @@ class Settings(BaseSettings):
     # Override via env vars without a deploy. Paystack
     # charge amounts are derived from these via services.subscription.
     #
+    # One paid plan (Premium) in two billing periods. The four tier keys
+    # in tier_benefits.json all resolve to these same figures, so the
+    # distinct names are legacy aliases rather than separate products.
+    # Consolidating UserTier itself needs a data migration —
+    # get_tier_config falls back to `free` for an unknown key, so a
+    # rename could silently demote a paid user — and is deliberately
+    # not done here.
+    #
     #   study_plus_monthly_price_kobo: env STUDY_PLUS_MONTHLY_PRICE_KOBO
     #   study_plus_yearly_price_kobo:  env STUDY_PLUS_YEARLY_PRICE_KOBO
     #   complete_plus_monthly_price_kobo: env COMPLETE_PLUS_MONTHLY_PRICE_KOBO
     #   complete_plus_yearly_price_kobo:  env COMPLETE_PLUS_YEARLY_PRICE_KOBO
     #
     # Legacy aliases (PREMIUM_MONTHLY_PRICE_KOBO / PREMIUM_YEARLY_PRICE_KOBO)
-    # map to Study+ so existing .env files keep working.
-    study_plus_monthly_price_kobo: int = 100_000    # ₦1,000
-    study_plus_yearly_price_kobo: int = 1_000_000   # ₦10,000
-    complete_plus_monthly_price_kobo: int = 200_000  # ₦2,000
-    complete_plus_yearly_price_kobo: int = 2_000_000 # ₦20,000
+    # map to the same plan so existing .env files keep working.
+    study_plus_monthly_price_kobo: int = 300_000    # ₦3,000
+    study_plus_yearly_price_kobo: int = 3_000_000   # ₦30,000
+    complete_plus_monthly_price_kobo: int = 300_000  # ₦3,000
+    complete_plus_yearly_price_kobo: int = 3_000_000 # ₦30,000
     premium_monthly_price_kobo: int = 100_000       # legacy alias → study_plus_monthly
     premium_yearly_price_kobo: int = 1_000_000      # legacy alias → study_plus_yearly
 
