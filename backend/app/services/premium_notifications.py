@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User, UserTier
 from app.services.notifications import create_notification
+from app.services.subscription import format_tier_name
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ async def notify_premium_activated(
     
     Phase 6: Welcome notification with benefits summary.
     """
-    tier_name = "Premium Monthly" if tier == UserTier.PREMIUM_MONTHLY else "Premium Yearly"
+    tier_name = format_tier_name(tier)
     expires_str = expires_at.strftime("%B %d, %Y")
     
     benefits = [
@@ -71,7 +72,7 @@ async def notify_premium_expiring_soon(
     
     Phase 6: Reminder notification with renewal CTA.
     """
-    tier_name = "Premium Monthly" if tier == UserTier.PREMIUM_MONTHLY else "Premium Yearly"
+    tier_name = format_tier_name(tier)
     
     if days_left == 7:
         title = "⏰ Premium Expires in 7 Days"
@@ -114,7 +115,7 @@ async def notify_premium_expired(
     
     Phase 6: Expiry notification with re-subscribe CTA.
     """
-    tier_name = "Premium Monthly" if expired_tier == UserTier.PREMIUM_MONTHLY else "Premium Yearly"
+    tier_name = format_tier_name(expired_tier)
     
     await create_notification(
         db=db,
@@ -206,7 +207,7 @@ async def check_and_notify_expiring_subscriptions(db: AsyncSession) -> int:
         # Find users whose subscription expires on target date
         result = await db.execute(
             select(User).where(
-                User.tier.in_([UserTier.PREMIUM_MONTHLY, UserTier.PREMIUM_YEARLY]),
+                User.tier.in_([UserTier.STUDY_PLUS_MONTHLY, UserTier.STUDY_PLUS_YEARLY, UserTier.COMPLETE_PLUS_MONTHLY, UserTier.COMPLETE_PLUS_YEARLY]),
                 User.subscription_expires_at >= date_start,
                 User.subscription_expires_at <= date_end,
             )
@@ -243,7 +244,7 @@ async def notify_payment_initiated(
     
     Phase 6: Payment started - waiting for Paystack confirmation.
     """
-    tier_name = "Premium Monthly" if tier == UserTier.PREMIUM_MONTHLY else "Premium Yearly"
+    tier_name = format_tier_name(tier)
     amount_naira = amount_kobo / 100
     
     await create_notification(
@@ -276,7 +277,7 @@ async def notify_payment_pending(
     
     Phase 6: Payment received but awaiting bank/Paystack confirmation.
     """
-    tier_name = "Premium Monthly" if tier == UserTier.PREMIUM_MONTHLY else "Premium Yearly"
+    tier_name = format_tier_name(tier)
     
     await create_notification(
         db=db,
@@ -308,7 +309,7 @@ async def notify_payment_failed(
     
     Phase 6: Payment was declined or failed.
     """
-    tier_name = "Premium Monthly" if tier == UserTier.PREMIUM_MONTHLY else "Premium Yearly"
+    tier_name = format_tier_name(tier)
     
     await create_notification(
         db=db,
@@ -340,7 +341,7 @@ async def notify_payment_cancelled(
     
     Phase 6: User cancelled the payment or it timed out.
     """
-    tier_name = "Premium Monthly" if tier == UserTier.PREMIUM_MONTHLY else "Premium Yearly"
+    tier_name = format_tier_name(tier)
     
     await create_notification(
         db=db,
@@ -373,7 +374,7 @@ async def notify_payment_refunded(
     
     Phase 6: Payment was refunded - subscription reversed.
     """
-    tier_name = "Premium Monthly" if tier == UserTier.PREMIUM_MONTHLY else "Premium Yearly"
+    tier_name = format_tier_name(tier)
     amount_naira = amount_kobo / 100
     
     await create_notification(
@@ -407,7 +408,7 @@ async def notify_payment_abandoned(
     
     Phase 6: User initiated payment but didn't complete it.
     """
-    tier_name = "Premium Monthly" if tier == UserTier.PREMIUM_MONTHLY else "Premium Yearly"
+    tier_name = format_tier_name(tier)
     
     await create_notification(
         db=db,
@@ -564,7 +565,7 @@ async def check_and_send_daily_reward_reminders(db: AsyncSession) -> int:
     
     count = 0
     for streak, user in streaks_users:
-        is_premium = user.tier in (UserTier.PREMIUM_MONTHLY, UserTier.PREMIUM_YEARLY)
+        is_premium = user.tier != UserTier.FREE
         await notify_daily_reward_available(
             db=db,
             user_id=user.id,

@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Literal
 
 from app.exam_types import ExamTypeKey
+from app.models import UserTier
 
 
 def _validate_password_strength(v: str) -> str:
@@ -847,11 +848,15 @@ class AiRouteResponse(BaseModel):
 
 class PaymentInitiateRequest(BaseModel):
     """POST /api/v1/payments/initiate body.
-    
+
     User selects a tier and initiates checkout. Backend returns
     the payment provider's checkout URL.
     """
-    tier: Literal["premium_monthly", "premium_yearly"] = "premium_monthly"
+    # Must match the UserTier enum. This used to be
+    # Literal["premium_monthly", "premium_yearly"] — tiers that no
+    # longer exist — so every purchase was rejected with a 422 before
+    # reaching payment, and the four real tiers were unpurchasable.
+    tier: UserTier = UserTier.STUDY_PLUS_MONTHLY
     provider: Literal["paystack", "flutterwave"] = "paystack"
 
 

@@ -334,3 +334,140 @@ async def test_asset_unlock_rejects_ad_and_unknown_methods(client: AsyncClient, 
     assert user.service_credit_balance == 200
     assert user.cashable_balance == 200
     assert (await db_session.execute(select(StudyTransaction))).scalars().all() == []
+
+# ── Tier plumbing: the paid tiers must be purchasable and deliverable ─
+
+
+def test_calculate_end_date_covers_every_paid_tier():
+    """Subscription expiry must work for all four paid tiers.
+
+    `calculate_subscription_end_date` only branched on UserTier.
+    PREMIUM_MONTHLY / PREMIUM_YEARLY, which no longer exist in the
+    enum, so every successful charge raised AttributeError. The webhook
+    swallowed it, the user kept paying, and the tier was never
+    upgraded.
+    """
+    from datetime import datetime, timedelta
+
+    from app.models import UserTier
+    from app.services.subscription import calculate_subscription_end_date
+
+    start = datetime(2026, 1, 1)
+    expected = {
+        UserTier.STUDY_PLUS_MONTHLY: 30,
+        UserTier.STUDY_PLUS_YEARLY: 365,
+        UserTier.COMPLETE_PLUS_MONTHLY: 30,
+        UserTier.COMPLETE_PLUS_YEARLY: 365,
+    }
+    for tier, days in expected.items():
+        got = calculate_subscription_end_date(tier, start)
+        assert got == start + timedelta(days=days), f"{tier.value} -> {got}"
+
+
+def test_free_tier_has_no_end_date():
+    """FREE must raise, not silently get a subscription window."""
+    from app.models import UserTier
+    from app.services.subscription import calculate_subscription_end_date
+
+    with pytest.raises(ValueError):
+        calculate_subscription_end_date(UserTier.FREE)
+
+
+def test_payment_initiate_accepts_real_tiers():
+    """The purchase schema must accept the tiers that can be sold.
+
+    It used to be Literal["premium_monthly", "premium_yearly"] —
+    defunct values — so Pydantic rejected every purchase with a 422
+    before payment, and the four real tiers were unbuyable.
+    """
+    from app.schemas import PaymentInitiateRequest
+    from app.models import UserTier
+
+    for tier in [
+        "study_plus_monthly",
+        "study_plus_yearly",
+        "complete_plus_monthly",
+        "complete_plus_yearly",
+    ]:
+        req = PaymentInitiateRequest(tier=tier)
+        assert req.tier == UserTier(tier)
+
+    # A defunct tier must not be silently accepted.
+    with pytest.raises(Exception):
+        PaymentInitiateRequest(tier="premium_monthly")
+
+
+def test_no_dead_tier_enum_members_referenced():
+    """UserTier.PREMIUM_* does not exist; any use is a runtime crash.
+
+    Regression guard for the 11 sites in premium_notifications.py and
+    the tier-benefits endpoint that referenced them.
+    """
+    import inspect
+
+    from app.models import UserTier
+    from app.services import premium_notifications
+
+    assert not hasattr(UserTier, "PREMIUM_MONTHLY")
+    assert not hasattr(UserTier, "PREMIUM_YEARLY")
+
+    src = inspect.getsource(premium_notifications)
+    assert "PREMIUM_MONTHLY" not in src, "dead enum member still referenced"
+    assert "PREMIUM_YEARLY" not in src, "dead enum member still referenced"
+
+
+def test_notifications_module_imports_cleanly():
+    """premium_notifications must import — it referenced dead members."""
+    from app.services import premium_notifications
+
+    assert premium_notifications.UserTier is not None
+
+
+def test_activation_copy_matches_tier_benefits():
+    """Push copy must only claim what the tier actually grants.
+
+    The old body promised "ad-free reading and 2x points" to every
+    tier. Study+ has all multipliers at 1.0, so that was false.
+    """
+    from app.models import UserTier
+    from app.routers.payouts import _premium_activated_body
+
+    study = _premium_activated_body(UserTier.STUDY_PLUS_MONTHLY)
+    assert "1.5x" not in study, f"Study+ claims a multiplier it does not have: {study}"
+
+    complete = _premium_activated_body(UserTier.COMPLETE_PLUS_MONTHLY)
+    assert "1.5x" in complete, f"Complete+ omits its real multipliers: {complete}"
+    assert "3x" not in complete
+
+
+def test_subscription_status_benefits_come_from_data():
+    """Status benefits must reflect the tier, not a constant dict."""
+    from datetime import datetime, timedelta
+
+    from app.models import User, UserTier
+    from app.services.subscription import get_subscription_status
+
+    user = User(
+        email="tier@test.com",
+        password_hash="hash",
+        tier=UserTier.STUDY_PLUS_MONTHLY,
+        subscription_expires_at=datetime.utcnow() + timedelta(days=30),
+    )
+    status = get_subscription_status(user)
+
+    assert status["benefits"]["free_asset_unlock"] is True
+    assert status["benefits"]["audio_full_access"] is True
+    assert status["benefits"]["chat_daily_limit"] == 300
+    # The old constant dict keys must be gone.
+    for removed in ("ad_free_study", "double_points", "priority_ai"):
+        assert removed not in status["benefits"], f"stale key {removed} still returned"
+
+
+def test_free_user_reports_no_premium_benefits():
+    from app.models import User, UserTier
+    from app.services.subscription import get_subscription_status
+
+    user = User(email="free@test.com", password_hash="hash", tier=UserTier.FREE)
+    status = get_subscription_status(user)
+    assert status["is_premium"] is False
+    assert status["benefits"] == {}

@@ -274,6 +274,51 @@ async def _process_wallet_deposit(payment: Payment, reference: str, db: AsyncSes
         logger.warning("⚠️  No deposit_amount_kobo in metadata or amount is 0")
 
 
+def _premium_activated_body(tier: UserTier) -> str:
+    """Activation push copy, stated in terms of what the tier delivers.
+
+    Reads the tier's benefits from tier_benefits.json so the message
+    can never claim a multiplier or privilege the tier does not have.
+    """
+    try:
+        from app.services.tier_benefits import get_tier_config
+
+        cfg = get_tier_config(tier) or {}
+    except Exception:
+        cfg = {}
+
+    features = cfg.get("features", {}) or {}
+    multipliers = cfg.get("multipliers", {}) or {}
+    parts: list[str] = []
+
+    study = features.get("study_materials", {}) or {}
+    if study.get("free_unlock") or study.get("unlock_method") == "free":
+        parts.append("free study asset unlocks")
+
+    listen = features.get("listen_mode", {}) or {}
+    if listen.get("full_access") or listen.get("enabled_units") == "all":
+        parts.append("full audio narration")
+
+    for key, label in (
+        ("reading_points", "reading points"),
+        ("task_rewards", "task rewards"),
+        ("bills_cashback", "bills cashback"),
+    ):
+        mult = multipliers.get(key, 1.0)
+        if mult and mult > 1.0:
+            parts.append(f"{mult:g}x {label}")
+
+    if not parts:
+        return f"Welcome to {format_tier_name(tier)}! Your subscription is active."
+
+    joined = (
+        ", ".join(parts[:-1]) + f" and {parts[-1]}"
+        if len(parts) > 1
+        else parts[0]
+    )
+    return f"Welcome to {format_tier_name(tier)}! Enjoy {joined}."
+
+
 async def _process_premium_subscription(payment: Payment, db: AsyncSession, logger):
     """Process successful premium subscription upgrade."""
     logger.info("🎉 Processing PREMIUM SUBSCRIPTION upgrade...")
@@ -302,7 +347,12 @@ async def _process_premium_subscription(payment: Payment, db: AsyncSession, logg
                 send_push_notification_background(
                     user_id=payment.user_id,
                     title="🎉 Premium Activated!",
-                    body=f"Welcome to {tier_name}! Enjoy ad-free reading and 2x points.",
+                    # Copy is derived from the tier's actual benefits.
+                    # It previously promised "ad-free reading and 2x
+                    # points" for every tier, which is false for Study+
+                    # (all multipliers 1.0) and shaped user expectations
+                    # against something they never got.
+                    body=_premium_activated_body(tier),
                     data={
                         "type": "subscription_success",
                         "tier": tier.value,

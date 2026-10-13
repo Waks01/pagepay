@@ -132,6 +132,38 @@ def _effective_commission_kobo(
        points even when the provider returns 0/unknown discount.
 
     The fallback matches the frontend estimate users see before purchase.
+
+    See `_resolve_commission_kobo` for the variant that reports whether the
+    figure came from the provider or from that fallback.
+    """
+    return _resolve_commission_kobo(
+        amount_kobo=amount_kobo,
+        service=service,
+        discount=discount,
+        charged=charged,
+        price_naira=price_naira,
+    )[0]
+
+
+def _resolve_commission_kobo(
+    amount_kobo: int,
+    service: str,
+    discount: str | None = None,
+    charged: float | None = None,
+    price_naira: float | None = None,
+) -> tuple[int, bool]:
+    """Resolve commission and report whether the provider supplied it.
+
+    Returns `(commission_kobo, is_estimated)`.
+
+    `is_estimated` is True when neither the provider's discount nor the
+    charged-vs-price gap produced a figure and the 1.8% fallback was used
+    instead. That distinction matters because the fallback is an
+    assumption rather than measured margin: crediting it to a
+    *withdrawable* balance pays real naira out of the platform against
+    revenue that may not exist. Callers holding a user's cashable
+    balance should route estimated commission to spendable credits
+    instead, and only withdrawable credit real provider margin.
     """
     commission_kobo = 0
 
@@ -147,12 +179,47 @@ def _effective_commission_kobo(
         except (ValueError, TypeError):
             pass
 
-    if commission_kobo <= 0:
-        fallback_kobo = max(1, int(amount_kobo * 0.018))
-        logger.info("VTU %s returned 0 commission; using fallback of %d kobo", service, fallback_kobo)
-        commission_kobo = fallback_kobo
+    if commission_kobo > 0:
+        return commission_kobo, False
 
-    return commission_kobo
+    fallback_kobo = max(1, int(amount_kobo * 0.018))
+    logger.info("VTU %s returned 0 commission; using fallback of %d kobo", service, fallback_kobo)
+    return fallback_kobo, True
+
+
+async def _credit_commission_points(
+    db: AsyncSession,
+    user_id: int,
+    points: int,
+    commission_estimated: bool,
+) -> None:
+    """Credit commission points to the wallet they belong in.
+
+    Estimated commission (the 1.8% fallback in `_resolve_commission_kobo`)
+    is an assumption, not measured margin. Paying it into
+    `cashable_balance` would let a user deposit, buy these services, and
+    withdraw more naira than the provider actually paid us - so estimated
+    commission lands in spendable service credits, and only real provider
+    margin becomes withdrawable cash.
+    """
+    if not settings.wallet_split_enabled:
+        await db.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(points_balance=User.points_balance + points)
+        )
+        return
+
+    column = (
+        User.service_credit_balance
+        if commission_estimated
+        else User.cashable_balance
+    )
+    await db.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values({column.name: column + points})
+    )
 
 
 def _generate_reference() -> str:
@@ -1689,6 +1756,9 @@ async def fund_betting(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Fund betting wallet."""
+    # Enforce per-service rate limits. These were defined for this
+    # service but never called, leaving the commission path unlimited.
+    await enforce_rate_limits(current_user.id, "betting")
     reference = _generate_reference()
     biller_code = payload.get("biller_code", "")
     account_number = payload.get("account_number", "")
@@ -1779,9 +1849,12 @@ async def fund_betting(
         await db.rollback()
         raise _vtu_error(exc)
 
-    commission_kobo = _effective_commission_kobo(
+    commission_kobo, commission_estimated = _resolve_commission_kobo(
         amount_kobo=amount_kobo,
         service="betting",
+        # Bigisub returns the provider's data dict; use its discount when
+        # present. Omitting it forced the 1.8% estimate every time.
+        discount=(result.get("discount") if isinstance(result, dict) else None),
     )
     
     # Get full user object for multiplier calculation (Phase 2)
@@ -1809,18 +1882,10 @@ async def fund_betting(
 
     balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
     new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
-    if settings.wallet_split_enabled:
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance + points)
-        )
-    else:
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(points_balance=User.points_balance + points)
-        )
+
+    await _credit_commission_points(
+        db, current_user.id, points, commission_estimated
+    )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -1882,6 +1947,9 @@ async def topup_smile(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Top up Smile ISP account."""
+    # Enforce per-service rate limits. These were defined for this
+    # service but never called, leaving the commission path unlimited.
+    await enforce_rate_limits(current_user.id, "isp_smile")
     reference = _generate_reference()
     account_number = payload.get("account_number", "")
     plan_id = int(payload.get("plan_id", 0))
@@ -1935,9 +2003,12 @@ async def topup_smile(
         await db.rollback()
         raise _vtu_error(exc)
 
-    commission_kobo = _effective_commission_kobo(
+    commission_kobo, commission_estimated = _resolve_commission_kobo(
         amount_kobo=amount_kobo,
         service="isp_smile",
+        # Use the provider's own discount when it reports one, so
+        # commission reflects real margin, not the 1.8% estimate.
+        discount=(result.get("discount") if isinstance(result, dict) else None),
     )
     
     # Get full user object for multiplier calculation (Phase 2)
@@ -1965,18 +2036,10 @@ async def topup_smile(
 
     balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
     new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
-    if settings.wallet_split_enabled:
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance + points)
-        )
-    else:
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(points_balance=User.points_balance + points)
-        )
+
+    await _credit_commission_points(
+        db, current_user.id, points, commission_estimated
+    )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -2013,6 +2076,9 @@ async def topup_spectranet(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Top up Spectranet ISP account."""
+    # Enforce per-service rate limits. These were defined for this
+    # service but never called, leaving the commission path unlimited.
+    await enforce_rate_limits(current_user.id, "isp_spectranet")
     reference = _generate_reference()
     account_number = payload.get("account_number", "")
     plan_id = int(payload.get("plan_id", 0))
@@ -2066,9 +2132,12 @@ async def topup_spectranet(
         await db.rollback()
         raise _vtu_error(exc)
 
-    commission_kobo = _effective_commission_kobo(
+    commission_kobo, commission_estimated = _resolve_commission_kobo(
         amount_kobo=amount_kobo,
         service="isp_spectranet",
+        # Use the provider's own discount when it reports one, so
+        # commission reflects real margin, not the 1.8% estimate.
+        discount=(result.get("discount") if isinstance(result, dict) else None),
     )
     
     # Get full user object for multiplier calculation (Phase 2)
@@ -2096,18 +2165,10 @@ async def topup_spectranet(
 
     balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
     new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
-    if settings.wallet_split_enabled:
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance + points)
-        )
-    else:
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(points_balance=User.points_balance + points)
-        )
+
+    await _credit_commission_points(
+        db, current_user.id, points, commission_estimated
+    )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -2152,6 +2213,9 @@ async def buy_result_checker(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Buy exam result checker PIN."""
+    # Enforce per-service rate limits. These were defined for this
+    # service but never called, leaving the commission path unlimited.
+    await enforce_rate_limits(current_user.id, "education")
     reference = _generate_reference()
     exam_code = payload.get("exam_code", "")
     quantity = int(payload.get("quantity", 1))
@@ -2205,9 +2269,12 @@ async def buy_result_checker(
         await db.rollback()
         raise _vtu_error(exc)
 
-    commission_kobo = _effective_commission_kobo(
+    commission_kobo, commission_estimated = _resolve_commission_kobo(
         amount_kobo=amount_kobo,
         service="education",
+        # Use the provider's own discount when it reports one, so
+        # commission reflects real margin, not the 1.8% estimate.
+        discount=(result.get("discount") if isinstance(result, dict) else None),
     )
     
     # Get full user object for multiplier calculation (Phase 2)
@@ -2235,18 +2302,10 @@ async def buy_result_checker(
 
     balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
     new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
-    if settings.wallet_split_enabled:
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance + points)
-        )
-    else:
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(points_balance=User.points_balance + points)
-        )
+
+    await _credit_commission_points(
+        db, current_user.id, points, commission_estimated
+    )
     await db.commit()
 
     from app.services.notifications import create_notification_background
@@ -2292,6 +2351,9 @@ async def send_sms(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Send bulk SMS."""
+    # Enforce per-service rate limits. These were defined for this
+    # service but never called, leaving the commission path unlimited.
+    await enforce_rate_limits(current_user.id, "sms")
     reference = _generate_reference()
     sender_name = payload.get("sender_name", "")
     recipients = payload.get("recipients", [])
@@ -2345,9 +2407,12 @@ async def send_sms(
         await db.rollback()
         raise _vtu_error(exc)
 
-    commission_kobo = _effective_commission_kobo(
+    commission_kobo, commission_estimated = _resolve_commission_kobo(
         amount_kobo=amount_kobo,
         service="sms",
+        # Use the provider's own discount when it reports one, so
+        # commission reflects real margin, not the 1.8% estimate.
+        discount=(result.get("discount") if isinstance(result, dict) else None),
     )
     
     # Get full user object for multiplier calculation (Phase 2)
@@ -2375,18 +2440,10 @@ async def send_sms(
 
     balance_for_calc = user_row.cashable_balance if settings.wallet_split_enabled else user_row.points_balance
     new_balance = balance_for_calc - kobo_to_points(amount_kobo) + points
-    if settings.wallet_split_enabled:
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(cashable_balance=User.cashable_balance + points)
-        )
-    else:
-        await db.execute(
-            update(User)
-            .where(User.id == current_user.id)
-            .values(points_balance=User.points_balance + points)
-        )
+
+    await _credit_commission_points(
+        db, current_user.id, points, commission_estimated
+    )
     await db.commit()
 
     from app.services.notifications import create_notification_background

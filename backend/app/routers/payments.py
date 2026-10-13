@@ -125,13 +125,11 @@ async def initiate_payment(
         logger.error("❌ PAYSTACK_SECRET_KEY not configured!")
         raise HTTPException(status_code=503, detail="Payments not configured")
     
-    # Parse tier enum
-    try:
-        tier = UserTier(payload.tier)
-        logger.info("✅ Tier parsed: %s", tier.value)
-    except ValueError:
-        logger.error("❌ Invalid tier: %s", payload.tier)
-        raise HTTPException(status_code=400, detail=f"Invalid tier: {payload.tier}")
+    # `payload.tier` is already a validated UserTier enum member (the
+    # schema used to accept string tiers that no longer exist, so every
+    # purchase was rejected here with a 400).
+    tier = payload.tier
+    logger.info("✅ Tier parsed: %s", tier.value)
     
     # Get tier price
     amount_kobo = get_tier_price_kobo(tier)
@@ -614,12 +612,17 @@ async def get_tier_benefits():
     """
     from app.services.tier_benefits import get_tier_config, _tier_config
     from app.models import UserTier
-    
-    # Return the full config for all tiers
+
+    # Return the full config for all tiers. Keyed by the real tier
+    # values — these were "premium_monthly"/"premium_yearly", enum
+    # members that no longer exist, which 500'd this endpoint and
+    # took down the premium comparison screen.
     return {
         "free": get_tier_config(UserTier.FREE),
-        "premium_monthly": get_tier_config(UserTier.PREMIUM_MONTHLY),
-        "premium_yearly": get_tier_config(UserTier.PREMIUM_YEARLY),
+        "study_plus_monthly": get_tier_config(UserTier.STUDY_PLUS_MONTHLY),
+        "study_plus_yearly": get_tier_config(UserTier.STUDY_PLUS_YEARLY),
+        "complete_plus_monthly": get_tier_config(UserTier.COMPLETE_PLUS_MONTHLY),
+        "complete_plus_yearly": get_tier_config(UserTier.COMPLETE_PLUS_YEARLY),
         "comparison": _tier_config.config.get("comparison", {}),
     }
 

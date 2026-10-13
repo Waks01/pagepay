@@ -9,6 +9,7 @@ from typing import Optional
 
 from app.config import settings
 from app.models import User, UserTier
+from app.services.tier_benefits import get_tier_config
 
 
 GRACE_PERIOD = timedelta(days=settings.premium_grace_period_days)
@@ -81,25 +82,39 @@ def get_points_multiplier(user: User, activity_type: str = "reading") -> float:
         return multiplier_map.get(activity_type, settings.premium_points_multiplier)
 
 
+#: Subscription length in days, keyed by tier. Derived here rather than
+#: if/elif'd inline so adding a tier is one entry, and so an unknown
+#: tier raises instead of silently falling through.
+_TIER_DURATION_DAYS: dict[UserTier, int] = {
+    UserTier.STUDY_PLUS_MONTHLY: 30,
+    UserTier.STUDY_PLUS_YEARLY: 365,
+    UserTier.COMPLETE_PLUS_MONTHLY: 30,
+    UserTier.COMPLETE_PLUS_YEARLY: 365,
+}
+
+
 def calculate_subscription_end_date(tier: UserTier, start_date: Optional[datetime] = None) -> datetime:
     """Calculate when a subscription should expire.
-    
+
     Args:
         tier: The subscription tier
         start_date: When subscription starts (defaults to now)
-        
+
     Returns:
         Expiration datetime
+
+    Raises:
+        ValueError: if `tier` is FREE or otherwise has no defined
+            duration — a caller that reaches here with FREE is a bug,
+            and silently returning a date would extend a free tier.
     """
     if start_date is None:
         start_date = datetime.utcnow()
-    
-    if tier == UserTier.PREMIUM_MONTHLY:
-        return start_date + timedelta(days=30)
-    elif tier == UserTier.PREMIUM_YEARLY:
-        return start_date + timedelta(days=365)
-    else:
+
+    days = _TIER_DURATION_DAYS.get(tier)
+    if days is None:
         raise ValueError(f"Cannot calculate end date for tier: {tier}")
+    return start_date + timedelta(days=days)
 
 
 def get_tier_price_kobo(tier: UserTier) -> int:
@@ -155,32 +170,57 @@ def format_tier_name(tier: UserTier) -> str:
 
 def get_subscription_status(user: User) -> dict:
     """Get detailed subscription status for a user.
-    
+
     Args:
         user: User model instance
-        
+
     Returns:
         Dictionary with subscription details
     """
     is_active = is_premium(user)
-    
+
     days_remaining = None
     if is_active and user.subscription_expires_at:
         delta = user.subscription_expires_at - datetime.utcnow()
         days_remaining = max(0, delta.days)
-    
+
+    in_grace = (
+        is_active
+        and user.subscription_expires_at is not None
+        and user.subscription_expires_at <= datetime.utcnow()
+    )
+
+    # Benefits are reported from the tier benefits data, not hardcoded.
+    # The previous fixed dict claimed ad_free_study / double_points /
+    # priority_ai for *every* paid tier, which was false for Study+ and
+    # made the payload unusable for showing a user what they bought.
+    benefits: dict = {}
+    if is_active:
+        try:
+            tier_benefits = get_tier_config(user.tier)
+        except Exception:
+            tier_benefits = {}
+        features = tier_benefits.get("features", {}) or {}
+        study = features.get("study_materials", {}) or {}
+        listen = features.get("listen_mode", {}) or {}
+        benefits = {
+            "free_asset_unlock": bool(
+                study.get("free_unlock") or study.get("unlock_method") == "free"
+            ),
+            "audio_full_access": bool(
+                listen.get("full_access") or listen.get("enabled_units") == "all"
+            ),
+            "chat_daily_limit": settings.study_chat_premium_daily_limit,
+        }
+
     return {
         "tier": user.tier.value,
         "tier_name": format_tier_name(user.tier),
         "is_premium": is_active,
-        "in_grace_period": is_active and user.subscription_expires_at is not None and user.subscription_expires_at <= datetime.utcnow(),
+        "in_grace_period": in_grace,
         "expires_at": user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
         "days_remaining": days_remaining,
         "grace_period_days": settings.premium_grace_period_days,
         "points_multiplier": get_points_multiplier(user),
-        "benefits": {
-            "ad_free_study": is_active,
-            "double_points": is_active,
-            "priority_ai": is_active,
-        }
+        "benefits": benefits,
     }
