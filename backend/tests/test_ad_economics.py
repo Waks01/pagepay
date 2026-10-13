@@ -78,25 +78,85 @@ def test_payout_is_16_at_defaults():
     assert settings.platform_ad_revenue_percent == 0.20
 
 
-def test_env_example_does_not_set_the_derived_value():
-    """`.env.example` must not ship a hand-set payout, which would
-    override the derivation for anyone who copies it."""
+def test_env_example_does_not_hard_set_the_payout():
+    """`.env.example` must not ship a hand-set payout that contradicts the
+    derivation. It may show one commented out, with the right value."""
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     env_example = os.path.join(repo_root, "backend", ".env.example")
     if not os.path.exists(env_example):
         pytest.skip(".env.example not present")
 
-    src = open(env_example, encoding="utf-8").read()
+    src = io.open(env_example, encoding="utf-8").read()
     active = [
         line
         for line in src.splitlines()
-        if line.startswith("REWARDED_AD_PAYOUT_POINTS=")
+        if not line.lstrip().startswith("#")
+        and line.startswith("REWARDED_AD_PAYOUT_POINTS=")
     ]
     assert not active, (
-        f".env.example must not set the derived payout: {active}. "
+        f".env.example must not set the derived payout as active config: {active}. "
         "Set REWARDED_AD_GROSS_POINTS instead."
     )
     assert "REWARDED_AD_GROSS_POINTS=" in src
+
+
+def test_settings_warns_when_payout_contradicts_the_share(caplog):
+    """A stale env override must be loud, not silent.
+
+    The old `REWARDED_AD_PAYOUT_POINTS=20` alongside
+    `PLATFORM_AD_REVENUE_PERCENT=0.20` made the payout equal the gross, so
+    users got 100% and the platform kept nothing while every config screen
+    still claimed 20%. The override stays settable — it is a useful ops
+    knob — but a mismatch has to be visible.
+    """
+    import logging
+
+    from app.config import Settings
+
+    with caplog.at_level(logging.WARNING, logger="uvicorn.error"):
+        Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            secret_key="test-secret",
+            rewarded_ad_gross_points=20,
+            rewarded_ad_payout_points=20,  # stale gross value under a payout name
+            platform_ad_revenue_percent=0.20,
+        )
+    assert "AD PAYOUT MISMATCH" in caplog.text
+    assert "set REWARDED_AD_PAYOUT_POINTS=16" in caplog.text
+
+
+def test_settings_stays_silent_when_payout_matches(caplog):
+    import logging
+
+    from app.config import Settings
+
+    with caplog.at_level(logging.WARNING, logger="uvicorn.error"):
+        Settings(
+            database_url="sqlite+aiosqlite:///:memory:",
+            secret_key="test-secret",
+            rewarded_ad_gross_points=20,
+            rewarded_ad_payout_points=16,
+            platform_ad_revenue_percent=0.20,
+        )
+    assert "AD PAYOUT MISMATCH" not in caplog.text
+
+
+def test_settings_tolerates_a_deliberate_override():
+    """An honest override is allowed — this is the point of keeping the
+    knob. It warns but does not refuse to boot."""
+    from app.config import Settings
+
+    s = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        secret_key="test-secret",
+        rewarded_ad_gross_points=30,
+        rewarded_ad_payout_points=25,  # operator chose an 83/17 split
+        platform_ad_revenue_percent=0.20,
+    )
+    assert s.rewarded_ad_payout_points == 25
+
+
+import io  # noqa: E402
 
 
 def test_free_chat_quota_is_bounded_by_the_ad_margin():

@@ -819,5 +819,44 @@ class Settings(BaseSettings):
                 raise ValueError("ENCRYPTION_KEY must be set in production for data-at-rest encryption")
         return self
 
+    @model_validator(mode="after")
+    def _check_ad_payout_matches_revenue_share(self) -> "Settings":
+        """Keep the ad payout consistent with the platform's revenue share.
+
+        `rewarded_ad_payout_points` is a deliberate ops override — it is
+        useful to credit without a deploy, so it stays settable. But an
+        env value wins over the derived default, and a stale one silently
+        breaks the split: with the old `REWARDED_AD_PAYOUT_POINTS=20`
+        still set alongside `PLATFORM_AD_REVENUE_PERCENT=0.20`, the
+        payout equals the gross, so users get 100% and the platform keeps
+        nothing while every config screen still claims 20%.
+
+        A warning, not an error: the override is legitimate, and refusing
+        to boot over a payout number would be worse than logging it.
+        """
+        import logging as _logging
+
+        logger = _logging.getLogger("uvicorn.error")
+
+        expected = int(self.rewarded_ad_gross_points * (1 - self.platform_ad_revenue_percent))
+        actual = self.rewarded_ad_payout_points
+
+        if actual != expected:
+            logger.warning(
+                "AD PAYOUT MISMATCH: rewarded_ad_payout_points=%s but gross=%s x "
+                "(1 - platform_ad_revenue_percent=%s) = %s. The platform keeps "
+                "%s pts of %s instead of the configured %.0f%%. If this is an "
+                "env override, set REWARDED_AD_PAYOUT_POINTS=%s.",
+                actual,
+                self.rewarded_ad_gross_points,
+                self.platform_ad_revenue_percent,
+                expected,
+                self.rewarded_ad_gross_points - actual,
+                self.rewarded_ad_gross_points,
+                self.platform_ad_revenue_percent * 100,
+                expected,
+            )
+        return self
+
 
 settings = Settings()  # type: ignore[call-arg]
