@@ -17,6 +17,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from app.config import settings
 from app.models import (
     AudioUnlock,
     StudyAsset,
@@ -457,7 +458,7 @@ def test_subscription_status_benefits_come_from_data():
 
     assert status["benefits"]["free_asset_unlock"] is True
     assert status["benefits"]["audio_full_access"] is True
-    assert status["benefits"]["chat_daily_limit"] == 300
+    assert status["benefits"]["chat_daily_limit"] == settings.study_chat_premium_daily_limit
     # The old constant dict keys must be gone.
     for removed in ("ad_free_study", "double_points", "priority_ai"):
         assert removed not in status["benefits"], f"stale key {removed} still returned"

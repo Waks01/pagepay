@@ -118,13 +118,31 @@ class Settings(BaseSettings):
     applovin_webhook_secret: str | None = None
 
     # ── Ad reward payout (SSV-only flow) ────────────────────────────
-    # How many points one rewarded ad is worth, before the user-share
-    # discount. 20 × USER_SHARE (0.80) = 16 points credited per ad.
-    # 16 points = ₦1.60. Override via env `REWARDED_AD_PAYOUT_POINTS`.
-    # The value is read from settings (env-overridable) and lives in
-    # exactly one place. Only rewarded_* ad units earn; in-feed and
-    # interstitial credits are blocked at the SSV handler.
-    rewarded_ad_payout_points: int = 20
+    # The platform keeps `platform_ad_revenue_percent` (20%) of what an
+    # ad grosses; the user gets the rest. Only rewarded_* ad units earn —
+    # in-feed and interstitial credits are blocked at the SSV handler.
+    #
+    # Two values, not one:
+    #   `rewarded_ad_gross_points` is what an ad is worth, in points. At
+    #     10 pts/₦ the $1.50 Nigerian rewarded-video eCPM assumption is
+    #     ₦2.00 = 20 points.
+    #   `rewarded_ad_payout_points` is what the user is credited, derived
+    #     from the percent so the two can never drift apart.
+    #
+    # This used to be a single `rewarded_ad_payout_points = 20` holding
+    # the GROSS figure. The name implied it was the payout, which made
+    # "pay 20, keep 4" look like the model — when the actual credit is
+    # 16. That error took a full analysis pass to unwind, so the naming
+    # is now explicit and the payout is derived rather than hand-set.
+    # Override via env `REWARDED_AD_GROSS_POINTS`.
+    rewarded_ad_gross_points: int = 20
+    # Points credited per rewarded ad to the user's spendable balance.
+    # Derived: gross × (1 - platform_ad_revenue_percent).
+    # Must land in `service_credit_balance`, never cashable — as
+    # spendable service the payout costs ~₦0.81 to serve, which is what
+    # keeps the margin at ~60% instead of ~20%.
+    # Override via env `REWARDED_AD_PAYOUT_POINTS`.
+    rewarded_ad_payout_points: int = int(20 * (1 - 0.20))  # 16
     # Bonus credited to the user when they finish a 1-minute reading
     # slice, independent of any ads watched. Settled at /session/end.
     # Override via env `READING_SLICE_BONUS_POINTS`.
@@ -306,11 +324,24 @@ class Settings(BaseSettings):
 
     # Daily chat quota per user. /study/chat calls a paid model with no
     # free tier, so an unmetered endpoint is an open bill: a scripted
-    # client could otherwise drain the Cloudflare account. Premium
-    # users get the larger cap (services/ai_usage.py enforces both).
-    # Override via env `STUDY_CHAT_DAILY_LIMIT`.
-    study_chat_daily_limit: int = 50
-    study_chat_premium_daily_limit: int = 300
+    # client could otherwise drain the Cloudflare account.
+    #
+    # Free is 5/day, deliberately low. Measured with model routing live
+    # (68% Granite at ~N0.68/turn, 32% GLM at ~N2.43/turn) the blended
+    # cost is ~N1.24/turn, so 5 turns/day is ~N186/user/month — an
+    # acquisition cost the rewarded-ad margin (~N120/user/month at 10
+    # ads/day) nearly covers. At the previous 50/day the same user cost
+    # ~N1,860/month against ~N0 of revenue.
+    #
+    # Premium is 15/day: ~N556/month at full use, which leaves comfortable
+    # margin against the subscription price. Metering beyond the quota
+    # recovers the rest — see PRICING_AND_UNIT_ECONOMICS.md.
+    #
+    # Failed model calls refund the slot (services/ai_usage.py).
+    # Override via env `STUDY_CHAT_DAILY_LIMIT` /
+    # `STUDY_CHAT_PREMIUM_DAILY_LIMIT`.
+    study_chat_daily_limit: int = 5
+    study_chat_premium_daily_limit: int = 15
 
     # Minimum effective reading duration (seconds) before a session is
     # considered "verified" and eligible for the slice bonus. The
