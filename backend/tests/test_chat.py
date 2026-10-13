@@ -190,10 +190,14 @@ async def test_chat_daily_quota_and_refund(
     assert (await post()).status_code == 200
     assert (await post()).status_code == 200
 
-    # Third is over quota.
+    # Third is over quota. The detail must name the price so the client
+    # can offer to buy the turn rather than dead-ending.
     res = await post()
     assert res.status_code == 429
-    assert "Daily AI chat limit" in res.json()["detail"]
+    detail = res.json()["detail"]
+    assert "Daily free chat limit" in detail
+    assert "SV" in detail
+    assert res.headers.get("X-Chat-Turn-Price") is not None
 
 
 @pytest.mark.asyncio

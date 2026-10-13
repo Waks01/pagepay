@@ -74,7 +74,7 @@ from app.services import study_audio_service
 from app.services import r2_storage
 import app.services.tts_hybrid as tts_hybrid
 from app.limiter import limiter
-from app.services.ai_usage import check_and_record, release
+from app.services.ai_usage import check_and_record, peek_count, release
 from app.services.subscription import is_premium
 from app.schemas import (
     ChatRequest,
@@ -1804,7 +1804,9 @@ async def chat_study(
 
     Per-user daily quota: this calls a paid model with no free tier,
     so the call is admitted against `study_chat_daily_limit`
-    (premium gets `study_chat_premium_daily_limit`). Failed model
+    (premium gets `study_chat_premium_daily_limit`). Beyond that quota a
+    student can buy a turn with SV — priced by the tier the question
+    routes to, so the price tracks the cost. Failed model
     calls are refunded. See services/ai_usage.py.
     """
     result = await db.execute(
@@ -1822,8 +1824,73 @@ async def chat_study(
         if is_premium(current_user)
         else settings.study_chat_daily_limit
     )
-    allowed, remaining = check_and_record(current_user.id, daily_limit)
+
+    # Classify once. The tier drives both the price of a paid turn and
+    # which model answers, so it has to be settled before either.
+    from app.ai.routing import classify_turn
+
+    decision = classify_turn(payload.message, material_title=material.title)
+    tier = decision.model_tier if settings.ai_routing_enabled else "premium"
+
+    # A turn is billable when the free quota is already spent. Decide
+    # before touching any counter, so a rejected payment can't consume a
+    # free slot.
+    used = peek_count(current_user.id)
+    paid_daily_limit = settings.study_chat_paid_daily_limit
+    is_billable = used >= daily_limit
+
+    paid_price = 0
+    if is_billable:
+        turn_price = (
+            settings.study_chat_sv_premium
+            if tier == "premium"
+            else settings.study_chat_sv_standard
+        )
+        if used >= daily_limit + paid_daily_limit:
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    f"Daily chat limit reached ({daily_limit} free + "
+                    f"{paid_daily_limit} paid). Try again tomorrow."
+                ),
+            )
+        if not payload.pay_for_turn:
+            # Rejected before any state changes, so the free quota stays
+            # intact and the client can offer the pay path.
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    f"Daily free chat limit reached ({daily_limit}/day). "
+                    f"This question costs {turn_price} SV."
+                ),
+                headers={"X-Chat-Turn-Price": str(turn_price)},
+            )
+        # Pay first, then commit with its ledger row, so an unaffordable
+        # balance writes nothing at all.
+        paid_price = turn_price
+        new_balance = await _debit_wallet(
+            db, current_user.id, "points", paid_price
+        )
+        db.add(
+            StudyTransaction(
+                user_id=current_user.id,
+                asset_id=None,
+                method="chat",
+                points_spent=paid_price,
+                reward_granted=True,
+            )
+        )
+        await db.commit()
+
+    # Admit the slot against the limit that applies to this turn.
+    allowed, remaining = check_and_record(
+        current_user.id,
+        daily_limit + (paid_daily_limit if is_billable else 0),
+    )
     if not allowed:
+        # Priced and paid but couldn't be admitted — refund.
+        if is_billable:
+            await _refund_chat_payment(db, current_user.id, paid_price)
         raise HTTPException(
             status_code=429,
             detail=f"Daily AI chat limit reached ({daily_limit}/day). Try again tomorrow.",
@@ -1848,14 +1915,6 @@ async def chat_study(
             "in parentheses where students will need the exam wording."
         )
 
-    # Decide the model before calling, so the choice is logged and the
-    # cost is intended rather than incidental. Generation tasks keep
-    # using premium; chat is the one place complexity varies.
-    from app.ai.routing import classify_turn
-
-    decision = classify_turn(payload.message, material_title=material.title)
-    tier = decision.model_tier if settings.ai_routing_enabled else "premium"
-
     try:
         ai_result = await route_ai(
             payload.message,
@@ -1868,17 +1927,23 @@ async def chat_study(
         )
     except HTTPException:
         # Provider failed after we admitted the call — give the slot
-        # back so an outage doesn't burn the user's daily quota.
+        # back so an outage doesn't burn the user's daily quota, and
+        # refund the SV so a failed turn is never paid for.
         release(current_user.id)
+        if is_billable and paid_price:
+            await _refund_chat_payment(db, current_user.id, paid_price)
         raise
     text = ai_result["response"]
     logger.info(
-        "study chat: user=%s material=%s tier=%s reason=%s score=%s model=%s usage=%s",
+        "study chat: user=%s material=%s tier=%s reason=%s score=%s "
+        "billable=%s sv=%s model=%s usage=%s",
         current_user.id,
         material.id,
         tier,
         decision.reason,
         decision.score,
+        is_billable,
+        paid_price,
         ai_result.get("model"),
         ai_result.get("usage"),
     )
@@ -1902,6 +1967,27 @@ async def chat_study(
 # same unit (POINTS_PER_NAIRA = 10, so 1 pt = ₦0.10), which is why a
 # price quoted in sv is paid from either wallet at face value.
 _SV_METHODS = {"points", "sv"}
+
+
+async def _refund_chat_payment(
+    db: AsyncSession, user_id: int, amount: int
+) -> None:
+    """Refund a paid chat turn when the model call fails.
+
+    Without this, a Cloudflare outage costs the student real SV for an
+    answer they never got. Credits back to the spendable wallet the
+    debit came from and commits, so a failure path never leaves a
+    half-written ledger.
+    """
+    if amount <= 0:
+        return
+    field = _wallet_field_for("points")
+    await db.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values({getattr(User, field): getattr(User, field) + amount})
+    )
+    await db.commit()
 
 
 def _wallet_field_for(method: str) -> str:

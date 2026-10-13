@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, FadeInDown } from 'react-native-reanimated';
 
 import { apiFetch } from '@/src/shared/api/client';
-import { sendChatMessage, type ChatRequest } from '@/src/features/study/api';
+import { sendChatMessage, ChatRefusedError, type ChatRequest } from '@/src/features/study/api';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PageHeader } from '@/components/PageHeader';
@@ -51,6 +51,9 @@ export default function StudyChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  // Set when the student just paid for a turn, so the retry that follows
+  // the "Use N SV" prompt carries pay_for_turn instead of asking again.
+  const [paidTurn, setPaidTurn] = useState(false);
   const [educationLevel, setEducationLevel] = useState<
     NonNullable<ChatRequest['education_level']>
   >('secondary');
@@ -69,6 +72,20 @@ export default function StudyChatScreen() {
       return res.json();
     },
   });
+
+  // Spendable SV, shown in the "use N SV" prompt so the student knows
+  // what they have before agreeing.
+  const meQ = useQuery({
+    queryKey: ['me'],
+    queryFn: async () => {
+      const res = await apiFetch('/api/v1/auth/me');
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+  const balance = meQ.data?.service_credit_balance as number | undefined;
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -110,17 +127,49 @@ export default function StudyChatScreen() {
           .slice(-10)
           .map((m) => ({ role: m.role, content: m.text }));
 
-        const answer = await sendChatMessage(
-          {
-            material_id: materialId,
-            message: text,
-            education_level: educationLevel,
-            difficulty: difficulty,
-            language: i18n.language,
-            history,
-          },
-          controller.signal,
-        );
+        let answer: string;
+        try {
+          answer = await sendChatMessage(
+            {
+              material_id: materialId,
+              message: text,
+              education_level: educationLevel,
+              difficulty: difficulty,
+              language: i18n.language,
+              history,
+              pay_for_turn: paidTurn,
+            },
+            controller.signal,
+          );
+        } catch (err) {
+          // Quota spent: offer to buy the turn rather than dead-ending.
+          // The server names the price for this specific question, so
+          // prompt with that rather than a generic upsell.
+          if (
+            err instanceof ChatRefusedError &&
+            err.status === 429 &&
+            err.priceSv != null
+          ) {
+            Alert.alert(
+              'Daily free chat used',
+              `This question costs ${err.priceSv} SV${balance != null ? `. You have ${balance}.` : ''}`,
+              [
+                { text: 'Not now', style: 'cancel' },
+                {
+                  text: `Use ${err.priceSv} SV`,
+                  onPress: () => {
+                    setPaidTurn(true);
+                    sendMessage(text);
+                  },
+                },
+              ],
+            );
+            throw err;
+          }
+          throw err;
+        }
+        setPaidTurn(false);
+        queryClient.invalidateQueries({ queryKey: ['me'] });
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId ? { ...m, text: answer, status: 'ok' } : m,
@@ -140,7 +189,16 @@ export default function StudyChatScreen() {
         abortRef.current = null;
       }
     },
-    [materialId, messages, streaming, educationLevel, difficulty, i18n.language],
+    [
+      materialId,
+      messages,
+      streaming,
+      educationLevel,
+      difficulty,
+      i18n.language,
+      paidTurn,
+      balance,
+    ],
   );
 
   // Cancel an in-flight request when the screen unmounts so the app

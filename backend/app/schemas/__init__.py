@@ -780,6 +780,10 @@ class ChatRequest(BaseModel):
     language: str | None = Field(default=None, max_length=10)
     # Prior turns, oldest first. Server keeps the last 20.
     history: list[ChatMessage] = Field(default_factory=list, max_length=40)
+    # Set to pay SV for this turn when the free daily quota is spent.
+    # Without it a quota-exhausted student gets a 429; with it they get
+    # a billable turn (or a 402 carrying the price and balance).
+    pay_for_turn: bool = False
 
 
 class ChatResponse(BaseModel):

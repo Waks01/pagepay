@@ -105,7 +105,31 @@ export type ChatRequest = {
   language?: string;
   /** Prior turns, oldest first. Server keeps the last 20. */
   history?: ChatMessage[];
+  /**
+   * Set to buy this turn with SV when the free daily quota is spent.
+   * Without it the server answers 429 carrying the price; with it the
+   * turn is billable (or 402 if the balance is short).
+   */
+  pay_for_turn?: boolean;
 };
+
+/**
+ * Raised when chat is refused so the caller can distinguish the reasons.
+ * A 429 from quota carries `priceSv` — what paying would cost — so the
+ * UI can offer it. A 402 is a short balance. A 429 with `paidCapped` set
+ * means both the free quota and the paid cap are spent for today.
+ */
+export class ChatRefusedError extends Error {
+  constructor(
+    message: string,
+    readonly status: 402 | 429,
+    readonly priceSv?: number,
+    readonly paidCapped = false,
+  ) {
+    super(message);
+    this.name = "ChatRefusedError";
+  }
+}
 
 export type UnlockRequest = {
   asset_id: number;
@@ -398,7 +422,20 @@ export async function sendChatMessage(
   } as RequestInit);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || "Chat failed");
+    const detail = err.detail || "Chat failed";
+    // Distinguish "quota spent, pay to continue" from a real failure so
+    // the UI can offer the paid turn rather than dead-ending.
+    if (res.status === 402 || res.status === 429) {
+      const priceHeader = res.headers?.get?.("X-Chat-Turn-Price");
+      const priceSv = priceHeader ? Number(priceHeader) : undefined;
+      throw new ChatRefusedError(
+        detail,
+        res.status,
+        Number.isFinite(priceSv) ? priceSv : undefined,
+        res.status === 429 && priceSv == null,
+      );
+    }
+    throw new Error(detail);
   }
   return res.text();
 }

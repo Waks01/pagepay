@@ -46,6 +46,23 @@ def check_and_record(user_id: int, daily_limit: int) -> tuple[bool, int]:
         return (True, daily_limit - len(bucket))
 
 
+def peek_count(user_id: int) -> int:
+    """Calls already used in the current 24h window, without recording.
+
+    Lets a caller decide whether the next turn is free or billable
+    *before* touching the counter, so a rejected payment never consumes
+    a free slot.
+    """
+    now = time.time()
+    with _LOCK:
+        bucket = _CALLS.get(user_id)
+        if not bucket:
+            return 0
+        while bucket and now - bucket[0] > _WINDOW_SECONDS:
+            bucket.popleft()
+        return len(bucket)
+
+
 def release(user_id: int) -> None:
     """Refund the most recent call for `user_id` (model failed).
 

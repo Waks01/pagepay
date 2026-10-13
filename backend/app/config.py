@@ -343,6 +343,21 @@ class Settings(BaseSettings):
     study_chat_daily_limit: int = 5
     study_chat_premium_daily_limit: int = 15
 
+    # ── Paid chat turns (beyond the daily quota) ─────────────────────
+    # Once the free quota is used, a student can buy a turn with SV.
+    # Priced by the tier the question routes to, so the price tracks
+    # the cost: Premium answers use GLM-4.7-Flash (~N2.43/turn) and
+    # Standard ones Granite (~N0.68/turn).
+    #
+    # `study_chat_paid_daily_limit` caps billable turns per 24h window,
+    # on top of the free quota. Without it a scripted client could buy
+    # indefinitely, and the exposure stops being predictable.
+    # Override via env `STUDY_CHAT_PAID_DAILY_LIMIT` /
+    # `STUDY_CHAT_SV_STANDARD` / `STUDY_CHAT_SV_PREMIUM`.
+    study_chat_paid_daily_limit: int = 50
+    study_chat_sv_standard: int = 15
+    study_chat_sv_premium: int = 35
+
     # Minimum effective reading duration (seconds) before a session is
     # considered "verified" and eligible for the slice bonus. The
     # session state machine sets `verified=True` only after the user
