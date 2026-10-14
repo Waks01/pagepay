@@ -358,6 +358,21 @@ class Settings(BaseSettings):
     study_chat_sv_standard: int = 15
     study_chat_sv_premium: int = 35
 
+    # Premium's monthly SV allowance, and the discount on topping up.
+    #
+    # The allowance is what makes the subscription price defensible: at
+    # N3,000/month with 2,500 SV (N250 of compute, ~85 standard chat
+    # turns) the base cost of serving a subscriber is ~N250 against
+    # N3,000, and anything they buy beyond it is margin.
+    #
+    # top_up_discount_percent applies to *unified* deposits - see
+    # services.sv_packs. A premium user buying N1,000 of SV receives
+    # N1,000 worth at the undiscounted rate less 30%.
+    # Override via env `PREMIUM_SV_MONTHLY_ALLOWANCE` /
+    # `PREMIUM_TOP_UP_DISCOUNT_PERCENT`.
+    premium_sv_monthly_allowance: int = 2_500
+    premium_top_up_discount_percent: float = 0.30
+
     # Minimum effective reading duration (seconds) before a session is
     # considered "verified" and eligible for the slice bonus. The
     # session state machine sets `verified=True` only after the user

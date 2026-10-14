@@ -48,6 +48,36 @@ def naira_to_points(naira: float) -> int:
     return int(round(naira * settings.points_per_naira))
 
 
+def deposit_points_for_user(kobo: int, user) -> int:
+    """Points a *deposit* should credit, honouring the premium discount.
+
+    A deposit is the one direction of flow where tier matters: it is the
+    user buying SV, and Premium gets a discount off the rate. Every other
+    conversion in this module is a payout or price, where charging a
+    premium user less would be a hole.
+
+    The discount is applied as extra points for the same naira, which
+    keeps points-per-naira as the single rate rather than introducing a
+    second one. At POINTS_PER_NAIRA=10 and a 30% discount, N1,000 buys
+    14,285 points instead of 10,000 — i.e. ₦0.07 a point.
+
+    Returns the undiscounted figure for non-premium users, so the free
+    path is byte-for-byte what it was.
+    """
+    from app.services.subscription import is_premium
+
+    base = kobo_to_points(kobo)
+    if base <= 0 or not is_premium(user):
+        return base
+
+    discount = float(settings.premium_top_up_discount_percent or 0)
+    if discount <= 0:
+        return base
+    if discount >= 1:  # defensive; a 100% discount is a misconfiguration
+        return base
+    return int(round(base / (1 - discount)))
+
+
 def points_to_naira(points: int) -> float:
     """Convert wallet points back to whole naira.
 

@@ -164,6 +164,41 @@ def register_subscription_expiry_job(scheduler: AsyncIOScheduler) -> None:
     )
 
 
+async def grant_premium_allowances() -> None:
+    """Top up Premium's monthly SV allowance.
+
+    Runs daily and is idempotent per calendar month, so a missed or
+    repeated run cannot double-credit: a user who already received this
+    month's grant costs one indexed SELECT.
+    """
+    from app.services.sv_allowance import grant_all_allowances
+
+    try:
+        granted = await grant_all_allowances()
+    except Exception as exc:
+        logger.error("Premium allowance sweep failed: %s", exc)
+        return
+
+    if granted:
+        logger.info("APScheduler granted premium allowance to %d user(s)", granted)
+
+
+def register_premium_allowance_job(scheduler: AsyncIOScheduler) -> None:
+    scheduler.add_job(
+        grant_premium_allowances,
+        "cron",
+        hour=5,
+        minute=0,
+        misfire_grace_time=7200,
+        coalesce=True,
+        id="premium_allowance_grant",
+        replace_existing=True,
+    )
+    logger.info(
+        "Scheduled job registered: id=premium_allowance_grant trigger=cron hour=5 minute=0 misfire_grace_time=7200"
+    )
+
+
 async def auto_submit_exam(session_id: int) -> None:
     """Auto-submit an exam session when the timer expires.
 

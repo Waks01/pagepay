@@ -8,7 +8,6 @@ import logging
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -268,31 +267,39 @@ async def execute_scheduled_purchase(schedule_id: int):
 
 
 async def initialize_scheduler():
-    """Initialize APScheduler with SQLAlchemy job store."""
+    """Initialize APScheduler.
+
+    In-memory, not SQLAlchemyJobStore. The job store needs a
+    *synchronous* DB driver (psycopg) while the app speaks asyncpg, so
+    configuring one raised `No module named 'psycopg'` at every boot
+    and took the whole scheduler down with it — the daily reminder,
+    the subscription expiry sweep and the audio refund sweep were all
+    silently never registered.
+
+    Losing the jobstore costs nothing: every schedule is already
+    re-registered from the ScheduledBill table at startup, and the
+    recurring jobs are registered again in main.py on each boot. What
+    the jobstore added was surviving a crash mid-interval, which the
+    DB-backed reload already covers.
+    """
     global scheduler
-    
+
     if scheduler is not None:
         return
-    
+
     logger.info("Initializing APScheduler for scheduled bills")
-    
-    # Use SQLAlchemy job store for persistence
-    jobstores = {
-        'default': SQLAlchemyJobStore(url=settings.database_url)
-    }
-    
+
     executors = {
-        'default': AsyncIOExecutor()
+        "default": AsyncIOExecutor(),
     }
-    
+
     job_defaults = {
-        'coalesce': True,  # Don't run multiple instances of same job
-        'max_instances': 1,
-        'misfire_grace_time': 60,  # 60 seconds tolerance
+        "coalesce": True,  # Don't run multiple instances of same job
+        "max_instances": 1,
+        "misfire_grace_time": 60,  # 60 seconds tolerance
     }
-    
+
     scheduler = AsyncIOScheduler(
-        jobstores=jobstores,
         executors=executors,
         job_defaults=job_defaults,
     )

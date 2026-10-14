@@ -72,7 +72,7 @@ from app.services.paystack import (
     PaystackError,
     get_client as get_paystack_client,
 )
-from app.services.money import kobo_to_points
+from app.services.money import deposit_points_for_user, kobo_to_points
 from app.services.money_caps import record_amount_v2
 from app.services.notifications import create_notification
 from app.services.subscription import calculate_subscription_end_date, format_tier_name
@@ -218,16 +218,18 @@ async def _process_wallet_deposit(payment: Payment, reference: str, db: AsyncSes
     logger.info("💵 Deposit amount from metadata: %s kobo", deposit_amount_kobo)
     
     if deposit_amount_kobo and deposit_amount_kobo > 0:
-        deposit_points = kobo_to_points(deposit_amount_kobo)
-        logger.info("🎯 Converting %s kobo → %d points", deposit_amount_kobo, deposit_points)
-        
         user_row = (
             await db.execute(
                 select(User).where(User.id == payment.user_id)
             )
         ).scalar_one_or_none()
-        
+
         if user_row is not None:
+            # Premium tops up at a discount, so the credit depends on who
+            # is depositing. Resolved server-side — the client must not
+            # be able to name its own rate.
+            deposit_points = deposit_points_for_user(deposit_amount_kobo, user_row)
+            logger.info("🎯 Converting %s kobo → %d points", deposit_amount_kobo, deposit_points)
             if settings.wallet_split_enabled:
                 user_row.cashable_balance = (user_row.cashable_balance or 0) + deposit_points
             else:
@@ -384,15 +386,16 @@ async def _reverse_wallet_deposit(payment: Payment, reference: str, db: AsyncSes
     deposit_amount_kobo = metadata.get("deposit_amount_kobo")
     
     if deposit_amount_kobo and deposit_amount_kobo > 0:
-        deposit_points = kobo_to_points(deposit_amount_kobo)
-        
         user_row = (
             await db.execute(
                 select(User).where(User.id == payment.user_id)
             )
         ).scalar_one_or_none()
-        
+
         if user_row is not None:
+            # Must match what the deposit credited, or a refund leaves
+            # the user holding points they never paid for.
+            deposit_points = deposit_points_for_user(deposit_amount_kobo, user_row)
             old_balance = user_row.points_balance or 0
             new_balance = max(0, old_balance - deposit_points)  # Don't go negative
             user_row.points_balance = new_balance
