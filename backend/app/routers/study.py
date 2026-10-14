@@ -3855,3 +3855,92 @@ async def ai_usage_summary(
             for endpoint, data in by_endpoint.items()
         },
     }
+
+# ── GET /study/ads/complete (AdMob SSV) ───────────────────────────
+
+
+@router.get("/ads/complete")
+async def admob_reward_callback(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """AdMob rewarded-ad Server-Side Verification callback.
+
+    AdMob GETs this URL when a rewarded view is earned. The signature
+    is verified against Google's rotating public keys and the caller is
+    confirmed by reverse DNS before anything is credited, then the
+    transaction_id is deduped because AdMob retries up to five times.
+
+    No auth dependency: the signature is the credential. Requires the
+    SSV callback URL registered on the rewarded ad unit in the AdMob UI.
+    """
+    from app.services import admob_ssv
+
+    # Raw bytes off the ASGI scope, not request.url.query: clients and
+    # proxies are free to re-normalise the parsed form (percent-decoding
+    # and re-encoding), which would change the string the signature
+    # covers. AdMob signs the query exactly as it is sent.
+    raw_query = request.scope.get("query_string", b"").decode("utf-8", "replace")
+    client_ip = request.client.host if request.client else ""
+
+    try:
+        await admob_ssv.fetch_verifier_keys()
+        params = await admob_ssv.verify_callback(raw_query, client_ip)
+    except admob_ssv.SSVError as exc:
+        logger.warning("AdMob SSV rejected from %s: %s", client_ip, exc)
+        return Response(status_code=400, content="verification failed")
+
+    try:
+        user_id = int(params["user_id"])
+        transaction_id = int(params["transaction_id"])
+    except ValueError:
+        logger.warning("AdMob SSV sent non-integer ids: %s", raw_query[:120])
+        return Response(status_code=400, content="bad ids")
+
+    payout = admob_ssv.payout_points()
+
+    # Idempotency. AdMob retries, so a replayed callback must not
+    # double-credit. The transaction_id is the only available key, so
+    # the row that carries it is the ad ledger row.
+    existing = await db.execute(
+        select(StudyTransaction.id)
+        .where(
+            StudyTransaction.user_id == user_id,
+            StudyTransaction.asset_id == transaction_id,
+            StudyTransaction.method == "ad",
+        )
+        .limit(1)
+    )
+    if existing.scalar_one_or_none() is not None:
+        logger.info("AdMob SSV duplicate transaction_id=%s ignored", transaction_id)
+        return Response(status_code=200, content="ok")
+
+    user_row = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if user_row is None:
+        # Unknown user: acknowledge so AdMob stops retrying, but never
+        # invent a wallet to credit.
+        logger.warning("AdMob SSV for unknown user=%s", user_id)
+        return Response(status_code=200, content="ok")
+
+    db.add(
+        StudyTransaction(
+            user_id=user_row.id,
+            asset_id=transaction_id,
+            method="ad",
+            points_spent=0,
+            reward_granted=True,
+        )
+    )
+    # Spendable only. A withdrawable ad reward is a payout the ad did
+    # not fund — the same guard as bills commission and the allowance.
+    if settings.wallet_split_enabled:
+        user_row.service_credit_balance = (user_row.service_credit_balance or 0) + payout
+    else:
+        user_row.points_balance = (user_row.points_balance or 0) + payout
+    await db.commit()
+
+    logger.info(
+        "AdMob SSV credited user=%s sv=%d transaction_id=%s",
+        user_row.id, payout, transaction_id,
+    )
+    return Response(status_code=200, content="ok")

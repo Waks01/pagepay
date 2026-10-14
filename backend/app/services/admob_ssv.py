@@ -1,0 +1,204 @@
+"""AdMob rewarded-ad Server-Side Verification (SSV).
+
+This is the authority for "the user actually watched the ad, credit
+them". Without it, crediting per ad is trivially farmable — a script
+POSTs to the credit endpoint in a loop. Everything below follows the
+algorithm in the AdMob SSV docs (and admob.md §4.6):
+
+1. Fetch the verifier public keys, cache them for at most 24h because
+   they rotate.
+2. Build the signed content: the raw query string with the last two
+   parameters (signature, key_id — appended last by Google) removed,
+   URL-decoding nothing, as UTF-8 bytes in order.
+3. Verify ECDSA P-256 / SHA-256 / DER with the key named by key_id.
+4. Confirm the caller's origin by reverse DNS is Google-owned.
+5. Respond 200, and treat a replayed callback as a no-op.
+
+Two PagePay rules layered on top:
+
+- The credit lands in `service_credit_balance`, never the withdrawable
+  side. An ad reward that becomes withdrawable cash is a payout we have
+  not earned the margin on — the same guard as bills commission and the
+  premium allowance.
+- The amount is `settings.rewarded_ad_payout_points`, which is *derived*
+  from `rewarded_ad_gross_points` and `platform_ad_revenue_percent`.
+  The client's claim, and the `reward_amount` AdMob echoes back, are
+  both ignored: AdMob's own reward label on the unit is cosmetic and
+  was configured as "1 Point", which is not what we pay.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import logging
+import socket
+import time
+from functools import lru_cache
+from urllib.parse import parse_qsl
+
+import httpx
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from app.config import settings
+
+logger = logging.getLogger("uvicorn.error")
+
+_KEYS_URL = "https://gstatic.com/admob/reward/verifier-keys.json"
+_KEYS_TTL_SECONDS = 24 * 60 * 60  # rotate; the docs cap the cache at 24h
+
+# Reverse-DNS suffixes AdMob's SSV callbacks resolve to.
+_GOOGLE_DOMAINS = ("googlebot.com", "google.com")
+
+_keys_cache: dict | None = None
+_keys_fetched_at: float = 0.0
+
+
+class SSVError(Exception):
+    """Verification failed. Never a partial credit."""
+
+
+# ── keys ──────────────────────────────────────────────────────────
+
+
+async def fetch_verifier_keys(force: bool = False) -> dict[int, ec.EllipticCurvePublicKey]:
+    """Return {keyId: public key}, cached for at most 24h.
+
+    Raises SSVError on a transport failure or a payload we cannot use,
+    so a caller cannot accidentally treat "no keys" as verified.
+    """
+    global _keys_cache, _keys_fetched_at
+
+    if not force and _keys_cache is not None and (time.time() - _keys_fetched_at) < _KEYS_TTL_SECONDS:
+        return _keys_cache
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(_KEYS_URL)
+            if resp.status_code != 200:
+                raise SSVError(f"verifier-keys HTTP {resp.status_code}")
+            payload = resp.json()
+    except SSVError:
+        raise
+    except Exception as exc:
+        raise SSVError(f"verifier-keys unreachable: {exc}") from exc
+
+    entries = payload.get("keys")
+    if not isinstance(entries, list) or not entries:
+        raise SSVError("verifier-keys payload has no keys")
+
+    keys: dict[int, ec.EllipticCurvePublicKey] = {}
+    for entry in entries:
+        try:
+            key_id = int(entry["keyId"])
+            pem = entry["pem"]
+        except (KeyError, TypeError, ValueError):
+            continue
+        try:
+            keys[key_id] = serialization.load_pem_public_key(pem.encode())
+        except Exception:
+            continue
+
+    if not keys:
+        raise SSVError("verifier-keys contained no usable keys")
+
+    _keys_cache = keys
+    _keys_fetched_at = time.time()
+    return keys
+
+
+def _reset_key_cache_for_tests() -> None:
+    """Test-only: drop the key cache so each test fetches fresh."""
+    global _keys_cache, _keys_fetched_at
+    _keys_cache = None
+    _keys_fetched_at = 0.0
+
+
+# ── verification ──────────────────────────────────────────────────
+
+
+def build_signed_content(raw_query: str) -> str:
+    """The raw query string minus the trailing signature and key_id.
+
+    Google appends those two last, so dropping the final two
+    ampersand-separated members reconstructs exactly what was signed.
+    Nothing is URL-decoded: the signature covers the bytes as sent, so
+    decoding first would verify a different string.
+    """
+    parts = raw_query.split("&")
+    if len(parts) < 2:
+        raise SSVError("query too short to contain signature and key_id")
+    trailing = parts[-1]
+    if not trailing.startswith("key_id="):
+        raise SSVError("query does not end with key_id")
+    return "&".join(parts[:-2])
+
+
+async def verify_signature(content: str, signature_b64: str, key_id: int) -> None:
+    """ECDSA P-256 / SHA-256 / DER. Raises SSVError on any failure."""
+    keys = await fetch_verifier_keys()
+    if key_id not in keys:
+        raise SSVError(f"unknown key_id {key_id}")
+    try:
+        signature = base64.b64decode(signature_b64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise SSVError("signature is not valid base64") from exc
+    try:
+        keys[key_id].verify(
+            signature, content.encode("utf-8"), ec.ECDSA(hashes.SHA256())
+        )
+    except InvalidSignature as exc:
+        raise SSVError("signature did not verify") from exc
+
+
+def origin_is_google(ip: str) -> bool:
+    """Reverse-DNS the caller and require a Google-owned suffix.
+
+    Belt-and-braces: the ECDSA check is the real gate, since only Google
+    holds the private key. This additionally refuses a callback that
+    arrives from outside Google's space. Failures (no PTR record, DNS
+    timeout) are treated as not-Google rather than allowed.
+    """
+    if not ip:
+        return False
+    try:
+        hostname = socket.gethostbyaddr(ip)[0]
+    except Exception:
+        return False
+    return hostname.endswith(_GOOGLE_DOMAINS)
+
+
+async def verify_callback(raw_query: str, client_ip: str) -> dict:
+    """Verify one SSV callback. Returns the parsed params.
+
+    Raises SSVError on any failure. Performs the signature check first
+    (needs no DNS) and the origin check last (slow, best-effort), so an
+    obvious forgery is refused without a reverse lookup.
+    """
+    params = dict(parse_qsl(raw_query, keep_blank_values=True))
+    for field in ("user_id", "reward_amount", "transaction_id", "signature", "key_id"):
+        if field not in params:
+            raise SSVError(f"missing {field}")
+
+    content = build_signed_content(raw_query)
+    try:
+        key_id = int(params["key_id"])
+    except ValueError as exc:
+        raise SSVError("key_id not an integer") from exc
+
+    await verify_signature(content, params["signature"], key_id)
+
+    if not origin_is_google(client_ip):
+        raise SSVError("caller did not resolve to a Google domain")
+
+    return params
+
+
+def payout_points() -> int:
+    """SV to credit per verified view. Server-owned, never the client's."""
+    amount = int(settings.rewarded_ad_payout_points)
+    if amount <= 0:
+        raise SSVError("rewarded_ad_payout_points is not configured")
+    return amount
