@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import {
+  FlatList,
   Image,
   Pressable,
   ScrollView,
@@ -21,7 +22,9 @@ import Animated, {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system";
+// Legacy helpers only — the root `expo-file-system` export throws when
+// these are called (see ../shared/hooks/use-document-picker.ts).
+import * as FileSystem from "expo-file-system/legacy";
 
 import { apiFetch, API_URL } from "@/src/shared/api/client";
 import { cacheDirectory } from "@/src/shared/lib/file-paths";
@@ -306,17 +309,24 @@ export default function FileViewerScreen() {
                 </Pressable>
               </View>
             ) : (
-              <ScrollView
+              // FlatList rather than ScrollView.map: a paging ScrollView
+              // mounts and decodes every page of the document at once,
+              // which is what kills the process on large PDFs.
+              <FlatList
+                data={pagesQ.data || []}
+                keyExtractor={(page) => String(page.page)}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.pdfScrollContent}
-              >
-                {(pagesQ.data || []).map((page) => (
+                initialNumToRender={1}
+                maxToRenderPerBatch={2}
+                windowSize={3}
+                removeClippedSubviews
+                renderItem={({ item: page }) => (
                   <ZoomableImage
-                    key={page.page}
-                    uri={`data:image/png;base64,${page.image_base64}`}
+                    uri={`data:image/jpeg;base64,${page.image_base64}`}
                   />
-                ))}
-              </ScrollView>
+                )}
+              />
             )}
           </View>
         )}

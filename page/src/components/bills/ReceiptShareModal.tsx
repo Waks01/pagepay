@@ -15,7 +15,9 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as FileSystem from "expo-file-system";
+// Legacy helpers only — the root `expo-file-system` export throws when
+// these are called (see ../../src/shared/hooks/use-document-picker.ts).
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { captureRef } from "react-native-view-shot";
 

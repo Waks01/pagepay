@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+// expo-file-system v54+ moved these methods out of the root export: the
+// root re-exports them only to throw in runtime ("This method will throw
+// in runtime"). The legacy subpath is the working implementation, so the
+// copy/cache path must import from it.
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { cacheDirectory } from '@/src/shared/lib/file-paths';
 

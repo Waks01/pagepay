@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   Linking,
   Modal,
@@ -22,7 +23,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system";
+// Legacy helpers only — the root `expo-file-system` export throws when
+// these are called (see use-document-picker.ts for the full note).
+import * as FileSystem from "expo-file-system/legacy";
 
 import { apiFetch, API_URL } from "@/src/shared/api/client";
 import { EXAM_TYPE_KEYS } from "@/src/shared/lib/exam-types";
@@ -773,21 +776,28 @@ export default function MaterialDetailScreen() {
                           </Text>
                         </Pressable>
                       ) : pdfPages && pdfPages.length > 0 ? (
-                        <ScrollView
+                        // FlatList, not ScrollView.map: a paging ScrollView
+                        // mounts and decodes every page of the document at
+                        // once, which is what kills the process on large PDFs.
+                        <FlatList
                           horizontal
                           pagingEnabled
                           showsHorizontalScrollIndicator={false}
                           style={styles.pdfScroll}
-                        >
-                          {pdfPages.map((page) => (
+                          data={pdfPages}
+                          keyExtractor={(page) => String(page.page)}
+                          initialNumToRender={2}
+                          maxToRenderPerBatch={2}
+                          windowSize={3}
+                          removeClippedSubviews
+                          renderItem={({ item: page }) => (
                             <Image
-                              key={page.page}
-                              source={{ uri: `data:image/png;base64,${page.image_base64}` }}
+                              source={{ uri: `data:image/jpeg;base64,${page.image_base64}` }}
                               style={styles.pdfPageImage}
                               resizeMode="contain"
                             />
-                          ))}
-                        </ScrollView>
+                          )}
+                        />
                       ) : (
                         <Pressable
                           onPress={() =>

@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  FlatList,
   Image,
   Linking,
   Modal,
@@ -152,6 +153,8 @@ export default function StudyScreen() {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [selectedPages, setSelectedPages] = useState<number[]>([]);
   const [pdfPreviewPages, setPdfPreviewPages] = useState<Array<{ page: number; total: number; image_base64: string; width: number; height: number }> | null>(null);
+  const [pdfTruncated, setPdfTruncated] = useState(false);
+  const [pdfTotalPages, setPdfTotalPages] = useState(0);
   const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const scale = useSharedValue(1);
@@ -316,6 +319,8 @@ export default function StudyScreen() {
       if (file.type === "application/pdf") {
         setPdfPreviewLoading(true);
         setPdfPreviewPages(null);
+        setPdfTruncated(false);
+        setPdfTotalPages(0);
           setSelectedPages([]);
         try {
           const form = new FormData();
@@ -333,6 +338,10 @@ export default function StudyScreen() {
           const pages = data.pages || [];
           setPdfPreviewPages(pages);
           setSelectedPages(pages.map((p: any) => p.page));
+          // The server caps the preview at a page limit; surface it so
+          // the user knows the rest of the document still uploads.
+          setPdfTruncated(Boolean(data.truncated));
+          setPdfTotalPages(Number(data.total ?? pages.length));
         } catch (err) {
           console.error("[study/index] PDF preview failed:", err);
           setError(err instanceof Error ? err.message : "Failed to preview PDF");
@@ -831,17 +840,24 @@ export default function StudyScreen() {
                     <SkeletonBase height={420} width="100%" borderRadius={12} />
                   </View>
                 ) : pdfPreviewPages && pdfPreviewPages.length > 0 ? (
-                  <ScrollView
+                  // FlatList, not ScrollView.map: a paging ScrollView
+                  // mounts and decodes every page at once (the old crash),
+                  // while FlatList only keeps a small window alive.
+                  <FlatList
                     horizontal
                     pagingEnabled
                     showsHorizontalScrollIndicator={false}
                     style={styles.pdfScroll}
-                  >
-                    {pdfPreviewPages.map((page) => {
+                    data={pdfPreviewPages}
+                    keyExtractor={(page) => String(page.page)}
+                    initialNumToRender={2}
+                    maxToRenderPerBatch={2}
+                    windowSize={3}
+                    removeClippedSubviews
+                    renderItem={({ item: page }) => {
                       const isSelected = selectedPages.includes(page.page);
                       return (
                         <Pressable
-                          key={page.page}
                           onPress={() => {
                             setSelectedPages((prev) => {
                               if (prev.includes(page.page)) {
@@ -853,24 +869,36 @@ export default function StudyScreen() {
                           style={styles.pdfPageItem}
                         >
                           <Image
-                            source={{ uri: `data:image/png;base64,${page.image_base64}` }}
+                            source={{ uri: `data:image/jpeg;base64,${page.image_base64}` }}
                             style={styles.pdfPageImage}
                             resizeMode="contain"
                           />
                           <View style={[styles.pdfPageCheck, { backgroundColor: isSelected ? tokens.mint : "rgba(0,0,0,0.4)" }]}>
                             <Text style={[styles.pdfPageCheckText, { color: "#fff" }]}>
-                              {isSelected ? `Page ${page.page}` : `Page ${page.page}`}
+                              Page {page.page}
                             </Text>
                           </View>
                         </Pressable>
                       );
-                    })}
-                  </ScrollView>
+                    }}
+                  />
                 ) : (
                   <View style={styles.previewPdfPlaceholder}>
                     <Ionicons name="document-text-outline" size={48} color={tokens.mint} />
                     <Text style={[styles.previewPdfText, { color: tokens.inkMuted }]}>
                       PDF preview will be available after upload
+                    </Text>
+                  </View>
+                )}
+                {!pdfPreviewLoading && pdfTruncated && (
+                  <View style={styles.pdfTruncatedNote}>
+                    <Ionicons name="information-circle-outline" size={14} color={tokens.inkMuted} />
+                    <Text style={[styles.pdfTruncatedText, { color: tokens.inkMuted }]}>
+                      {t("study.sow_upload.pdf_preview_truncated", {
+                        count: pdfTotalPages,
+                        defaultValue:
+                          "Showing the first {{count}} pages. Tick the pages you want and upload.",
+                      })}
                     </Text>
                   </View>
                 )}
@@ -1193,6 +1221,16 @@ const styles = StyleSheet.create({
   previewPdfText: {
     fontSize: 13,
     textAlign: "center",
+  },
+  pdfTruncatedNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingTop: 8,
+  },
+  pdfTruncatedText: {
+    fontSize: 11,
+    flex: 1,
   },
 
   previewActions: {

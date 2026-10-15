@@ -361,6 +361,7 @@
       "char_exceeds": "(exceeds limit)",
       "processing": "Processing {{percent}}%",
       "processing_ellipsis": "Processing…",
+      "pdf_preview_truncated": "Showing the first {{count}} pages. Tick the pages you want and upload.",
       "success": "Upload successful!",
       "success_a11y": "Upload successful",
       "submit": "Upload text",

@@ -287,6 +287,61 @@ async def upload_sow_image(
     return SowUploadJobAccepted(job_id=job.id, status="queued")
 
 
+# ── PDF page rendering ───────────────────────────────────────────────
+# Rendering every page of a PDF at full resolution as base64 PNG is a
+# memory bomb: a 20-page scheme of work at 150 DPI is ~60-90 MB of JSON
+# that the client then decodes into ~120 MB of bitmaps, which Android
+# answers by killing the app process ("the app closed after I picked the
+# PDF"). Previews therefore render a capped number of pages at thumbnail
+# resolution as JPEG, and tell the client how many pages were skipped so
+# it can say so instead of silently hiding the rest of the document.
+_PDF_PREVIEW_MAX_PAGES = 20
+_PDF_PREVIEW_MAX_WIDTH = 900     # px — readable as a thumbnail, cheap to decode
+_PDF_PREVIEW_JPEG_QUALITY = 70
+
+
+def _render_pdf_pages(pdf, max_pages: int = _PDF_PREVIEW_MAX_PAGES) -> dict:
+    """Render up to `max_pages` of an open PyMuPDF document as JPEG pages.
+
+    Returns `{pages, total, truncated, page_limit}`. `page_limit` lets the
+    client offer a "load more" affordance instead of pretending the
+    document ended at the cap.
+    """
+    import base64 as _base64
+
+    pages: list[dict] = []
+    total = len(pdf)
+    truncated = total > max_pages
+
+    for page_num in range(min(total, max_pages)):
+        page = pdf[page_num]
+        # Scale by page width so any page size lands near the target
+        # width instead of depending on the document's DPI.
+        zoom = _PDF_PREVIEW_MAX_WIDTH / max(page.rect.width, 1)
+        pix = page.get_pixmap(matrix=_fitz_matrix(zoom))
+        img_bytes = pix.tobytes("jpeg", jpg_quality=_PDF_PREVIEW_JPEG_QUALITY)
+        pages.append({
+            "page": page_num + 1,
+            "total": total,
+            "image_base64": _base64.b64encode(img_bytes).decode("ascii"),
+            "width": pix.width,
+            "height": pix.height,
+        })
+
+    return {
+        "pages": pages,
+        "total": total,
+        "truncated": truncated,
+        "page_limit": max_pages,
+    }
+
+
+def _fitz_matrix(zoom: float):
+    import fitz
+
+    return fitz.Matrix(zoom, zoom)
+
+
 @router.post("/sow/preview-pdf")
 async def preview_sow_pdf(
     file: UploadFile = File(...),
@@ -323,20 +378,7 @@ async def preview_sow_pdf(
         raise HTTPException(status_code=400, detail="Stored file is not a valid PDF") from exc
 
     try:
-        pages: list[dict] = []
-        for page_num in range(len(pdf)):
-            page = pdf[page_num]
-            pix = page.get_pixmap(dpi=150)
-            img_bytes = pix.tobytes("png")
-            pages.append({
-                "page": page_num + 1,
-                "total": len(pdf),
-                "image_base64": __import__("base64").b64encode(img_bytes).decode("ascii"),
-                "width": pix.width,
-                "height": pix.height,
-            })
-        pdf.close()
-        return {"pages": pages}
+        return _render_pdf_pages(pdf)
     except HTTPException:
         raise
     except Exception as exc:
@@ -1257,20 +1299,9 @@ async def get_material_pages(
         raise HTTPException(status_code=400, detail="Stored file is not a valid PDF") from exc
 
     try:
-        pages: list[dict] = []
-        for page_num in range(len(pdf)):
-            page = pdf[page_num]
-            pix = page.get_pixmap(dpi=150)
-            img_bytes = pix.tobytes("png")
-            pages.append({
-                "page": page_num + 1,
-                "total": len(pdf),
-                "image_base64": __import__("base64").b64encode(img_bytes).decode("ascii"),
-                "width": pix.width,
-                "height": pix.height,
-            })
+        rendered = _render_pdf_pages(pdf)
         pdf.close()
-        return {"pages": pages}
+        return rendered
     except HTTPException:
         raise
     except Exception as exc:
