@@ -158,7 +158,9 @@
     "withdrawal_success": "Don send money",
     "fee_label": "with {{amount}} charge",
     "view_all": "See All",
-    "status_pending": "Dey wait"
+    "status_pending": "Dey wait",
+    "watch_ad_label": "Watch di ad",
+    "watch_ad_hint": "Collect 16 SV for each ad. E go enter your study credits."
   },
   "tasks": {
     "title": "Work Wey Dey",
@@ -400,22 +402,22 @@
       "pause": "Pause am",
       "listen": "Listen"
     },
-                  "audio_unlock":  {
-                                       "title":  "Unlock Audio",
-                                       "cost_label":  "Unlock cost",
-                                       "once":  "One time only · you go dey hear am forever",
-                                       "balance_label":  "Your balance",
-                                       "wallet_sv":  "Service credit",
-                                       "wallet_cashable":  "Cashable points",
-                                       "hint":  "Unlock sharp sharp with service credit or cashable points. Dem go generate the audio once, and na your own forever.",
-                                       "cta":  "Unlock for {{cost}} {{unit}}",
-                                       "cta_short":  "Balance no reach",
-                                       "need_more":  "You still need {{count}}",
-                                       "unlocking":  "Dey unlock...",
-                                       "error_title":  "Unlock Fail",
-                                       "unlocked_title":  "Audio don Unlock",
-                                       "unlocked_body":  "You fit listen to this material anytime now."
-                                   },
+    "audio_unlock": {
+      "title": "Unlock Audio",
+      "cost_label": "Unlock cost",
+      "once": "One time only · you go dey hear am forever",
+      "balance_label": "Your balance",
+      "wallet_sv": "Service credit",
+      "wallet_cashable": "Cashable points",
+      "hint": "Unlock sharp sharp with service credit or cashable points. Dem go generate the audio once, and na your own forever.",
+      "cta": "Unlock for {{cost}} {{unit}}",
+      "cta_short": "Balance no reach",
+      "need_more": "You still need {{count}}",
+      "unlocking": "Dey unlock...",
+      "error_title": "Unlock Fail",
+      "unlocked_title": "Audio don Unlock",
+      "unlocked_body": "You fit listen to this material anytime now."
+    },
     "loading_material_title": null,
     "loading_material_subtitle": null,
     "loading_material_a11y": null,

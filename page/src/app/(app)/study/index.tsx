@@ -30,7 +30,7 @@ import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 
 import { apiFetch, apiUpload } from "@/src/shared/api/client";
 import { getExamTypeLabel } from "@/src/shared/lib/exam-types";
-import { pollSowJob } from "@/src/features/study/api";
+import { pollSowJob, type SowJobStatus, type EducationLevel } from "@/src/features/study/api";
 import {
   useMaterials,
   useUploadSow,
@@ -43,6 +43,8 @@ import { useImagePicker } from "@/src/shared/hooks/use-image-picker";
 import { useDocumentPicker } from "@/src/shared/hooks/use-document-picker";
 import { useCurrentUser } from "@/src/shared/lib/current-user";
 import { SowUploadCard } from "@/components/study/SowUploadCard";
+import { PagePayBanner } from "@/src/components/ads/PagePayBanner";
+import { NativeAdCard } from "@/src/components/ads/NativeAdCard";
 import { PageHeader } from "@/components/PageHeader";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Fonts, PagePay } from "@/constants/theme";
@@ -66,6 +68,22 @@ function categorizeError(
     return message;
   }
   return t("study.errors.generic", { operation, message: "(no detail)" });
+}
+
+/**
+ * Translate a failed upload job's error code into something a human can
+ * act on. Job errors arrive as backend category codes
+ * (`pdf_has_no_text_layer`, `empty_extracted_text`, …), so showing them
+ * raw tells the user nothing.
+ */
+function describeUploadError(
+  code: string | null | undefined,
+  t: (key: string, params?: Record<string, unknown>) => string,
+): string | null {
+  if (!code) return null;
+  const key = `study.sow_upload.errors.${code}`;
+  const message = t(key, { defaultValue: "" });
+  return message || null;
 }
 
 type TopicInfo = {
@@ -140,9 +158,27 @@ export default function StudyScreen() {
   const [uploadProgress, setUploadProgress] = useState<number | undefined>(
     undefined,
   );
+  const [uploadStage, setUploadStage] = useState<string | null>(null);
   const [aiProcessing, setAiProcessing] = useState(false);
+
+  // Progress and its stage label move together — clearing one without
+  // the other leaves a stale label next to a fresh bar.
+  const resetUploadProgress = () => {
+    setUploadProgress(0);
+    setUploadStage(null);
+  };
+  const clearUploadProgress = () => {
+    setUploadProgress(undefined);
+    setUploadStage(null);
+  };
   const [uploadJustCompleted, setUploadJustCompleted] = useState(false);
   const [examType, setExamType] = useState<string | null>(null);
+  /**
+   * How deep the explanation and the narration are pitched. "primary"
+   * is the default: a student who uploads a syllabus wants it explained
+   * the way a good teacher would, not the way a paper is written.
+   */
+  const [educationLevel, setEducationLevel] = useState<EducationLevel>("primary");
   const [materialLoading, setMaterialLoading] = useState(false);
   const materialFetchIdRef = useRef(0);
   const [generateMode, setGenerateMode] = useState<"topic" | "all">("all");
@@ -177,7 +213,7 @@ export default function StudyScreen() {
   const handleUploadText = async (text: string, examType: string | null) => {
     setError(null);
     setRetryAction(null);
-    setUploadProgress(0);
+    resetUploadProgress();
     try {
       // Client-side validation
       if (text.trim().length < 10) {
@@ -194,15 +230,16 @@ export default function StudyScreen() {
       const result = await uploadMutation.mutateAsync({
         text,
         exam_type: examType,
+        education_level: educationLevel,
       });
       // Navigate to the dedicated material detail screen. The Study
       // screen intentionally holds no inline detail view — everything
       // material-specific lives on /study/{id}.
       router.replace(`/study/${result.material_id}`);
       setUploadProgress(100);
-      setTimeout(() => setUploadProgress(undefined), 2000);
+      setTimeout(clearUploadProgress, 2000);
     } catch (err) {
-      setUploadProgress(undefined);
+      clearUploadProgress();
       const message = err instanceof Error ? err.message : "Upload failed";
       const specificError = categorizeError(message, "upload text", t);
       setError(specificError);
@@ -210,19 +247,23 @@ export default function StudyScreen() {
     }
   };
 
-  // Wire-level progress for file uploads. The XHR fires onprogress with
-  // real byte counts; we map that to 0..80% of the bar. 80→99 is the
-  // server AI-processing window — the polling endpoint doesn't give us
-  // a percentage, so we tick 1% per poll to show the bar advancing
-  // while the work is happening. 100 means the follow-up material
-  // fetch is done.
+  // The server reports real progress (0-100) plus a stage code as each
+  // step completes — reading pages, parsing with the model, saving. Use
+  // those instead of guessing, so the bar reflects actual work and the
+  // label says what is happening. The 0-80 window is the wire upload
+  // (real byte counts from XHR); 80-100 is the server's window.
   const handleUploadProgress = (loaded: number, total: number) => {
     if (total <= 0) return;
     const pct = Math.min(80, Math.round((loaded / total) * 80));
     setUploadProgress(pct);
   };
 
-  const handlePollTick = () => {
+  const handlePollTick = (status?: SowJobStatus) => {
+    if (status && typeof status.progress === "number") {
+      setUploadProgress(Math.max(80, Math.min(99, status.progress)));
+      if (status.stage) setUploadStage(status.stage);
+      return;
+    }
     setUploadProgress((prev) => {
       const current = prev ?? 0;
       return current >= 99 ? current : Math.min(99, current + 1);
@@ -237,7 +278,7 @@ export default function StudyScreen() {
     setUploadProgress(100);
     qc.invalidateQueries({ queryKey: ["study", "materials"] });
     setTimeout(() => {
-      setUploadProgress(undefined);
+      clearUploadProgress();
       setUploadJustCompleted(false);
     }, 3000);
     router.replace(`/study/${materialId}`);
@@ -247,12 +288,12 @@ export default function StudyScreen() {
     console.log("[study/index] handleUploadImage START", { examType });
     setError(null);
     setRetryAction(null);
-    setUploadProgress(0);
+    resetUploadProgress();
     try {
       const files = await pickImages();
       if (!files || files.length === 0) {
         console.log("[study/index] handleUploadImage CANCELED");
-        setUploadProgress(undefined);
+        clearUploadProgress();
         return;
       }
       const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -266,7 +307,7 @@ export default function StudyScreen() {
       setPreviewVisible(true);
     } catch (err) {
       console.log("[study/index] handleUploadImage ERROR", err);
-      setUploadProgress(undefined);
+      clearUploadProgress();
       const message = err instanceof Error ? err.message : "Upload failed";
       const specificError = categorizeError(message, "image upload", t);
       setError(specificError);
@@ -278,12 +319,12 @@ export default function StudyScreen() {
     console.log("[study/index] handleTakePhoto START", { examType });
     setError(null);
     setRetryAction(null);
-    setUploadProgress(0);
+    resetUploadProgress();
     try {
       const file = await takePhoto();
       if (!file) {
         console.log("[study/index] handleTakePhoto CANCELED");
-        setUploadProgress(undefined);
+        clearUploadProgress();
         return;
       }
       console.log("[study/index] handleTakePhoto PREVIEW", file);
@@ -292,7 +333,7 @@ export default function StudyScreen() {
       setPreviewVisible(true);
     } catch (err) {
       console.log("[study/index] handleTakePhoto ERROR", err);
-      setUploadProgress(undefined);
+      clearUploadProgress();
       const message = err instanceof Error ? err.message : "Upload failed";
       const specificError = categorizeError(message, "photo upload", t);
       setError(specificError);
@@ -304,12 +345,12 @@ export default function StudyScreen() {
     console.log("[study/index] handleUploadDocument START", { examType });
     setError(null);
     setRetryAction(null);
-    setUploadProgress(0);
+    resetUploadProgress();
     try {
       const file = await pickDocument();
       if (!file) {
         console.log("[study/index] handleUploadDocument CANCELED");
-        setUploadProgress(undefined);
+        clearUploadProgress();
         return;
       }
       console.log("[study/index] handleUploadDocument PREVIEW", file);
@@ -354,7 +395,7 @@ export default function StudyScreen() {
       setPreviewVisible(true);
     } catch (err) {
       console.log("[study/index] handleUploadDocument ERROR", err);
-      setUploadProgress(undefined);
+      clearUploadProgress();
       const message = err instanceof Error ? err.message : "Upload failed";
       const specificError = categorizeError(message, "document upload", t);
       setError(specificError);
@@ -366,7 +407,7 @@ export default function StudyScreen() {
     console.log("[study/index] confirmUpload START", { previewFile, count: previewFiles.length });
     if (!previewFile) return;
     setPreviewVisible(false);
-    setUploadProgress(0);
+    resetUploadProgress();
     try {
       const isImage = previewFile.type.startsWith("image/");
       const isPdf = previewFile.type === "application/pdf";
@@ -378,11 +419,12 @@ export default function StudyScreen() {
           const f = filesToUpload[i];
           setUploadProgress(Math.round((i / filesToUpload.length) * 50));
           console.log("[study/index] confirmUpload calling uploadSowImage", { idx: i, name: f.name });
-          const { job_id } = await uploadImageMutation.mutateAsync({
-            file: { uri: f.uri, name: f.name, type: f.type },
-            exam_type: examType,
-            onProgress: handleUploadProgress,
-          });
+            const { job_id } = await uploadImageMutation.mutateAsync({
+              file: { uri: f.uri, name: f.name, type: f.type },
+              exam_type: examType,
+              onProgress: handleUploadProgress,
+              education_level: educationLevel,
+            });
           console.log("[study/index] confirmUpload image job_id", { job_id, idx: i });
           setAiProcessing(true);
           setUploadProgress(80);
@@ -407,20 +449,23 @@ export default function StudyScreen() {
           exam_type: examType,
           selected_pages: selectedPagesArray,
           onProgress: handleUploadProgress,
+          education_level: educationLevel,
         });
         setAiProcessing(true);
         setUploadProgress(80);
         const job = await pollSowJob(job_id, handlePollTick);
         setAiProcessing(false);
         if (job.status === "failed" || !job.material_id) {
-          throw new Error(job.error || "Document processing failed");
+          throw new Error(
+            describeUploadError(job.error, t) || "Document processing failed",
+          );
         }
         await finalizeUploadSuccess(job.material_id);
       } else {
         throw new Error("Unsupported file type");
       }
     } catch (err) {
-      setUploadProgress(undefined);
+      clearUploadProgress();
       const message = err instanceof Error ? err.message : "Upload failed";
       setError(message);
     } finally {
@@ -600,8 +645,11 @@ export default function StudyScreen() {
               aiProcessing
             }
             uploadProgress={uploadProgress}
+            uploadStage={uploadStage}
             examType={examType}
             onExamTypeChange={setExamType}
+            educationLevel={educationLevel}
+            onEducationLevelChange={setEducationLevel}
             onUploadText={handleUploadText}
             onUploadImage={handleUploadImage}
             onTakePhoto={handleTakePhoto}
@@ -761,6 +809,16 @@ export default function StudyScreen() {
               </Text>
             </View>
           )}
+
+          {/* Ads. Only on the list screen - never inside a reading or
+              exam flow, where an ad interrupts the thing the student
+              came to do. */}
+          {materials.length > 0 ? (
+            <>
+              <NativeAdCard style={styles.adCard} />
+              <PagePayBanner style={styles.adBanner} />
+            </>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -1027,6 +1085,14 @@ const styles = StyleSheet.create({
   listTitle: {
     fontSize: 18,
     letterSpacing: -0.3,
+  },
+
+  adCard: {
+    marginTop: 16,
+  },
+  adBanner: {
+    marginTop: 12,
+    marginBottom: 8,
   },
 
   materialCard: {

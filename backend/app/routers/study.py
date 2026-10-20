@@ -10,6 +10,7 @@ import asyncio
 import io
 import re
 from datetime import datetime, timedelta
+from typing import Callable
 
 import httpx
 
@@ -28,6 +29,7 @@ from app.ai.prompts import (
     ESSAY_TOPIC_GENERATOR,
     EXAM_STYLE_GUIDES,
     EXAMPLE_GENERATOR,
+    FIGURE_DESCRIPTION_PROMPT,
     FLASHCARD_ALL_TOPICS_GENERATOR,
     FLASHCARD_GENERATOR,
     FLASHCARD_TOPIC_GENERATOR,
@@ -37,6 +39,7 @@ from app.ai.prompts import (
     MCQ_TOPIC_GENERATOR,
     SOW_PARSER,
     VIDEO_SCRIPT_GENERATOR,
+    VISION_OCR_PROMPT,
 )
 from app.ai.router import route_ai
 from app.exam_types import (
@@ -58,6 +61,8 @@ from app.models import (
     StudyAudioBatch,
     StudyMaterial,
     StudyProgress,
+    StudyFigure,
+    StudyPage,
     StudyTransaction,
     User,
     ReadingSession,
@@ -73,6 +78,8 @@ from app.services.tts_hybrid import AUDIO_CACHE_DIR, synthesize_study_audio
 from app.services import study_narration
 from app.services import audio_pricing
 from app.services import study_audio_service
+from app.services import study_explanation
+from app.services import page_artifacts
 from app.services import r2_storage
 import app.services.tts_hybrid as tts_hybrid
 from app.limiter import limiter
@@ -93,6 +100,8 @@ from app.schemas import (
     GenerateAssetRequest,
     GenerateAssetResponse,
     MaterialDetail,
+    MaterialFigure,
+    MaterialPage,
     MaterialSummary,
     MaterialUpdate,
     QuizCompleteRequest,
@@ -110,6 +119,11 @@ from app.schemas import (
 
 logger = logging.getLogger("uvicorn.error")
 router = APIRouter(prefix="/study", tags=["study"])
+
+# Called with (percent, stage) as an upload advances. The stage is a
+# stable machine-readable code the client translates into a label, so
+# the progress bar can say *what* is happening instead of just moving.
+ProgressCallback = Callable[[int, str], None]
 
 # Per-route file upload cap. The global RequestSizeLimitMiddleware
 # allows up to 1MB, but we tighten that for these routes — a 5MB
@@ -132,6 +146,46 @@ ALLOWED_IMAGE_TYPES: frozenset[str] = frozenset({
 
 UNLOCK_POINTS_COST = settings.study_unlock_points_cost
 VIDEO_UNLOCK_POINTS_COST = settings.study_video_unlock_points_cost
+
+# PDF → image → OCR rendering budget.
+#
+# The preview renderer above produces 900px thumbnails so the phone can
+# flip through a document fast. That resolution is too low for OCR —
+# small print turns to mush — so the extraction path renders its own,
+# wider pages. 1400px keeps body text legible to the vision model while
+# staying small enough that a page costs ~150-300 KB of base64.
+_OCR_PAGE_MAX_WIDTH = 1400
+_OCR_PAGE_JPEG_QUALITY = 75
+
+# Each Cloudflare vision call is a full round trip, so pages are OCR'd
+# concurrently. Four at a time keeps a 12-page scan at roughly three
+# rounds instead of twelve, without hammering the API.
+_OCR_PAGE_CONCURRENCY = 4
+
+# Hard cap on how many pages one document may OCR. The preview endpoint
+# already caps at 20 pages for the same reason: past that the upload
+# stops being a "SOW" and starts being a book, and the request would
+# run long enough to hit the platform's request timeout.
+_OCR_MAX_PAGES = 20
+
+# How deep the explanation and the narration are pitched. "primary" is
+# the default: a student who uploads a syllabus wants it explained to
+# them the way a good teacher would, not the way a paper is written.
+_EDUCATION_LEVELS: frozenset[str] = frozenset({
+    "primary",
+    "secondary",
+    "tertiary",
+    "research",
+})
+
+
+def _normalise_education_level(value: str | None) -> str:
+    """Clamp an education level to one the prompts know how to pitch."""
+    level = (value or "").strip().lower()
+    if level in _EDUCATION_LEVELS:
+        return level
+    fallback = (settings.study_education_default_level or "primary").strip().lower()
+    return fallback if fallback in _EDUCATION_LEVELS else "primary"
 
 
 # ── POST /study/sow/upload ──────────────────────────────────────────
@@ -165,13 +219,26 @@ async def upload_sow(
 
     title = (parsed or {}).get("title", "Untitled Material") if isinstance(parsed, dict) else "Untitled Material"
 
+    # The teaching layer: the same material rewritten in plain language
+    # for a beginner. It is an extra model call, and a failure here
+    # must not lose the upload — the faithful structure is the source of
+    # truth and the app falls back to it.
+    explanation = await _build_explanation_safely(
+        title=title,
+        source_text=payload.text,
+        figures=[],
+        level=_normalise_education_level(payload.education_level),
+    )
+
     material = StudyMaterial(
         user_id=current_user.id,
         title=title,
         exam_type=exam_type,
         raw_input=payload.text,
         parsed_structure=_json.dumps(parsed) if parsed else None,
+        explanation_structure=_json.dumps(explanation) if explanation else None,
         ai_model_used=ai_result.get("provider"),
+        education_level=_normalise_education_level(payload.education_level),
     )
     db.add(material)
     await db.commit()
@@ -189,6 +256,7 @@ async def upload_sow(
 async def upload_sow_image(
     file: UploadFile = File(...),
     exam_type: str | None = Form(default=None),
+    education_level: str | None = Form(default=None),
     request: Request = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -281,6 +349,7 @@ async def upload_sow_image(
             contents=contents,
             safe_name=safe_name,
             content_type=file.content_type or "image/jpeg",
+            education_level=_normalise_education_level(education_level),
         )
     )
 
@@ -342,6 +411,123 @@ def _fitz_matrix(zoom: float):
     return fitz.Matrix(zoom, zoom)
 
 
+def _render_pdf_pages_for_ocr(contents: bytes, page_numbers: list[int]) -> list[bytes]:
+    """Render the given 1-indexed PDF pages to JPEG blobs for OCR.
+
+    Uses PyMuPDF — the same renderer the preview endpoint uses — so a
+    PDF that previews on the phone is guaranteed to be OCR-able here.
+    The pages are rendered wider than the preview thumbnails
+    (`_OCR_PAGE_MAX_WIDTH`) because 900px thumbnails are too soft for
+    the vision model to read small print.
+
+    Returns one JPEG blob per requested page, in the order requested.
+    Pages outside the document are skipped rather than raising.
+    """
+    import fitz
+
+    rendered: list[bytes] = []
+    with fitz.open(stream=contents, filetype="pdf") as pdf:
+        total = len(pdf)
+        for page_number in page_numbers:
+            if page_number < 1 or page_number > total:
+                continue
+            page = pdf[page_number - 1]
+            zoom = _OCR_PAGE_MAX_WIDTH / max(page.rect.width, 1)
+            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+            rendered.append(pix.tobytes("jpeg", jpg_quality=_OCR_PAGE_JPEG_QUALITY))
+    return rendered
+
+
+def _resolve_pdf_page_numbers(contents: bytes, selected_pages: str | None) -> list[int]:
+    """Work out which 1-indexed PDF pages to read.
+
+    `selected_pages` is the JSON array the client sends after the user
+    picks pages in the preview. An empty or invalid selection must not
+    silently produce an empty document, so it falls back to every page.
+    """
+    import fitz
+
+    with fitz.open(stream=contents, filetype="pdf") as pdf:
+        total_pages = len(pdf)
+
+    page_numbers = list(range(1, total_pages + 1))
+    if selected_pages:
+        try:
+            import json as _json
+            wanted = [i for i in sorted(set(_json.loads(selected_pages))) if 1 <= i <= total_pages]
+            page_numbers = wanted or page_numbers
+        except Exception:
+            pass
+    return page_numbers
+
+
+async def _ocr_pdf_pages(
+    contents: bytes,
+    page_numbers: list[int],
+    on_page: ProgressCallback | None = None,
+) -> str:
+    """Render PDF pages to images and OCR each one with Cloudflare Vision.
+
+    A PDF is a layout document, so the page is treated as a picture and
+    handed to the same vision model the image-upload route uses. Reading
+    the PDF's embedded text instead would only work for documents that
+    happen to carry a text layer — a scan or a photo carries none, and
+    the AI would receive nothing at all.
+
+    Pages are OCR'd concurrently (bounded by `_OCR_PAGE_CONCURRENCY`)
+    because each vision call is a full round trip — twelve pages done
+    serially would take a minute. A page that fails is logged and
+    skipped; only a total failure raises.
+    """
+    page_images = _render_pdf_pages_for_ocr(contents, page_numbers)
+    if not page_images:
+        raise ValueError("pdf_render_failed")
+
+    semaphore = asyncio.Semaphore(_OCR_PAGE_CONCURRENCY)
+    total = len(page_images)
+    completed = 0
+
+    async def ocr_one(image: bytes) -> str:
+        nonlocal completed
+        try:
+            async with semaphore:
+                return await _ocr_image_with_cloudflare(image, "image/jpeg")
+        finally:
+            # Count the page whether it succeeded or not — otherwise a
+            # failed page leaves the progress bar stuck.
+            completed += 1
+            if on_page is not None:
+                on_page(completed, total)
+
+    results = await asyncio.gather(
+        *(ocr_one(image) for image in page_images),
+        return_exceptions=True,
+    )
+
+    chunks: list[str] = []
+    failures = 0
+    for index, result in enumerate(results):
+        if isinstance(result, BaseException):
+            failures += 1
+            logger.warning(
+                "[sow/document] OCR failed for page %s: %s",
+                page_numbers[index] if index < len(page_numbers) else index + 1,
+                result,
+            )
+            continue
+        if result and result.strip():
+            chunks.append(result.strip())
+
+    if not chunks:
+        raise ValueError("pdf_ocr_failed")
+    if failures:
+        logger.warning(
+            "[sow/document] %s of %s PDF pages failed OCR — continuing with the rest",
+            failures, total,
+        )
+    return "\n\n".join(chunks)
+
+
 @router.post("/sow/preview-pdf")
 async def preview_sow_pdf(
     file: UploadFile = File(...),
@@ -391,6 +577,7 @@ async def upload_sow_document(
     file: UploadFile = File(...),
     exam_type: str | None = Form(default=None),
     selected_pages: str | None = Form(default=None),
+    education_level: str | None = Form(default=None),
     request: Request = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -487,6 +674,7 @@ async def upload_sow_document(
             contents=contents,
             safe_name=safe_name,
             selected_pages=selected_pages,
+            education_level=_normalise_education_level(education_level),
         )
     )
 
@@ -513,11 +701,44 @@ async def get_sow_job_status(
         status=row.status,
         material_id=row.material_id,
         error=row.error_message,
+        progress=row.progress,
+        stage=row.stage,
         updated_at=row.updated_at,
     )
 
 
 # ── Background workers ───────────────────────────────────────────────
+
+
+def _sniff_image_content_type(contents: bytes, fallback: str = "image/jpeg") -> str:
+    """The real image type of some bytes.
+
+    The content type on an upload is client-supplied and not to be
+    trusted: the phone's image picker coerces anything it does not
+    recognise to `image/jpeg`, including HEIC. Sending HEIC bytes in a
+    data URI that claims JPEG makes the vision model refuse the image,
+    and the material is lost with an "OCR failed" the student cannot
+    act on. The bytes know what they are.
+    """
+    if not contents:
+        return fallback
+    if contents[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if contents[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if contents[:4] == b"RIFF" and contents[8:12] == b"WEBP":
+        return "image/webp"
+    if contents[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if contents[:4] == b"%PDF":
+        return "application/pdf"
+    if len(contents) > 12 and contents[4:8] == b"ftyp":
+        brand = contents[8:12]
+        if brand in (b"heic", b"heix", b"hevc", b"heim", b"heis", b"mif1"):
+            return "image/heic"
+        if brand in (b"avif", b"avis"):
+            return "image/avif"
+    return fallback
 
 
 async def _ocr_image_with_cloudflare(
@@ -533,7 +754,8 @@ async def _ocr_image_with_cloudflare(
     import httpx
 
     b64 = base64.b64encode(contents).decode()
-    data_uri = f"data:{content_type};base64,{b64}"
+    real_type = _sniff_image_content_type(contents, content_type or "image/jpeg")
+    data_uri = f"data:{real_type};base64,{b64}"
     url = (
         f"https://api.cloudflare.com/client/v4/accounts/"
         f"{settings.cloudflare_account_id}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct"
@@ -543,7 +765,7 @@ async def _ocr_image_with_cloudflare(
         "Content-Type": "application/json",
     }
     body = {
-        "prompt": "Extract all text from this image. Return the raw text exactly as written, preserving structure (headings, bullet points, numbering).",
+        "prompt": VISION_OCR_PROMPT,
         "image": data_uri,
         "max_tokens": 8000,
         "temperature": 0.1,
@@ -562,31 +784,122 @@ async def _ocr_image_with_cloudflare(
         raise RuntimeError("cf_vision_malformed_response") from exc
 
 
-async def _extract_document_text(contents: bytes, filename: str, selected_pages: str | None = None) -> str:
+async def _describe_figure_with_cloudflare(image_bytes: bytes) -> str:
+    """Ask the vision model what one cropped figure shows.
+
+    The crop is a real picture of the student's own material. Its
+    description is what the teaching layer explains and what the
+    narration speaks, so a student who cannot see the diagram still
+    gets everything it contains.
+
+    Returns an empty string on failure — a figure without a description
+    is still a figure.
+    """
+    import base64
+    import httpx
+
+    if not image_bytes:
+        return ""
+
+    b64 = base64.b64encode(image_bytes).decode()
+    # A crop off a PDF page is PNG; an uploaded photo is whatever the
+    # phone sent. The bytes decide.
+    real_type = _sniff_image_content_type(image_bytes, "image/png")
+    data_uri = f"data:{real_type};base64,{b64}"
+    url = (
+        f"https://api.cloudflare.com/client/v4/accounts/"
+        f"{settings.cloudflare_account_id}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct"
+    )
+    headers = {
+        "Authorization": f"Bearer {settings.cloudflare_api_token}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "prompt": FIGURE_DESCRIPTION_PROMPT,
+        "image": data_uri,
+        "max_tokens": 800,
+        "temperature": 0.2,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=90) as client:
+            resp = await client.post(url, json=body, headers=headers)
+        if resp.status_code != 200:
+            logger.warning("[figure] vision HTTP %s", resp.status_code)
+            return ""
+        data = resp.json()
+        return (data.get("result", {}).get("response", "") or "").strip()
+    except Exception as exc:
+        logger.warning("[figure] vision description failed: %s", exc)
+        return ""
+
+
+async def _describe_figures(artifacts: list) -> list:
+    """Describe every cropped figure, a few at a time.
+
+    Each call is a full round trip to the vision model, so they run
+    concurrently. A figure that cannot be described keeps an empty
+    description rather than failing the upload.
+    """
+    if not artifacts:
+        return []
+
+    semaphore = asyncio.Semaphore(4)
+
+    async def describe(artifact):
+        async with semaphore:
+            artifact.description = await _describe_figure_with_cloudflare(
+                artifact.image_bytes or b""
+            )
+        # The crop is only needed for the description call; the key and
+        # the URL are what get stored.
+        artifact.image_bytes = None
+
+    await asyncio.gather(*(describe(a) for a in artifacts), return_exceptions=True)
+    return artifacts
+
+
+async def _extract_document_text(
+    contents: bytes,
+    filename: str,
+    selected_pages: str | None = None,
+    on_progress: ProgressCallback | None = None,
+) -> str:
     """Branch on extension and extract plain text from PDF / DOCX / TXT.
 
     Raises a `ValueError` with a user-safe category on any failure;
     the document worker translates that into the right
     `error_message` on the job row.
 
+    A PDF is rendered page by page and read with the same vision model
+    the image-upload route uses — a PDF is a layout document, and
+    reading its embedded text would only work for documents that
+    happen to carry a text layer. A scan or a photo carries none, and
+    the AI would receive nothing at all.
+
     For PDFs, `selected_pages` is a JSON array of 1-indexed page numbers
-    to include. If omitted or empty, all pages are extracted.
+    to include. If omitted or empty, all pages are read.
     """
     fname = filename.lower()
     if fname.endswith(".pdf"):
         try:
-            import pypdf
-            from io import BytesIO
-            reader = pypdf.PdfReader(BytesIO(contents))
-            pages = reader.pages
-            if selected_pages:
-                try:
-                    import json as _json
-                    selected = set(_json.loads(selected_pages))
-                    pages = [pages[i - 1] for i in sorted(selected) if 1 <= i <= len(reader.pages)]
-                except Exception:
-                    pass
-            return "\n".join(p.extract_text() or "" for p in pages)
+            page_numbers = _resolve_pdf_page_numbers(contents, selected_pages)
+            ocr_pages = page_numbers[:_OCR_MAX_PAGES]
+            if len(ocr_pages) < len(page_numbers):
+                logger.info(
+                    "[sow/document] OCR page cap reached — reading %s of %s pages",
+                    len(ocr_pages), len(page_numbers),
+                )
+
+            def _on_page(done: int, total: int) -> None:
+                if on_progress is not None:
+                    on_progress(20 + int(50 * done / max(total, 1)), "reading_pages")
+
+            extracted = await _ocr_pdf_pages(contents, ocr_pages, on_page=_on_page)
+            if not extracted.strip():
+                raise ValueError("pdf_ocr_empty")
+            return extracted
+        except ValueError:
+            raise
         except Exception as exc:
             logger.error("PDF extraction failed: %s", exc)
             raise ValueError("pdf_extraction_failed") from exc
@@ -640,25 +953,79 @@ def _parse_ai_response(response_text: str) -> dict | None:
     return None
 
 
+# The retry prompt. The parser is asked for a document that fills the
+# whole output budget, so a long document can run the model out of
+# tokens mid-object and the JSON comes back truncated. The fix is not a
+# better prompt, it is a second attempt that says so explicitly.
+_SOW_REPAIR_PROMPT = """You returned JSON that could not be parsed.
+
+Here is what you returned:
+<<<
+{raw_response}
+>>>
+
+Return the SAME document again, as valid JSON only:
+- Start with {{ and end with }}
+- No markdown fences, no commentary, no explanation before or after
+- Every string must be escaped, including quotes and newlines
+- If you were cut off, return what you have and close every open bracket and brace
+- Keep the same title, topics and content_blocks you produced
+
+Output the JSON only."""
+
+
 async def _run_sow_parser(extracted_text: str) -> tuple[dict | None, str | None, str | None]:
     """Run the SOW parser AI prompt. Returns (parsed, provider, raw_response).
 
     Pulled out of the workers so the image + document paths share the
     exact same parsing logic.
+
+    A response that is not valid JSON is retried once with an explicit
+    "valid JSON only" instruction, which is what the phase 3 spec
+    called for. Without the retry a long document simply loses its
+    structure and the student gets a blank material with no error
+    shown.
     """
     prompt = SOW_PARSER.format(raw_text=extracted_text)
     ai_result = await route_ai(prompt, task_type="heavy")
-    parsed = _parse_ai_response(ai_result.get("response", ""))
-    return parsed, ai_result.get("provider"), ai_result.get("response", "")
+    raw_response = ai_result.get("response", "")
+    parsed = _parse_ai_response(raw_response)
+
+    if parsed is None and raw_response:
+        logger.warning("[sow] parser returned invalid JSON, retrying once")
+        try:
+            repair = await route_ai(
+                _SOW_REPAIR_PROMPT.format(raw_response=raw_response[:6000]),
+                task_type="heavy",
+            )
+            repaired = _parse_ai_response(repair.get("response", ""))
+            if repaired is not None:
+                logger.info("[sow] parser repair succeeded")
+                return repaired, repair.get("provider"), repair.get("response", "")
+            logger.error("[sow] parser repair also returned invalid JSON")
+        except Exception as exc:
+            logger.error("[sow] parser repair failed: %s", exc)
+
+    return parsed, ai_result.get("provider"), raw_response
 
 
 async def _mark_job_status(
-    job_id: str, status: str, *, material_id: int | None = None, error: str | None = None
+    job_id: str,
+    status: str,
+    *,
+    material_id: int | None = None,
+    error: str | None = None,
+    progress: int | None = None,
+    stage: str | None = None,
 ) -> None:
     """Update a job row using its own session.
 
     The worker runs in a background task with no shared session, so
     each status flip opens `AsyncSessionLocal` briefly.
+
+    `progress` (0-100) and `stage` let the polling client show a real
+    progress bar with a stage label instead of guessing at the
+    remaining time.
     """
     async with AsyncSessionLocal() as db:
         row = await db.get(SowUploadJob, job_id)
@@ -669,8 +1036,188 @@ async def _mark_job_status(
             row.material_id = material_id
         if error is not None:
             row.error_message = error
+        if progress is not None:
+            row.progress = progress
+        if stage is not None:
+            row.stage = stage
         row.updated_at = datetime.utcnow()
         await db.commit()
+
+
+def _figure_notes(figures: list) -> str:
+    """Render the figure descriptions for the AI prompts.
+
+    The OCR pass can only say a figure exists; the crop tells the
+    model what it actually contains. Both go to the parser and to the
+    teaching layer, so a diagram is never reduced to a stray label.
+    """
+    lines = []
+    for figure in figures:
+        description = (figure.description or "").strip()
+        if not description:
+            continue
+        lines.append(
+            f"[FIGURE page {figure.page} | figure {figure.index}]: {description}"
+        )
+    if not lines:
+        return ""
+    return "\n\nFigures found on the pages:\n" + "\n".join(lines)
+
+
+async def _build_explanation_safely(
+    *,
+    title: str,
+    source_text: str,
+    figures: list,
+    level: str,
+) -> dict | None:
+    """Build the teaching layer, without ever failing the upload.
+
+    The faithful layer is the source of truth; the teaching layer is
+    the extra. If the model is unavailable or answers with nonsense,
+    the material is still saved with everything that was read from the
+    page.
+    """
+    try:
+        figure_dicts = [
+            {
+                "figure_index": figure.index,
+                "page": figure.page,
+                "description": figure.description,
+                "caption": figure.caption,
+            }
+            for figure in figures
+        ]
+        return await study_explanation.build_explanation(
+            title=title,
+            raw_text=source_text,
+            figures=figure_dicts,
+            level=level,
+        )
+    except Exception as exc:
+        logger.warning("[sow] explanation layer failed: %s", exc)
+        return None
+
+
+async def _build_material_artifacts(
+    *,
+    key_prefix: str,
+    contents: bytes,
+    is_pdf: bool,
+    content_type: str,
+    extracted_text: str,
+    max_pages: int = _OCR_MAX_PAGES,
+) -> tuple[list, list]:
+    """Render the pages, crop the figures, and describe every figure.
+
+    Runs after the text has been read. Nothing here is allowed to fail
+    the upload: a material with no page images or no figures is still a
+    valid material, and the app falls back to rendering the source file
+    on demand.
+    """
+    pages: list = []
+    figures: list = []
+
+    try:
+        if is_pdf:
+            pages = page_artifacts.build_page_artifacts(
+                contents, key_prefix=key_prefix, max_pages=max_pages
+            )
+            figures = page_artifacts.build_figure_artifacts(
+                contents, key_prefix=key_prefix, max_pages=max_pages
+            )
+        else:
+            pages = page_artifacts.build_image_artifacts(
+                contents, key_prefix=key_prefix, content_type=content_type
+            )
+            # A photo of a textbook page is one image with no geometry
+            # to read a figure out of. When the OCR pass reported a
+            # diagram, the whole image is treated as that figure so it
+            # still gets a proper description.
+            if "[FIGURE:" in (extracted_text or "").upper():
+                figures.append(
+                    page_artifacts.FigureArtifact(
+                        index=1,
+                        page=1,
+                        bbox=(0.0, 0.0, 0.0, 0.0),
+                        width=0,
+                        height=0,
+                        image_bytes=contents,
+                    )
+                )
+    except Exception as exc:
+        logger.warning("[sow] artifact build failed: %s", exc)
+
+    await _describe_figures(figures)
+    return pages, figures
+
+
+async def _persist_material(
+    *,
+    user_id: int,
+    title: str,
+    exam_type: str | None,
+    raw_input: str,
+    parsed_structure: dict | None,
+    explanation_structure: dict | None,
+    contents: bytes,
+    file_mime_type: str,
+    ai_model_used: str | None,
+    education_level: str,
+    pages: list,
+    figures: list,
+) -> int:
+    """Write the material and its page/figure artifacts, and return its id."""
+    import json as _json
+
+    async with AsyncSessionLocal() as db:
+        material = StudyMaterial(
+            user_id=user_id,
+            title=title,
+            exam_type=exam_type,
+            raw_input=raw_input,
+            parsed_structure=_json.dumps(parsed_structure) if parsed_structure else None,
+            explanation_structure=(
+                _json.dumps(explanation_structure) if explanation_structure else None
+            ),
+            original_file_data=contents,
+            file_mime_type=file_mime_type,
+            ai_model_used=ai_model_used,
+            education_level=education_level,
+        )
+        db.add(material)
+        await db.commit()
+        await db.refresh(material)
+
+        for page in pages:
+            db.add(
+                StudyPage(
+                    material_id=material.id,
+                    page=page.page,
+                    width=page.width,
+                    height=page.height,
+                    image_key=page.image_key,
+                    image_url=page.image_url,
+                    is_scan=page.is_scan,
+                )
+            )
+        for figure in figures:
+            db.add(
+                StudyFigure(
+                    material_id=material.id,
+                    page=figure.page,
+                    figure_index=figure.index,
+                    bbox=_json.dumps(list(figure.bbox)),
+                    width=figure.width,
+                    height=figure.height,
+                    image_key=figure.image_key,
+                    image_url=figure.image_url,
+                    description=figure.description or None,
+                    caption=figure.caption or None,
+                )
+            )
+        await db.commit()
+        return material.id
 
 
 async def _process_sow_image_job(
@@ -680,6 +1227,7 @@ async def _process_sow_image_job(
     contents: bytes,
     safe_name: str,
     content_type: str,
+    education_level: str | None = None,
 ) -> None:
     """Background worker for the image SOW upload.
 
@@ -692,8 +1240,9 @@ async def _process_sow_image_job(
         "[sow/upload-image worker] START job=%s user=%s bytes=%s",
         job_id, user_id, len(contents),
     )
+    level = education_level or settings.study_education_default_level
     try:
-        await _mark_job_status(job_id, "processing")
+        await _mark_job_status(job_id, "processing", progress=10, stage="reading_pages")
 
         try:
             extracted_text = await _ocr_image_with_cloudflare(contents, content_type)
@@ -708,8 +1257,21 @@ async def _process_sow_image_job(
         if not extracted_text.strip():
             raise RuntimeError("image_ocr_empty")
 
+        await _mark_job_status(job_id, "processing", progress=45, stage="reading_pages")
+        pages, figures = await _build_material_artifacts(
+            key_prefix=job_id,
+            contents=contents,
+            is_pdf=False,
+            content_type=content_type,
+            extracted_text=extracted_text,
+            max_pages=1,
+        )
+        notes = _figure_notes(figures)
+        source_text = f"{extracted_text}{notes}"
+
+        await _mark_job_status(job_id, "processing", progress=70, stage="parsing_ai")
         try:
-            parsed, provider, _ = await _run_sow_parser(extracted_text)
+            parsed, provider, _ = await _run_sow_parser(source_text)
             logger.info(
                 "[sow/upload-image worker] parser done job=%s provider=%s keys=%s",
                 job_id, provider, list((parsed or {}).keys()) if isinstance(parsed, dict) else None,
@@ -720,28 +1282,37 @@ async def _process_sow_image_job(
 
         title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
 
-        import json as _json
-        async with AsyncSessionLocal() as db:
-            material = StudyMaterial(
-                user_id=user_id,
-                title=title,
-                exam_type=exam_type,
-                raw_input=f"[IMAGE: {safe_name}]\n{extracted_text}",
-                parsed_structure=_json.dumps(parsed) if parsed else None,
-                original_file_data=contents,
-                file_mime_type=content_type or "image/jpeg",
-                ai_model_used=provider,
-            )
-            db.add(material)
-            await db.commit()
-            await db.refresh(material)
-            material_id = material.id
+        await _mark_job_status(job_id, "processing", progress=85, stage="parsing_ai")
+        explanation = await _build_explanation_safely(
+            title=title,
+            source_text=source_text,
+            figures=figures,
+            level=level,
+        )
+
+        await _mark_job_status(job_id, "processing", progress=92, stage="saving")
+        material_id = await _persist_material(
+            user_id=user_id,
+            title=title,
+            exam_type=exam_type,
+            raw_input=f"[IMAGE: {safe_name}]\n{source_text}",
+            parsed_structure=parsed,
+            explanation_structure=explanation,
+            contents=contents,
+            file_mime_type=content_type or "image/jpeg",
+            ai_model_used=provider,
+            education_level=level,
+            pages=pages,
+            figures=figures,
+        )
 
         logger.info(
             "[sow/upload-image worker] DONE job=%s material_id=%s",
             job_id, material_id,
         )
-        await _mark_job_status(job_id, "completed", material_id=material_id)
+        await _mark_job_status(
+            job_id, "completed", material_id=material_id, progress=100, stage="completed"
+        )
     except Exception as exc:
         logger.exception("SOW image job %s failed", job_id)
         await _mark_job_status(job_id, "failed", error=str(exc) or exc.__class__.__name__)
@@ -754,21 +1325,42 @@ async def _process_sow_document_job(
     contents: bytes,
     safe_name: str,
     selected_pages: str | None = None,
+    education_level: str | None = None,
 ) -> None:
     """Background worker for the document SOW upload. Same shape as
     the image worker — runs extraction + AI parse, writes the
     material, updates the job row.
+
+    Progress is reported as it happens: `reading_pages` while the
+    document is read (or OCR'd page by page), `parsing_ai` while the
+    model works, `saving` while the material is written. The client
+    polls those to drive its progress bar.
     """
+    level = education_level or settings.study_education_default_level
     logger.info(
         "[sow/upload-document worker] START job=%s user=%s bytes=%s cloudinary_available=%s",
         job_id, len(contents), "cloudinary" in dir(),
     )
     logger.info("[sow/upload-document worker] study_router_cloudinary_imports=%s", "cloudinary" in globals())
     try:
-        await _mark_job_status(job_id, "processing")
+        await _mark_job_status(job_id, "processing", progress=5, stage="queued")
+
+        last_reported = {"progress": 5}
+
+        async def report(progress: int, stage: str) -> None:
+            """Push progress to the job row, coalescing near-identical updates."""
+            if progress <= last_reported["progress"] and stage == "reading_pages":
+                return
+            last_reported["progress"] = progress
+            await _mark_job_status(job_id, "processing", progress=progress, stage=stage)
 
         try:
-            extracted_text = await _extract_document_text(contents, safe_name, selected_pages=selected_pages)
+            extracted_text = await _extract_document_text(
+                contents,
+                safe_name,
+                selected_pages=selected_pages,
+                on_progress=report,
+            )
             logger.info(
                 "[sow/upload-document worker] extract done job=%s text_len=%s",
                 job_id, len(extracted_text or ""),
@@ -794,8 +1386,20 @@ async def _process_sow_document_job(
             await _mark_job_status(job_id, "failed", error="empty_extracted_text")
             return
 
+        await _mark_job_status(job_id, "processing", progress=55, stage="reading_pages")
+        pages, figures = await _build_material_artifacts(
+            key_prefix=job_id,
+            contents=contents,
+            is_pdf=safe_name.lower().endswith(".pdf"),
+            content_type="application/pdf",
+            extracted_text=extracted_text,
+        )
+        notes = _figure_notes(figures)
+        source_text = f"{extracted_text}{notes}"
+
+        await _mark_job_status(job_id, "processing", progress=72, stage="parsing_ai")
         try:
-            parsed, provider, _ = await _run_sow_parser(extracted_text)
+            parsed, provider, _ = await _run_sow_parser(source_text)
             logger.info(
                 "[sow/upload-document worker] parser done job=%s provider=%s",
                 job_id, provider,
@@ -807,37 +1411,46 @@ async def _process_sow_document_job(
 
         title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
 
-        import json as _json
-        async with AsyncSessionLocal() as db:
-            filename_lower = safe_name.lower()
-            if filename_lower.endswith(".pdf"):
-                inferred_mime = "application/pdf"
-            elif filename_lower.endswith((".docx", ".doc")):
-                inferred_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            elif filename_lower.endswith(".txt"):
-                inferred_mime = "text/plain"
-            else:
-                inferred_mime = "application/octet-stream"
-            material = StudyMaterial(
-                user_id=user_id,
-                title=title,
-                exam_type=exam_type,
-                raw_input=f"[DOCUMENT: {safe_name}]\n{extracted_text}",
-                parsed_structure=_json.dumps(parsed) if parsed else None,
-                original_file_data=contents,
-                file_mime_type=inferred_mime,
-                ai_model_used=provider,
-            )
-            db.add(material)
-            await db.commit()
-            await db.refresh(material)
-            material_id = material.id
+        await _mark_job_status(job_id, "processing", progress=85, stage="parsing_ai")
+        explanation = await _build_explanation_safely(
+            title=title,
+            source_text=source_text,
+            figures=figures,
+            level=level,
+        )
+
+        await _mark_job_status(job_id, "processing", progress=92, stage="saving")
+        filename_lower = safe_name.lower()
+        if filename_lower.endswith(".pdf"):
+            inferred_mime = "application/pdf"
+        elif filename_lower.endswith((".docx", ".doc")):
+            inferred_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        elif filename_lower.endswith(".txt"):
+            inferred_mime = "text/plain"
+        else:
+            inferred_mime = "application/octet-stream"
+        material_id = await _persist_material(
+            user_id=user_id,
+            title=title,
+            exam_type=exam_type,
+            raw_input=f"[DOCUMENT: {safe_name}]\n{source_text}",
+            parsed_structure=parsed,
+            explanation_structure=explanation,
+            contents=contents,
+            file_mime_type=inferred_mime,
+            ai_model_used=provider,
+            education_level=level,
+            pages=pages,
+            figures=figures,
+        )
 
         logger.info(
             "[sow/upload-document worker] DONE job=%s material_id=%s",
             job_id, material_id,
         )
-        await _mark_job_status(job_id, "completed", material_id=material_id)
+        await _mark_job_status(
+            job_id, "completed", material_id=material_id, progress=100, stage="completed"
+        )
     except Exception as exc:
         logger.exception("SOW document job %s failed", job_id)
         await _mark_job_status(job_id, "failed", error=str(exc) or exc.__class__.__name__)
@@ -869,6 +1482,30 @@ async def list_materials(
             created_at=m.created_at,
         ))
     return out
+
+
+async def _count_rows(db: AsyncSession, model, material_id: int) -> int:
+    """How many rows of `model` belong to this material."""
+    result = await db.execute(
+        select(func.count(model.id)).where(model.material_id == material_id)
+    )
+    return int(result.scalar() or 0)
+
+
+def _fresh_url(image_key: str | None, stored: str | None) -> str | None:
+    """A usable URL for a stored object, minted at read time.
+
+    A presigned R2 URL expires after an hour, so a URL saved on the
+    row would leave the student looking at a broken image the next
+    morning. When the bucket is public the URL is stable anyway.
+    """
+    if not image_key:
+        return stored
+    try:
+        minted = r2_storage.audio_url_for(image_key)
+    except Exception:
+        minted = None
+    return minted or stored
 
 
 async def _get_asset_types(db: AsyncSession, material_id: int) -> list[str]:
@@ -918,6 +1555,14 @@ async def get_material(
 
     import json as _json
     parsed = _json.loads(material.parsed_structure) if material.parsed_structure else None
+    explanation = (
+        _json.loads(material.explanation_structure)
+        if material.explanation_structure
+        else None
+    )
+
+    page_count = await _count_rows(db, StudyPage, material_id)
+    figure_count = await _count_rows(db, StudyFigure, material_id)
 
     asset_list = []
     for a in assets:
@@ -948,6 +1593,10 @@ async def get_material(
         file_mime_type=material.file_mime_type or None,
         has_original_file=material.original_file_data is not None,
         created_at=material.created_at,
+        explanation_structure=explanation,
+        education_level=material.education_level or "primary",
+        page_count=page_count,
+        figure_count=figure_count,
     )
 
 
@@ -1000,6 +1649,14 @@ async def update_material(
 
     import json as _json
     parsed = _json.loads(material.parsed_structure) if material.parsed_structure else None
+    explanation = (
+        _json.loads(material.explanation_structure)
+        if material.explanation_structure
+        else None
+    )
+
+    page_count = await _count_rows(db, StudyPage, material_id)
+    figure_count = await _count_rows(db, StudyFigure, material_id)
 
     asset_list = []
     for a in assets:
@@ -1027,6 +1684,10 @@ async def update_material(
         file_mime_type=material.file_mime_type or None,
         has_original_file=material.original_file_data is not None,
         created_at=material.created_at,
+        explanation_structure=explanation,
+        education_level=material.education_level or "primary",
+        page_count=page_count,
+        figure_count=figure_count,
     )
 
 
@@ -1307,6 +1968,94 @@ async def get_material_pages(
     except Exception as exc:
         logger.exception("[pages] PDF rendering failed material_id=%s err=%s", material_id, exc)
         raise HTTPException(status_code=500, detail=f"PDF rendering failed: {exc}") from exc
+
+
+# ── GET /study/materials/{id}/page-images ─────────────────────────────
+#
+# The stored page renders, as plain URLs. These were written to object
+# storage when the material was uploaded, so the app loads them from
+# the CDN instead of pulling a base64 blob of every page through the
+# API each time the reader opens.
+
+
+@router.get("/materials/{material_id}/page-images", response_model=list[MaterialPage])
+async def get_material_page_images(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    rows = await db.execute(
+        select(StudyPage)
+        .where(StudyPage.material_id == material_id)
+        .order_by(StudyPage.page)
+    )
+    pages = rows.scalars().all()
+    return [
+        MaterialPage(
+            page=page.page,
+            # Minted per read: a presigned URL expires, and a stored
+            # one would leave the student with broken images tomorrow.
+            image_url=_fresh_url(page.image_key, page.image_url),
+            width=page.width,
+            height=page.height,
+            is_scan=page.is_scan,
+        )
+        for page in pages
+    ]
+
+
+# ── GET /study/materials/{id}/figures ──────────────────────────────────
+#
+# Every diagram found on the material's pages, with the plain-language
+# description of what it shows. The app renders the crop inline in the
+# lesson and speaks the description in the narration, so a student who
+# cannot see the picture still gets everything it contains.
+
+
+@router.get("/materials/{material_id}/figures", response_model=list[MaterialFigure])
+async def get_material_figures(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == current_user.id,
+        )
+    )
+    material = result.scalar_one_or_none()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    rows = await db.execute(
+        select(StudyFigure)
+        .where(StudyFigure.material_id == material_id)
+        .order_by(StudyFigure.figure_index)
+    )
+    figures = rows.scalars().all()
+    return [
+        MaterialFigure(
+            figure_index=figure.figure_index,
+            page=figure.page,
+            image_url=_fresh_url(figure.image_key, figure.image_url),
+            width=figure.width,
+            height=figure.height,
+            description=figure.description,
+            caption=figure.caption,
+        )
+        for figure in figures
+    ]
 
 
 # ── POST /study/generate ────────────────────────────────────────────
@@ -3632,6 +4381,67 @@ async def retry_audio_batch(
     return retried
 
 
+def _audio_content_type(raw: bytes) -> str:
+    """The real container of an audio blob.
+
+    MeloTTS answers with WAV and edge-tts with MP3, and the same
+    function serves both. Guessing wrong makes some players refuse the
+    file, so the header is read.
+    """
+    if not raw:
+        return "audio/mpeg"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WAVE":
+        return "audio/wav"
+    if raw[:4] == b"OggS":
+        return "audio/ogg"
+    if raw[:4] == b"fLaC":
+        return "audio/flac"
+    if raw[:3] == b"ID3" or raw[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):
+        return "audio/mpeg"
+    return "audio/mpeg"
+
+
+def _narration_structure_for(material) -> dict:
+    """The structure the narration should speak.
+
+    The teaching layer is preferred: it is the same material rewritten
+    in plain language, with every diagram described in words, which is
+    exactly what a narration wants to read out. The faithful layer
+    supplies the topic list, because the teaching layer carries blocks
+    but no topics of its own.
+
+    When there is no teaching layer the faithful structure is used
+    unchanged, so narration still works for anything uploaded before
+    the teaching layer existed.
+    """
+    import json as _json
+
+    parsed = {}
+    if material.parsed_structure:
+        try:
+            loaded = _json.loads(material.parsed_structure)
+            if isinstance(loaded, dict):
+                parsed = loaded
+        except Exception:
+            parsed = {}
+
+    if not material.explanation_structure:
+        return parsed
+    try:
+        explanation = _json.loads(material.explanation_structure)
+    except Exception:
+        return parsed
+    if not isinstance(explanation, dict):
+        return parsed
+    blocks = explanation.get("blocks")
+    if not isinstance(blocks, list) or not blocks:
+        return parsed
+
+    merged = dict(parsed)
+    merged["blocks"] = blocks
+    return merged
+
+
 async def _generate_one_episode(db: AsyncSession, batch) -> None:
     """Generate, synthesise, store, and mark ready one episode.
 
@@ -3646,7 +4456,7 @@ async def _generate_one_episode(db: AsyncSession, batch) -> None:
     if material is None:
         raise RuntimeError("Material not found")
 
-    parsed = _parsed_of(material)
+    parsed = _narration_structure_for(material)
 
     script, level, char_count = await study_narration.generate_episode_script(
         material_title=material.title,
@@ -3655,6 +4465,7 @@ async def _generate_one_episode(db: AsyncSession, batch) -> None:
         level=batch.level,
         episode_index=batch.episode_index,
         total_episodes=batch.total_episodes,
+        db=db,
     )
 
     if not r2_storage.is_configured():
@@ -3672,7 +4483,11 @@ async def _generate_one_episode(db: AsyncSession, batch) -> None:
     )
 
     key = r2_storage.object_key(cache_path.name)
-    r2_storage.upload_bytes(key, audio, content_type="audio/mpeg")
+    # The container depends on which provider answered: MeloTTS hands
+    # back WAV, edge-tts hands back MP3. Labelling a WAV as
+    # audio/mpeg makes some players refuse to open it, so the bytes
+    # are sniffed instead of assumed.
+    r2_storage.upload_bytes(key, audio, content_type=_audio_content_type(audio))
 
     await study_audio_service.mark_ready(
         db,
@@ -3714,7 +4529,25 @@ async def generate_next_audio_episode(
     if batch is None:
         return {"processed": None, "remaining": 0}
 
-    await _generate_one_episode(db, batch)
+    try:
+        await _generate_one_episode(db, batch)
+    except Exception as exc:
+        # The batch is left in `generating` unless it is failed here.
+        # The user has already been debited for it, so an unhandled
+        # failure means a charge for audio that will never arrive, and
+        # the batch sits in `generating` until the sweeper comes for it
+        # half an hour later. Fail it and refund it now.
+        logger.exception("[audio] episode generation failed batch=%s", batch.id)
+        await study_audio_service.mark_failed(
+            db, batch.id, reason=str(exc) or "generation_failed"
+        )
+        await db.commit()
+        return {
+            "processed": None,
+            "remaining": 0,
+            "error": "generation_failed",
+            "refunded": True,
+        }
 
     remaining_result = await db.execute(
         select(StudyAudioBatch.id).where(
@@ -3975,3 +4808,48 @@ async def admob_reward_callback(
         user_row.id, payout, transaction_id,
     )
     return Response(status_code=200, content="ok")
+
+class AdRevenueRequest(BaseModel):
+    """Impression-level ad revenue, reported by the client.
+
+    This is the number that tells us whether ad-watching actually funds
+    the rewards we pay out. `value_micros` is the impression's value in
+    micro units - 5000 means $0.005.
+
+    The client is not trusted for money: this is telemetry for the
+    ad-revenue-vs-reward-cost check, never a balance. A student could
+    send anything here.
+    """
+
+    format: str = "rewarded"
+    value_micros: int = 0
+    currency: str = "USD"
+    precision: str = "UNKNOWN"
+
+
+@router.post("/ads/revenue")
+async def record_ad_revenue(
+    payload: AdRevenueRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record an ad impression's revenue.
+
+    Stored as an AiUsageLog row with endpoint "ad_revenue" and the
+    impression value as a cost, so the ad margin check lives in the same
+    place as the AI cost check rather than in a spreadsheet.
+    """
+    from app.services.ai_cost import log_usage
+
+    await log_usage(
+        db,
+        user_id=current_user.id,
+        endpoint="ad_revenue",
+        model=payload.format,
+        prompt_tokens=0,
+        completion_tokens=0,
+        # value_micros -> USD. Recorded as a negative cost because this
+        # is revenue offsetting the AI spend, not more of it.
+        cost_usd=-(payload.value_micros / 1_000_000),
+    )
+    return {"ok": True}

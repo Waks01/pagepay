@@ -37,6 +37,7 @@ import {
 } from "@/src/lib/socket";
 import { handleNotificationTap, setupNotificationListeners } from "@/src/lib/notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { initAds } from "@/src/shared/lib/ads";
 
 Splash.preventAutoHideAsync();
 
@@ -135,6 +136,14 @@ export default function RootLayout() {
     // switch waits on multiple secure-store reads before its
     // useQuery hooks can issue their network requests.
     warmTokenCache();
+  }, []);
+
+  // Initialise the Google Mobile Ads SDK once, at the root, so every
+  // screen that shows an ad finds the SDK already warm. This is
+  // fire-and-forget: the app is fully usable if it fails, and
+  // `initAds` never rejects.
+  useEffect(() => {
+    void initAds();
   }, []);
 
   useEffect(() => {

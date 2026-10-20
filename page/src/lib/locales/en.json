@@ -225,7 +225,9 @@
       "n/a": ""
     },
     "view_all": "View All",
-    "status_pending": "Pending"
+    "status_pending": "Pending",
+    "watch_ad_label": "Watch an ad",
+    "watch_ad_hint": "Earn 16 SV per ad. Goes to your study credits."
   },
   "tasks": {
     "title": "Available Tasks",
@@ -362,6 +364,27 @@
       "processing": "Processing {{percent}}%",
       "processing_ellipsis": "Processing…",
       "pdf_preview_truncated": "Showing the first {{count}} pages. Tick the pages you want and upload.",
+      "errors": {
+        "pdf_render_failed": "We couldn't render this PDF's pages. The file may be damaged — try another copy.",
+        "pdf_ocr_failed": "We couldn't read the pages of this PDF. Try a clearer copy.",
+        "pdf_ocr_empty": "No text was found in this PDF. Try a clearer copy.",
+        "empty_extracted_text": "We couldn't read any text from this file. Try a clearer copy, or upload the pages as images.",
+        "pdf_extraction_failed": "We couldn't read this PDF. The file may be damaged or password-protected — try another copy.",
+        "docx_extraction_failed": "We couldn't read this document. The file may be damaged — try another copy.",
+        "text_decode_failed": "We couldn't read this text file. Try saving it again as UTF-8.",
+        "unsupported_file_type": "That file type isn't supported yet. Upload a PDF, Word document, or text file.",
+        "document_extraction_failed": "Something went wrong reading your document. Please try again.",
+        "image_ocr_failed": "We couldn't read this image. Try a clearer photo.",
+        "image_ocr_empty": "No text was found in this image. Try a clearer photo.",
+        "ai_parser_failed": "We couldn't build the study plan from this material. Please try again."
+      },
+      "stages": {
+        "queued": "Preparing your document…",
+        "reading_pages": "Reading the pages…",
+        "parsing_ai": "Building your study plan…",
+        "saving": "Saving your material…",
+        "completed": "Done!"
+      },
       "success": "Upload successful!",
       "success_a11y": "Upload successful",
       "submit": "Upload text",

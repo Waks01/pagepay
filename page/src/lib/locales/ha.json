@@ -158,7 +158,9 @@
     "withdrawal_success": "An cire zuwa banki",
     "fee_label": "har da {{amount}} kuɗin",
     "view_all": "Duba Duka",
-    "status_pending": "Ana jira"
+    "status_pending": "Ana jira",
+    "watch_ad_label": "Kalli ad",
+    "watch_ad_hint": "Samu 16 SV na kowane ad. Yana zuwa kanka karatu."
   },
   "tasks": {
     "title": "Ayyukan Da Ke Samuwa",

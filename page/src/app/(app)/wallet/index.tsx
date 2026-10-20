@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { apiFetch } from "@/src/shared/api/client";
+import { RewardedAdButton } from "@/src/components/ads/RewardedAdButton";
 import { consumePendingWithdrawAfterPin } from "@/src/shared/lib/pin-verify-flag";
 import {
   formatKobo,
@@ -389,6 +390,34 @@ export default function WalletScreen() {
               </View>
             </View>
           )}
+          {/* Earn without money. The credit lands via the SSV callback
+              on the server, so the balance is refreshed a moment after
+              the ad closes rather than optimistically. */}
+          <View style={{ marginTop: 14, gap: 8 }}>
+            <RewardedAdButton
+              onEarned={() => {
+                // The server credits the SV through SSV, which is
+                // asynchronous - give it a beat, then refresh.
+                setTimeout(() => {
+                  void useCurrentUserStore.getState().refresh();
+                }, 1500);
+              }}
+              label={t("wallet.watch_ad_label", "Watch an ad")}
+              amountSv={16}
+            />
+            <Text
+              style={{
+                fontSize: 11,
+                color: c.inkFaint,
+                textAlign: "center",
+              }}
+            >
+              {t(
+                "wallet.watch_ad_hint",
+                "Earn 16 SV per ad. Goes to your study credits.",
+              )}
+            </Text>
+          </View>
           <View
             style={{
               height: 1,

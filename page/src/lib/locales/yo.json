@@ -158,7 +158,9 @@
     "withdrawal_success": "Ti yọ si banki",
     "fee_label": "pẹlu {{amount}} owo",
     "view_all": "Wo Gbogbo",
-    "status_pending": "Ti nduro"
+    "status_pending": "Ti nduro",
+    "watch_ad_label": "Wo àwọn ìpolé",
+    "watch_ad_hint": "Gba 16 SV fún àwọn ìpolé kọ̀ọ̀kan. Ó lọ sí ìbéèrè ìkẹ́kọ̀ọ́ ọwọ́."
   },
   "tasks": {
     "title": "Awọn Iṣẹ Ti o Wa",

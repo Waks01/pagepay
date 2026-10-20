@@ -158,7 +158,9 @@
     "withdrawal_success": "Wepụrụ n'ụlọ akụ",
     "fee_label": "gụnyere {{amount}} ụgwọ",
     "view_all": "Lee Ha Niile",
-    "status_pending": "Na-eche"
+    "status_pending": "Na-eche",
+    "watch_ad_label": "Lee mgbalahụ",
+    "watch_ad_hint": "Nweta 16 SV maka mmgbalụ anyị. Ọ na-abanye na akụkọ mmadụ gị."
   },
   "tasks": {
     "title": "Ọrụ Dị",
