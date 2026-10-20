@@ -475,6 +475,12 @@ class StudyMaterial(Base):
     returned after parsing the raw input into topics/subtopics. If the
     AI call fails, `parsed_structure` is NULL and the client surfaces
     a retry CTA.
+
+    `explanation_structure` is the teaching layer: the same material
+    rewritten in plain language for a beginner, with the diagrams
+    described in words. It is what the reader shows, what the tutor
+    quotes, and what the narration speaks. It is deliberately separate
+    from `parsed_structure`, which stays faithful to the source.
     """
 
     __tablename__ = "study_materials"
@@ -485,11 +491,75 @@ class StudyMaterial(Base):
     exam_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     raw_input: Mapped[str] = mapped_column(Text)
     parsed_structure: Mapped[str | None] = mapped_column(Text, nullable=True)
+    explanation_structure: Mapped[str | None] = mapped_column(Text, nullable=True)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     original_file_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     file_mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     ai_model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    education_level: Mapped[str] = mapped_column(String(20), nullable=False, default="primary")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class StudyPage(Base):
+    """One rendered page of an uploaded document.
+
+    A page is the full-fidelity image of one sheet of what the student
+    uploaded. It is written to object storage at upload time so the
+    app can show the student their own material at any zoom, without
+    re-downloading the source file every time the screen opens.
+    """
+
+    __tablename__ = "study_pages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    material_id: Mapped[int] = mapped_column(Integer, index=True)
+    page: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    width: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    height: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    image_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # True when the page carried no text layer, so its figures had to be
+    # separated from the prose by ink analysis rather than by geometry.
+    is_scan: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("uq_study_page_material_page", "material_id", "page", unique=True),
+    )
+
+
+class StudyFigure(Base):
+    """One diagram-like region cropped out of an uploaded page.
+
+    A figure is never dropped. When the page has a text layer the crop
+    comes from the PDF's own geometry, so it is pixel-exact. When the
+    page is a scan, the crop comes from separating ink from prose, and
+    the whole page is kept as a single figure if that is not possible.
+
+    `description` is the vision model's plain-language account of what
+    the figure shows. It is what the teaching layer explains and what
+    the narration speaks, so a student who cannot see the picture still
+    gets its content.
+    """
+
+    __tablename__ = "study_figures"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    material_id: Mapped[int] = mapped_column(Integer, index=True)
+    page: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    figure_index: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    bbox: Mapped[str | None] = mapped_column(Text, nullable=True)
+    width: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    height: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    image_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    caption: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("uq_study_figure_material_index", "material_id", "figure_index", unique=True),
+    )
 
 
 class SowUploadJob(Base):
@@ -519,6 +589,14 @@ class SowUploadJob(Base):
     )  # queued | processing | completed | failed
     material_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Real progress, written by the worker as each step completes.
+    # `progress` is 0-100; `stage` is a stable machine-readable code
+    # (queued | reading_pages | parsing_ai | saving | completed) the
+    # client turns into a label. Without these the client had to fake
+    # progress with a 1%-per-poll tick, which left the user staring at
+    # a bar that crept along with no idea what was happening.
+    progress: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    stage: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -615,24 +693,32 @@ class AiUsageLog(Base):
 
 
 class StudyTransaction(Base):
-    """One spend-or-earn event on a study asset.
+  """One spend-or-earn event on a study asset.
 
-    `method` is either `points` (user spent wallet points) or `ad`
-    (user watched a rewarded ad). `points_spent` is non-zero only for
-    the `points` method. `reward_granted` tracks whether the backend
-    actually unlocked the content — if false, the client should show
-    an error and retry.
-    """
+  `method` is either `points` (user spent wallet points) or `ad`
+  (user watched a rewarded ad). `points_spent` is non-zero only for
+  the `points` method. `reward_granted` tracks whether the backend
+  actually unlocked the content — if false, the client should show
+  an error and retry.
 
-    __tablename__ = "study_transactions"
+  `external_id` carries the provider's own event id for externally
+  triggered rows. AdMob's rewarded `transaction_id` is a hex string
+  ("18fa792de1bca816048293fc71035638"), far outside the range of the
+  integer columns, and it is the dedupe key: AdMob re-sends a callback
+  up to five times in one-second intervals, and a replayed callback
+  must not credit twice.
+  """
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
-    asset_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    method: Mapped[str] = mapped_column(String(50))  # points | ad
-    points_spent: Mapped[int] = mapped_column(Integer, default=0)
-    reward_granted: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+  __tablename__ = "study_transactions"
+
+  id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+  user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+  asset_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+  method: Mapped[str] = mapped_column(String(50))  # points | ad
+  points_spent: Mapped[int] = mapped_column(Integer, default=0)
+  reward_granted: Mapped[bool] = mapped_column(Boolean, default=False)
+  external_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+  created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class StudyProgress(Base):

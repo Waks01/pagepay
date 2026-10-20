@@ -3,17 +3,22 @@
 This is the only thing standing between "watch an ad, get SV" and a
 loop that credits itself. The tests below forge signatures with a real
 EC key pair so the crypto path is actually exercised rather than
-mocked, and they cover the four ways it must refuse: bad signature,
-wrong key, unknown caller, and a replayed callback.
+mocked, and they cover the ways it must refuse: bad signature, wrong
+key, unknown caller, and a replayed callback.
+
+The shapes here follow the official SSV spec rather than what is
+convenient: `transaction_id` is a hex string, and Google calls from
+addresses whose reverse DNS ends in 1e100.net / dns.google /
+googleusercontent.com, not googlebot.com.
 """
 
 import base64
-import json
 import os
 import time
+from urllib.parse import quote
 
 import pytest
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
 _ENV = os.path.join(
@@ -30,12 +35,18 @@ if os.path.exists(_ENV):
 
 from httpx import AsyncClient  # noqa: E402
 from sqlalchemy import select  # noqa: E402
-from urllib.parse import quote  # noqa: E402
 
 from app.models import StudyTransaction, User, UserTier  # noqa: E402
 from app.services import admob_ssv  # noqa: E402
 
 KEY_ID = 987654321
+
+# AdMob's documented example transaction id: a hex string.
+HEX_TRANSACTION_ID = "18fa792de1bca816048293fc71035638"
+
+# Captured before the autouse fixture patches it, so the DNS-failure
+# test can exercise the real reverse-lookup path.
+_REAL_ORIGIN_IS_GOOGLE = admob_ssv.origin_is_google
 
 
 @pytest.fixture
@@ -45,20 +56,20 @@ def signed():
     admob_ssv._keys_cache = {KEY_ID: private.public_key()}
     admob_ssv._keys_fetched_at = time.time()
 
-    def sign(content: str, kid: int = KEY_ID) -> str:
+    def sign(content: str) -> str:
         sig = private.sign(content.encode("utf-8"), ec.ECDSA(hashes.SHA256()))
         return quote(base64.b64encode(sig).decode(), safe="")
 
-    def build(user_id: int, txn_id: int, **over) -> str:
+    def build(user_id: int, txn_id: str = HEX_TRANSACTION_ID, **over) -> str:
         params = {
-            "user_id": user_id,
-            "custom_data": "",
+            "ad_network": "5450213213286189855",
+            "ad_unit": "ca-app-pub-3898064484524772/4958048285",
+            "custom_data": "pagepay_rewarded",
             "reward_amount": "1",
             "reward_item": "1 Point",
             "timestamp": "1791587482000",
-            "ad_unit": "ca-app-pub-x/4958048285",
-            "ad_network": "5450213213286189855",
             "transaction_id": txn_id,
+            "user_id": str(user_id),
         }
         params.update(over)
         # Percent-encode every value, as AdMob does. Signing the encoded
@@ -66,8 +77,7 @@ def signed():
         # idempotent, so a re-encode cannot alter the signed bytes.
         pairs = [f"{k}={quote(str(v), safe='')}" for k, v in params.items()]
         content = "&".join(pairs)
-        sig = sign(content, over.get("_kid", KEY_ID))
-        return f"{content}&signature={sig}&key_id={KEY_ID}"
+        return f"{content}&signature={sign(content)}&key_id={KEY_ID}"
 
     yield build
     admob_ssv._keys_cache = None
@@ -91,7 +101,9 @@ def _auth(user_id: int) -> dict:
 
 def test_signed_content_drops_the_trailing_two_params():
     raw = "user_id=1&reward_amount=1&ad_network=55&signature=ABC&key_id=99"
-    assert admob_ssv.build_signed_content(raw) == "user_id=1&reward_amount=1&ad_network=55"
+    assert admob_ssv.build_signed_content(raw) == (
+        "user_id=1&reward_amount=1&ad_network=55"
+    )
 
 
 def test_signed_content_refuses_a_query_without_key_id_last():
@@ -99,21 +111,68 @@ def test_signed_content_refuses_a_query_without_key_id_last():
         admob_ssv.build_signed_content("user_id=1&signature=ABC")
 
 
+# ── the origin check ──────────────────────────────────────────────
+
+
+def test_origin_accepts_the_domains_google_actually_calls_from():
+    """Regression: the allowlist was googlebot.com/google.com only.
+
+    Google's own addresses reverse-resolve to 1e100.net (Google Front
+    End, which is what AdMob calls from), dns.google and
+    googleusercontent.com. With the original list, every legitimate
+    callback would have been rejected and no ad credit would ever have
+    landed.
+    """
+    for host in (
+        "sf-in-f34.1e100.net",
+        "dns.google",
+        "1.112.255.173.bc.googleusercontent.com",
+        "crawl-74-125-24-34.googlebot.com",
+    ):
+        assert any(
+            host == d or host.endswith("." + d)
+            for d in admob_ssv._GOOGLE_DOMAINS
+        ), f"{host} would be rejected"
+
+
+def test_origin_rejects_a_non_google_host():
+    assert not any(
+        "evil.example.com" == d or "evil.example.com".endswith("." + d)
+        for d in admob_ssv._GOOGLE_DOMAINS
+    )
+
+
+def test_origin_returns_none_when_dns_fails(monkeypatch):
+    """A DNS failure is not the same as a non-Google host.
+
+    The signature already proved the callback is genuine, and Google
+    only retries five times - so a transient DNS failure must not cost
+    the revenue permanently.
+    """
+    import socket
+
+    def boom(*_a, **_k):
+        raise socket.herror("no PTR record")
+
+    monkeypatch.setattr(socket, "gethostbyaddr", boom)
+    assert _REAL_ORIGIN_IS_GOOGLE("1.2.3.4") is None
+
+
 # ── verification ──────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
 async def test_valid_callback_verifies(signed):
-    raw = signed(7, 4242)
+    raw = signed(7)
     params = await admob_ssv.verify_callback(raw, "8.8.8.8")
     assert params["user_id"] == "7"
-    assert params["transaction_id"] == "4242"
+    assert params["transaction_id"] == HEX_TRANSACTION_ID
 
 
 @pytest.mark.asyncio
 async def test_tampered_payload_is_refused(signed):
     """Changing a value after signing must break the signature."""
-    raw = signed(7, 4242)
+    raw = signed(7)
     tampered = raw.replace("user_id=7", "user_id=8", 1)
     with pytest.raises(admob_ssv.SSVError):
         await admob_ssv.verify_callback(tampered, "8.8.8.8")
@@ -123,19 +182,21 @@ async def test_tampered_payload_is_refused(signed):
 async def test_foreign_signature_is_refused(signed):
     """A signature from a key AdMob does not publish must not verify."""
     attacker = ec.generate_private_key(ec.SECP256R1())
-    content = "user_id=7&reward_amount=1&transaction_id=4242&signature=x"
-    sig = base64.b64encode(
-        attacker.sign(content.encode(), ec.ECDSA(hashes.SHA256()))
-    ).decode()
-    raw = f"{content[:-len('&signature=x')]}&signature={sig}&key_id={KEY_ID}"
+    content = "user_id=7&reward_amount=1&transaction_id=abc"
+    sig = quote(
+        base64.b64encode(
+            attacker.sign(content.encode(), ec.ECDSA(hashes.SHA256()))
+        ).decode(),
+        safe="",
+    )
+    raw = f"{content}&signature={sig}&key_id={KEY_ID}"
     with pytest.raises(admob_ssv.SSVError):
         await admob_ssv.verify_callback(raw, "8.8.8.8")
 
 
 @pytest.mark.asyncio
 async def test_unknown_key_id_is_refused(signed):
-    """A signature bounded to a key AdMob no longer publishes must not verify."""
-    raw = signed(7, 4242).replace(f"key_id={KEY_ID}", "key_id=111", 1)
+    raw = signed(7).replace(f"key_id={KEY_ID}", "key_id=111", 1)
     with pytest.raises(admob_ssv.SSVError):
         await admob_ssv.verify_callback(raw, "8.8.8.8")
 
@@ -144,13 +205,12 @@ async def test_unknown_key_id_is_refused(signed):
 async def test_non_google_origin_is_refused(signed, monkeypatch):
     monkeypatch.setattr(admob_ssv, "origin_is_google", lambda ip: False)
     with pytest.raises(admob_ssv.SSVError):
-        await admob_ssv.verify_callback(signed(7, 4242), "1.2.3.4")
+        await admob_ssv.verify_callback(signed(7), "1.2.3.4")
 
 
 @pytest.mark.asyncio
 async def test_missing_field_is_refused(signed):
-    """Dropping a signed parameter invalidates the signature too."""
-    raw = signed(7, 4242)
+    raw = signed(7)
     without_user = raw.replace("user_id=7&", "", 1)
     assert "user_id" not in without_user.split("&signature=")[0]
     with pytest.raises(admob_ssv.SSVError):
@@ -168,14 +228,36 @@ async def test_valid_callback_credits_sv(client, db_session, signed):
     await db_session.commit()
     await db_session.refresh(user)
 
-    res = await client.get(f"/api/v1/study/ads/complete?{signed(user.id, 555)}")
+    res = await client.get(f"/api/v1/study/ads/complete?{signed(user.id)}")
     assert res.status_code == 200
 
     await db_session.refresh(user)
     assert user.service_credit_balance == admob_ssv.payout_points()
     rows = (await db_session.execute(select(StudyTransaction))).scalars().all()
     assert len(rows) == 1 and rows[0].method == "ad"
-    assert rows[0].asset_id == 555  # transaction_id is the dedupe key
+    # The hex transaction id is stored verbatim - it does not fit an
+    # integer column, and it is the dedupe key.
+    assert rows[0].external_id == HEX_TRANSACTION_ID
+
+
+@pytest.mark.asyncio
+async def test_hex_transaction_id_is_accepted(client, db_session, signed):
+    """Regression: the id was parsed as an int.
+
+    AdMob's transaction_id is a hex string, so `int(...)` raised and the
+    endpoint answered 400 - meaning no ad credit ever landed.
+    """
+    user = User(email="ssvhex@test.com", password_hash="h")
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    res = await client.get(
+        f"/api/v1/study/ads/complete?{signed(user.id, HEX_TRANSACTION_ID)}"
+    )
+    assert res.status_code == 200
+    await db_session.refresh(user)
+    assert user.service_credit_balance == admob_ssv.payout_points()
 
 
 @pytest.mark.asyncio
@@ -189,7 +271,7 @@ async def test_callback_is_idempotent(client, db_session, signed):
 
     payout = admob_ssv.payout_points()
     for _ in range(3):
-        res = await client.get(f"/api/v1/study/ads/complete?{signed(user.id, 777)}")
+        res = await client.get(f"/api/v1/study/ads/complete?{signed(user.id)}")
         assert res.status_code == 200
 
     await db_session.refresh(user)
@@ -197,15 +279,18 @@ async def test_callback_is_idempotent(client, db_session, signed):
 
 
 @pytest.mark.asyncio
-async def test_bad_signature_is_rejected_and_nothing_credited(client, db_session, signed):
+async def test_bad_signature_is_rejected_and_nothing_credited(
+    client, db_session, signed
+):
     user = User(email="ssv3@test.com", password_hash="h")
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
 
-    raw = signed(user.id, 888).replace("user_id=", "user_id=", 1)
-    tampered = raw.replace("ad_network=5450213213286189855", "ad_network=999")
-    res = await client.get(f"/api/v1/study/ads/complete?{tampered}")
+    raw = signed(user.id).replace(
+        "ad_network=5450213213286189855", "ad_network=999"
+    )
+    res = await client.get(f"/api/v1/study/ads/complete?{raw}")
     assert res.status_code == 400
 
     rows = (await db_session.execute(select(StudyTransaction))).scalars().all()
@@ -213,7 +298,9 @@ async def test_bad_signature_is_rejected_and_nothing_credited(client, db_session
 
 
 @pytest.mark.asyncio
-async def test_credit_never_touches_the_withdrawable_wallet(client, db_session, signed):
+async def test_credit_never_touches_the_withdrawable_wallet(
+    client, db_session, signed
+):
     """An ad reward that becomes withdrawable cash is a payout the ad did
     not fund."""
     user = User(email="ssv4@test.com", password_hash="h")
@@ -223,12 +310,78 @@ async def test_credit_never_touches_the_withdrawable_wallet(client, db_session, 
     await db_session.commit()
     await db_session.refresh(user)
 
-    res = await client.get(f"/api/v1/study/ads/complete?{signed(user.id, 999)}")
+    res = await client.get(f"/api/v1/study/ads/complete?{signed(user.id)}")
     assert res.status_code == 200
     await db_session.refresh(user)
     assert user.cashable_balance == 5_000
 
 
+@pytest.mark.asyncio
+async def test_unknown_user_is_acknowledged_not_credited(
+    client, db_session, signed
+):
+    """An unknown user must not create a wallet, but AdMob should stop
+    retrying - so acknowledge with 200 and log."""
+    res = await client.get(f"/api/v1/study/ads/complete?{signed(999999)}")
+    assert res.status_code == 200
+
+
 def test_payout_is_the_configured_amount_and_not_the_ad_unit_label():
     """AdMob's unit is labelled '1 Point'; we pay the derived 16."""
     assert admob_ssv.payout_points() == 16
+
+
+# ── the key server ─────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_key_fetch_follows_the_redirect(monkeypatch):
+    """Regression: gstatic.com answers 301 to www.gstatic.com.
+
+    httpx does not follow redirects by default, so the key fetch failed
+    on every call and no SSV callback could ever be verified. This
+    asserts the client is configured to follow.
+    """
+    import httpx
+
+    seen: dict = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "keys": [
+                    {
+                        "keyId": 1234,
+                        "pem": (
+                            "-----BEGIN PUBLIC KEY-----\n"
+                            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE+nzvoGqvDeB9+SzE6igTl7"
+                            "TyK4JBbglwir9oTcQta8NuG26ZpZFxt+F2NDk7asTE6/2Yc8i1ATcGI"
+                            "qtuS5hv0Q==\n-----END PUBLIC KEY-----"
+                        ),
+                    }
+                ]
+            }
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+        async def get(self, url):
+            seen["url"] = url
+            return FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+    admob_ssv._reset_key_cache_for_tests()
+
+    keys = await admob_ssv.fetch_verifier_keys(force=True)
+    assert len(keys) == 1 and 1234 in keys
+    assert seen.get("follow_redirects") is True, "redirects are not followed"
+    admob_ssv._reset_key_cache_for_tests()

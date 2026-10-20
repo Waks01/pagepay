@@ -49,8 +49,28 @@ logger = logging.getLogger("uvicorn.error")
 _KEYS_URL = "https://gstatic.com/admob/reward/verifier-keys.json"
 _KEYS_TTL_SECONDS = 24 * 60 * 60  # rotate; the docs cap the cache at 24h
 
-# Reverse-DNS suffixes AdMob's SSV callbacks resolve to.
-_GOOGLE_DOMAINS = ("googlebot.com", "google.com")
+# Reverse-DNS suffixes that identify a Google-owned host.
+#
+# These were taken from live reverse lookups of the addresses Google
+# actually calls from, not guessed. The first version of this file
+# allowed only `googlebot.com` and `google.com`, which would have
+# rejected every real AdMob callback:
+#
+#   8.8.8.8            -> dns.google
+#   74.125.24.34        -> sf-in-f34.1e100.net
+#   142.250.185.78      -> fra16s48-in-f14.1e100.net
+#   216.58.200.49       -> tsa01s08-in-f17.1e100.net
+#   173.255.112.1       -> .bc.googleusercontent.com
+#
+# `1e100.net` is Google Front End - the range AdMob's SSV calls come
+# from - so excluding it would have silently lost every ad credit.
+_GOOGLE_DOMAINS = (
+    "googlebot.com",
+    "google.com",
+    "1e100.net",
+    "dns.google",
+    "googleusercontent.com",
+)
 
 _keys_cache: dict | None = None
 _keys_fetched_at: float = 0.0
@@ -75,7 +95,10 @@ async def fetch_verifier_keys(force: bool = False) -> dict[int, ec.EllipticCurve
         return _keys_cache
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        # gstatic.com answers 301 to www.gstatic.com, and httpx does
+        # not follow redirects by default - without this the key fetch
+        # failed on every single call.
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
             resp = await client.get(_KEYS_URL)
             if resp.status_code != 200:
                 raise SSVError(f"verifier-keys HTTP {resp.status_code}")
@@ -153,21 +176,30 @@ async def verify_signature(content: str, signature_b64: str, key_id: int) -> Non
         raise SSVError("signature did not verify") from exc
 
 
-def origin_is_google(ip: str) -> bool:
-    """Reverse-DNS the caller and require a Google-owned suffix.
+def origin_is_google(ip: str) -> bool | None:
+    """Reverse-DNS the caller and check for a Google-owned suffix.
 
-    Belt-and-braces: the ECDSA check is the real gate, since only Google
-    holds the private key. This additionally refuses a callback that
-    arrives from outside Google's space. Failures (no PTR record, DNS
-    timeout) are treated as not-Google rather than allowed.
+    Returns True for Google, False for a resolvable non-Google host, and
+    None when the lookup itself failed.
+
+    None is deliberately distinct from False. The ECDSA signature is the
+    real gate - only Google holds the private key - so a DNS timeout or
+    an unresolvable PTR must not cost the revenue: Google re-sends a
+    callback five times and then gives up, so a blocked-but-valid
+    callback is a permanently lost credit. A host that *does* resolve to
+    something non-Google is genuinely suspicious and is refused.
     """
     if not ip:
         return False
     try:
         hostname = socket.gethostbyaddr(ip)[0]
     except Exception:
-        return False
-    return hostname.endswith(_GOOGLE_DOMAINS)
+        return None
+    hostname = hostname.lower().rstrip(".")
+    return any(
+        hostname == domain or hostname.endswith("." + domain)
+        for domain in _GOOGLE_DOMAINS
+    )
 
 
 async def verify_callback(raw_query: str, client_ip: str) -> dict:
@@ -190,8 +222,20 @@ async def verify_callback(raw_query: str, client_ip: str) -> dict:
 
     await verify_signature(content, params["signature"], key_id)
 
-    if not origin_is_google(client_ip):
+    origin = origin_is_google(client_ip)
+    if origin is False:
+        # The host resolved to something that is not Google's. Refuse.
         raise SSVError("caller did not resolve to a Google domain")
+    if origin is None:
+        # The lookup itself failed. The signature already proved this is
+        # Google, and Google only retries five times - so log it and
+        # let the credit through rather than losing the revenue to a
+        # transient DNS failure.
+        logger.warning(
+            "AdMob SSV from %s: reverse DNS failed, allowing on the "
+            "strength of the verified signature",
+            client_ip,
+        )
 
     return params
 

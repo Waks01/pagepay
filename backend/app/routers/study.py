@@ -228,6 +228,8 @@ async def upload_sow(
         source_text=payload.text,
         figures=[],
         level=_normalise_education_level(payload.education_level),
+        db=db,
+        user_id=current_user.id,
     )
 
     material = StudyMaterial(
@@ -465,6 +467,7 @@ async def _ocr_pdf_pages(
     contents: bytes,
     page_numbers: list[int],
     on_page: ProgressCallback | None = None,
+    user_id: int | None = None,
 ) -> str:
     """Render PDF pages to images and OCR each one with Cloudflare Vision.
 
@@ -491,7 +494,9 @@ async def _ocr_pdf_pages(
         nonlocal completed
         try:
             async with semaphore:
-                return await _ocr_image_with_cloudflare(image, "image/jpeg")
+                return await _ocr_image_with_cloudflare(
+                    image, "image/jpeg", user_id=user_id
+                )
         finally:
             # Count the page whether it succeeded or not — otherwise a
             # failed page leaves the progress bar stuck.
@@ -742,7 +747,10 @@ def _sniff_image_content_type(contents: bytes, fallback: str = "image/jpeg") -> 
 
 
 async def _ocr_image_with_cloudflare(
-    contents: bytes, content_type: str
+    contents: bytes,
+    content_type: str,
+    *,
+    user_id: int | None = None,
 ) -> str:
     """Send the image to Cloudflare Workers AI Llama Vision and return extracted text.
 
@@ -775,6 +783,28 @@ async def _ocr_image_with_cloudflare(
         if resp.status_code != 200:
             raise RuntimeError(f"cf_vision_http_{resp.status_code}")
         data = resp.json()
+
+    if user_id is not None:
+        # The OCR pass costs real money and used to be invisible to the
+        # admin cost breakdown. It gets its own session because the PDF
+        # path runs several of these concurrently and they must not
+        # share one.
+        try:
+            from app.services.ai_cost import log_usage
+
+            usage = (data.get("result") or {}).get("usage") or {}
+            async with AsyncSessionLocal() as usage_db:
+                await log_usage(
+                    usage_db,
+                    user_id=user_id,
+                    endpoint="sow_ocr",
+                    model="@cf/meta/llama-3.2-11b-vision-instruct",
+                    prompt_tokens=usage.get("prompt_tokens") or 0,
+                    completion_tokens=usage.get("completion_tokens") or 0,
+                )
+        except Exception as exc:
+            logger.warning("[sow] OCR usage logging failed: %s", exc)
+
     try:
         text = data.get("result", {}).get("response", "")
         if not text:
@@ -863,6 +893,7 @@ async def _extract_document_text(
     filename: str,
     selected_pages: str | None = None,
     on_progress: ProgressCallback | None = None,
+    user_id: int | None = None,
 ) -> str:
     """Branch on extension and extract plain text from PDF / DOCX / TXT.
 
@@ -894,7 +925,9 @@ async def _extract_document_text(
                 if on_progress is not None:
                     on_progress(20 + int(50 * done / max(total, 1)), "reading_pages")
 
-            extracted = await _ocr_pdf_pages(contents, ocr_pages, on_page=_on_page)
+            extracted = await _ocr_pdf_pages(
+                contents, ocr_pages, on_page=_on_page, user_id=user_id
+            )
             if not extracted.strip():
                 raise ValueError("pdf_ocr_empty")
             return extracted
@@ -1070,6 +1103,8 @@ async def _build_explanation_safely(
     source_text: str,
     figures: list,
     level: str,
+    db=None,
+    user_id: int | None = None,
 ) -> dict | None:
     """Build the teaching layer, without ever failing the upload.
 
@@ -1093,6 +1128,8 @@ async def _build_explanation_safely(
             raw_text=source_text,
             figures=figure_dicts,
             level=level,
+            db=db,
+            user_id=user_id,
         )
     except Exception as exc:
         logger.warning("[sow] explanation layer failed: %s", exc)
@@ -1245,7 +1282,9 @@ async def _process_sow_image_job(
         await _mark_job_status(job_id, "processing", progress=10, stage="reading_pages")
 
         try:
-            extracted_text = await _ocr_image_with_cloudflare(contents, content_type)
+            extracted_text = await _ocr_image_with_cloudflare(
+                contents, content_type, user_id=user_id
+            )
             logger.info(
                 "[sow/upload-image worker] OCR done job=%s text_len=%s",
                 job_id, len(extracted_text or ""),
@@ -1283,12 +1322,15 @@ async def _process_sow_image_job(
         title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
 
         await _mark_job_status(job_id, "processing", progress=85, stage="parsing_ai")
-        explanation = await _build_explanation_safely(
-            title=title,
-            source_text=source_text,
-            figures=figures,
-            level=level,
-        )
+        async with AsyncSessionLocal() as explain_db:
+            explanation = await _build_explanation_safely(
+                title=title,
+                source_text=source_text,
+                figures=figures,
+                level=level,
+                db=explain_db,
+                user_id=user_id,
+            )
 
         await _mark_job_status(job_id, "processing", progress=92, stage="saving")
         material_id = await _persist_material(
@@ -1360,6 +1402,7 @@ async def _process_sow_document_job(
                 safe_name,
                 selected_pages=selected_pages,
                 on_progress=report,
+                user_id=user_id,
             )
             logger.info(
                 "[sow/upload-document worker] extract done job=%s text_len=%s",
@@ -1412,12 +1455,15 @@ async def _process_sow_document_job(
         title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
 
         await _mark_job_status(job_id, "processing", progress=85, stage="parsing_ai")
-        explanation = await _build_explanation_safely(
-            title=title,
-            source_text=source_text,
-            figures=figures,
-            level=level,
-        )
+        async with AsyncSessionLocal() as explain_db:
+            explanation = await _build_explanation_safely(
+                title=title,
+                source_text=source_text,
+                figures=figures,
+                level=level,
+                db=explain_db,
+                user_id=user_id,
+            )
 
         await _mark_job_status(job_id, "processing", progress=92, stage="saving")
         filename_lower = safe_name.lower()
@@ -4466,6 +4512,7 @@ async def _generate_one_episode(db: AsyncSession, batch) -> None:
         episode_index=batch.episode_index,
         total_episodes=batch.total_episodes,
         db=db,
+        user_id=batch.user_id,
     )
 
     if not r2_storage.is_configured():
@@ -4756,21 +4803,29 @@ async def admob_reward_callback(
 
     try:
         user_id = int(params["user_id"])
-        transaction_id = int(params["transaction_id"])
     except ValueError:
-        logger.warning("AdMob SSV sent non-integer ids: %s", raw_query[:120])
+        logger.warning("AdMob SSV sent a non-integer user_id: %s", raw_query[:120])
+        return Response(status_code=400, content="bad ids")
+
+    # `transaction_id` is a hex string, not a number - AdMob's example is
+    # "18fa792de1bca816048293fc71035638", which is far outside the range
+    # of any integer column. Parsing it as an int rejected every real
+    # callback, so no ad credit would ever have landed.
+    transaction_id = (params.get("transaction_id") or "").strip()
+    if not transaction_id:
+        logger.warning("AdMob SSV sent no transaction_id: %s", raw_query[:120])
         return Response(status_code=400, content="bad ids")
 
     payout = admob_ssv.payout_points()
 
-    # Idempotency. AdMob retries, so a replayed callback must not
-    # double-credit. The transaction_id is the only available key, so
-    # the row that carries it is the ad ledger row.
+    # Idempotency. AdMob re-sends a callback up to five times in
+    # one-second intervals, so a replay must not credit twice. The
+    # transaction_id is the provider's own unique id for the event.
     existing = await db.execute(
         select(StudyTransaction.id)
         .where(
             StudyTransaction.user_id == user_id,
-            StudyTransaction.asset_id == transaction_id,
+            StudyTransaction.external_id == transaction_id,
             StudyTransaction.method == "ad",
         )
         .limit(1)
@@ -4789,7 +4844,8 @@ async def admob_reward_callback(
     db.add(
         StudyTransaction(
             user_id=user_row.id,
-            asset_id=transaction_id,
+            asset_id=None,
+            external_id=transaction_id,
             method="ad",
             points_spent=0,
             reward_granted=True,

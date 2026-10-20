@@ -115,6 +115,16 @@ async def _ensure_critical_columns():
         ("tasks", "category",            "VARCHAR(50)  NOT NULL DEFAULT 'social_media'"),
         ("tasks", "reward_type",         "VARCHAR(20)  NOT NULL DEFAULT 'cash'"),
         ("tasks", "reward_multiplier",   "DOUBLE PRECISION NOT NULL DEFAULT 1.0"),
+        # The teaching layer and the depth it is pitched at. The
+        # `study_materials` table already exists in prod, so `create_all`
+        # will not add these columns to it — without this backfill every
+        # upload would fail on the insert.
+        ("study_materials", "explanation_structure", "TEXT NULL"),
+        ("study_materials", "education_level", "VARCHAR(20) NOT NULL DEFAULT 'primary'"),
+        # AdMob's rewarded `transaction_id` is a hex string, so it needs a
+        # text column. It is the SSV dedupe key: Google re-sends a
+        # callback up to five times, and a replay must not credit twice.
+        ("study_transactions", "external_id", "VARCHAR(128) NULL"),
     )
 
     try:
@@ -167,6 +177,37 @@ async def _ensure_wallet_split_columns():
         logger.error("Wallet-split backfill failed: %s", exc)
 
 
+async def _ensure_sow_job_progress_columns():
+    """Defensive backfill for the SOW upload job progress columns.
+
+    The 046_sow_job_progress migration is the canonical fix, but the prod
+    DB is stuck at alembic rev 021 (see `_ensure_critical_columns` for
+    the full story), so the migration chain may never walk this far.
+    Without these columns the upload worker crashes on every progress
+    write and every SOW upload fails.
+
+    Same additive, idempotent `ADD COLUMN IF NOT EXISTS` pattern as the
+    other backfills, so it is a no-op once the migration has landed.
+    """
+    from sqlalchemy import text
+
+    additions = (
+        ("sow_upload_jobs", "progress", "SMALLINT NULL"),
+        ("sow_upload_jobs", "stage",   "VARCHAR(40) NULL"),
+    )
+    try:
+        async with engine.begin() as conn:
+            for table, column, ddl in additions:
+                await conn.execute(text(
+                    f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS "
+                    f"{column} {ddl}"
+                ))
+        logger.info("SOW job progress backfill: ensured %d columns exist",
+                    len(additions))
+    except Exception as exc:
+        logger.error("SOW job progress backfill failed: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global processor_task
@@ -213,6 +254,8 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(_ensure_critical_columns())
     logger.info("Scheduling wallet-split column backfill...")
     asyncio.create_task(_ensure_wallet_split_columns())
+    logger.info("Scheduling SOW job progress backfill...")
+    asyncio.create_task(_ensure_sow_job_progress_columns())
 
 # Initialize Firebase Admin for push notifications. The init helper
     # reads credentials from FIREBASE_SERVICE_ACCOUNT_JSON (raw JSON) or
