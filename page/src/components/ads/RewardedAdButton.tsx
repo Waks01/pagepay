@@ -10,17 +10,20 @@
  * unprompted is a policy violation and terrible UX in a study app.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useRewardedAd } from '@/src/shared/lib/ads';
-import { useCurrentUser } from '@/src/shared/lib/current-user';
+import {
+  useCurrentUser,
+  useCurrentUserStore,
+} from '@/src/shared/lib/current-user';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 
 type Props = {
-  /** Called after the ad is watched. The balance refresh is the parent's job. */
+  /** Called once the credit has actually landed. */
   onEarned?: () => void;
   /** Label for the button. */
   label?: string;
@@ -30,6 +33,10 @@ type Props = {
   amountSv?: number;
   style?: object;
 };
+
+/** How long to wait for the server's SSV credit before giving up. */
+const CREDIT_WAIT_MS = 30_000;
+const CREDIT_POLL_MS = 1_500;
 
 export function RewardedAdButton({
   onEarned,
@@ -42,28 +49,64 @@ export function RewardedAdButton({
   const tokens = PagePay[scheme];
   const user = useCurrentUser();
   const [busy, setBusy] = useState(false);
+  const [crediting, setCrediting] = useState(false);
+  const [credited, setCredited] = useState(false);
+  const balanceBeforeRef = useRef<number | null>(null);
+
+  const balance = user?.service_credit_balance ?? 0;
+
+  /**
+   * Wait for the server's SSV credit to actually land.
+   *
+   * The credit is granted by the backend when AdMob's callback arrives,
+   * which is asynchronous and can trail the ad closing by a second or
+   * two. A fixed delay either shows a stale balance or refreshes before
+   * the credit exists, so poll the store until the balance moves.
+   */
+  const waitForCredit = useCallback(async () => {
+    const before = balanceBeforeRef.current;
+    setCrediting(true);
+    const deadline = Date.now() + CREDIT_WAIT_MS;
+
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, CREDIT_POLL_MS));
+      const fresh = await useCurrentUserStore.getState().refresh();
+      const now = fresh?.service_credit_balance ?? 0;
+      if (before == null || now > before) {
+        setCrediting(false);
+        setCredited(true);
+        onEarned?.();
+        return;
+      }
+    }
+
+    // The credit did not arrive in time. The server may still be
+    // processing it, so say so rather than claiming failure.
+    setCrediting(false);
+    onEarned?.();
+  }, [onEarned]);
 
   const { show, isLoaded, isShowing, error } = useRewardedAd(
     user?.id,
     () => {
-      // UX only - the server credits the SV via SSV. The parent
-      // refetches the balance; if it has not moved yet, the credit is
-      // still in flight, so the refresh is retried briefly.
-      onEarned?.();
+      // UX only - the server credits the SV via SSV.
+      balanceBeforeRef.current = balance;
+      void waitForCredit();
     },
   );
 
   const onPress = useCallback(() => {
-    if (isShowing) return;
+    if (isShowing || crediting) return;
     setBusy(true);
+    setCredited(false);
     const shown = show();
     if (!shown) {
       // Nothing was ready. Tell the student rather than failing silently.
       setBusy(false);
     }
-  }, [isShowing, show]);
+  }, [isShowing, crediting, show]);
 
-  const disabled = busy || isShowing;
+  const disabled = busy || isShowing || crediting;
 
   return (
     <View style={style}>
@@ -84,10 +127,20 @@ export function RewardedAdButton({
         {disabled ? (
           <ActivityIndicator size="small" color={tokens.mint} />
         ) : (
-          <Ionicons name="play-circle-outline" size={18} color={tokens.mint} />
+          <Ionicons
+            name={credited ? 'checkmark-circle' : 'play-circle-outline'}
+            size={18}
+            color={tokens.mint}
+          />
         )}
         <Text style={[styles.label, { color: tokens.mint }]}>
-          {isShowing ? 'Loading ad...' : label}
+          {credited
+            ? 'Credited'
+            : crediting
+              ? 'Crediting...'
+              : isShowing
+                ? 'Loading ad...'
+                : label}
         </Text>
         {showAmount ? (
           <Text style={[styles.amount, { color: tokens.mint }]}>

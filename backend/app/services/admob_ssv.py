@@ -35,7 +35,7 @@ import logging
 import socket
 import time
 from functools import lru_cache
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, unquote
 
 import httpx
 from cryptography.exceptions import InvalidSignature
@@ -141,22 +141,65 @@ def _reset_key_cache_for_tests() -> None:
 
 # ── verification ──────────────────────────────────────────────────
 
+_SIGNATURE_PARAM = "signature="
+_KEY_ID_PARAM = "key_id="
+
 
 def build_signed_content(raw_query: str) -> str:
-    """The raw query string minus the trailing signature and key_id.
+    """The bytes AdMob actually signed: the query up to `signature=`.
 
-    Google appends those two last, so dropping the final two
-    ampersand-separated members reconstructs exactly what was signed.
+    This follows Google's reference implementation exactly rather than
+    assuming a parameter order. Google takes the query string, finds the
+    first literal `signature=`, and keeps everything before the `&` that
+    precedes it:
+
+        i = queryString.indexOf("signature=")
+        content = queryString.substring(0, i - 1)
+
+    The docs also state that the last two parameters are always
+    `signature` and `key_id` in that order, so the two agree for a
+    well-formed callback - but following the reference implementation
+    means an unusual-but-valid callback is still verified against the
+    bytes that were signed, rather than being rejected outright.
+
     Nothing is URL-decoded: the signature covers the bytes as sent, so
     decoding first would verify a different string.
     """
-    parts = raw_query.split("&")
-    if len(parts) < 2:
-        raise SSVError("query too short to contain signature and key_id")
-    trailing = parts[-1]
-    if not trailing.startswith("key_id="):
-        raise SSVError("query does not end with key_id")
-    return "&".join(parts[:-2])
+    i = raw_query.find(_SIGNATURE_PARAM)
+    if i == -1:
+        raise SSVError("query has no signature parameter")
+    if i == 0:
+        raise SSVError("signature is the first parameter")
+    # i - 1 drops the '&' that separates the content from `signature=`.
+    return raw_query[: i - 1]
+
+
+def split_signature_and_key_id(raw_query: str) -> tuple[str, str]:
+    """Extract (signature, key_id) the way Google's reference code does.
+
+    The signature runs from `signature=` to the `&` before `key_id=`.
+
+    The signature is returned percent-decoded, because that is the
+    base64 payload itself - the *content* that was signed stays in its
+    encoded form, and it is the signature bytes that need decoding
+    before they can be verified.
+    """
+    i = raw_query.find(_SIGNATURE_PARAM)
+    if i == -1:
+        raise SSVError("query has no signature parameter")
+    sig_and_key = raw_query[i:]
+    j = sig_and_key.find(_KEY_ID_PARAM)
+    if j == -1:
+        raise SSVError("query has no key_id parameter")
+    signature = sig_and_key[len(_SIGNATURE_PARAM) : j - 1]
+    key_id = sig_and_key[j + len(_KEY_ID_PARAM) :]
+    if not signature:
+        raise SSVError("empty signature")
+    if not key_id:
+        raise SSVError("empty key_id")
+    # The signature travels as a base64 string in a URL, so its '+' and
+    # '/' arrive percent-encoded. Unquote before base64-decoding.
+    return unquote(signature), unquote(key_id)
 
 
 async def verify_signature(content: str, signature_b64: str, key_id: int) -> None:
@@ -210,17 +253,28 @@ async def verify_callback(raw_query: str, client_ip: str) -> dict:
     obvious forgery is refused without a reverse lookup.
     """
     params = dict(parse_qsl(raw_query, keep_blank_values=True))
-    for field in ("user_id", "reward_amount", "transaction_id", "signature", "key_id"):
+    for field in ("user_id", "reward_amount", "transaction_id", "ad_unit"):
         if field not in params:
             raise SSVError(f"missing {field}")
 
     content = build_signed_content(raw_query)
+    # Pull the signature and key_id out of the raw query the way Google's
+    # reference code does, rather than trusting the decoded params -
+    # the signature is over the encoded bytes.
+    signature_b64, key_id_raw = split_signature_and_key_id(raw_query)
     try:
-        key_id = int(params["key_id"])
+        key_id = int(key_id_raw)
     except ValueError as exc:
         raise SSVError("key_id not an integer") from exc
 
-    await verify_signature(content, params["signature"], key_id)
+    await verify_signature(content, signature_b64, key_id)
+
+    # The callback must be for an ad unit we own. The signing key is
+    # shared across every AdMob publisher, so without this a rogue
+    # publisher could point their own ad unit at this URL and mint SV
+    # for arbitrary PagePay accounts.
+    if not ad_unit_is_allowed(params["ad_unit"]):
+        raise SSVError(f"ad_unit {params['ad_unit']!r} is not ours")
 
     origin = origin_is_google(client_ip)
     if origin is False:
@@ -246,3 +300,38 @@ def payout_points() -> int:
     if amount <= 0:
         raise SSVError("rewarded_ad_payout_points is not configured")
     return amount
+
+
+def allowed_ad_units() -> set[str]:
+    """Ad unit ids we accept a callback for.
+
+    The SSV endpoint is public and the signing key is shared by every
+    AdMob publisher, so without this check any developer could point
+    their own ad unit's callback URL at ours and have their users
+    credited with PagePay SV - a minting vector, not a theft one, but
+    still unbounded free balance.
+
+    Google's own guidance is to check the `ad_unit` in the callback
+    against the ad unit you expect.
+    """
+    from app.config import settings as _settings
+
+    units = {
+        u.strip()
+        for u in str(_settings.rewarded_ad_unit_ids or "").split(",")
+        if u.strip()
+    }
+    return units
+
+
+def ad_unit_is_allowed(ad_unit: str) -> bool:
+    """True when the callback is for an ad unit we own.
+
+    An empty allowlist means "not configured", which is treated as
+    refusing rather than allowing - a fail-open check here would
+    reinstate the minting vector.
+    """
+    allowed = allowed_ad_units()
+    if not allowed:
+        return False
+    return ad_unit in allowed

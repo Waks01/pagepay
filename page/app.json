@@ -11,17 +11,20 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": ["audio"],
+        "NSPhotoLibraryAddUsageDescription": "PagePay needs access to save narration episodes to your library.",
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
       }
     },
     "android": {
       "package": "com.kenzola.pagepay",
       "adaptiveIcon": {
         "backgroundColor": "#0E7C66",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": true,
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-router",
@@ -62,7 +65,22 @@
           "cameraPermission": "PagePay needs access to your camera to take photos for study materials."
         }
       ],
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true,
+          "enableBackgroundRecording": false,
+          "recordAudioAndroid": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "PagePay needs access to your photos to upload study materials.",
+          "savePhotosPermission": "PagePay needs access to save narration episodes to your library."
+        }
+      ],
       "expo-video"
     ],
     "experiments": {

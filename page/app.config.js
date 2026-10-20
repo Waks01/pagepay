@@ -60,6 +60,13 @@ if (
   ]);
 }
 
+// Writes the IAB app-ads.txt into the Android assets during prebuild.
+// The android/ directory is generated and gitignored, so this cannot be
+// a committed file.
+if (!plugins.some((p) => p === "./plugins/withAdMobAssets")) {
+  plugins.push("./plugins/withAdMobAssets");
+}
+
 module.exports = ({ config }) => {
   return {
     ...config,

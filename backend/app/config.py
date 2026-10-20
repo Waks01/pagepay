@@ -143,6 +143,23 @@ class Settings(BaseSettings):
     # keeps the margin at ~60% instead of ~20%.
     # Override via env `REWARDED_AD_PAYOUT_POINTS`.
     rewarded_ad_payout_points: int = int(20 * (1 - 0.20))  # 16
+
+    # Ad unit ids we accept an SSV callback for. Comma separated.
+    #
+    # The SSV endpoint is public and AdMob's signing key is shared by
+    # every publisher, so without this allowlist any developer could
+    # point their own ad unit's callback URL at ours and have their
+    # users credited with PagePay SV. Google's guidance is to check the
+    # `ad_unit` in the callback against the ad unit you expect.
+    #
+    # Both the live unit and Google's rewarded *test* unit are listed:
+    # the test unit is what a dev build requests, and AdMob sends a
+    # callback for it too.
+    # Override via env `REWARDED_AD_UNIT_IDS`.
+    rewarded_ad_unit_ids: str = (
+        "ca-app-pub-3898064484524772/4958048285,"
+        "ca-app-pub-3940256099942544/5224354917"
+    )
     # Bonus credited to the user when they finish a 1-minute reading
     # slice, independent of any ads watched. Settled at /session/end.
     # Override via env `READING_SLICE_BONUS_POINTS`.
@@ -698,11 +715,53 @@ class Settings(BaseSettings):
     cloudflare_r2_bucket: str = "pagepay"
     cloudflare_r2_public_url: str | None = None    # e.g. https://cdn.example.com
     cloudflare_r2_prefix: str = "study-audio"      # object key prefix in the bucket
+    # Object key prefixes for the page/figure artifacts of an uploaded
+    # material. A *page* is a full-fidelity render of one page of the
+    # document; a *figure* is a crop of a diagram, graph, circuit or
+    # illustration found on it. Both are written once at upload time and
+    # served from the bucket, so the phone never has to pull a whole PDF
+    # just to show the student what they uploaded.
+    cloudflare_r2_pages_prefix: str = "study-pages"
+    cloudflare_r2_figures_prefix: str = "study-figures"
     cloudflare_r2_presign_expiry_seconds: int = 3600  # 1 hour, refreshed on read
     # TTL for audio files. Same 30-day pattern as image proxy.
     # expo-av caches aggressively on the client, so this is mostly
     # for CDN edge cache (if we ever add one).
     audio_cache_ttl_seconds: int = 30 * 24 * 60 * 60
+
+    # ── Study material extraction (pages, figures, narration) ───────
+    # Width of the full-fidelity page render written to object storage
+    # and shown in the app's "Original" view. Wider than the OCR render
+    # (1400px) so the student can zoom into their own material and
+    # read small print without going back to the source file.
+    study_page_render_width: int = 1800
+    study_page_jpeg_quality: int = 82
+    # A figure is a region of a page that carries ink but no prose: a
+    # diagram, graph, circuit, chart, photograph or worked illustration.
+    # Regions smaller than this share of the page are page furniture —
+    # rules, underlines, bullet glyphs, page numbers — not figures.
+    # The bar is deliberately low: a small boxed flowchart is still a
+    # figure, and the side-length filter is what rules out a rule.
+    study_figure_min_area_ratio: float = 0.004
+    # A region covering more than this share of a page that also carries
+    # prose is decoration (a page border, a watermark frame), not a
+    # figure worth cropping.
+    study_figure_max_area_ratio: float = 0.90
+    # How much of the page around a figure to keep, as a share of the
+    # page's smaller side, so the crop still shows the caption and the
+    # labels that sit just outside the drawing.
+    study_figure_padding: float = 0.012
+    # Tesseract is used only to locate prose on a *scanned* page so the
+    # figures on it can be separated from the text around them. It is
+    # never used to read the material — the vision model does that. When
+    # Tesseract is not installed the whole page is kept as a single
+    # figure instead, which loses nothing.
+    tesseract_enabled: bool = True
+    # Default explanation depth for the teaching layer and the
+    # narration. "primary" narrates to a young student in plain
+    # language with everyday analogies; the app offers the other levels
+    # as a picker on the podcast screen.
+    study_education_default_level: str = "primary"
 
     # ── Platform revenue splits ──────────────────────────────────────
     # Ads: portion of ad revenue kept by platform (rest goes to user as points).

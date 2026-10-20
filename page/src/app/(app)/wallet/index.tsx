@@ -11,6 +11,7 @@ import {
   Platform,
   TouchableOpacity,
   Image,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -19,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { RewardedAdButton } from "@/src/components/ads/RewardedAdButton";
+import { openAdInspector } from "@/src/shared/lib/ads";
 import { consumePendingWithdrawAfterPin } from "@/src/shared/lib/pin-verify-flag";
 import {
   formatKobo,
@@ -396,11 +398,9 @@ export default function WalletScreen() {
           <View style={{ marginTop: 14, gap: 8 }}>
             <RewardedAdButton
               onEarned={() => {
-                // The server credits the SV through SSV, which is
-                // asynchronous - give it a beat, then refresh.
-                setTimeout(() => {
-                  void useCurrentUserStore.getState().refresh();
-                }, 1500);
+                // The button waits for the SSV credit to land before
+                // calling this, so the balance is already correct.
+                void useCurrentUserStore.getState().refresh();
               }}
               label={t("wallet.watch_ad_label", "Watch an ad")}
               amountSv={16}
@@ -417,6 +417,18 @@ export default function WalletScreen() {
                 "Earn 16 SV per ad. Goes to your study credits.",
               )}
             </Text>
+            {__DEV__ ? (
+              <Pressable
+                onPress={() => void openAdInspector()}
+                style={{ alignSelf: "center", paddingVertical: 6 }}
+                accessibilityRole="button"
+                accessibilityLabel="Open ad inspector"
+              >
+                <Text style={{ fontSize: 10, color: c.inkFaint }}>
+                  Ad inspector (dev)
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
           <View
             style={{

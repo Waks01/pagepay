@@ -49,11 +49,22 @@ export const AD_UNITS = {
 /**
  * Ad unit ids to use right now.
  *
- * `__DEV__` builds get Google's canonical test units, so a developer
- * never serves a live ad to their own device. Release builds get the
- * real units.
+ * A dev build must never serve live ads - invalid traffic risks the
+ * AdMob account being suspended. So:
+ *
+ *   - `__DEV__` builds use Google's canonical test units.
+ *   - A non-dev build uses the real units, unless
+ *     `EXPO_PUBLIC_ADS_USE_TEST_UNITS` is set, which lets a staging
+ *     build request test inventory without shipping a debug build.
+ *
+ * The backend accepts callbacks for both the live and the rewarded test
+ * unit, so a test-unit view still credits SV.
  */
-export const ACTIVE_AD_UNITS = __DEV__
+const USE_TEST_UNITS =
+  __DEV__ ||
+  process.env.EXPO_PUBLIC_ADS_USE_TEST_UNITS === 'true';
+
+export const ACTIVE_AD_UNITS = USE_TEST_UNITS
   ? {
       rewarded: TestIds.REWARDED,
       banner: TestIds.ADAPTIVE_BANNER,
@@ -62,7 +73,7 @@ export const ACTIVE_AD_UNITS = __DEV__
   : AD_UNITS;
 
 /** True when the app is running against Google's test inventory. */
-export const USING_TEST_ADS = __DEV__;
+export const USING_TEST_ADS = USE_TEST_UNITS;
 
 /**
  * Report an impression's monetary value to the backend.
@@ -113,6 +124,17 @@ export function initAds(): Promise<void> {
   if (!initPromise) {
     initPromise = (async () => {
       try {
+        // Register the device as a test device before initializing, so
+        // even a build pointed at the live ad units cannot serve itself
+        // a live ad. AdMob rejects test traffic from a registered test
+        // device, which is the belt to the __DEV__ test-unit braces.
+        const testDevices = parseTestDeviceIds();
+        if (testDevices.length > 0) {
+          await MobileAds().setRequestConfiguration({
+            testDeviceIdentifiers: testDevices,
+          });
+        }
+
         const adapterStatus = await MobileAds().initialize();
         if (__DEV__) {
           console.log('[ads] MobileAds initialised', adapterStatus);
@@ -128,21 +150,64 @@ export function initAds(): Promise<void> {
 }
 
 /**
+ * Device ids to treat as test devices.
+ *
+ * The hashed id appears in the device log after the first ad request
+ * ("Use new ConsentDebugSettings.Builder().addTestDeviceHashedId(...)"),
+ * so it is pasted in through the environment rather than hard-coded.
+ */
+function parseTestDeviceIds(): string[] {
+  const raw = process.env.EXPO_PUBLIC_ADS_TEST_DEVICE_IDS;
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Open the Ad Inspector - the debugging cockpit for ad serving.
+ *
+ * It shows the ad request, the mediation chain, the adapter status and
+ * the reason an ad failed to fill, which is the only practical way to
+ * see why a slot is empty on a device. Dev only: it must never be
+ * reachable in a release build.
+ */
+export async function openAdInspector(): Promise<void> {
+  if (!__DEV__) return;
+  try {
+    await MobileAds().openAdInspector();
+  } catch (error) {
+    console.warn('[ads] ad inspector failed to open', error);
+  }
+}
+
+/**
  * Build the request options for an ad request.
  *
  * `userId` is what lets the SSV callback credit the right account, so
- * it is required for any format that pays out.
+ * it is required for the rewarded format. It is deliberately not set on
+ * banner or native requests: those formats never produce a server-side
+ * verification callback, and sending a user id to a request that has
+ * no use for it is a needless identifier disclosure.
  */
-export function requestOptionsFor(userId?: string | number | null) {
+export function requestOptionsFor(
+  userId?: string | number | null,
+  options: { ssv?: boolean } = {},
+) {
+  const withSsv = options.ssv ?? false;
   return {
     // PagePay does not yet run a UMP consent flow, so ads are
     // requested non-personalised. Serving personalised ads without
     // collecting consent is a policy violation in the EEA/UK and the
     // US states. This must be revisited when UMP lands.
     requestNonPersonalizedAdsOnly: true,
-    ...(userId != null
+    ...(withSsv && userId != null
       ? {
           serverSideVerificationOptions: {
+            // Google requires a string, and warns against putting
+            // anything identifying in it - the internal numeric user
+            // id is the right value.
             userId: String(userId),
             customData: 'pagepay_rewarded',
           },
@@ -188,7 +253,7 @@ export function useRewardedAd(
   const load = () => {
     const instance = RewardedAd.createForAdRequest(
       ACTIVE_AD_UNITS.rewarded,
-      requestOptionsFor(userId),
+      requestOptionsFor(userId, { ssv: true }),
     );
     // A rewarded ad fires its own LOADED event
     // (RewardedAdEventType.LOADED === "rewarded_loaded"), not the

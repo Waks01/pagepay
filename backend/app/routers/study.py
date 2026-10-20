@@ -17,7 +17,7 @@ import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.prompts import (
@@ -38,6 +38,7 @@ from app.ai.prompts import (
     MCQ_GENERATOR,
     MCQ_TOPIC_GENERATOR,
     SOW_PARSER,
+    SOW_PARSER_CHUNK,
     VIDEO_SCRIPT_GENERATOR,
     VISION_OCR_PROMPT,
 )
@@ -79,6 +80,7 @@ from app.services import study_narration
 from app.services import audio_pricing
 from app.services import study_audio_service
 from app.services import study_explanation
+from app.services import study_chunking
 from app.services import page_artifacts
 from app.services import r2_storage
 import app.services.tts_hybrid as tts_hybrid
@@ -167,6 +169,10 @@ _OCR_PAGE_CONCURRENCY = 4
 # stops being a "SOW" and starts being a book, and the request would
 # run long enough to hit the platform's request timeout.
 _OCR_MAX_PAGES = 20
+
+# How many pieces of a long document are parsed at the same time. Each
+# piece is a full round trip to the model.
+_SOW_CHUNK_CONCURRENCY = 3
 
 # How deep the explanation and the narration are pitched. "primary" is
 # the default: a student who uploads a syllabus wants it explained to
@@ -1013,12 +1019,21 @@ async def _run_sow_parser(extracted_text: str) -> tuple[dict | None, str | None,
     Pulled out of the workers so the image + document paths share the
     exact same parsing logic.
 
+    A long document is split into pieces and each piece is parsed on
+    its own, because the parser is asked for the whole document's
+    structure and a long document does not fit in one response. The
+    pieces are joined in Python — re-emitting them through a model
+    would put them back in the same budget problem.
+
     A response that is not valid JSON is retried once with an explicit
     "valid JSON only" instruction, which is what the phase 3 spec
     called for. Without the retry a long document simply loses its
     structure and the student gets a blank material with no error
     shown.
     """
+    if study_chunking.needs_chunking(extracted_text):
+        return await _run_sow_parser_chunked(extracted_text)
+
     prompt = SOW_PARSER.format(raw_text=extracted_text)
     ai_result = await route_ai(prompt, task_type="heavy")
     raw_response = ai_result.get("response", "")
@@ -1040,6 +1055,85 @@ async def _run_sow_parser(extracted_text: str) -> tuple[dict | None, str | None,
             logger.error("[sow] parser repair failed: %s", exc)
 
     return parsed, ai_result.get("provider"), raw_response
+
+
+async def _parse_sow_chunk(chunk: str) -> dict | None:
+    """Parse one piece of a long document.
+
+    A piece that comes back as invalid JSON is repaired once, the same
+    way a whole document is. A piece that cannot be parsed at all
+    returns None and the piece is dropped — the rest of the document
+    is still worth having.
+    """
+    prompt = SOW_PARSER_CHUNK.format(raw_text=chunk)
+    try:
+        ai_result = await route_ai(prompt, task_type="heavy", max_tokens=6000)
+    except Exception as exc:
+        logger.error("[sow] chunk parse failed: %s", exc)
+        return None
+
+    raw_response = ai_result.get("response", "")
+    parsed = _parse_ai_response(raw_response)
+    if parsed is not None:
+        return parsed
+
+    if not raw_response:
+        return None
+
+    logger.warning("[sow] chunk returned invalid JSON, retrying once")
+    try:
+        repair = await route_ai(
+            _SOW_REPAIR_PROMPT.format(raw_response=raw_response[:6000]),
+            task_type="heavy",
+            max_tokens=6000,
+        )
+        return _parse_ai_response(repair.get("response", ""))
+    except Exception as exc:
+        logger.error("[sow] chunk repair failed: %s", exc)
+        return None
+
+
+async def _run_sow_parser_chunked(
+    extracted_text: str,
+) -> tuple[dict | None, str | None, str | None]:
+    """Parse a long document in pieces and join the pieces together.
+
+    The pieces are parsed a few at a time — each one is a full round
+    trip to the model, and twenty of them in series would take a
+    quarter of an hour.
+    """
+    chunks = study_chunking.chunk_text(extracted_text)
+    if not chunks:
+        return None, None, ""
+
+    logger.info(
+        "[sow] long document: %d chars split into %d chunks",
+        len(extracted_text), len(chunks),
+    )
+
+    semaphore = asyncio.Semaphore(_SOW_CHUNK_CONCURRENCY)
+
+    async def parse_one(chunk: str) -> dict | None:
+        async with semaphore:
+            return await _parse_sow_chunk(chunk)
+
+    results = await asyncio.gather(*(parse_one(chunk) for chunk in chunks))
+
+    parsed_chunks = [r for r in results if isinstance(r, dict)]
+    dropped = len(results) - len(parsed_chunks)
+    if dropped:
+        logger.warning("[sow] %d of %d chunks could not be parsed", dropped, len(chunks))
+    if not parsed_chunks:
+        return None, None, ""
+
+    merged = study_chunking.merge_chunk_results(parsed_chunks)
+    logger.info(
+        "[sow] merged %d chunks into %d blocks and %d topics",
+        len(parsed_chunks),
+        len(merged.get("content_blocks") or []),
+        len(merged.get("topics") or []),
+    )
+    return merged, "cloudflare", ""
 
 
 async def _mark_job_status(
@@ -1755,6 +1849,37 @@ async def delete_material(
     material = result.scalar_one_or_none()
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
+
+    # The page renders and the diagram crops live in object storage, and
+    # their rows live here. Deleting only the material would orphan both
+    # — the bucket keeps billing storage for images nobody can reach.
+    # The object deletion is best-effort: a storage hiccup must not stop
+    # the student deleting their own material.
+    try:
+        page_rows = await db.execute(
+            select(StudyPage).where(StudyPage.material_id == material_id)
+        )
+        figure_rows = await db.execute(
+            select(StudyFigure).where(StudyFigure.material_id == material_id)
+        )
+        object_keys = [
+            row.image_key
+            for row in list(page_rows.scalars().all()) + list(figure_rows.scalars().all())
+            if row.image_key
+        ]
+        await db.execute(
+            delete(StudyPage).where(StudyPage.material_id == material_id)
+        )
+        await db.execute(
+            delete(StudyFigure).where(StudyFigure.material_id == material_id)
+        )
+        for key in object_keys:
+            try:
+                r2_storage.delete(key)
+            except Exception as exc:
+                logger.warning("[materials] R2 cleanup failed key=%s: %s", key, exc)
+    except Exception as exc:
+        logger.warning("[materials] artifact cleanup failed id=%s: %s", material_id, exc)
 
     await db.delete(material)
     await db.commit()

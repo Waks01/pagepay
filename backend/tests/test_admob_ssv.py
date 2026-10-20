@@ -106,9 +106,14 @@ def test_signed_content_drops_the_trailing_two_params():
     )
 
 
-def test_signed_content_refuses_a_query_without_key_id_last():
+def test_signature_and_key_id_must_both_be_present():
+    """A callback missing key_id cannot be verified.
+
+    The content builder no longer checks this - it only finds where the
+    signed content ends - so the check lives with the parser.
+    """
     with pytest.raises(admob_ssv.SSVError):
-        admob_ssv.build_signed_content("user_id=1&signature=ABC")
+        admob_ssv.split_signature_and_key_id("user_id=1&signature=ABC")
 
 
 # ── the origin check ──────────────────────────────────────────────
@@ -329,6 +334,67 @@ async def test_unknown_user_is_acknowledged_not_credited(
 def test_payout_is_the_configured_amount_and_not_the_ad_unit_label():
     """AdMob's unit is labelled '1 Point'; we pay the derived 16."""
     assert admob_ssv.payout_points() == 16
+
+
+# ── the ad_unit allowlist ──────────────────────────────────────────
+
+
+def test_ad_unit_allowlist_covers_live_and_test_units():
+    """Both the live unit and Google's rewarded test unit must be listed.
+
+    A dev build requests the test unit, and AdMob sends a callback for
+    it too - so a test view still has to be creditable.
+    """
+    allowed = admob_ssv.allowed_ad_units()
+    assert "ca-app-pub-3898064484524772/4958048285" in allowed
+    assert "ca-app-pub-3940256099942544/5224354917" in allowed
+
+
+def test_ad_unit_from_another_app_is_refused():
+    """A rogue publisher's unit must not be able to mint our SV.
+
+    The endpoint is public and AdMob's signing key is shared by every
+    publisher, so without this any developer could point their own ad
+    unit's callback at ours and have their users credited.
+    """
+    assert admob_ssv.ad_unit_is_allowed("ca-app-pub-9999999999999999/1111111111") is False
+    assert admob_ssv.ad_unit_is_allowed("ca-app-pub-3898064484524772/4958048285") is True
+
+
+@pytest.mark.asyncio
+async def test_callback_for_a_foreign_ad_unit_is_refused(signed):
+    """The signature can be perfectly valid and the ad unit still wrong."""
+    raw = signed(7, ad_unit="ca-app-pub-9999999999999999/1111111111")
+    with pytest.raises(admob_ssv.SSVError, match="not ours"):
+        await admob_ssv.verify_callback(raw, "8.8.8.8")
+
+
+# ── signature extraction follows Google's algorithm ──────────────────
+
+
+def test_signature_and_key_id_are_split_like_google_does():
+    """Google takes the signature from `signature=` to the `&` before
+    `key_id=`, and the key id from there to the end.
+
+    The signature comes back percent-decoded, because that is the base64
+    payload itself - the content that was signed stays encoded, and it
+    is the signature bytes that need decoding before verification.
+    """
+    raw = "a=1&signature=ABC%3D&key_id=12345"
+    sig, key_id = admob_ssv.split_signature_and_key_id(raw)
+    assert sig == "ABC="
+    assert key_id == "12345"
+
+
+def test_signature_must_be_followed_by_key_id():
+    with pytest.raises(admob_ssv.SSVError):
+        admob_ssv.split_signature_and_key_id("a=1&signature=ABC")
+
+
+def test_content_is_everything_before_the_signature_ampersand():
+    """Matches Google's `queryString.substring(0, indexOf("signature=") - 1)`."""
+    raw = "a=1&b=2&signature=ABC&key_id=9"
+    assert admob_ssv.build_signed_content(raw) == "a=1&b=2"
 
 
 # ── the key server ─────────────────────────────────────────────────
