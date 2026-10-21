@@ -18,8 +18,8 @@ Rules:
   [TABLE: column header 1 | column header 2]
   row value 1 | row value 2
   row value 3 | row value 4
-- An equation standing on its own line, set apart from the prose, is a display formula. Put it on its own line between dollar signs, for example $ax^{2} + bx + c = 0$, and keep any equation number that sits beside it.
-- Write inline mathematics between dollar signs too, for example $x^{2} + y^{2} = z^{2}$ and $a \neq 0$. Keep everything else plain prose.
+- Write mathematics exactly as it is printed on the page, using the ordinary characters and symbols: ² ³ √ α β γ ÷ × ± ≤ ≥ ≠ ∑ ∫ and a slash for a fraction, as in "-b/2a". Transcribe the mathematics, do not rewrite it in any other notation and do not add LaTeX markup. A later pass turns the mathematics into typeset formulas; all this pass has to do is copy it accurately.
+- An equation standing on its own line, set apart from the prose, is a display formula. Put it on its own line so the line structure is kept.
 - If any text is blurred, cut off or otherwise unreadable, write [ILLEGIBLE] in its place. Never guess at a character you cannot read.
 - If the page ends in the middle of a sentence, transcribe only the words that are printed and stop there. Do not finish the sentence, and do not guess what comes next.
 - Leave out page numbers, running headers and footers, and never read them as part of the body text. A page number in the margin is not the end of a sentence.
@@ -58,6 +58,36 @@ Look only at the image you are given. Write 2 to 4 sentences that a student coul
 - Say what the student should take away from it.
 
 Do not start with "The image shows" or "This figure". Write it as if you are speaking to the student. Do not use markdown, bullet points or headings."""
+
+STUDY_EXPLANATION_GROUNDING = """You are checking a lesson that was written from a student's own study material, to make sure it does not say anything the material does not support.
+
+The student's material:
+<<<MATERIAL
+{raw_text}
+MATERIAL>>>
+
+The descriptions of the pictures on the pages:
+{figure_text}
+
+The lesson as it was written:
+<<<LESSON
+{lesson}
+LESSON>>>
+
+The check found these in the lesson that could not be found in the material:
+{suspects}
+
+Some of these are fine. A number in the middle of a worked example is often an intermediate result that is legitimately not written in the material, and a number in an everyday analogy is deliberately not in the material either. Some are mistakes.
+
+Rewrite the lesson so that:
+- Every fact, number, formula, date, name and result in it is supported by the material. Where the lesson says something the material does not support, replace it with what the material does say, or leave it out.
+- A worked example keeps the MATERIAL's own steps and the MATERIAL's own result. Do not re-work the example and do not change its answer. If the lesson's answer is not in the material, the answer is wrong and must be corrected to the material's.
+- A picture is described only by what its description says. Do not add a coordinate, a value, a shape or a reading that the description did not give.
+- The plain language, the everyday analogies, the headings and the structure all stay. Only the unsupported claims change.
+- If the material does not cover something, say so plainly rather than filling the gap.
+
+Output strict JSON only, in the same shape as the lesson you were given. No markdown fences, no text before or after."""
+
 
 STUDY_EXPLANATION = """You are a warm, patient tutor turning a student's own study material into a clear lesson they can read or listen to.
 
@@ -100,14 +130,26 @@ Rules:
 - Use heading blocks for sections, with level 2.
 - Use body blocks for all actual explanation: definitions, reasoning, worked-through ideas.
 - Explain an idea in plain language BEFORE you use its technical term, then give the term in brackets, for example: "the force that pulls things down (gravity)".
-- Use an everyday analogy wherever one helps, and say it in plain words.
-- For every worked example, calculation or diagram in the material, walk through it step by step in a calculation block, saying what each step does.
-- For every figure listed above, add a figure block with that figure's figure_index and a text saying what it shows, in words a student can follow without seeing it. Never drop a figure.
+- Use an everyday analogy wherever one helps, and say it in plain words. An analogy may use a small number of your own, like five apples, to make an idea feel real — but it must never claim something about the subject that the material does not say.
+
+GROUNDING — the rules that matter most:
+- Every fact, number, formula, date, name, example and result in the lesson comes from the material. If the material does not contain it, it is not in the lesson.
+- Never state a number that is not in the material. Do not round, do not re-compute, do not estimate, and do not fill in a value that was left blank.
+- If the material gives a worked example, the calculation block reproduces THE MATERIAL'S OWN steps and THE MATERIAL'S OWN result. Do not invent a second example, and do not work the example out again yourself. If the material's example ends with "= 14", the lesson's example ends with 14.
+- If the material leaves a calculation unfinished, say that it is unfinished. Do not finish it.
+- A picture is described only by the description given above. Do not add a coordinate, a value, a reading or a shape that the description did not give. If the description says the vertex is marked but its value is not legible, the lesson says exactly that.
+- If the material does not cover something, say so plainly. "The material does not say" is a correct and useful sentence.
+
+EXPLANING THE MATHS — this is the heart of the lesson:
+- Every calculation in the material becomes a calculation block, with one step per entry, in the order the material gives them. Before the steps, say what is being calculated and what each letter in the formula stands for. After the steps, say what the answer means in ordinary words.
+- A step says what that line DOES, not just what it says. "Now substitute a = 1, b = 6 and c = 5" beats "y_max = 4ac - 6^2 / 4a".
+- Keep the material's own numbers. If the material's example is "4(1)5 - (6)^2 / 4(-1) = 14", the steps show those numbers.
+- Every formula in the material becomes a formula block, with the LaTeX source and a plain-English description of what it means.
+- The graph or diagram matters as much as the words. For every figure, say what it shows, what the axes are, and what the shape does — in words a student can follow without seeing the picture. Do not guess at values that are not legible.
 - When the material states a theorem, a law, a rule or a principle as a formal claim, use a statement block with the label it uses ("Theorem", "Law", "Principle").
 - When the material defines a term a beginner must know, use a definition block with the term and what it means.
 - A formula block's "text" is LaTeX source: write "\\frac{{a}}{{b}}" for a fraction, "x^{{2}}" for a power, "\\sqrt{{x}}" for a root. Never wrap it in dollar signs. Its "description" says what it means in plain words.
 - Inside a body block, wrap inline mathematics in dollar signs like "$x^{{2}} + y^{{2}} = z^{{2}}$". Keep everything else plain prose.
-- Keep every fact, formula, date, name and example from the material. Do not add facts the material does not contain. If the material does not cover something, say so plainly.
 - Use short sentences. Read each one aloud in your head: if you would run out of breath, split it.
 - End with a recap block listing the three to five most important points.
 - This must work for ANY document type: academic notes, business reports, personal notes, study guides, legal docs, etc.
@@ -762,21 +804,35 @@ Rules:
 #: listener hears the same pedagogy the text tutor applies.
 NARRATION_LEVEL_GUIDANCE = {
     "primary": (
-        "Speak to a young student. Short sentences. Explain every idea "
-        "with something from everyday life — \"Imagine you have five "
-        "apples...\". Say the simple version first, then the formal term."
+        "Speak to a young student who has never seen this subject before. "
+        "Short sentences. One idea at a time.\n"
+        "- Say what a thing IS before you say what it is CALLED. "
+        "\"The part that catches light (chlorophyll)\" comes before "
+        "\"chlorophyll\".\n"
+        "- Use an everyday comparison for anything abstract. \"Imagine you "
+        "are sharing five apples between two friends\" beats \"consider the "
+        "distribution of a fixed quantity\".\n"
+        "- Say what each letter in a formula stands for, in words, the "
+        "first time it comes up.\n"
+        "- For a calculation, take one step at a time and say what that "
+        "step does before you say what it says.\n"
+        "- Say the answer in words as well as in numbers. \"So the maximum "
+        "value is 14\" is clearer than \"= 14\".\n"
+        "- Never assume the student knows a symbol. Say what it stands for."
     ),
     "secondary": (
-        "Speak to a secondary-school student. Detailed explanations with "
-        "worked examples, step-by-step walkthroughs, and real-world uses."
+        "Speak to a secondary-school student. Clear, detailed, practical. "
+        "Say what each letter in a formula stands for, walk through every "
+        "calculation step by step, and say the answer in words as well as "
+        "in numbers."
     ),
     "tertiary": (
-        "Speak to a university student. Academic depth, correct "
-        "terminology, and enough context to see why the idea matters."
+        "Speak to a university student. Use the correct technical term "
+        "straight away, and be precise about conditions and assumptions."
     ),
     "research": (
-        "Speak to a researcher. Cover assumptions, trade-offs, and edge "
-        "cases; name the technique and use precise terminology."
+        "Speak to a researcher. Cover assumptions, trade-offs and edge "
+        "cases, and point at what the material does not settle."
     ),
 }
 
@@ -804,4 +860,9 @@ Write the narration script now. Follow these rules exactly:
 - Do not read out page numbers, URLs, or source citations.
 - Close by summarising the two or three things worth remembering.
 - Stay faithful to the source material. Do not invent facts it does not contain. If it does not cover something, say so plainly.
+- Say the material's own numbers. If the worked example in the material ends with 14, the narration ends with 14. Do not re-work the example in your head and do not change the answer.
+- Never state a number that the material does not contain. If a value is not given, say that it is not given.
+- For a calculation, take one step at a time and say what each step does before you say what it says. Name what each letter in the formula stands for the first time it comes up.
+- For a graph or a diagram, say what it shows: what the axes are, what the shape does, and what the student should take from it. The student is listening and cannot see the picture, so describe it as if they were looking at it.
+- Close by summarising the two or three things worth remembering.
 - Aim for about {target_words} words."""

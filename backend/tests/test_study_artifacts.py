@@ -159,6 +159,243 @@ class TestFigureRegions:
             doc.close()
 
 
+class TestGroundingAudit:
+    """The lesson is checked against the material it was written from.
+
+    A lesson that is wrong is worse than no lesson: the quiz is
+    written against it and the narration speaks it.
+    """
+
+    SOURCE = (
+        "y_max = 4ac - 6^2/4a = 4(1)5 - (6)^2/4(-1) = 14. "
+        "y = ax^2 + bx + c. a = 1, b = 6, c = 5."
+    )
+
+    def test_a_correct_lesson_is_clean(self):
+        from app.services import study_grounding
+
+        lesson = {
+            "blocks": [
+                {"type": "body", "text": "The formula is y = ax^2 + bx + c."},
+                {
+                    "type": "calculation",
+                    "label": "Example",
+                    "steps": [
+                        "Substitute a = 1, b = 6, c = 5",
+                        "y_max = 4ac - 6^2 / 4a = 4(1)5 - (6)^2 / 4(-1)",
+                        "y_max = 14",
+                    ],
+                },
+            ]
+        }
+        audit = study_grounding.audit_explanation(lesson, self.SOURCE)
+        assert audit["clean"] is True
+
+    def test_a_wrong_answer_is_caught(self):
+        from app.services import study_grounding
+
+        lesson = {
+            "blocks": [
+                {
+                    "type": "calculation",
+                    "label": "Example",
+                    "steps": [
+                        "Substitute a = 1, b = 6, c = 5",
+                        "y_max = 4ac - 6^2 / 4a = 4(1)5 - (6)^2 / 4(-1)",
+                        "y_max = 15",
+                    ],
+                }
+            ]
+        }
+        audit = study_grounding.audit_explanation(lesson, self.SOURCE)
+        assert audit["unsupported_calculations"], "the wrong answer must be caught"
+
+    def test_a_made_up_number_is_caught(self):
+        from app.services import study_grounding
+
+        lesson = {
+            "blocks": [
+                {"type": "body", "text": "The coefficient turns out to be 37."}
+            ]
+        }
+        audit = study_grounding.audit_explanation(lesson, self.SOURCE)
+        assert "37" in audit["unverified_numbers"]
+
+    def test_a_figure_that_says_too_much_is_caught(self):
+        from app.services import study_grounding
+
+        figure_text = "Two graphs, one showing a parabola with a vertex marked."
+        lesson = {
+            "blocks": [
+                {
+                    "type": "figure",
+                    "figure_index": 1,
+                    "text": "A parabola with its vertex at (0, 2).",
+                }
+            ]
+        }
+        audit = study_grounding.audit_explanation(lesson, self.SOURCE, figure_text)
+        assert audit["unsupported_figures"], "the overreach must be caught"
+
+    def test_a_figure_inside_the_description_is_fine(self):
+        from app.services import study_grounding
+
+        figure_text = "A parabola with its vertex at (0, 2)."
+        lesson = {
+            "blocks": [
+                {
+                    "type": "figure",
+                    "figure_index": 1,
+                    "text": "A parabola with its vertex at (0, 2).",
+                }
+            ]
+        }
+        audit = study_grounding.audit_explanation(lesson, self.SOURCE, figure_text)
+        assert audit["unsupported_figures"] == []
+
+    def test_an_analogy_number_is_not_a_claim(self):
+        """A tip may use a number of its own to make a point."""
+        from app.services import study_grounding
+
+        lesson = {
+            "blocks": [
+                {
+                    "type": "tip",
+                    "label": "Remember",
+                    "text": "If you shared five apples between two friends...",
+                }
+            ]
+        }
+        audit = study_grounding.audit_explanation(lesson, self.SOURCE)
+        assert audit["unverified_numbers"] == []
+
+    def test_ocr_confusions_are_matched(self):
+        """The material was read by a model, so 1 may be an l."""
+        from app.services import study_grounding
+
+        assert study_grounding.numbers_in("l4 apples") == {"14"}
+        assert study_grounding.numbers_in("O5") == {"5"}
+
+    def test_a_letter_is_not_a_digit(self):
+        """'formula' has an o in it. That is not a zero."""
+        from app.services import study_grounding
+
+        assert study_grounding.numbers_in("The formula is y = ax^2 + bx + c.") == {"2"}
+
+    def test_a_subtraction_is_not_a_negative(self):
+        from app.services import study_grounding
+
+        assert study_grounding.numbers_in("a-1") == {"1"}
+        assert study_grounding.numbers_in("(-1, 2)") == {"-1", "2"}
+
+
+class TestPlatformConfig:
+    """The public config endpoint must not 500 because the database blinked.
+
+    It is called on every app start, and its job is to hand the client
+    its configuration. A slow or briefly unreachable database must not
+    leave the app without it.
+    """
+
+    @pytest.mark.asyncio
+    async def test_it_serves_the_rates(self, client):
+        response = await client.get("/api/v1/config/platform")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["task_base_rates_kobo"]["youtube_subscribe"] == 15_000
+        assert 0 < body["ad_revenue_platform_percent"] < 1
+
+    @pytest.mark.asyncio
+    async def test_a_failing_database_falls_back_to_the_defaults(
+        self, client, monkeypatch
+    ):
+        from app.constants import task_rates
+        from app.routers import config as config_router
+
+        async def broken_db(_db):
+            raise RuntimeError("the database is not answering")
+
+        monkeypatch.setattr(task_rates, "get_task_rates_from_db", broken_db)
+
+        response = await client.get("/api/v1/config/platform")
+        assert response.status_code == 200
+        assert response.json()["task_base_rates_kobo"]["youtube_subscribe"] == 15_000
+
+
+class TestDocxExtraction:
+    """A Word document is a document, not a wall of text.
+
+    The .docx path used to read the paragraph text and nothing else,
+    so every diagram and every table in a Word document was dropped on
+    the floor.
+    """
+
+    def _docx(self) -> bytes:
+        import io
+
+        import docx
+
+        document = docx.Document()
+        document.add_heading("Quadratic Equations", level=1)
+        document.add_paragraph(
+            "A quadratic equation is of the form ax^2 + bx + c = 0, "
+            "where a is not zero."
+        )
+        table = document.add_table(rows=2, cols=2)
+        table.rows[0].cells[0].text = "Stage"
+        table.rows[0].cells[1].text = "Input"
+        table.rows[1].cells[0].text = "Light reaction"
+        table.rows[1].cells[1].text = "Light, H2O"
+
+        from PIL import Image
+
+        image = Image.new("RGB", (40, 20), "white")
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        document.add_picture(io.BytesIO(buffer.getvalue()))
+
+        output = io.BytesIO()
+        document.save(output)
+        return output.getvalue()
+
+    def test_prose_comes_out(self):
+        from app.services import page_artifacts
+
+        text, _images = page_artifacts.extract_docx_text_and_images(self._docx())
+        assert "Quadratic Equations" in text
+        assert "ax^2 + bx + c = 0" in text
+
+    def test_a_table_comes_out(self):
+        from app.services import page_artifacts
+
+        text, _images = page_artifacts.extract_docx_text_and_images(self._docx())
+        assert "[TABLE: Stage | Input]" in text
+        assert "Light reaction | Light, H2O" in text
+
+    def test_a_picture_comes_out(self):
+        from app.services import page_artifacts
+
+        _text, images = page_artifacts.extract_docx_text_and_images(self._docx())
+        assert len(images) == 1
+        assert images[0][:8] == b"\x89PNG\r\n\x1a\n"
+
+    def test_a_document_with_no_pictures_is_fine(self):
+        import io
+
+        import docx
+
+        from app.services import page_artifacts
+
+        document = docx.Document()
+        document.add_paragraph("Just prose.")
+        output = io.BytesIO()
+        document.save(output)
+
+        text, images = page_artifacts.extract_docx_text_and_images(output.getvalue())
+        assert "Just prose." in text
+        assert images == []
+
+
 class TestPromptBraces:
     """A prompt that is never format()ed must not carry format escapes.
 

@@ -69,21 +69,24 @@ async def main() -> None:
             try:
                 return await one(path)
             except Exception as exc:
-                return {"name": os.path.basename(path), "error": str(exc)}
+                return {
+                    "name": os.path.basename(path),
+                    "error": f"{type(exc).__name__}: {exc!r}",
+                }
 
     for result in await asyncio.gather(*(guarded(p) for p in paths)):
         if result.get("error"):
             print(f"ERROR {result['name']}: {result['error']}")
             continue
-        flag = "FIGURE" if result["figure"] else "-------"
-        print(f"\n{flag}  {result['name']}  ({result['text_len']} chars)")
-        if result["header"]:
+        flag = "FIGURE" if result.get("figure") else "-------"
+        print(f"\n{flag}  {result['name']}  ({result.get('text_len', 0)} chars)")
+        if result.get("header"):
             print(f"    header: {result['header']}")
-        if result["footer"]:
+        if result.get("footer"):
             print(f"    footer: {result['footer']}")
-        if result["figure"]:
+        if result.get("figure"):
             print(f"    figure: {result['figure'][:260]}")
-        print(f"    blocks: {result['kinds']}")
+        print(f"    blocks: {result.get('kinds')}")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Alert,
+  FlatList,
   ScrollView,
   StyleSheet,
   Text,
@@ -454,41 +455,6 @@ export default function MaterialReaderScreen() {
     });
   };
 
-  const renderOriginal = () => {
-    if (pagesQ.isLoading) {
-      return (
-        <Text style={[styles.readerBody, { color: tokens.inkMuted }]}>
-          Loading your pages...
-        </Text>
-      );
-    }
-    const pages = pagesQ.data ?? [];
-    if (pages.length === 0) {
-      return (
-        <Text style={[styles.readerBody, { color: tokens.inkMuted }]}>
-          The pages of this material are not available.
-        </Text>
-      );
-    }
-    return pages.map((page: MaterialPage) => (
-      <View key={page.page} style={styles.pageWrap}>
-        {page.image_url ? (
-          <ExpoImage
-            source={{ uri: page.image_url }}
-            style={styles.pageImage}
-            contentFit="contain"
-            transition={200}
-            accessibilityLabel={`Page ${page.page} of your material`}
-          />
-        ) : (
-          <Text style={[styles.pageMissing, { color: tokens.inkMuted }]}>
-            Page {page.page} is not available.
-          </Text>
-        )}
-      </View>
-    ));
-  };
-
   if (materialQ.isLoading) {
     return (
       <SafeAreaView
@@ -597,22 +563,68 @@ export default function MaterialReaderScreen() {
         />
       </View>
 
-      <ScrollView
-        style={styles.scrollContent}
-        contentContainerStyle={
-          ttsUrl ? styles.scrollContentWithPlayer : undefined
-        }
-      >
-        {mode === "original" ? (
-          renderOriginal()
-        ) : hasStructuredContent ? (
-          renderContentBlocks()
-        ) : (
-          <Text style={[styles.readerText, { color: tokens.ink }]}>
-            {materialQ.data.content || "No content available"}
-          </Text>
-        )}
-      </ScrollView>
+      {mode === "original" ? (
+        <FlatList
+          data={pagesQ.data ?? []}
+          keyExtractor={(item) => String(item.page)}
+          renderItem={({ item }) => (
+            <View style={styles.pageWrap}>
+              {item.image_url ? (
+                <ExpoImage
+                  source={{ uri: item.image_url }}
+                  style={styles.pageImage}
+                  contentFit="contain"
+                  transition={200}
+                  recyclingKey={`page-${item.page}`}
+                  cachePolicy="memory-disk"
+                  accessibilityLabel={`Page ${item.page} of your material`}
+                />
+              ) : (
+                <Text style={[styles.pageMissing, { color: tokens.inkMuted }]}>
+                  Page {item.page} is not available.
+                </Text>
+              )}
+            </View>
+          )}
+          ListEmptyComponent={
+            pagesQ.isLoading ? (
+              <Text style={[styles.readerBody, { color: tokens.inkMuted }]}>
+                Loading your pages...
+              </Text>
+            ) : (
+              <Text style={[styles.readerBody, { color: tokens.inkMuted }]}>
+                The pages of this material are not available.
+              </Text>
+            )
+          }
+          contentContainerStyle={
+            ttsUrl ? styles.scrollContentWithPlayer : styles.pageListContent
+          }
+          // A decoded page costs about 10 MB, so mounting every page of
+          // a long document at once asks for hundreds of megabytes and
+          // kills the app on a mid-range phone. Only the pages near
+          // the screen are held in memory.
+          initialNumToRender={2}
+          maxToRenderPerBatch={2}
+          windowSize={3}
+          removeClippedSubviews
+        />
+      ) : (
+        <ScrollView
+          style={styles.scrollContent}
+          contentContainerStyle={
+            ttsUrl ? styles.scrollContentWithPlayer : undefined
+          }
+        >
+          {hasStructuredContent ? (
+            renderContentBlocks()
+          ) : (
+            <Text style={[styles.readerText, { color: tokens.ink }]}>
+              {materialQ.data.content || "No content available"}
+            </Text>
+          )}
+        </ScrollView>
+      )}
 
       {ttsUrl && (
         <View style={styles.playerDock} pointerEvents="box-none">
@@ -821,6 +833,9 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     borderRadius: 12,
     overflow: "hidden",
+  },
+  pageListContent: {
+    padding: 16,
   },
   pageImage: {
     width: "100%",

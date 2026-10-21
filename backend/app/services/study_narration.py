@@ -533,7 +533,108 @@ async def generate_episode_script(
     if not script:
         raise RuntimeError("Narration model returned an empty script")
 
+    # The script is checked against the material it was written from.
+    # A number the student hears is a number they will believe and
+    # repeat, and a spoken answer cannot be quietly corrected later.
+    unverified = _unverified_numbers_in_script(script, source)
+    if unverified and settings.study_narration_grounding_enabled:
+        logger.warning(
+            "[narration] script has numbers the material does not: %s",
+            ", ".join(unverified),
+        )
+        script = await _repair_narration_script(
+            script,
+            unverified,
+            prompt=prompt,
+            source=source,
+            db=db,
+            user_id=user_id,
+        )
+    elif unverified:
+        logger.warning(
+            "[narration] script has numbers the material does not: %s",
+            ", ".join(unverified),
+        )
+
     return script, level, len(script)
+
+
+def _unverified_numbers_in_script(script: str, source: str) -> list[str]:
+    """Numbers spoken in the script that the source does not contain."""
+    from app.services import study_grounding
+
+    if not source:
+        return []
+    source_numbers = study_grounding.numbers_in(source)
+    if not source_numbers:
+        return []
+    unverified = []
+    for number in study_grounding.numbers_in(script):
+        if number in source_numbers:
+            continue
+        # Small round numbers are usually "the first step" or an
+        # everyday analogy, not a claim about the material.
+        try:
+            value = float(number)
+        except ValueError:
+            continue
+        if value <= 12 and value == int(value):
+            continue
+        unverified.append(number)
+    return sorted(unverified, key=lambda n: (len(n), n))
+
+
+async def _repair_narration_script(
+    script: str,
+    unverified: list[str],
+    *,
+    prompt: str,
+    source: str,
+    db=None,
+    user_id: int | None = None,
+) -> str:
+    """One attempt to take the unsupported numbers out of a script."""
+    from app.ai.router import route_ai
+
+    repair = (
+        "The narration you wrote contains numbers that are not in the "
+        "student's material:\n"
+        + ", ".join(unverified)
+        + "\n\nRewrite the narration so that every number in it comes from "
+        "the material below. If a number was made up, remove it or replace "
+        "it with what the material actually says. Keep everything else — "
+        "the wording, the analogies, the structure, the length.\n\n"
+        "The material:\n"
+        f"{source}\n\n"
+        "Your narration:\n"
+        f"{script}\n\n"
+        "Output only the rewritten narration, as plain text."
+    )
+
+    try:
+        result = await route_ai(
+            repair,
+            task_type="heavy",
+            max_tokens=4000,
+            db=db,
+            user_id=user_id,
+            endpoint="narration_grounding",
+        )
+    except Exception as exc:
+        logger.warning("[narration] grounding repair failed: %s", exc)
+        return script
+
+    repaired = _clean(result.get("response") or "")
+    if not repaired:
+        return script
+
+    still = _unverified_numbers_in_script(repaired, source)
+    if still:
+        logger.warning(
+            "[narration] grounding repair left %s unsupported numbers",
+            ", ".join(still),
+        )
+    return repaired
 
 
 def episodes_for_topic(source_chars: int) -> int:

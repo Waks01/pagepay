@@ -85,8 +85,7 @@ There is **no `components/ads/` directory** — the ad components described in o
 - Use `useRouter()` and `useLocalSearchParams()` for navigation
 - Route persistence: last meaningful screen is saved to `expo-secure-store` and restored after auth gates (see `src/shared/lib/screen-memory.ts`)
 
-### 4a. The Study Reader and the Podcast
-The study screen has two ideas that must not be conflated.
+### 4a. The Study Reader and the PodcastThe study screen has two ideas that must not be conflated.
 
 - **"My material"** shows the student's own upload, page for page, at full fidelity. The images come from `GET /materials/{id}/page-images` (object storage) and are loaded with `expo-image`. Nothing is re-rendered on the phone.
 - **"Explained"** shows the teaching layer — the material rewritten for a beginner, with every diagram rendered inline from `GET /materials/{id}/figures` and its description underneath.
@@ -96,6 +95,12 @@ The study screen has two ideas that must not be conflated.
 - `src/features/study/audio-download.ts` — saving an episode to the phone. iOS goes through `expo-media-library`; Android goes through the Storage Access Framework into Downloads. Neither asks for a broad storage permission.
 - **Background audio** needs all three of: the `expo-audio` config plugin with `enableBackgroundPlayback`, `setAudioModeAsync({ shouldPlayInBackground: true, interruptionMode: "doNotMix" })`, and `player.setActiveForLockScreen(true, …)`. Without the third, Android cuts the audio after about three minutes. `requestNotificationPermissionsAsync()` puts the controls in the notification shade.
 - Playback position is saved to the server every few seconds so closing the app does not lose the student's place.
+- **The "My material" view is a windowed list, not a ScrollView of every page.** A page decoded to a bitmap costs width × height × 4 bytes — about 10 MB for a 1400px render — so mounting twenty pages at once asks for hundreds of megabytes and takes a mid-range phone over its heap. `initialNumToRender={2}`, `maxToRenderPerBatch={2}`, `windowSize={3}` and `removeClippedSubviews` keep only the pages near the screen in memory.
+
+### 4c. Screens Are Not Mounted Before They Are Needed
+- **The tab navigator must not set `lazy: false`.** It was there to "preserve query cache across tab switches", but React Query's cache does not depend on a screen being mounted — the data is cached either way. What it did was mount all nine tabs at startup, so nine screens fired their queries at once and nine screens' worth of images and state were live before the student had tapped anything. On a mid-range phone that is what killed the app with a GC timeout.
+- A screen that can be restored onto the stack without its parameter — a stale navigation state, a deep link — must check before it requests. `/content/undefined` is a 404 and a screen with nothing to show; step back instead.
+- A public config endpoint must not fail because the database is briefly unreachable. Serve the documented fallback.
 
 ### 4b. Rendering the Parts That Are Not Prose
 A study material contains worked calculations, formulas, code listings, quotes, theorems and tables. Each has a shape of its own, and each is rendered by its own component in `components/study/`.

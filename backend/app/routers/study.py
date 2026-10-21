@@ -512,7 +512,7 @@ async def _ocr_pdf_pages(
         nonlocal completed
         try:
             async with semaphore:
-                text = await _ocr_image_with_cloudflare(
+                text = await _ocr_page_with_fallback(
                     image, "image/jpeg", user_id=user_id
                 )
                 findings = await _detect_figures_with_cloudflare(image)
@@ -816,31 +816,15 @@ async def _detect_figures_with_cloudflare(
     if not image_bytes:
         return PageFindings()
 
-    b64 = base64.b64encode(image_bytes).decode()
-    real_type = _sniff_image_content_type(image_bytes, content_type)
-    data_uri = f"data:{real_type};base64,{b64}"
-    url = (
-        f"https://api.cloudflare.com/client/v4/accounts/"
-        f"{settings.cloudflare_account_id}/ai/run/"
-        f"@cf/meta/llama-3.2-11b-vision-instruct"
-    )
-    headers = {
-        "Authorization": f"Bearer {settings.cloudflare_api_token}",
-        "Content-Type": "application/json",
-    }
-    body = {
-        "prompt": FIGURE_DETECTION_PROMPT,
-        "image": data_uri,
-        "max_tokens": 700,
-        "temperature": 0.0,
-    }
+    data_uri = _data_uri(image_bytes, content_type)
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(url, json=body, headers=headers)
-        if resp.status_code != 200:
-            logger.warning("[figure] detection HTTP %s", resp.status_code)
-            return PageFindings()
-        answer = (resp.json().get("result", {}).get("response", "") or "").strip()
+        answer, _usage = await _vision_request(
+            FIGURE_DETECTION_PROMPT,
+            data_uri,
+            max_tokens=700,
+            temperature=0.0,
+            timeout=_DETECTION_TIMEOUT_SECONDS,
+        )
     except Exception as exc:
         logger.warning("[figure] detection failed: %s", exc)
         return PageFindings()
@@ -967,6 +951,242 @@ def _is_decoration_only(description: str) -> bool:
     return True
 
 
+# How long a single vision call is given.
+#
+# A full page of a textbook can run to several thousand tokens of
+# transcription, and on a busy Workers AI tier that takes minutes, not
+# seconds. A page that timed out was a page silently lost from the
+# student's material.
+_VISION_TIMEOUT_SECONDS = 300
+_DETECTION_TIMEOUT_SECONDS = 240
+
+# A vision call that timed out is retried once. A timeout is usually
+# the tier being busy, and the second attempt often lands in a quieter
+# moment. The point is that one slow page does not cost the student
+# the whole document.
+_VISION_ATTEMPTS = 2
+
+# A rate limit is waited out for longer. The quota comes back, and a
+# page that is merely waiting is not a page that is lost.
+_VISION_RATE_LIMIT_ATTEMPTS = 4
+
+
+class VisionRateLimited(RuntimeError):
+    """The Workers AI tier is rate limiting the account.
+
+    The quota is shared by everything running on the account, so a 429
+    is not a problem with this one page — it is the account being busy.
+    Every page of a document waits rather than piling on.
+    """
+
+
+# When the tier rate limits us, every vision call waits this long
+# before trying again. A per-call backoff is not enough: four pages
+# reading at once would each retry into the same wall.
+_VISION_COOLDOWN_SECONDS = 20
+_vision_cooldown_until = 0.0
+
+
+def _respect_vision_cooldown() -> None:
+    """Wait out a rate limit, if one is in force."""
+    import time
+
+    global _vision_cooldown_until
+    remaining = _vision_cooldown_until - time.time()
+    if remaining > 0:
+        logger.info("[vision] waiting %.0fs for the rate limit to clear", remaining)
+        time.sleep(remaining)
+
+
+def _note_rate_limit() -> None:
+    """Put every vision call on hold for a while."""
+    import time
+
+    global _vision_cooldown_until
+    _vision_cooldown_until = max(
+        _vision_cooldown_until, time.time() + _VISION_COOLDOWN_SECONDS
+    )
+
+
+async def _vision_request(
+    prompt: str,
+    data_uri: str,
+    *,
+    max_tokens: int,
+    temperature: float,
+    timeout: int,
+) -> tuple[str, dict]:
+    """One call to the vision model, with a retry on a timeout.
+
+    Returns (text, usage). Raises RuntimeError on every failure mode,
+    so the caller has one thing to catch.
+    """
+    import base64
+    import httpx
+
+    url = (
+        f"https://api.cloudflare.com/client/v4/accounts/"
+        f"{settings.cloudflare_account_id}/ai/run/"
+        f"@cf/meta/llama-3.2-11b-vision-instruct"
+    )
+    headers = {
+        "Authorization": f"Bearer {settings.cloudflare_api_token}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "prompt": prompt,
+        "image": data_uri,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+
+    last_error: Exception | None = None
+    rate_limited = 0
+    for attempt in range(max(_VISION_ATTEMPTS, _VISION_RATE_LIMIT_ATTEMPTS)):
+        _respect_vision_cooldown()
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(url, json=body, headers=headers)
+            if resp.status_code == 429:
+                # The account's quota is exhausted. Hold every call
+                # off for a moment rather than piling more on. A rate
+                # limit deserves more patience than a timeout — the
+                # quota comes back.
+                last_error = RuntimeError("cf_vision_http_429")
+                rate_limited += 1
+                _note_rate_limit()
+                logger.warning(
+                    "[vision] rate limited (%s), cooling down for %ss",
+                    rate_limited,
+                    _VISION_COOLDOWN_SECONDS,
+                )
+                if rate_limited >= _VISION_RATE_LIMIT_ATTEMPTS:
+                    break
+                continue
+            if resp.status_code == 408:
+                # The gateway gave up on the model, or the tier is
+                # busy. Both are worth another try — 408 in
+                # particular means the answer was nearly ready.
+                last_error = RuntimeError("cf_vision_http_408")
+                await asyncio.sleep(3 * (attempt + 1))
+                continue
+            if resp.status_code != 200:
+                raise RuntimeError(f"cf_vision_http_{resp.status_code}")
+            data = resp.json()
+        except httpx.TimeoutException as exc:
+            last_error = exc
+            logger.warning(
+                "[vision] timeout on attempt %s of %s",
+                attempt + 1, _VISION_ATTEMPTS,
+            )
+            continue
+        except httpx.HTTPError as exc:
+            last_error = exc
+            logger.warning("[vision] request failed: %s", exc)
+            continue
+
+        try:
+            result = data.get("result") or {}
+            text = result.get("response", "")
+        except (AttributeError, KeyError, IndexError, TypeError) as exc:
+            raise RuntimeError("cf_vision_malformed_response") from exc
+        if not text:
+            raise RuntimeError("cf_vision_empty")
+        return text, (result.get("usage") or {})
+
+    if isinstance(last_error, RuntimeError) and "429" in str(last_error):
+        raise VisionRateLimited(str(last_error))
+    raise RuntimeError(
+        f"cf_vision_failed: {last_error}"
+        if last_error
+        else "cf_vision_failed"
+    )
+
+
+def _data_uri(contents: bytes, fallback_type: str) -> str:
+    import base64
+
+    b64 = base64.b64encode(contents).decode()
+    real_type = _sniff_image_content_type(contents, fallback_type)
+    return f"data:{real_type};base64,{b64}"
+
+
+def _split_page_image(contents: bytes, parts: int = 2) -> list[bytes]:
+    """Cut a page image into horizontal bands.
+
+    A dense page can take the model longer than the gateway will wait
+    for it, and the page is then lost from the material. Reading it in
+    two halves is two shorter calls, and the answer comes back.
+    """
+    try:
+        import io
+
+        from PIL import Image
+
+        with Image.open(io.BytesIO(contents)) as image:
+            width, height = image.size
+            if height < parts * 200:
+                return [contents]
+            overlap = int(height * 0.04)
+            band = height // parts
+            bands = []
+            for index in range(parts):
+                top = max(0, index * band - overlap)
+                bottom = min(height, (index + 1) * band + overlap)
+                if bottom - top < 40:
+                    continue
+                cropped = image.crop((0, top, width, bottom))
+                buffer = io.BytesIO()
+                cropped.save(buffer, format="JPEG", quality=92)
+                bands.append(buffer.getvalue())
+            return bands or [contents]
+    except Exception as exc:
+        logger.warning("[vision] could not split the page: %s", exc)
+        return [contents]
+
+
+async def _ocr_page_with_fallback(
+    contents: bytes,
+    content_type: str,
+    *,
+    user_id: int | None = None,
+) -> str:
+    """Transcribe a page, falling back to reading it in halves.
+
+    The page is not lost because it was too dense for one call.
+    """
+    try:
+        return await _ocr_image_with_cloudflare(
+            contents, content_type, user_id=user_id
+        )
+    except VisionRateLimited:
+        # The account is busy, not the page. Reading it in halves would
+        # make it worse.
+        raise
+    except Exception as exc:
+        logger.warning("[vision] whole page failed (%s), reading it in halves", exc)
+
+    bands = _split_page_image(contents, 2)
+    if len(bands) == 1:
+        raise
+
+    parts = []
+    for index, band in enumerate(bands):
+        try:
+            parts.append(
+                await _ocr_image_with_cloudflare(
+                    band, "image/jpeg", user_id=user_id
+                )
+            )
+        except Exception as exc:
+            logger.warning(
+                "[vision] band %s of %s failed: %s", index + 1, len(bands), exc
+            )
+    if not parts:
+        raise
+    return "\n\n".join(parts)
+
+
 async def _ocr_image_with_cloudflare(
     contents: bytes,
     content_type: str,
@@ -979,31 +1199,18 @@ async def _ocr_image_with_cloudflare(
     base64 data URI. Raises RuntimeError on failure so the worker
     can mark the job as `failed`.
     """
-    import base64
-    import httpx
-
-    b64 = base64.b64encode(contents).decode()
-    real_type = _sniff_image_content_type(contents, content_type or "image/jpeg")
-    data_uri = f"data:{real_type};base64,{b64}"
-    url = (
-        f"https://api.cloudflare.com/client/v4/accounts/"
-        f"{settings.cloudflare_account_id}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct"
+    data_uri = _data_uri(contents, content_type or "image/jpeg")
+    text, usage = await _vision_request(
+        VISION_OCR_PROMPT,
+        data_uri,
+        # A page transcribes to about 1500 characters. A cap of 8000
+        # let the model ramble on a page of dense mathematics until
+        # the gateway gave up and the page was lost. 3000 covers a
+        # full dense page and stops a runaway.
+        max_tokens=3000,
+        temperature=0.1,
+        timeout=_VISION_TIMEOUT_SECONDS,
     )
-    headers = {
-        "Authorization": f"Bearer {settings.cloudflare_api_token}",
-        "Content-Type": "application/json",
-    }
-    body = {
-        "prompt": VISION_OCR_PROMPT,
-        "image": data_uri,
-        "max_tokens": 8000,
-        "temperature": 0.1,
-    }
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(url, json=body, headers=headers)
-        if resp.status_code != 200:
-            raise RuntimeError(f"cf_vision_http_{resp.status_code}")
-        data = resp.json()
 
     if user_id is not None:
         # The OCR pass costs real money and used to be invisible to the
@@ -1013,7 +1220,6 @@ async def _ocr_image_with_cloudflare(
         try:
             from app.services.ai_cost import log_usage
 
-            usage = (data.get("result") or {}).get("usage") or {}
             async with AsyncSessionLocal() as usage_db:
                 await log_usage(
                     usage_db,
@@ -1026,13 +1232,7 @@ async def _ocr_image_with_cloudflare(
         except Exception as exc:
             logger.warning("[sow] OCR usage logging failed: %s", exc)
 
-    try:
-        text = data.get("result", {}).get("response", "")
-        if not text:
-            raise RuntimeError("cf_vision_empty")
-        return text
-    except (KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError("cf_vision_malformed_response") from exc
+    return text
 
 
 async def _describe_figure_with_cloudflare(image_bytes: bytes) -> str:
@@ -1159,10 +1359,10 @@ async def _extract_document_text(
             raise ValueError("pdf_extraction_failed") from exc
     if fname.endswith((".docx", ".doc")):
         try:
-            import docx
-            from io import BytesIO
-            doc = docx.Document(BytesIO(contents))
-            return "\n".join(para.text for para in doc.paragraphs)
+            from app.services import page_artifacts
+
+            text, _images = page_artifacts.extract_docx_text_and_images(contents)
+            return text
         except Exception as exc:
             logger.error("DOCX extraction failed: %s", exc)
             raise ValueError("docx_extraction_failed") from exc
@@ -1392,15 +1592,15 @@ def _figure_notes(figures: list) -> str:
     The OCR pass can only say a figure exists; the crop tells the
     model what it actually contains. Both go to the parser and to the
     teaching layer, so a diagram is never reduced to a stray label.
+    The marker matches the one the figure-detection pass writes, so
+    the parser sees one format wherever a figure came from.
     """
     lines = []
     for figure in figures:
         description = (figure.description or "").strip()
         if not description:
             continue
-        lines.append(
-            f"[FIGURE page {figure.page} | figure {figure.index}]: {description}"
-        )
+        lines.append(f"[FIGURE: {description}]")
     if not lines:
         return ""
     return "\n\nFigures found on the pages:\n" + "\n".join(lines)
@@ -1453,6 +1653,7 @@ async def _build_material_artifacts(
     content_type: str,
     extracted_text: str,
     max_pages: int = _OCR_MAX_PAGES,
+    is_docx: bool = False,
 ) -> tuple[list, list]:
     """Render the pages, crop the figures, and describe every figure.
 
@@ -1472,6 +1673,30 @@ async def _build_material_artifacts(
             figures = page_artifacts.build_figure_artifacts(
                 contents, key_prefix=key_prefix, max_pages=max_pages
             )
+        elif is_docx:
+            # A Word document's pictures are content, not decoration.
+            # They are taken out of the document and stored like any
+            # other figure, so a diagram in a .docx reaches the
+            # student instead of being dropped on the floor.
+            _text, images = page_artifacts.extract_docx_text_and_images(contents)
+            for index, image in enumerate(images):
+                key = (
+                    f"{settings.cloudflare_r2_figures_prefix}"
+                    f"/{key_prefix}/{index + 1}.png"
+                )
+                stored = page_artifacts.upload_object(key, image, "image/png")
+                figures.append(
+                    page_artifacts.FigureArtifact(
+                        index=index + 1,
+                        page=1,
+                        bbox=(0.0, 0.0, 0.0, 0.0),
+                        width=0,
+                        height=0,
+                        image_key=stored,
+                        image_url=page_artifacts.object_url(stored),
+                        image_bytes=image,
+                    )
+                )
         else:
             pages = page_artifacts.build_image_artifacts(
                 contents, key_prefix=key_prefix, content_type=content_type
@@ -1496,7 +1721,6 @@ async def _build_material_artifacts(
 
     await _describe_figures(figures)
     return pages, figures
-
 
 async def _persist_material(
     *,
@@ -1591,7 +1815,7 @@ async def _process_sow_image_job(
         await _mark_job_status(job_id, "processing", progress=10, stage="reading_pages")
 
         try:
-            extracted_text = await _ocr_image_with_cloudflare(
+            extracted_text = await _ocr_page_with_fallback(
                 contents, content_type, user_id=user_id
             )
             logger.info(
@@ -1756,6 +1980,7 @@ async def _process_sow_document_job(
             key_prefix=job_id,
             contents=contents,
             is_pdf=safe_name.lower().endswith(".pdf"),
+            is_docx=safe_name.lower().endswith((".docx", ".doc")),
             content_type="application/pdf",
             extracted_text=extracted_text,
         )

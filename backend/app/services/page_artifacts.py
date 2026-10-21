@@ -432,13 +432,22 @@ def crop_region_png(page, bbox: tuple[float, float, float, float], zoom: float) 
 # ── Storage ───────────────────────────────────────────────────────────
 
 
-def _upload(key: str, data: bytes, content_type: str) -> str | None:
+def upload_object(key: str, data: bytes, content_type: str) -> str | None:
     """Write bytes to object storage. Returns the key, or None on failure.
 
     Storage is a convenience, not a requirement: when the bucket is not
     reachable the material still works, the app just falls back to
     rendering pages from the source file on demand.
     """
+    return _upload(key, data, content_type)
+
+
+def object_url(key: str | None) -> str | None:
+    """A URL for a stored object, or None."""
+    return _url_for(key)
+
+
+def _upload(key: str, data: bytes, content_type: str) -> str | None:
     if not data:
         return None
     try:
@@ -556,6 +565,74 @@ def build_image_artifacts(
             is_scan=True,
         )
     ]
+
+
+def extract_docx_text_and_images(contents: bytes) -> tuple[str, list[bytes]]:
+    """Read a Word document: its prose, its tables, and its pictures.
+
+    A `.docx` is a zip of XML, and the pictures inside it are ordinary
+    files hanging off the document's relationships. `python-docx` reads
+    the prose, and the images come out of the relationships.
+
+    Taking only the paragraph text, as this did before, threw away
+    every diagram in the document — and a Word document is a
+    *document*, with the same promise as a PDF: nothing on the page is
+    lost.
+
+    Returns the text (with a `[TABLE: ...]` block for each table) and
+    the pictures in the order they appear.
+    """
+    import io
+
+    try:
+        import docx
+        from docx.oxml.ns import qn
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
+    except ImportError as exc:  # pragma: no cover - dependency missing
+        raise RuntimeError("python-docx is not installed") from exc
+
+    document = docx.Document(io.BytesIO(contents))
+
+    parts: list[str] = []
+    images: list[bytes] = []
+
+    def paragraph_images(element) -> list[bytes]:
+        found: list[bytes] = []
+        for blip in element.iter(qn("a:blip")):
+            rid = blip.get(qn("r:embed"))
+            if not rid:
+                continue
+            try:
+                part = document.part.related_parts[rid]
+            except KeyError:
+                continue
+            try:
+                found.append(part.blob)
+            except Exception:
+                continue
+        return found
+
+    for child in document.element.body.iterchildren():
+        if child.tag == qn("w:p"):
+            paragraph = Paragraph(child, document)
+            text = (paragraph.text or "").strip()
+            if text:
+                parts.append(text)
+            images.extend(paragraph_images(child))
+        elif child.tag == qn("w:tbl"):
+            table = Table(child, document)
+            headers = [cell.text.strip() for cell in table.rows[0].cells] if table.rows else []
+            rows = []
+            for row in table.rows:
+                cells = [cell.text.strip() for cell in row.cells]
+                rows.append(" | ".join(cells))
+            if headers or rows:
+                parts.append(
+                    "[TABLE: " + " | ".join(headers) + "]\n" + "\n".join(rows)
+                )
+
+    return "\n\n".join(parts), images
 
 
 def build_figure_artifacts(

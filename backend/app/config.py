@@ -731,10 +731,15 @@ class Settings(BaseSettings):
 
     # ── Study material extraction (pages, figures, narration) ───────
     # Width of the full-fidelity page render written to object storage
-    # and shown in the app's "Original" view. Wider than the OCR render
-    # (1400px) so the student can zoom into their own material and
-    # read small print without going back to the source file.
-    study_page_render_width: int = 1800
+    # and shown in the app's "My material" view.
+    #
+    # It is a memory budget as much as a quality one. A page decoded
+    # to a bitmap costs width * height * 4 bytes, so a 1800px render is
+    # 16 MB, and a student scrolling a 20-page document with every
+    # page mounted at once asks for 320 MB — which takes a mid-range
+    # Android over its heap and kills the app. 1400px is still sharper
+    # than the screen, and the reader mounts only a few pages at once.
+    study_page_render_width: int = 1400
     study_page_jpeg_quality: int = 82
     # A figure is a region of a page that carries ink but no prose: a
     # diagram, graph, circuit, chart, photograph or worked illustration.
@@ -759,9 +764,17 @@ class Settings(BaseSettings):
     tesseract_enabled: bool = True
     # Default explanation depth for the teaching layer and the
     # narration. "primary" narrates to a young student in plain
-    # language with everyday analogies; the app offers the other levels
-    # as a picker on the podcast screen.
+    # language; the app offers the other levels as a picker.
     study_education_default_level: str = "primary"
+    # Check every teaching layer against the material it was written
+    # from, and repair what is not supported. It costs one extra model
+    # call per upload. A lesson that is wrong is worse than no lesson:
+    # the quiz is written against it and the narration speaks it.
+    study_grounding_enabled: bool = True
+    # Check every narration script the same way. A number the student
+    # hears is a number they will believe and repeat.
+    study_narration_grounding_enabled: bool = True
+
 
     # ── Platform revenue splits ──────────────────────────────────────
     # Ads: portion of ad revenue kept by platform (rest goes to user as points).

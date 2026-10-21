@@ -20,7 +20,9 @@ router = APIRouter(prefix="/config", tags=["config"])
 
 
 @router.get("/platform")
-async def get_platform_config(db: AsyncSession = Depends(get_db)) -> dict[str, float | dict[str, int]]:
+async def get_platform_config(
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, float | dict[str, int] | str]:
     """Return platform revenue split percentages + task base rates.
 
     Shape:
@@ -34,7 +36,8 @@ async def get_platform_config(db: AsyncSession = Depends(get_db)) -> dict[str, f
             "youtube_like": 5000,
             "youtube_watch": 10000,
             "youtube_comment": 30000
-          }
+          },
+          "paystack_public_key": "pk_live_..."
         }
 
     Revenue values are fractions (0.20 = 20%). Task rates are in kobo
@@ -44,9 +47,24 @@ async def get_platform_config(db: AsyncSession = Depends(get_db)) -> dict[str, f
     hardcoded `TASK_BASE_RATES_KOB` constants are used. The backend
     validation path also reads from the same source so there is
     exactly one source of truth for rates.
+
+    The return type includes `str` because `paystack_public_key` is a
+    string. When it was not, FastAPI's response validation rejected
+    every response and this endpoint answered 500 on every call.
     """
     from app.constants.task_rates import get_task_rates_from_db
-    task_rates = await get_task_rates_from_db(db)
+
+    # The hardcoded rates are the fallback, so the database read is
+    # best-effort. This endpoint is called on every app start; a slow
+    # or briefly unreachable database must not turn it into a 500 and
+    # leave the client without its config.
+    try:
+        task_rates = await get_task_rates_from_db(db)
+    except Exception as exc:
+        logger.warning("[config] task rates unavailable, using defaults: %s", exc)
+        from app.constants.task_rates import TASK_BASE_RATES_KOB
+
+        task_rates = dict(TASK_BASE_RATES_KOB)
 
     return {
         "ad_revenue_platform_percent": settings.platform_ad_revenue_percent,

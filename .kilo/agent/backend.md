@@ -138,11 +138,15 @@ A student's upload is a *document*, not a wall of text. It has diagrams, graphs,
 - **Figures are found from the file's own geometry, never from a vision model.** A PDF already knows where its graphics are: `page.get_drawings()` for vector art, `page.get_image_rects()` for photographs, `page.get_text("blocks")` for prose. A region that carries ink but no prose is a figure. Vision models are good at *describing* a picture and bad at saying *where* it is — asking one for coordinates produces confident nonsense and wrong crops.
   - **PyMuPDF traps to avoid.** `Rect.is_empty` is true when either side has no length, so it throws away every horizontal rule and every vertical one — and the arrows between the boxes of a flowchart are exactly those. `Rect | Rect` is the intersection, not the union, and `include_rect` silently refuses a rectangle with no area. The clustering in `_cluster_rects` therefore works on plain `(x0, y0, x1, y1)` tuples.
   - A scanned page has no geometry. There, Tesseract supplies the prose boxes and the ink that is *not* prose is separated out. When Tesseract is not installed the whole page is kept as one figure, which loses nothing.
+- **A Word document is a document, not a wall of text.** `page_artifacts.extract_docx_text_and_images` reads the prose, the tables (as `[TABLE: …]` blocks) *and* the pictures, in document order. The `.docx` path used to read the paragraph text and nothing else, so every diagram in a Word document was dropped. The pictures are stored like any other figure and described by the same pass.
 - **A page's pictures are found by a second, separate call.** The transcription prompt is not asked about pictures at all. Asking one call to transcribe a page *and* to describe its pictures made the model invent a parabola with a vertex at (−1, 2) on two pages of a real algebra textbook that contain nothing but prose — and a made-up graph is worse than no graph, because the student is then taught something that is not in their material. `FIGURE_DETECTION_PROMPT` asks one focused question ("does this page hold a picture that shows information?") and it answers NO for prose and YES for graphs, naming the equations on them correctly.
   - The same call reports the page's **running header and footer**, which are then stripped from the transcribed text with `_strip_furniture`. A footer left in becomes a paragraph in the student's lesson.
   - A description that mentions nothing that shows information — a crest, a letterhead, a decorative border — is discarded by `_is_decoration_only`. A letterhead logo is not a figure to teach.
-- **Descriptions.** Every crop is sent to the vision model with `FIGURE_DESCRIPTION_PROMPT`. The description is what the teaching layer explains and what the narration speaks, so a student who cannot see the picture still gets its content.
-- The OCR prompt is `VISION_OCR_PROMPT`. It demands markdown structure, `[TABLE: …]` lines, and `[ILLEGIBLE]` for text the model cannot read, and it asks for mathematics in dollar signs. It does **not** ask for explanations — faithfulness and teaching are separate jobs.
+- **The OCR prompt is `VISION_OCR_PROMPT`.** It demands markdown structure, `[TABLE: …]` lines, and `[ILLEGIBLE]` for text the model cannot read. It does **not** ask for explanations — faithfulness and teaching are separate jobs.
+- **The OCR transcribes the mathematics; it does not typeset it.** Asking the OCR pass to write mathematics as LaTeX made it four times more expensive in tokens, and on a page dense with fractions the model ran to the token cap and the gateway gave up — the page was lost. The prompt now says to copy the mathematics as printed (`-b/2a`, `²`, `α`), and the *parser* turns it into LaTeX afterwards, which it does well.
+- **The OCR is capped at 3000 tokens.** A page transcribes to about 1500 characters. A cap of 8000 let the model ramble until the gateway timed out.
+- **A vision call that runs too long is not a lost page.** `_vision_request` retries a timeout once, and a page that still fails is read in two halves by `_ocr_page_with_fallback` (split with Pillow). A dense page is then two shorter calls, and the answer comes back.
+- **The Workers AI quota is shared by the whole account.** A 429 is not a problem with one page, it is the account being busy, so every vision call waits out a cooldown instead of one page retrying into the same wall. `VisionRateLimited` is raised so the page-splitting fallback does not make a rate limit worse.
 - **A prompt that is never `format()`ed must not carry format escapes.** `VISION_OCR_PROMPT` is sent as it stands, so a `{{` in it is a `{{` the model copies into the material: every formula came out as `ax^{{2}}`. The prompts that *are* `format()`ed need the doubling. `TEACH_FROM_LESSON` is a *substituted value*, so it needs single braces — `str.format` does not unescape what it substitutes. `tests/test_study_artifacts.py::TestPromptBraces` guards all of this.
 
 #### 9b. The Teaching Layer
@@ -154,7 +158,16 @@ A student's upload is a *document*, not a wall of text. It has diagrams, graphs,
 - The depth is the **education level**: `primary` (default — narrated to a young student), `secondary`, `tertiary`, `research`. It is chosen on upload and can be changed when generating narration.
 - New block types in the teaching layer: `figure` (with a `figure_index` pointing at a row in `study_figures`) and `recap`.
 
-#### 9c. Long Documents Are Parsed In Pieces
+#### 9c. The Lesson Is Checked Against The Material
+A lesson that is wrong is worse than no lesson. The quiz is written against it, the narration speaks it, and the student believes it. So the lesson is audited and repaired.
+
+- `app/services/study_grounding.py` finds the claims the material does not support: a number that is nowhere in the source, a worked example whose answer the material does not give, a figure that says more than its description said. Numbers are compared with OCR confusions folded (`l4` is `14`), and only inside number-like tokens — "formula" has an o in it, and that is not a zero.
+- **The audit is a diagnostic, not a gate.** A number that happens to appear somewhere else in the material passes it, and a claim with no number in it at all passes it too. So the repair always runs, with the audit's findings as hints.
+- The repair (`STUDY_EXPLANATION_GROUNDING`) is one extra model call. It keeps the plain language, the analogies and the structure, and fixes or removes the unsupported claims. A lesson that the repair empties is discarded rather than saved.
+- The narration is checked the same way (`study_narration_grounding_enabled`). A number the student *hears* is a number they will believe and repeat.
+- Turn it off with `STUDY_GROUNDING_ENABLED` / `STUDY_NARRATION_GROUNDING_ENABLED`. It costs one extra model call per upload.
+
+#### 9d. Long Documents Are Parsed In Pieces
 The parser is asked for the whole document's structure and is given a fixed output budget. For a long syllabus those cannot both be true: a twenty-page document does not fit in one response, and a model that runs out of tokens mid-object returns JSON that cannot be parsed.
 
 - `app/services/study_chunking.py` splits the document at paragraph boundaries, then at sentence boundaries inside an oversized paragraph.
@@ -163,7 +176,7 @@ The parser is asked for the whole document's structure and is given a fixed outp
 - A document that fits in one chunk takes the single-shot path — the common case is unchanged.
 - A piece that cannot be parsed is dropped with a warning; the rest of the document is still saved.
 
-#### 9d. The Block Vocabulary
+#### 9e. The Block Vocabulary
 A material is not only prose. The parser writes these block types, and the client renders each in its own shape:
 
 | Type | What it carries |
@@ -183,7 +196,7 @@ A material is not only prose. The parser writes these block types, and the clien
 - The server sends the **source** and the client decides the **presentation**. That is the same contract the catalog reader uses with its `[[EQ:…]]` sentinels: the same stored material can look right on a phone and on a tablet.
 - The narration cannot show a formula, so it speaks it. `_speak_math` in `app/services/study_narration.py` turns `\frac{a}{b}` into "a over b" and `\times` into "times". Reading LaTeX out character by character is nonsense.
 
-#### 9e. The Tutor And The Quizzes Are Taught From The Lesson
+#### 9f. The Tutor And The Quizzes Are Taught From The Lesson
 The teaching layer is not only what the reader shows. It is what the model is taught from.
 
 - `build_material_context` builds the context for the tutor and every generator. **The lesson is the primary source** — it is the material rewritten in plain language, with the diagrams described and the worked examples laid out. The verbatim OCR text is a wall of imperfect lines; the lesson is prose.
@@ -194,7 +207,7 @@ The teaching layer is not only what the reader shows. It is what the model is ta
 - `TEACH_FROM_LESSON` in `app/ai/prompts.py` is the rule every generator prompt carries, and `render_prompt` fills it in by default so a call site that forgets it renders a weaker prompt rather than failing with a KeyError.
 - The rule also tells the generators to write inline mathematics in dollar signs (`$x^{2}$`) so the app can typeset it. The question, the options, the explanation and the tutor's own answers all go through `RichText` on the client.
 
-#### 9f. Paid Audio Narration
+#### 9g. Paid Audio Narration
 - Endpoints: `/audio/topics/{id}`, `/audio/quote/{id}`, `/audio/batches/{id}` (GET and POST), `/audio/batches/{batch_id}/position`, `/audio/batches/{batch_id}/retry`, `/audio/generate-next/{id}`.
 - Generation is **client-driven**: the server holds the queue in Postgres and the client pulls it forward one episode at a time. Render's free tier cannot be relied on to run in-process background tasks.
 - A failed episode must call `mark_failed` so the debit is returned. Leaving the batch in `generating` means the user was charged for audio that will never arrive.

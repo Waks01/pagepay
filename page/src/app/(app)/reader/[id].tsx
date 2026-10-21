@@ -89,6 +89,7 @@ export default function ReaderScreen() {
 
   const workIdRef = useRef<number | null>(null);
   const workId = content?.parent_work_id ?? Number(id);
+  const contentId = Number(id);
 
   useEffect(() => {
     if (content?.parent_work_id) {
@@ -182,12 +183,36 @@ export default function ReaderScreen() {
   useEffect(() => {
     let mounted = true;
 
+    // The reader can be restored onto the stack with its id missing —
+    // a stale navigation state, a deep link without the parameter. A
+    // request for `/content/undefined` is a 404 and a reader with
+    // nothing to show, so the screen steps back instead.
+    if (!Number.isFinite(contentId) || contentId <= 0) {
+      setLoading(false);
+      router.replace("/home");
+      return;
+    }
+
     const loadContent = async () => {
-      const res = await apiFetch(`/api/v1/content/${id}`);
-      const data = (await res.json()) as ContentDetail;
-      if (mounted) {
-        setContent(data);
-        setLoading(false);
+      try {
+        const res = await apiFetch(`/api/v1/content/${id}`);
+        if (!res.ok) {
+          throw new Error(`Failed to load content: ${res.status}`);
+        }
+        const data = (await res.json()) as ContentDetail;
+        if (mounted) {
+          setContent(data);
+          setLoading(false);
+        }
+      } catch (e) {
+        // A missing slice, or a session that expired underneath us.
+        // Either way there is nothing to read, so the screen steps
+        // back rather than spinning forever.
+        console.warn("Content load failed", e);
+        if (mounted) {
+          setLoading(false);
+          router.replace("/home");
+        }
       }
     };
 

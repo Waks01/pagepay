@@ -21,7 +21,10 @@ from __future__ import annotations
 import json
 import logging
 
-from app.ai.prompts import STUDY_EXPLANATION
+from app.ai.prompts import (
+    STUDY_EXPLANATION,
+    STUDY_EXPLANATION_GROUNDING,
+)
 from app.config import settings
 
 logger = logging.getLogger("uvicorn.error")
@@ -279,6 +282,7 @@ async def build_explanation(
     target_words: int = _DEFAULT_TARGET_WORDS,
     db=None,
     user_id: int | None = None,
+    ground: bool = True,
 ) -> dict | None:
     """Rewrite the material as a beginner-friendly lesson.
 
@@ -286,6 +290,14 @@ async def build_explanation(
     None when the model did not return usable JSON. A None result is
     not fatal — the material keeps its faithful layer and the student
     can still read and hear the source.
+
+    With `ground`, the lesson is audited against the material and
+    repaired. The audit finds the claims that the material does not
+    support — a number that is nowhere in the source, a worked example
+    whose answer the material does not give, a figure that says more
+    than its description said — and one repair pass fixes them. A
+    lesson that is wrong is worse than no lesson, because the quiz is
+    written against it and the narration speaks it.
     """
     from app.ai.router import route_ai
 
@@ -299,12 +311,14 @@ async def build_explanation(
 
     guidance = _LEVEL_GUIDANCE.get(level, _LEVEL_GUIDANCE["primary"])
 
+    figure_text = figure_text_block(figures or [])
+
     prompt = STUDY_EXPLANATION.format(
         material_title=title or "Untitled Material",
         education_level=level,
         level_guidance=guidance,
         raw_text=raw_text or "",
-        figure_text=figure_text_block(figures or []),
+        figure_text=figure_text,
         target_words=target_words,
     )
 
@@ -327,7 +341,116 @@ async def build_explanation(
     if not isinstance(parsed.get("blocks"), list) or not parsed["blocks"]:
         logger.error("[explanation] model returned no blocks")
         return None
-    return parsed
+
+    if not ground or not settings.study_grounding_enabled:
+        return parsed
+
+    return await ground_explanation(
+        parsed,
+        raw_text=raw_text,
+        figure_text=figure_text,
+        db=db,
+        user_id=user_id,
+    )
+
+
+async def ground_explanation(
+    explanation: dict,
+    *,
+    raw_text: str,
+    figure_text: str = "",
+    db=None,
+    user_id: int | None = None,
+) -> dict:
+    """Check the lesson against the material and repair what fails.
+
+    The check always runs. The numeric audit is a *diagnostic*: it
+    points at the claims that the material does not support, and it
+    catches the worst ones — a worked example whose answer the
+    material does not give, a figure that says more than its
+    description said. But a number that happens to appear somewhere
+    else in the material passes the audit, and a claim with no number
+    in it at all passes it too. So the audit is a hint for the
+    repair, not a gate in front of it.
+
+    The repair is one extra call, and it is worth it: the lesson is
+    what the student is taught from, what the quiz is written
+    against, and what the narration speaks. If it is wrong, all three
+    are wrong in the same way.
+    """
+    from app.ai.router import route_ai
+    from app.services import study_grounding
+
+    audit = study_grounding.audit_explanation(explanation, raw_text, figure_text)
+    if audit["clean"]:
+        logger.info("[explanation] grounding check found nothing to repair")
+    else:
+        logger.info(
+            "[explanation] grounding check found %s unverified numbers, "
+            "%s unsupported calculations, %s unsupported figures",
+            len(audit["unverified_numbers"]),
+            len(audit["unsupported_calculations"]),
+            len(audit["unsupported_figures"]),
+        )
+
+    suspects: list[str] = []
+    for number in audit["unverified_numbers"]:
+        suspects.append(f"the number {number} does not appear in the material")
+    for problem in audit["unsupported_calculations"]:
+        suspects.append(
+            f"this worked example ends with a result the material does not "
+            f"give: {problem}"
+        )
+    for problem in audit["unsupported_figures"]:
+        suspects.append(f"this figure says more than its description: {problem}")
+
+    prompt = STUDY_EXPLANATION_GROUNDING.format(
+        raw_text=raw_text or "",
+        figure_text=figure_text or "(no figures)",
+        lesson=json.dumps(explanation, ensure_ascii=False),
+        suspects="\n".join(f"- {s}" for s in suspects) or "- nothing",
+    )
+
+    try:
+        result = await route_ai(
+            prompt,
+            task_type="heavy",
+            max_tokens=_EXPLANATION_MAX_TOKENS,
+            temperature=0.2,
+            db=db,
+            user_id=user_id,
+            endpoint="study_explanation_grounding",
+        )
+    except Exception as exc:
+        logger.warning("[explanation] grounding repair failed: %s", exc)
+        return explanation
+
+    repaired = _parse_json(result.get("response") or "")
+    if not repaired or not isinstance(repaired.get("blocks"), list):
+        logger.warning("[explanation] grounding repair returned nothing usable")
+        return explanation
+    if not repaired["blocks"]:
+        return explanation
+
+    # The repair must not have emptied the lesson.
+    if len(repaired["blocks"]) < len(explanation.get("blocks") or []) * 0.4:
+        logger.warning(
+            "[explanation] grounding repair dropped too much of the lesson"
+        )
+        return explanation
+
+    after = study_grounding.audit_explanation(repaired, raw_text, figure_text)
+    if after["clean"]:
+        logger.info("[explanation] grounding repair finished the job")
+    else:
+        logger.info(
+            "[explanation] grounding repair left %s unverified numbers, "
+            "%s unsupported calculations, %s unsupported figures",
+            len(after["unverified_numbers"]),
+            len(after["unsupported_calculations"]),
+            len(after["unsupported_figures"]),
+        )
+    return repaired
 
 
 # Kept in step with NARRATION_LEVEL_GUIDANCE in app/ai/prompts.py so the
@@ -335,20 +458,48 @@ async def build_explanation(
 # same way.
 _LEVEL_GUIDANCE = {
     "primary": (
-        "Speak to a young student. Short sentences. Explain every idea "
-        "with something from everyday life — \"Imagine you have five "
-        "apples...\". Say the simple version first, then the formal term."
+        "The student is learning this for the first time, and may not even "
+        "know what the words mean. Write for someone who has never seen the "
+        "subject.\n"
+        "- One idea at a time. Short sentences. A sentence the student cannot "
+        "read aloud in one breath is two sentences.\n"
+        "- Say what a thing IS before you say what it is CALLED. \"The part "
+        "that catches light (chlorophyll)\" comes before \"chlorophyll\".\n"
+        "- Use an everyday comparison for anything abstract. \"Imagine you are "
+        "sharing five apples between two friends\" beats \"consider the "
+        "distribution of a fixed quantity\".\n"
+        "- Before any formula or calculation, say what each letter stands "
+        "for, in words, one by one.\n"
+        "- For every step of a calculation, say what that line is doing, not "
+        "just what it says.\n"
+        "- Say the answer in words as well as in numbers. \"So the maximum "
+        "value is 14\" is clearer than \"= 14\".\n"
+        "- If a word is hard, use the easy word first and put the hard word "
+        "in brackets afterwards.\n"
+        "- Never assume the student knows a symbol. Write what it stands for."
     ),
     "secondary": (
-        "Speak to a secondary-school student. Detailed explanations with "
-        "worked examples, step-by-step walkthroughs, and real-world uses."
+        "The student is studying this for an exam. Clear, detailed, and "
+        "practical.\n"
+        "- Short-to-medium sentences, and no unnecessary jargon.\n"
+        "- Before a formula, say what each letter stands for.\n"
+        "- Walk through every calculation step by step, saying what each "
+        "line does.\n"
+        "- Give a real-world use where the material makes one possible.\n"
+        "- Say the answer in words as well as in numbers."
     ),
     "tertiary": (
-        "Speak to a university student. Academic depth, correct "
-        "terminology, and enough context to see why the idea matters."
+        "The student is at university. Use the correct technical term "
+        "straight away, and be precise about conditions, domains and "
+        "assumptions.\n"
+        "- Keep the derivations complete.\n"
+        "- Say why a method is chosen over its alternatives.\n"
+        "- Distinguish what the material states from what follows from it."
     ),
     "research": (
-        "Speak to a researcher. Cover assumptions, trade-offs, and edge "
-        "cases; name the technique and use precise terminology."
+        "The student is a researcher. Cover assumptions, trade-offs, "
+        "confounding factors and edge cases.\n"
+        "- Name the technique and the conditions under which it holds.\n"
+        "- Point at what the material does not settle."
     ),
 }
