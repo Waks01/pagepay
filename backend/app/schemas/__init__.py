@@ -600,6 +600,13 @@ class SowUploadRequest(BaseModel):
     # reported as a clear domain error. Use ExamTypeKey where a hard
     # reject is wanted (e.g. exam start).
     exam_type: str | None = Field(default=None, max_length=32, description="Exam type: jamb|waec|neco|nabteb|custom")
+    # How deep the teaching layer and the narration are pitched.
+    # "primary" narrates to a young student in plain language.
+    education_level: str | None = Field(
+        default=None,
+        max_length=20,
+        description="Education level: primary|secondary|tertiary|research",
+    )
 
 
 class SowUploadResponse(BaseModel):
@@ -630,12 +637,19 @@ class SowUploadJobStatus(BaseModel):
     `completed`, `material_id` is populated and the client can fetch
     the full `MaterialDetail` via `GET /materials/{material_id}`. On
     `failed`, `error` carries a short, user-safe message.
+
+    `progress` is 0-100 and `stage` is a machine-readable code
+    (queued | reading_pages | parsing_ai | saving | completed) so the
+    client can show a real progress bar with a label instead of
+    guessing at the remaining time.
     """
 
     job_id: str
     status: str
     material_id: int | None = None
     error: str | None = None
+    progress: int | None = None
+    stage: str | None = None
     updated_at: datetime
 
 
@@ -659,6 +673,50 @@ class MaterialDetail(BaseModel):
     file_mime_type: str | None = None
     has_original_file: bool = False
     created_at: datetime
+
+    # The teaching layer: the same material rewritten in plain language
+    # for a beginner, with every diagram described in words. `None`
+    # when the explanation could not be built — the faithful
+    # `parsed_structure` is still there and the app falls back to it.
+    explanation_structure: dict | None = None
+    # The depth the explanation and the narration are pitched at.
+    education_level: str = "primary"
+    # How many pages of the original document were read, and how many
+    # diagrams were found on them. The app uses these to show the
+    # "Original" view and to place the figures inline.
+    page_count: int = 0
+    figure_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class MaterialFigure(BaseModel):
+    """One diagram cropped out of an uploaded page.
+
+    `image_url` points at the stored crop. When it is null the figure
+    has no picture of its own — the app shows the page it came from
+    instead, so the diagram is still visible.
+    """
+
+    figure_index: int
+    page: int
+    image_url: str | None = None
+    width: int = 0
+    height: int = 0
+    description: str | None = None
+    caption: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class MaterialPage(BaseModel):
+    """One rendered page of an uploaded document."""
+
+    page: int
+    image_url: str | None = None
+    width: int = 0
+    height: int = 0
+    is_scan: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -793,13 +851,19 @@ class ChatResponse(BaseModel):
 
 
 class UnlockRequest(BaseModel):
-    # `points` is the legacy name for the spendable wallet and `sv` its
-    # modern alias (both debit the same balance); `cashable` spends the
-    # withdrawable side. Both are the same unit — POINTS_PER_NAIRA — so
-    # the price is identical whichever the user picks. The "ad" method
-    # is not accepted: the rewarded-ad pipeline has no backend.
-    asset_id: int
-    method: Literal["points", "sv", "cashable"] = "points"
+  # `points` is the legacy name for the spendable wallet and `sv` its
+  # modern alias (both debit the same balance); `cashable` spends the
+  # withdrawable side. Both are the same unit — POINTS_PER_NAIRA — so
+  # the price is identical whichever the user picks.
+  #
+  # There is deliberately no "ad" method. Rewarded ads do not unlock
+  # directly: the server credits the viewer with SV through the SSV
+  # callback (see routers/study.py `/ads/complete`), and that balance is
+  # then spent here like any other credit. Unlocking directly from the
+  # ad would mean granting content before the server has verified the
+  # view, which is the one thing SSV exists to prevent.
+  asset_id: int
+  method: Literal["points", "sv", "cashable"] = "points"
 
 
 class UnlockResponse(BaseModel):

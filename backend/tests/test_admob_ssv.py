@@ -329,6 +329,27 @@ async def test_unknown_user_is_acknowledged_not_credited(
     retrying - so acknowledge with 200 and log."""
     res = await client.get(f"/api/v1/study/ads/complete?{signed(999999)}")
     assert res.status_code == 200
+    rows = (await db_session.execute(select(StudyTransaction))).scalars().all()
+    assert rows == [], "an unknown user must not be credited"
+
+
+@pytest.mark.asyncio
+async def test_non_numeric_user_id_is_acknowledged_not_credited(
+    client, db_session, signed
+):
+    """AdMob documents user_id as string-only.
+
+    A value that is not our numeric id is simply unmatched - it must not
+    be treated as a malformed callback (which would make Google retry
+    five times for a request that can never succeed) and must never
+    credit anyone.
+    """
+    res = await client.get(
+        f"/api/v1/study/ads/complete?{signed('not-a-number')}"
+    )
+    assert res.status_code == 200
+    rows = (await db_session.execute(select(StudyTransaction))).scalars().all()
+    assert rows == []
 
 
 def test_payout_is_the_configured_amount_and_not_the_ad_unit_label():

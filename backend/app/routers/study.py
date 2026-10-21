@@ -39,6 +39,7 @@ from app.ai.prompts import (
     MCQ_TOPIC_GENERATOR,
     SOW_PARSER,
     SOW_PARSER_CHUNK,
+    render_prompt,
     VIDEO_SCRIPT_GENERATOR,
     VISION_OCR_PROMPT,
 )
@@ -2309,34 +2310,66 @@ async def generate_asset(
             context_parts.append(f"    * {cc}")
         context = "\n".join(context_parts)
 
+        # A single-topic generation still gets the lesson. A flashcard
+        # generated from a heading list is a generic flashcard; one
+        # generated from the explanation is a real one.
+        context = build_material_context(
+            material.parsed_structure,
+            material.raw_input,
+            budget=_ASSET_CONTEXT_CHARS,
+            outline_label=f"Topic: {payload.topic} —",
+            explanation_structure=material.explanation_structure,
+            include_source=False,
+            outline_override=context,
+        )
+
         if payload.asset_type == "mcq":
-            prompt = MCQ_TOPIC_GENERATOR.format(topic=payload.topic, context=context, count=payload.count, difficulty=payload.difficulty)
+            prompt = render_prompt(MCQ_TOPIC_GENERATOR, 
+                topic=payload.topic,
+                context=context,
+                count=payload.count,
+                difficulty=payload.difficulty,
+            )
         elif payload.asset_type == "flashcard":
-            prompt = FLASHCARD_TOPIC_GENERATOR.format(topic=payload.topic, context=context, count=payload.count)
+            prompt = render_prompt(FLASHCARD_TOPIC_GENERATOR, 
+                topic=payload.topic,
+                context=context,
+                count=payload.count,
+            )
         elif payload.asset_type == "essay":
-            prompt = ESSAY_TOPIC_GENERATOR.format(topic=payload.topic, context=context, count=payload.count)
+            prompt = render_prompt(ESSAY_TOPIC_GENERATOR, 
+                topic=payload.topic,
+                context=context,
+                count=payload.count,
+            )
         elif payload.asset_type == "diagram":
-            prompt = DIAGRAM_GENERATOR.format(topic=payload.topic, context=context, education_level=payload.education_level or "secondary")
+            prompt = render_prompt(DIAGRAM_GENERATOR, 
+                topic=payload.topic,
+                context=context,
+                education_level=payload.education_level or "secondary",
+            )
         elif payload.asset_type == "video":
-            prompt = VIDEO_SCRIPT_GENERATOR.format(topic=payload.topic, context=context, education_level=payload.education_level or "secondary")
+            prompt = render_prompt(VIDEO_SCRIPT_GENERATOR, 
+                topic=payload.topic,
+                context=context,
+                education_level=payload.education_level or "secondary",
+            )
         else:
             raise HTTPException(status_code=400, detail=f"Unknown asset type: {payload.asset_type}")
 
     else:
-        context_parts = []
-        for topic in topics:
-            context_parts.append(f"Topic: {topic['name']}")
-            for st in topic.get("subtopics", []):
-                context_parts.append(f"  - {st}")
-            for cc in topic.get("key_concepts", []):
-                context_parts.append(f"    * {cc}")
-        context = "\n".join(context_parts)
+        # Every generator gets the same context: the outline plus the
+        # lesson the student was given. Flashcards, essays, diagrams
+        # and video scripts used to be written from the outline alone,
+        # which is a table of contents — the model had nothing to
+        # write about except the headings themselves.
+        context = _build_asset_context(material)
 
         if payload.asset_type == "mcq":
             # Reuse the exam context builder so pre-generated MCQs draw on
             # the real material rather than only the topic outline, and
             # so the requested difficulty actually reaches the prompt.
-            prompt = MCQ_ALL_TOPICS_GENERATOR.format(
+            prompt = render_prompt(MCQ_ALL_TOPICS_GENERATOR, 
                 context=_build_mcq_context(material),
                 count=payload.count,
                 exam_style=EXAM_STYLE_GUIDES.get(
@@ -2347,13 +2380,27 @@ async def generate_asset(
                 ),
             )
         elif payload.asset_type == "flashcard":
-            prompt = FLASHCARD_ALL_TOPICS_GENERATOR.format(context=context, count=payload.count)
+            prompt = render_prompt(FLASHCARD_ALL_TOPICS_GENERATOR, 
+                context=context,
+                count=payload.count,
+            )
         elif payload.asset_type == "essay":
-            prompt = ESSAY_ALL_TOPICS_GENERATOR.format(context=context, count=payload.count)
+            prompt = render_prompt(ESSAY_ALL_TOPICS_GENERATOR, 
+                context=context,
+                count=payload.count,
+            )
         elif payload.asset_type == "diagram":
-            prompt = DIAGRAM_GENERATOR.format(topic="All Topics", context=context, education_level=payload.education_level or "secondary")
+            prompt = render_prompt(DIAGRAM_GENERATOR, 
+                topic="All Topics",
+                context=context,
+                education_level=payload.education_level or "secondary",
+            )
         elif payload.asset_type == "video":
-            prompt = VIDEO_SCRIPT_GENERATOR.format(topic="All Topics", context=context, education_level=payload.education_level or "secondary")
+            prompt = render_prompt(VIDEO_SCRIPT_GENERATOR, 
+                topic="All Topics",
+                context=context,
+                education_level=payload.education_level or "secondary",
+            )
         else:
             raise HTTPException(status_code=400, detail=f"Unknown asset type: {payload.asset_type}")
 
@@ -2923,6 +2970,12 @@ async def chat_study(
         material.raw_input,
         budget=_CHAT_CONTEXT_CHARS,
         outline_label="Syllabus outline (the topics this material covers):",
+        explanation_structure=material.explanation_structure,
+        # The tutor has room for both. The lesson is what the student
+        # was taught, so the tutor answers in the same language and
+        # from the same explanation; the source is there so a fact the
+        # rewrite dropped is not lost.
+        include_source=True,
     )
 
     system_prompt = CHAT_TUTOR_SYSTEM.format(
@@ -3806,7 +3859,18 @@ def _normalize_exam_questions(raw: list[dict]) -> list[dict]:
 # the tutor and the exam generator both get the student's actual
 # material, and only genuinely oversized documents are sliced.
 _MCQ_CONTEXT_CHARS = 12_000
+_ASSET_CONTEXT_CHARS = 12_000
 _CHAT_CONTEXT_CHARS = 100_000
+
+
+def _topic_outline(topic: dict) -> str:
+    """One topic rendered as an outline."""
+    parts = [f"Topic: {topic.get('name', '')}"]
+    for st in topic.get("subtopics", []):
+        parts.append(f"  - {st}")
+    for cc in topic.get("key_concepts", []):
+        parts.append(f"    * {cc}")
+    return "\n".join(parts)
 
 
 def build_material_context(
@@ -3815,22 +3879,38 @@ def build_material_context(
     *,
     budget: int,
     outline_label: str,
+    explanation_structure: object = None,
+    include_source: bool = True,
+    outline_override: str | None = None,
 ) -> str:
     """Build the study-material context for an AI prompt.
 
-    The student's own material is the primary source. The topic outline
-    is included alongside it so the model knows the structure, but it is
-    a supplement, never a substitute — an outline alone is only a table
-    of contents, and a model taught from headings cannot answer
-    questions about the text.
+    **The teaching layer is the primary source.** It is the material
+    rewritten in plain language, with the diagrams described and the
+    worked examples laid out — which is what a model should be taught
+    from when it is going to explain something or write a question. The
+    raw OCR text is a wall of imperfect lines; the lesson is prose.
 
-    `budget` bounds the raw material so a document with no upload-time
-    character cap cannot blow the context window. When the material
-    exceeds it, the head is kept (it carries the opening definitions and
-    framing) with a truncation marker so the model knows it is partial
-    rather than silently answering as though it had everything.
+    The topic outline is included alongside it so the model knows the
+    structure, but it is a supplement, never a substitute — an outline
+    alone is only a table of contents, and a model taught from headings
+    cannot answer questions about the text.
 
-    Falls back to the outline when there is no usable raw text.
+    The student's own material is included too, as the authority on
+    what was actually uploaded. A lesson is a rewrite, and a rewrite
+    can leave something out; the source is there so the tutor does not
+    lose a fact the explanation dropped.
+
+    `budget` bounds the whole context so a document with no upload-time
+    character cap cannot blow the model's context window. When the
+    material exceeds it, the head is kept (it carries the opening
+    definitions and framing) with a truncation marker so the model knows
+    it is partial rather than silently answering as though it had
+    everything.
+
+    Falls back to the outline when there is neither a lesson nor usable
+    raw text — a material uploaded before the teaching layer existed
+    still works.
     """
     import json as _json
 
@@ -3850,45 +3930,92 @@ def build_material_context(
     for topic in topics:
         if not isinstance(topic, dict):
             continue
-        outline_parts.append(f"Topic: {topic.get('name', '')}")
-        for st in topic.get("subtopics", []):
-            outline_parts.append(f"  - {st}")
-        for cc in topic.get("key_concepts", []):
-            outline_parts.append(f"    * {cc}")
+        outline_parts.append(_topic_outline(topic))
     outline = "\n".join(outline_parts)
 
+    if outline_override is not None:
+        # A single-topic generation supplies its own outline.
+        outline = outline_override
+
+    lesson = study_explanation.render_teaching_layer(explanation_structure)
     raw_text = (raw_input or "").strip()
 
-    if not raw_text:
+    if not lesson and not raw_text:
         return outline or "(no study material available)"
 
-    if len(raw_text) > budget:
-        # Keep the head, which carries the opening definitions and
-        # framing, rather than a truncated middle.
-        raw_text = (
-            raw_text[:budget].rstrip()
-            + "\n\n[... truncated: the material is longer than the "
-            "space available here ...]"
+    # The lesson takes the larger share when the source is included
+    # too: it is the part the model should reason from.
+    lesson_budget = int(budget * 0.6) if include_source else budget
+    source_budget = budget - lesson_budget if include_source else 0
+
+    parts: list[str] = []
+
+    if outline:
+        parts.append(f"{outline_label}\n{outline}")
+
+    if lesson:
+        if len(lesson) > lesson_budget:
+            lesson = (
+                lesson[:lesson_budget].rstrip()
+                + "\n\n[... the lesson continues beyond the space "
+                "available here ...]"
+            )
+        parts.append(
+            "The lesson written from the student's material — this is "
+            "the explanation the student was given, and it is the "
+            "version to teach and to question from:\n"
+            f"{lesson}"
         )
 
-    if not outline:
-        return raw_text
+    if raw_text and include_source:
+        if len(raw_text) > source_budget:
+            raw_text = (
+                raw_text[:source_budget].rstrip()
+                + "\n\n[... truncated: the material is longer than the "
+                "space available here ...]"
+            )
+        parts.append(
+            "The student's own material, verbatim — the authority on "
+            "what was uploaded:\n"
+            f"{raw_text}"
+        )
 
-    return (
-        f"{outline_label}\n"
-        f"{outline}\n\n"
-        "The student's study material in full:\n"
-        f"{raw_text}"
+    return "\n\n".join(parts)
+
+
+def _build_asset_context(material: StudyMaterial) -> str:
+    """Context for the asset generators: the outline plus the lesson.
+
+    Flashcards, essays, diagrams and video scripts are written from
+    this. The lesson is the material rewritten for a beginner, which is
+    what a flashcard or an essay should be built on — a card generated
+    from a heading list is a card about a heading.
+    """
+    return build_material_context(
+        material.parsed_structure,
+        material.raw_input,
+        budget=_ASSET_CONTEXT_CHARS,
+        outline_label="Syllabus outline (the topics this material covers):",
+        explanation_structure=material.explanation_structure,
+        include_source=False,
     )
 
 
 def _build_mcq_context(material: StudyMaterial) -> str:
-    """Context for the MCQ generator: material at the exam budget."""
+    """Context for the MCQ generator: material at the exam budget.
+
+    The teaching layer leads — the questions should come from the
+    explanation the student was actually given — and the source is
+    dropped, because an exam prompt has no room for two versions of the
+    same material.
+    """
     return build_material_context(
         material.parsed_structure,
         material.raw_input,
         budget=_MCQ_CONTEXT_CHARS,
         outline_label="Syllabus outline (use to distribute questions across topics):",
+        explanation_structure=material.explanation_structure,
+        include_source=False,
     )
 
 
@@ -3911,7 +4038,7 @@ async def _generate_exam_questions(
     exam_style = EXAM_STYLE_GUIDES.get(exam_type, EXAM_STYLE_GUIDES["custom"])
     difficulty_guide = DIFFICULTY_GUIDES.get(difficulty, DIFFICULTY_GUIDES["medium"])
 
-    prompt = MCQ_ALL_TOPICS_GENERATOR.format(
+    prompt = render_prompt(MCQ_ALL_TOPICS_GENERATOR, 
         context=context,
         count=count,
         exam_style=exam_style,
@@ -4926,11 +5053,19 @@ async def admob_reward_callback(
         logger.warning("AdMob SSV rejected from %s: %s", client_ip, exc)
         return Response(status_code=400, content="verification failed")
 
-    try:
-        user_id = int(params["user_id"])
-    except ValueError:
-        logger.warning("AdMob SSV sent a non-integer user_id: %s", raw_query[:120])
+    # The user id is whatever the client set in
+    # serverSideVerificationOptions.userId. PagePay sends the internal
+    # numeric id as a string, but AdMob documents the field as
+    # string-only, so a non-numeric value must not be treated as a
+    # malformed callback - it just will not match a user.
+    raw_user_id = (params.get("user_id") or "").strip()
+    if not raw_user_id:
+        logger.warning("AdMob SSV sent no user_id: %s", raw_query[:120])
         return Response(status_code=400, content="bad ids")
+    try:
+        user_id = int(raw_user_id)
+    except ValueError:
+        user_id = None
 
     # `transaction_id` is a hex string, not a number - AdMob's example is
     # "18fa792de1bca816048293fc71035638", which is far outside the range
@@ -4946,24 +5081,33 @@ async def admob_reward_callback(
     # Idempotency. AdMob re-sends a callback up to five times in
     # one-second intervals, so a replay must not credit twice. The
     # transaction_id is the provider's own unique id for the event.
-    existing = await db.execute(
-        select(StudyTransaction.id)
-        .where(
-            StudyTransaction.user_id == user_id,
-            StudyTransaction.external_id == transaction_id,
-            StudyTransaction.method == "ad",
+    if user_id is not None:
+        existing = await db.execute(
+            select(StudyTransaction.id)
+            .where(
+                StudyTransaction.user_id == user_id,
+                StudyTransaction.external_id == transaction_id,
+                StudyTransaction.method == "ad",
+            )
+            .limit(1)
         )
-        .limit(1)
-    )
-    if existing.scalar_one_or_none() is not None:
-        logger.info("AdMob SSV duplicate transaction_id=%s ignored", transaction_id)
-        return Response(status_code=200, content="ok")
+        if existing.scalar_one_or_none() is not None:
+            logger.info("AdMob SSV duplicate transaction_id=%s ignored", transaction_id)
+            return Response(status_code=200, content="ok")
 
-    user_row = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    user_row = None
+    if user_id is not None:
+        user_row = (
+            (await db.execute(select(User).where(User.id == user_id)))
+            .scalar_one_or_none()
+        )
     if user_row is None:
-        # Unknown user: acknowledge so AdMob stops retrying, but never
-        # invent a wallet to credit.
-        logger.warning("AdMob SSV for unknown user=%s", user_id)
+        # Unknown or unmatched user: acknowledge so AdMob stops
+        # retrying, but never invent a wallet to credit.
+        logger.warning(
+            "AdMob SSV for unmatched user_id=%r transaction_id=%s",
+            raw_user_id, transaction_id,
+        )
         return Response(status_code=200, content="ok")
 
     db.add(

@@ -250,7 +250,15 @@ export function useRewardedAd(
   const rewardRef = useRef(onReward);
   rewardRef.current = onReward;
 
-  const load = () => {
+  /**
+   * Build the ad instance and attach its listeners.
+   *
+   * One instance is created and reused: the wrapper has no destroy()
+   * for a rewarded ad, so creating a fresh one after every close leaks
+   * native objects and listeners. Re-loading the same instance is the
+   * documented pattern.
+   */
+  const build = () => {
     const instance = RewardedAd.createForAdRequest(
       ACTIVE_AD_UNITS.rewarded,
       requestOptionsFor(userId, { ssv: true }),
@@ -285,22 +293,34 @@ export function useRewardedAd(
     instance.addAdEventListener(AdEventType.CLOSED, () => {
       setIsShowing(false);
       setIsLoaded(false);
-      // Preload the next one so the following tap is instant.
-      load();
+      // Preload the next one on the same instance so the following tap
+      // is instant.
+      instance.load();
     });
-    instance.load();
     rewarded.current = instance;
+    instance.load();
+  };
+
+  const load = () => {
+    const instance = rewarded.current;
+    if (instance) {
+      instance.load();
+      return;
+    }
+    build();
   };
 
   useEffect(() => {
     let cancelled = false;
     void initAds().then(() => {
-      if (!cancelled) load();
+      if (!cancelled) build();
     });
     return () => {
       cancelled = true;
+      // Drop the listeners so a remount does not double-handle events.
+      rewarded.current?.removeAllListeners();
     };
-    // Reload when the user changes: a different user id means a
+    // Rebuild when the user changes: a different user id means a
     // different SSV attribution, so the old request is stale.
   }, [userId]);
 
@@ -312,7 +332,13 @@ export function useRewardedAd(
     }
     setIsShowing(true);
     setError(null);
-    instance.show();
+    // show() is async and rejects when the ad cannot be presented.
+    // Unhandled, that surfaces as an unhandled rejection.
+    instance.show().catch((e: unknown) => {
+      setIsShowing(false);
+      setIsLoaded(false);
+      setError(e instanceof Error ? e.message : 'Ad could not be shown');
+    });
     return true;
   };
 

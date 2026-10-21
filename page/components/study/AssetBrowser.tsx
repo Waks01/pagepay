@@ -100,6 +100,9 @@ type AssetBrowserProps = {
   onUnlock: (assetId: number, method: UnlockMethod) => Promise<void>;
   unlockedAssets: Record<number, unknown>;
   onQuizComplete?: (assetId: number, score: number) => Promise<void>;
+  /** Called after a rewarded ad credits the student, so the balances
+   *  shown in the unlock sheet can be refreshed. */
+  onBalanceChange?: () => void;
 };
 
 type AccordionSection = {
@@ -109,7 +112,7 @@ type AccordionSection = {
   assets: AssetInfo[];
 };
 
-export function AssetBrowser({ assets, userBalance, cashableBalance, onUnlock, unlockedAssets, onQuizComplete }: AssetBrowserProps) {
+export function AssetBrowser({ assets, userBalance, cashableBalance, onUnlock, unlockedAssets, onQuizComplete, onBalanceChange }: AssetBrowserProps) {
   const { t } = useTranslation();
   const isAssetUnlocked = (assetId: number) =>
     assetId in unlockedAssets;
@@ -438,6 +441,7 @@ export function AssetBrowser({ assets, userBalance, cashableBalance, onUnlock, u
           cashableBalance={cashableBalance}
           onUnlock={(method) => handleUnlock(pendingUnlock, method)}
           onClose={() => setPendingUnlock(null)}
+          onBalanceChange={onBalanceChange}
         />
       )}
     </View>

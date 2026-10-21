@@ -571,12 +571,26 @@ def test_exam_types_match_client():
 
 
 # ── MCQ context builder: real content, not just the outline ─────────
+"""Refresh the material-context tests for the teaching-layer contract.
+
+The context builder was reworked: the teaching layer (the material
+rewritten in plain language) is now the primary source, the outline
+travels with it, and the verbatim source is included only where there is
+room. The exam/MCQ generators deliberately drop the verbatim source -
+a question has no room for two versions of the same material.
+
+These tests were written against the earlier outline-plus-source
+contract and had to be rewritten to match.
+"""
 
 
 class _FakeMaterial:
-    def __init__(self, parsed, raw):
+    """A stand-in for StudyMaterial with the fields the builder reads."""
+
+    def __init__(self, parsed, raw, explanation=None):
         self.parsed_structure = parsed
         self.raw_input = raw
+        self.explanation_structure = explanation
 
 
 _TEST_OUTLINE = (
@@ -590,27 +604,61 @@ _TEST_RAW = (
     "the electron transport chain. ATP synthase enzymes use the proton "
     "gradient to phosphorylate ADP into ATP."
 )
+# A minimal teaching layer: the material rewritten in plain language.
+# The shape is {"blocks": [...]} with a "type" per block - "body" for
+# prose, which is what the generators read.
+_TEST_LESSON = {
+    "blocks": [
+        {
+            "type": "body",
+            "text": (
+                "The mitochondrion is the powerhouse of the cell. It folds "
+                "its inner membrane into cristae so the electron transport "
+                "chain has room to work, and ATP synthase uses the "
+                "resulting proton gradient to make ATP."
+            ),
+        }
+    ]
+}
 
 
-def test_mcq_context_includes_real_material():
-    """The generator must receive explanatory content, not only an outline.
+def test_mcq_context_is_built_from_the_teaching_layer():
+    """The generator must receive the lesson, not just an outline.
 
     Questions built from topic headings alone come out shallow and
     purely recall-shaped, which is what the outline-only context
-    produced. The raw material is the primary source; the outline is
-    kept only so the model knows how to distribute questions.
+    produced. The lesson is what the student was actually taught, so it
+    is what the questions should be written from.
     """
     from app.routers.study import _build_mcq_context
 
-    ctx = _build_mcq_context(_FakeMaterial(_TEST_OUTLINE, _TEST_RAW))
+    ctx = _build_mcq_context(
+        _FakeMaterial(_TEST_OUTLINE, _TEST_RAW, _TEST_LESSON)
+    )
     assert "Cell Biology" in ctx, "topic outline should be included"
     assert "Mitochondria" in ctx
-    assert "ATP synthase" in ctx, "raw material content must be included"
-    assert "electron transport chain" in ctx
-    assert "study material in full" in ctx
+    assert "powerhouse of the cell" in ctx, "the lesson must be included"
+    assert "cristae" in ctx
 
 
-def test_mcq_context_falls_back_when_raw_empty():
+def test_mcq_context_drops_the_verbatim_source():
+    """The exam prompt has room for one version of the material, not two.
+
+    The lesson is the version to question from, and the source is
+    dropped so the context stays inside the budget.
+    """
+    from app.routers.study import _build_mcq_context
+
+    ctx = _build_mcq_context(
+        _FakeMaterial(_TEST_OUTLINE, _TEST_RAW, _TEST_LESSON)
+    )
+    assert "ATP synthase enzymes use the proton" not in ctx, (
+        "the verbatim source should be dropped for exam questions"
+    )
+
+
+def test_mcq_context_falls_back_when_there_is_no_lesson():
+    """A material uploaded before the teaching layer existed still works."""
     from app.routers.study import _build_mcq_context
 
     ctx = _build_mcq_context(_FakeMaterial(_TEST_OUTLINE, ""))
@@ -619,26 +667,71 @@ def test_mcq_context_falls_back_when_raw_empty():
 
 
 def test_mcq_context_handles_missing_fields():
+    """A material with no parsed structure and no lesson must degrade."""
     from app.routers.study import _build_mcq_context
 
-    ctx = _build_mcq_context(_FakeMaterial(None, _TEST_RAW))
-    assert "ATP synthase" in ctx
-    assert "Syllabus outline" not in ctx
+    ctx = _build_mcq_context(_FakeMaterial(None, "", None))
+    assert "no study material" in ctx
 
-    # Nothing at all must degrade gracefully rather than raise.
-    empty = _build_mcq_context(_FakeMaterial(None, ""))
-    assert "no study material" in empty
+    # A corrupt structure must not raise either.
+    ctx2 = _build_mcq_context(_FakeMaterial("{not json", "", None))
+    assert "no study material" in ctx2
 
 
 def test_mcq_context_truncates_oversized_material():
+    """An oversized lesson is marked, not silently cut."""
     from app.routers.study import _build_mcq_context, _MCQ_CONTEXT_CHARS
 
-    big = _TEST_RAW * 200
-    assert len(big) > _MCQ_CONTEXT_CHARS
-    ctx = _build_mcq_context(_FakeMaterial(_TEST_OUTLINE, big))
-    assert len(ctx) < len(big)
-    assert "truncated" in ctx
-    assert "mitochondrion is the site" in ctx, "head of material preserved"
+    big_lesson = {
+        "blocks": [
+            {"type": "body", "text": "x" * (_MCQ_CONTEXT_CHARS * 2)}
+        ]
+    }
+    ctx = _build_mcq_context(_FakeMaterial(_TEST_OUTLINE, "", big_lesson))
+    assert len(ctx) <= _MCQ_CONTEXT_CHARS + 500
+    assert "continues beyond the space" in ctx
+
+
+def test_asset_context_uses_the_lesson_only():
+    """Assets carry the teaching layer, not the verbatim source.
+
+    The lesson is the material rewritten in plain language, and it is
+    what a flashcard or an essay should be built on. The verbatim
+    source is only kept where there is room for both - which is the
+    tutor, the one place a dropped fact would actually mislead a
+    student mid-explanation.
+    """
+    from app.routers.study import _build_asset_context
+
+    ctx = _build_asset_context(
+        _FakeMaterial(_TEST_OUTLINE, _TEST_RAW, _TEST_LESSON)
+    )
+    assert "powerhouse of the cell" in ctx, "the lesson must be present"
+    assert "ATP synthase enzymes use the proton" not in ctx, (
+        "the verbatim source is dropped for asset generation"
+    )
+
+
+def test_tutor_context_keeps_both_versions():
+    """The tutor is the one context that carries the source as well.
+
+    If a fact was dropped when the lesson was rewritten, the tutor must
+    still be able to find it.
+    """
+    from app.routers.study import build_material_context
+
+    ctx = build_material_context(
+        _TEST_OUTLINE,
+        _TEST_RAW,
+        budget=100_000,
+        outline_label="Syllabus outline (the topics this material covers):",
+        explanation_structure=_TEST_LESSON,
+        include_source=True,
+    )
+    assert "powerhouse of the cell" in ctx, "the lesson must be present"
+    assert "ATP synthase enzymes use the proton" in ctx, (
+        "the verbatim source must be present for the tutor"
+    )
 
 
 # ── Prompt wiring: difficulty and board style actually reach the prompt ─
@@ -659,13 +752,17 @@ def test_mcq_prompt_has_no_literal_difficulty():
 
 
 def test_mcq_prompt_renders_all_fields():
+    """The prompt renders through render_prompt, which fills in the
+    teach-from-lesson rule by default."""
     from app.ai.prompts import (
         MCQ_ALL_TOPICS_GENERATOR,
         EXAM_STYLE_GUIDES,
         DIFFICULTY_GUIDES,
+        render_prompt,
     )
 
-    rendered = MCQ_ALL_TOPICS_GENERATOR.format(
+    rendered = render_prompt(
+        MCQ_ALL_TOPICS_GENERATOR,
         context="ctx",
         count=5,
         exam_style=EXAM_STYLE_GUIDES["jamb"],
@@ -675,6 +772,7 @@ def test_mcq_prompt_renders_all_fields():
     assert "Exactly 5 questions" in rendered
     assert "Application and analysis" in rendered
     assert "JAMB-style objective questions" in rendered
+    assert "Write from it" in rendered, "the teach-from-lesson rule is missing"
     assert not re.search(r"\{[a-z_]+\}", rendered), "no unformatted placeholders"
 
 
@@ -687,3 +785,4 @@ def test_exam_style_guides_cover_every_board():
     # Difficulty must include all three levels a caller can request.
     for level in ("easy", "medium", "hard"):
         assert level in DIFFICULTY_GUIDES, f"no difficulty guide for {level}"
+

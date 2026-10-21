@@ -33,11 +33,13 @@ import { cacheDirectory } from "@/src/shared/lib/file-paths";
 import { getToken } from "@/src/shared/lib/storage";
 import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
-import { useCurrentUser } from "@/src/shared/lib/current-user";
+import { useCurrentUser, useCurrentUserStore } from "@/src/shared/lib/current-user";
 import { PageHeader } from "@/components/PageHeader";
 import { getTopicNames } from "@/src/app/(app)/study";
 import { ProgressDashboard } from "@/components/study/ProgressDashboard";
 import { AssetBrowser } from "@/components/study/AssetBrowser";
+import { CodeBlock } from "@/components/study/CodeBlock";
+import { MathText } from "@/components/study/MathText";
 import { cacheAsset, getCachedAsset } from "@/src/features/study/storage";
 import { useClaimQuizBonus } from "@/src/features/study/hooks/use-study";
 import { Skeleton } from "@/components/Skeleton";
@@ -50,6 +52,11 @@ type MaterialDetail = {
   file_mime_type: string | null;
   has_original_file: boolean;
   parsed_structure: Record<string, unknown> | null;
+  /** The teaching layer — the material rewritten for a beginner. */
+  explanation_structure?: Record<string, unknown> | null;
+  education_level?: string;
+  page_count?: number;
+  figure_count?: number;
   assets: Array<{
     id: number;
     material_id: number;
@@ -111,7 +118,13 @@ export default function MaterialDetailScreen() {
     material: MaterialDetail,
     tokens: any,
   ) => {
-    if (!material.parsed_structure) {
+    // The teaching layer is preferred: it is the same material written
+    // for a beginner, so it is a better preview of what the student
+    // is about to read. The faithful layer is the fallback.
+    const source =
+      material.explanation_structure ?? material.parsed_structure;
+
+    if (!source) {
       return (
         <Text
           style={[styles.materialPreviewText, { color: tokens.ink }]}
@@ -123,10 +136,11 @@ export default function MaterialDetailScreen() {
     }
 
     try {
-      const parsed = JSON.parse(
-        JSON.stringify(material.parsed_structure),
-      ) as { content_blocks?: any[] };
-      const blocks = parsed?.content_blocks;
+      const parsed = JSON.parse(JSON.stringify(source)) as {
+        content_blocks?: any[];
+        blocks?: any[];
+      };
+      const blocks = parsed?.blocks ?? parsed?.content_blocks;
 
       if (!Array.isArray(blocks) || blocks.length === 0) {
         return (
@@ -195,6 +209,86 @@ export default function MaterialDetailScreen() {
                 </Text>
               ))}
             </View>
+          );
+        }
+
+        // The parts of a material that are not prose get a line of
+        // their own in the preview, so the student can see there is a
+        // formula or a listing in here before opening it.
+        if (block.type === "formula" && block.text) {
+          return (
+            <View key={idx} style={{ marginBottom: 6 }}>
+              <MathText color={tokens.ink} fontSize={15} display>
+                {block.text}
+              </MathText>
+            </View>
+          );
+        }
+
+        if (block.type === "code" && block.text) {
+          return (
+            <View key={idx} style={{ marginBottom: 6 }}>
+              <CodeBlock
+                code={block.text}
+                language={block.language}
+                color={tokens.ink}
+                mutedColor={tokens.inkMuted}
+                surfaceColor={tokens.codeSurface}
+                borderColor={tokens.border}
+                accentColor={tokens.mint}
+              />
+            </View>
+          );
+        }
+
+        if (block.type === "calculation" && block.steps?.length) {
+          return (
+            <Text
+              key={idx}
+              style={[
+                styles.materialPreviewText,
+                { color: tokens.inkMuted, marginBottom: 4 },
+              ]}
+              numberOfLines={2}
+            >
+              {block.label || "Worked example"}: {block.steps[0]}
+            </Text>
+          );
+        }
+
+        if (block.type === "statement" && block.text) {
+          return (
+            <Text
+              key={idx}
+              style={[
+                styles.materialPreviewText,
+                {
+                  color: tokens.ink,
+                  fontStyle: "italic",
+                  marginBottom: 4,
+                },
+              ]}
+              numberOfLines={2}
+            >
+              {block.label ? `${block.label}: ` : ""}
+              {block.text}
+            </Text>
+          );
+        }
+
+        if (block.type === "definition" && (block.term || block.text)) {
+          return (
+            <Text
+              key={idx}
+              style={[
+                styles.materialPreviewText,
+                { color: tokens.inkMuted, marginBottom: 4 },
+              ]}
+              numberOfLines={2}
+            >
+              {block.term ? `${block.term}: ` : ""}
+              {block.text}
+            </Text>
           );
         }
 
@@ -272,6 +366,19 @@ export default function MaterialDetailScreen() {
     qc.invalidateQueries({ queryKey: ["me"] });
     return data;
   };
+
+  /**
+   * Refresh the wallet after a rewarded ad credits the student.
+   *
+   * The ad's reward is granted server-side through the SSV callback, so
+   * the balance only moves once that lands. The button waits for it and
+   * then calls this, which is what makes the "not enough balance" sheet
+   * show a balance that is actually correct.
+   */
+  const handleBalanceChange = useCallback(async () => {
+    await useCurrentUserStore.getState().refresh();
+    qc.invalidateQueries({ queryKey: ["me"] });
+  }, [qc]);
 
   const handleQuizComplete = async (assetId: number, score: number) => {
     // The bonus and the progress roll-up are server-side rewards — a
@@ -873,6 +980,24 @@ export default function MaterialDetailScreen() {
                   </Text>
                   <Ionicons name="chevron-forward" size={16} color={tokens.mintText} />
                 </Pressable>
+                <Pressable
+                  onPress={() => router.push(`/study/${materialId}/podcast`)}
+                  style={({ pressed }) => [
+                    styles.podcastBtn,
+                    {
+                      borderColor: tokens.border,
+                      backgroundColor: tokens.card,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Listen to your material as a podcast"
+                >
+                  <Ionicons name="headset-outline" size={18} color={tokens.mint} />
+                  <Text style={[styles.podcastBtnText, { color: tokens.mint }]}>
+                    Listen as a podcast
+                  </Text>
+                </Pressable>
               </View>
             </Animated.View>
           )}
@@ -995,6 +1120,7 @@ export default function MaterialDetailScreen() {
             onUnlock={handleAssetUnlock}
             unlockedAssets={unlockedAssets}
             onQuizComplete={handleQuizComplete}
+            onBalanceChange={handleBalanceChange}
           />
         </View>
       </ScrollView>
@@ -1518,6 +1644,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     letterSpacing: -0.1,
+  },
+  podcastBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  podcastBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
   },
   readerHeader: {
     flexDirection: "row",

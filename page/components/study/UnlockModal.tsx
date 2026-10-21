@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PagePaySpinner } from '@/components/PagePaySpinner';
+import { RewardedAdButton } from '@/src/components/ads/RewardedAdButton';
 
 type UnlockMethod = 'sv' | 'cashable';
 
@@ -25,6 +26,8 @@ type UnlockModalProps = {
   cashableBalance: number;
   onUnlock: (method: UnlockMethod) => Promise<void>;
   onClose: () => void;
+  /** Called after a rewarded ad credits the student. */
+  onBalanceChange?: () => void;
 };
 
 function AnimatedLockIcon({ color }: { color: string }) {
@@ -71,6 +74,7 @@ export function UnlockModal({
   cashableBalance,
   onUnlock,
   onClose,
+  onBalanceChange,
 }: UnlockModalProps) {
   const [loading, setLoading] = useState(false);
   // SV is the primary wallet; the choice sticks across opens so a user
@@ -85,6 +89,14 @@ export function UnlockModal({
   ];
   const canAfford = (balance: number) => balance >= pointsCost;
   const anyAffordable = wallets.some((w) => canAfford(w.balance));
+  // A student who cannot pay must still have a way forward, or the
+  // unlock is a dead end. Rewarded ads credit SV through the server's
+  // SSV callback, so watching an ad is the way to earn the balance
+  // needed to unlock.
+  const adsCanGetThere = !anyAffordable && pointsCost > 0;
+  const adsNeeded = adsCanGetThere
+    ? Math.ceil(Math.max(0, pointsCost - svBalance) / 16)
+    : 0;
 
   const handleUnlock = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -240,6 +252,40 @@ export function UnlockModal({
                 Continue browsing
               </Text>
             </Pressable>
+
+            {/* The way out for a student who cannot pay. Without this
+                the unlock is a dead end and the asset is unreachable
+                for anyone without money. Watching an ad credits 16 SV
+                through the server's SSV callback, so this is the same
+                earn path the wallet offers, surfaced exactly where the
+                student is stuck. */}
+            {adsCanGetThere && (
+              <View
+                style={[
+                  styles.earnBox,
+                  { borderColor: tokens.border, backgroundColor: tokens.mintFaint },
+                ]}
+              >
+                <View style={styles.earnHeader}>
+                  <Ionicons name="play-circle-outline" size={18} color={tokens.mint} />
+                  <Text style={[styles.earnTitle, { color: tokens.ink }]}>
+                    Earn credits to unlock
+                  </Text>
+                </View>
+                <Text style={[styles.earnSub, { color: tokens.inkMuted }]}>
+                  {adsNeeded} {adsNeeded === 1 ? 'ad' : 'ads'} to earn{' '}
+                  {pointsCost - svBalance} sv
+                </Text>
+                <RewardedAdButton
+                  style={styles.earnButton}
+                  onEarned={() => {
+                    onBalanceChange?.();
+                  }}
+                  label="Watch an ad"
+                  amountSv={16}
+                />
+              </View>
+            )}
           </Animated.View>
         </Pressable>
       </Pressable>
@@ -376,5 +422,28 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  earnBox: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    gap: 8,
+    marginTop: 2,
+  },
+  earnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  earnTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  earnSub: {
+    fontSize: 12.5,
+    marginTop: -4,
+  },
+  earnButton: {
+    marginTop: 4,
   },
 });
