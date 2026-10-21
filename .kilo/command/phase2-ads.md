@@ -46,17 +46,18 @@
   ```
 
 ### Step 2: SSV Webhook Endpoints (AdMob)
-- `GET /api/v1/ads/google/callback` (AdMob Server-Side Verification — AdMob uses GET in practice):
+- `GET /api/v1/study/ads/complete` (AdMob Server-Side Verification — AdMob uses GET in practice). *As planned in June 2026 this said `GET /api/v1/ads/google/callback`; the shipped route lives under the study router.*
   - Verify ECDSA P-256 signature using AdMob's published public keys
   - Signed data is raw query string up to `&signature=`, preserving original parameter order
   - Signature is base64url without standard padding
+  - The caller's IP must reverse-resolve to a Google-owned domain
   - Parse payload: `transaction_id`, `user_id` (from custom data), `reward_amount`, `revenue_usd`
   - Check `transaction_id` unique constraint (idempotency)
   - If not exists and `reward_amount > 0`:
-    - Credit fixed points based on `settings.rewarded_ad_payout_points * USER_SHARE`
+    - Credit `settings.rewarded_ad_payout_points` (16) — **service credit, never cashable**
     - Create `AdEvent` with `credit_status='credited'`
   - Return 200 OK immediately (AdMob retries on failure)
-- Note: AppLovin SSV deferred to a later phase
+- Note: AppLovin SSV deferred to a later phase — **still not built**
 
 ### Step 3: Content Feed Rotation
 - `GET /api/v1/content/feed/:user_id`:
@@ -84,19 +85,28 @@
 
 ### Step 1: Install Native Ad Dependencies
 ```bash
-npx expo install expo-ads-admob
-npm install react-native-google-mobile-ads react-native-applovin-max
-npm install --save-dev @fumitakayamada/expo-applovin-max
+npm install react-native-google-mobile-ads
 npx expo prebuild --clean
 npx expo run:android  # or expo run:ios
 ```
 
 **CRITICAL:** Do not use Expo Go. Must build dev-client binary for testing ads.
 
+> **Shipped state: the client side was never built.** `react-native-google-mobile-ads`
+> 15.8.0 is in `package.json`, but:
+> - **the config plugin is absent from `app.config.js`** — without `androidAppId`/`iosAppId` the native SDK has no application id and **crashes on launch**
+> - **no `mobileAds().initialize()` call** anywhere
+> - **no ad components** — `src/components/ads/` does not exist
+> - **no ad call sites** — the i18n keys (`watch_ad`, `watch_ads_prompt`, `recovery_watch_ad`, `ad_pre_claim`) are defined in every locale but referenced by no screen
+>
+> The backend SSV endpoint is live and waiting. Steps 2–8 below are the
+> remaining work — see `admob.md` §9 for the rollout checklist and
+> `.kilo/agent/frontend.md` §6.
+
 ### Step 2: App Initialization
-- `app/_layout.tsx`:
-  - Initialize AdMob: `GoogleMobileAds().initialize()`
-  - AppLovin: **not initialized** (deferred)
+- `src/app/_layout.tsx`:
+  - Initialize AdMob: `GoogleMobileAds().initialize()`, behind UMP consent where required
+  - AppLovin: **not initialized** (deferred — config fields are inert)
 - Create `src/shared/lib/ads.ts`:
   - Ad unit IDs from backend `GET /api/v1/ads/config`
   - Wrapper functions: `loadRewardedAd()`, `loadInterstitialAd()`, `loadNativeAd()`
@@ -110,7 +120,8 @@ npx expo run:android  # or expo run:ios
 
 ### Step 4: Interstitial Ad
 - `src/components/ads/InterstitialAd.tsx`:
-  - Loads after article complete
+  - Loads at natural breakpoints only — after finishing an exam, leaving the reader, returning to a tab root
+  - **Never** mid-exam, mid-lesson, or on app open (AdMob policy prohibits it)
   - Skip after 5s countdown
 
 ### Step 5: Native Ad Banner (In-Feed)
@@ -138,25 +149,30 @@ npx expo run:android  # or expo run:ios
 ## DevOps Tasks
 
 ### Step 1: Backend Deploy
-- Push Docker image to registry (Railway/Render auto-deploys)
-- Run `alembic upgrade head` on production DB
+- Push Docker image to registry (Render auto-deploys)
+- Apply migrations manually: production does **not** run `alembic upgrade head` on start — see `RENDER_DEPLOYMENT_GUIDE.md`
 - Verify health endpoint
 
 ### Step 2: Webhook Exposure
 - Ensure backend webhook endpoints are publicly accessible
-- Register webhook URLs in AdMob and AppLovin dashboards
+- Register the webhook URL in the AdMob dashboard:
+  `https://pagepay-fff6.onrender.com/api/v1/study/ads/complete`
 - Test with curl send of sample payloads
 
 ---
 
 ## Acceptance Criteria (Phase 2 Complete)
-✅ Native ads render in-feed with correct styling
-✅ Interstitial shows after article complete
-✅ Rewarded video plays after article complete
-✅ SSV endpoint credits points (tested with real test ads via AdMob)
+❌ Native ads render in-feed with correct styling — **not built**
+❌ Interstitial shows at breakpoints — **not built**
+✅ Rewarded ad with server-side verification — **backend only; the client that shows the ad is not built**
+✅ Real ad revenue tracking (backend tables + SSV)
+✅ Double-earn mechanic (backend credit path)
+❌ Play Store update: "PagePay: Read, Watch & Earn" — pending the client pipeline
+❌ Rewarded video plays after article complete — **not built**
+✅ SSV endpoint credits points — implemented and unit-tested (ECDSA P-256 verification, Google reverse-DNS check, `transaction_id` idempotency)
 ✅ Ad impression events logged in DB
-✅ App builds and runs with AdMob SDK (expo-dev-client, not Expo Go)
-✅ Live on Play Store with monetization active
+❌ App builds and runs with the AdMob SDK — the app builds and runs, but the AdMob native module is not configured
+❌ Live on Play Store with ad monetization active — ads have never been live
 ✅ Backend: all Phase 1 tests still pass
-✅ E2E: Read article → rewarded video → points in wallet
+❌ E2E: Read article → rewarded video → points in wallet — pending the client
 ✅ No TODO comments, placeholder strings, or mock data in committed code

@@ -3,9 +3,15 @@
 **Date:** 2026-07-13
 **Scope:** v2 follow-on — education catalog taxonomy, content class-level
 granularity, diagram support, and a 3-mode reader
-**Status:** 📋 **DRAFT — pending review** — not yet implemented
+**Status:** ✅ **SHIPPED** — every item in §6 is implemented (verified Oct 2026)
 **Supersedes:** v2 § Home, Catalog, Reader (deeper taxonomy + reader modes)
 **Pairs with:** `books/design-plan-v2.html` (visual design), `books/books.md` (OER strategy)
+
+> The section numbering and the reasoning below are kept as written in July
+> 2026 so the decisions stay traceable. Where the implementation differs
+> from the plan, §6 and the notes there say so — the reader renderers and
+> the catalog filter shipped, and the TTS engine is MeloTTS rather than
+> `edge-tts`.
 
 ---
 
@@ -356,20 +362,24 @@ Scope to a single slug with `--only-slug <slug>` for verification.
 - [x] Sepia theme + larger default body text in the reader
 - [x] Reorder catalog filters (subject first, level/class second)
 
-### Next sprint (1-2 weeks)
-- [ ] Image proxy endpoint + disk cache
-- [ ] Reader renders images / tables / equations
-- [ ] Class-level filter on the catalog secondary tab
-- [ ] Resume-to-last-unit on the home + catalog screens
+### Next sprint (1-2 weeks) — ✅ shipped
+- [x] Image proxy endpoint + disk cache — `backend/app/routers/images.py` (5MB cap, TTL cache header)
+- [x] Reader renders images / tables / equations — `page/components/reader/parseBody.ts` + `Renderers/{Image,Table,Equation}Segment.tsx`
+- [x] Class-level filter on the catalog secondary tab — `class_level` on `content_catalog` + `GET /api/v1/content` filter
+- [x] Resume-to-last-unit on the home + catalog screens — `GET /api/v1/progress/continue`, `GET /api/v1/content/works/{id}/resume`
 
-### Following sprint (Phase 3 prep)
-- [ ] Highlights + share-as-image (stored in `users.study_data` blob,
-      not a new table — see Appendix A and §1.5)
-- [ ] TTS audio generation (edge-tts batch job)
-- [ ] Reader mode switcher (Read / Study / Listen)
-- [ ] `reading_progress.reader_mode` column
-- [ ] `users.study_data` JSON column (single column, holds highlights
+### Following sprint (Phase 3 prep) — ✅ shipped
+- [x] Highlights + share-as-image (stored in `users.study_data` blob,
+      not a new table — see Appendix A and §1.5) — `page/components/reader/ShareAsImage.tsx` + `backend/app/routers/study_data.py`
+- [x] TTS audio generation — `backend/app/services/study_narration.py`, `tts.py`, `tts_hybrid.py` (MeloTTS, not edge-tts)
+- [x] Reader mode switcher (Read / Study / Listen) — `page/components/reader/ReaderModeSwitcher.tsx` with `ListenMode.tsx` + `StudyPanel.tsx`
+- [x] `reading_progress.reader_mode` column — migration 016
+- [x] `users.study_data` JSON column (single column, holds highlights
       + notes; saves a table)
+
+> **Note on the TTS engine:** this plan called for `edge-tts` as a batch
+> job. The shipped implementation uses **Cloudflare MeloTTS** through
+> `services/tts_hybrid.py`, metered per audio-minute.
 
 ### Cut from this plan
 - [ ] Per-department tertiary routing — tagged at source level instead

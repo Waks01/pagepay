@@ -245,43 +245,38 @@ async def synthesize_study_audio(
     chunk_files: list[Path] = []
     chunk_bytes_list: list[bytes] = []
     last_provider = provider
-    final_cache = cache
-    try:
-        for chunk in chunks:
-            chunk_cache = _cache_path(chunk, voice, provider)
-            if chunk_cache.exists():
-                chunk_bytes_list.append(chunk_cache.read_bytes())
-                chunk_files.append(chunk_cache)
-                continue
-
-            chunk_bytes = None
-            for name in ordered:
-                try:
-                    chunk_bytes = await providers[name](chunk, voice)
-                    if chunk_bytes:
-                        last_provider = name
-                        break
-                except Exception as exc:
-                    logger.warning("TTS provider %s failed for chunk: %s", name, exc)
-
-            if chunk_bytes is None:
-                raise RuntimeError(f"TTS failed for chunk: {chunk[:80]}...")
-
-            # Cache with correct extension based on actual audio format
-            chunk_cache = chunk_cache.with_suffix(f".{_audio_ext(chunk_bytes)}")
-            chunk_cache.write_bytes(chunk_bytes)
-            chunk_bytes_list.append(chunk_bytes)
+    for chunk in chunks:
+        chunk_cache = _cache_path(chunk, voice, provider)
+        if chunk_cache.exists():
+            chunk_bytes_list.append(chunk_cache.read_bytes())
             chunk_files.append(chunk_cache)
+            continue
 
-        final_bytes = _concat_audio(chunk_bytes_list)
-        # Write final with correct extension
-        final_cache = cache.with_suffix(f".{_audio_ext(final_bytes)}")
-        final_cache.write_bytes(final_bytes)
-        return final_bytes, last_provider, final_cache
-    finally:
-        for path in chunk_files:
+        chunk_bytes = None
+        for name in ordered:
             try:
-                if path.exists() and path != final_cache:
-                    path.unlink()
-            except OSError:
-                pass
+                chunk_bytes = await providers[name](chunk, voice)
+                if chunk_bytes:
+                    last_provider = name
+                    break
+            except Exception as exc:
+                logger.warning("TTS provider %s failed for chunk: %s", name, exc)
+
+        if chunk_bytes is None:
+            raise RuntimeError(f"TTS failed for chunk: {chunk[:80]}...")
+
+        # Cache with correct extension based on actual audio format
+        chunk_cache = chunk_cache.with_suffix(f".{_audio_ext(chunk_bytes)}")
+        chunk_cache.write_bytes(chunk_bytes)
+        chunk_bytes_list.append(chunk_bytes)
+        chunk_files.append(chunk_cache)
+
+    final_bytes = _concat_audio(chunk_bytes_list)
+    # Write final with correct extension
+    final_cache = cache.with_suffix(f".{_audio_ext(final_bytes)}")
+    final_cache.write_bytes(final_bytes)
+    # The per-chunk files are deliberately left on disk. They are the
+    # cache this function's own docstring promises: a retry re-reads
+    # them instead of paying for the speech again, and the directory
+    # is a cache directory, not a work queue.
+    return final_bytes, last_provider, final_cache

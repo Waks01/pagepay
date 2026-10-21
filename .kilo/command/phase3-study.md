@@ -2,44 +2,70 @@
 
 **Duration:** Weeks 7–10
 **Agents:** Backend + Frontend + AI
-**Goal:** Ship the AI study tab: SOW upload → structured outline → MCQs/flashcards/essays → ad-gated answers.
+**Goal:** Ship the AI study tab: SOW upload → structured outline → MCQs/flashcards/essays → ad-gate modals.
+**Status:** ✅ Shipped. The spec below is the June 2026 plan; the **AI provider
+section was rewritten in Oct 2026** to match what shipped. Everything else
+still describes the phase as built.
 
 ---
 
 ## Backend Tasks
 
 ### Step 1: AI Router Implementation
-- Create `app/services/ai_router.py` with provider abstraction
-- Provider clients:
-  - **Gemini (Google)**: Primary for heavy tasks (SOW parsing, generation)
-    - Models: `gemini-2.5-flash`, `gemini-2.0-flash-exp`
-    - Supports vision (OCR for SOW images)
-  - **Groq**: Fast inference (chat, quick responses)
-    - Models: `llama-3.3-70b-versatile`, `mixtral-8x7b`
-  - **OpenRouter**: Fallback aggregator
-    - Access to multiple models via single API
-- Implement circuit breaker pattern:
-  - Track consecutive failures per provider in `ai_provider_health` table
-  - Auto-failover to next provider after 3 failures
-  - Exponential backoff: 5min → 15min → 1hr before retry
-- All providers use direct HTTP (`httpx`) for async calls
-- Environment variables: `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`
+- **Shipped as `app/ai/router.py`** — a single provider, not a failover pool:
+  - **Cloudflare Workers AI**, one endpoint, one bill:
+    - `@cf/zai-org/glm-4.7-flash` — **premium**: SOW parsing, generation, reasoning
+    - `@cf/ibm-granite/granite-4.0-h-micro` — **standard**: definitions, recall, lookups
+    - `@cf/meta/llama-3.2-11b-vision-instruct` — vision (OCR for SOW images and rendered PDF pages)
+    - `@cf/myshell-ai/melotts` — narration TTS
+  - `app/ai/routing.py::classify_turn()` picks the tier for chat; generation tasks always use premium
+  - **No circuit breaker, no `ai_provider_health` table, no failover.** A Cloudflare outage is a 503 on every AI feature.
+  - **Cloudflare returns text in `result.response`**, not `result.choices[0].message.content`
+  - Environment variables: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`
+  - Cost control is the quota (`study_chat_daily_limit` etc.) plus per-user cost logging, not a provider list
 
 ### Step 2: SOW Upload & Parsing
 - `POST /api/v1/study/upload`:
   - Accept: `multipart/form-data` (image) OR `application/json` (text)
   - If image:
     1. Validate file type (jpg, png, pdf)
-    2. Send to Gemini Vision API for OCR extraction
+    2. Send to the Cloudflare vision model for OCR extraction
     3. Parse extracted text
   - If text: use directly
   - Send to AI router with `SOW_PARSER` prompt
   - Expected JSON structure: `{topics: [{name, subtopics[], key_concepts[]}]}`
   - Save: `StudyMaterial(user_id, title, raw_input, parsed_structure, ai_model_used)`
   - Return: `{id, title, parsed_structure, created_at}`
+- **PDF handling (shipped, Oct 2026):** a PDF is rendered page by page with
+  PyMuPDF and each page is OCR'd by the vision model — the same path as an
+  uploaded image. The PDF's embedded text layer is **not** used, because a
+  scan or a photo has none. There is no `pdf_has_no_text_layer` error and no
+  text-extraction fallback.
+- **Nothing on the page is lost (shipped, Oct 2026):** an upload is a
+  document, not a wall of text.
+  - Every page is rendered at 1800px and written to object storage
+    (`study-pages/`), so the app can show the student their own material at
+    any zoom. `GET /api/v1/study/materials/{id}/page-images`.
+  - Every diagram-like region is cropped and written to `study-figures/`.
+    `GET /api/v1/study/materials/{id}/figures` returns the crops with a
+    plain-language description of each one.
+  - Figures are found from the PDF's own geometry — `page.get_drawings()`,
+    `page.get_image_rects()`, `page.get_text("blocks")` — never from a
+    vision model asked for coordinates. See `app/services/page_artifacts.py`
+    and the PyMuPDF traps noted in `.kilo/agent/backend.md`.
+  - The OCR prompt is `VISION_OCR_PROMPT`: markdown structure, `[FIGURE: …]`
+    and `[TABLE: …]` lines, and `[ILLEGIBLE]` for text it cannot read.
+- **The teaching layer (shipped, Oct 2026):** `study_materials.explanation_structure`
+  holds the material rewritten in plain language for a beginner — analogies,
+  every worked example walked through, every diagram described in words.
+  `parsed_structure` stays faithful to the source and is never overwritten.
+  The reader shows one in "Explained" mode and the other in "My material"
+  mode.
 - Error handling:
   - OCR failure → return error, suggest manual text entry
-  - JSON parsing failure → retry with stricter prompt, or ask user to re-upload
+  - JSON parsing failure → **retry with a stricter prompt** (`_SOW_REPAIR_PROMPT`,
+    one attempt), then give up. The material is still saved with its raw
+    text so the student is not left with a blank screen.
 
 ### Step 3: Asset Generation Endpoints
 - `POST /api/v1/study/generate` (single endpoint, not `/mcq`, `/flashcards`, `/essay`):
@@ -139,33 +165,36 @@ Output strict JSON:
 {{"cards": [{{"front": "...", "back": "..."}}]}}"""
 ```
 
-### Step 2: Implement Provider Clients
-- `providers/gemini.py`: HTTP POST to `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`
-  - Auth: `?key={API_KEY}`
-  - Request: `{"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"maxOutputTokens": 4000, "temperature": 0.3}}`
-- `providers/groq.py`: OpenAI-compatible client to `https://api.groq.com/openai/v1/chat/completions`
-  - Auth: `Authorization: Bearer {API_KEY}`
-  - Model: `llama-3.3-70b-versatile`
-- `providers/openrouter.py`: OpenAI-compatible client to `https://openrouter.ai/api/v1/chat/completions`
+### Step 2: Implement the Cloudflare Client
+- `backend/app/ai/router.py` — the whole client, one provider:
+  - `POST https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/{model}`
+  - Auth: `Authorization: Bearer {CLOUDFLARE_API_TOKEN}`
+  - Text models: `{"messages": [...], "max_tokens": N, "temperature": T}`
+  - Vision: the same endpoint with an image as a base64 data URI in the message content
+  - **The response text is in `result.response`** — not in the OpenAI-compatible `result.choices[0].message.content`. Reading the wrong key silently yields an empty response and a 503.
+  - `chat_template_kwargs: {"enable_thinking": false}` on the premium model — leaving reasoning on triples billed output tokens
 
-### Step 3: Circuit Breaker
-- `app/ai/circuit_breaker.py`:
-  - `mark_failed(provider_name)`
-  - `mark_success(provider_name)`
-  - `get_circuit_open() → list[str]` (providers currently open)
-  - DB: `ai_provider_health` table with SQLAlchemy 2.0 async
+### Step 3: ~~Circuit Breaker~~ — not built
+- The `ai_provider_health` table and `app/ai/circuit_breaker.py` were planned
+  but **never built**. There is one provider, so there is nothing to fail over
+  to. A failed call raises and the caller returns a 503 with a user-safe
+  message. Do not reintroduce a provider list without reading
+  `PRICING_AND_UNIT_ECONOMICS.md` — a second provider is a second bill.
 
 ---
 
 ## Acceptance Criteria (Phase 3 Complete)
 ✅ Upload SOW (image or text) → AI parses to structured outline
+✅ Upload SOW (PDF) → pages rendered and OCR'd → AI parses to structured outline
 ✅ Generate MCQs: 5 questions per topic, valid JSON, correct answers
 ✅ Generate flashcards: tap-to-flip UI works
 ✅ Generate essay prompts: list displays correctly
 ✅ "Unlock answer" via rewarded ad works (SSV → points credit)
 ✅ "Unlock answer" via 50 pts works (balance deducted)
 ✅ Streaming chat responds token-by-token
-✅ AI fails over to secondary provider on rate limit
+❌ ~~AI fails over to secondary provider on rate limit~~ — superseded. There is
+no second provider; the cost control is model routing, the chat quota, and
+per-user cost logging.
 ✅ Chat UI shows loading, streaming, and error states
 ✅ Live on Play Store update
 ✅ Backend + frontend: all previous phase tests still pass

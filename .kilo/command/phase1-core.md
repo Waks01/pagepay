@@ -23,7 +23,7 @@
   mkdir -p routers models schemas services
   touch __init__.py main.py database.py
   ```
-- `requirements.txt`: `fastapi uvicorn[standard] gunicorn sqlalchemy[asyncio] asyncpg aio-mysql psycopg2-binary pydantic python-jose[cryptography] passlib[bcrypt] python-multipart aiofiles alembic httpx tenacity slowapi`
+- `requirements.txt`: `fastapi uvicorn[standard] gunicorn sqlalchemy[asyncio] asyncpg pydantic python-jose[cryptography] passlib[bcrypt] python-multipart aiofiles alembic httpx tenacity slowapi` — *as planned in June 2026 this also listed `aio-mysql` and `psycopg2-binary`; the project is PostgreSQL-only and never used MySQL*
 - `requirements-dev.txt`: add `pytest pytest-asyncio pytest-cov`
 
 ### Step 2: Database Setup

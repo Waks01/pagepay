@@ -56,6 +56,9 @@ async def route_ai(
     system_prompt: str | None = None,
     history: list[dict] | None = None,
     model_tier: str | None = None,
+    temperature: float | None = None,
+    user_id: int | None = None,
+    endpoint: str = "ai",
 ) -> dict:
     """Send a prompt to Cloudflare Workers AI and return the text.
 
@@ -66,6 +69,15 @@ async def route_ai(
     optional list of prior {"role": "user"|"assistant", "content": ...}
     turns placed between the system prompt and the current user turn
     (capped to the last 20 turns).
+
+    `temperature` overrides the per-task default. It is set explicitly
+    for the teaching layer, which is a creative task (0.7) rather than
+    a factual one (0.3).
+
+    `db` and `user_id` together make the call cost itself. Every AI
+    call the platform pays for should land in the usage log, and a
+    call whose cost nobody records is a bill nobody watches. Pass both
+    and the call is logged under `endpoint`.
 
     Returns {"response": str, "provider": str, "model": str,
     "usage": {...}}. Raises HTTPException 503 on any failure —
@@ -85,11 +97,12 @@ async def route_ai(
 
     model = resolve_model(model_tier)
 
-    temperature = (
-        settings.ai_temperature_chat
-        if task_type == "chat"
-        else settings.ai_temperature_default
-    )
+    if temperature is None:
+        temperature = (
+            settings.ai_temperature_chat
+            if task_type == "chat"
+            else settings.ai_temperature_default
+        )
 
     messages: list[dict] = []
     if system_prompt:
@@ -135,14 +148,37 @@ async def route_ai(
                     detail=f"Cloudflare AI error: {str(data.get('errors'))[:200]}",
                 )
             result = data.get("result") or {}
-            message = (result.get("choices") or [{}])[0].get("message") or {}
-            text = message.get("content") or ""
+            # Cloudflare Workers AI text models return result.response
+            # directly (not OpenAI-style choices[0].message.content).
+            text = result.get("response", "") or ""
+            if not text.strip():
+                choices = result.get("choices") or [{}]
+                message = choices[0].get("message") or {}
+                text = message.get("content") or ""
             if not text.strip():
                 raise HTTPException(
                     status_code=503,
                     detail="Cloudflare AI returned empty response",
                 )
             usage = result.get("usage") or {}
+
+            if db is not None and user_id is not None:
+                # Record the spend while it is still in hand. A call
+                # whose cost nobody records is a bill nobody watches.
+                try:
+                    from app.services.ai_cost import log_usage
+
+                    await log_usage(
+                        db,
+                        user_id=user_id,
+                        endpoint=endpoint,
+                        model=result.get("model") or model,
+                        prompt_tokens=usage.get("prompt_tokens") or 0,
+                        completion_tokens=usage.get("completion_tokens") or 0,
+                    )
+                except Exception as exc:
+                    logger.warning("AI usage logging failed: %s", exc)
+
             return {
                 "response": text,
                 "provider": "cloudflare",

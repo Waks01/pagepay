@@ -20,6 +20,8 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from dataclasses import dataclass
+
 from app.ai.prompts import (
     CHAT_TUTOR_SYSTEM,
     DIAGRAM_GENERATOR,
@@ -30,6 +32,7 @@ from app.ai.prompts import (
     EXAM_STYLE_GUIDES,
     EXAMPLE_GENERATOR,
     FIGURE_DESCRIPTION_PROMPT,
+    FIGURE_DETECTION_PROMPT,
     FLASHCARD_ALL_TOPICS_GENERATOR,
     FLASHCARD_GENERATOR,
     FLASHCARD_TOPIC_GENERATOR,
@@ -497,13 +500,29 @@ async def _ocr_pdf_pages(
     total = len(page_images)
     completed = 0
 
-    async def ocr_one(image: bytes) -> str:
+    async def read_one(image: bytes) -> str:
+        """OCR one page and look for a picture on it.
+
+        The two passes are separate on purpose. Asking one call to
+        transcribe the page *and* to describe its pictures produced a
+        graph on pages of a real algebra textbook that contain nothing
+        but prose. Asking a second, focused call whether the page
+        holds a picture is far more reliable.
+        """
         nonlocal completed
         try:
             async with semaphore:
-                return await _ocr_image_with_cloudflare(
+                text = await _ocr_image_with_cloudflare(
                     image, "image/jpeg", user_id=user_id
                 )
+                findings = await _detect_figures_with_cloudflare(image)
+            text = _strip_furniture(text, findings.header, findings.footer)
+            if findings.figure:
+                # The figure belongs to this page, so it goes with this
+                # page's text. The parser reads the marker and writes a
+                # figure block in the right place.
+                text = f"{text}\n\n[FIGURE: {findings.figure}]"
+            return text
         finally:
             # Count the page whether it succeeded or not — otherwise a
             # failed page leaves the progress bar stuck.
@@ -512,7 +531,7 @@ async def _ocr_pdf_pages(
                 on_page(completed, total)
 
     results = await asyncio.gather(
-        *(ocr_one(image) for image in page_images),
+        *(read_one(image) for image in page_images),
         return_exceptions=True,
     )
 
@@ -751,6 +770,201 @@ def _sniff_image_content_type(contents: bytes, fallback: str = "image/jpeg") -> 
         if brand in (b"avif", b"avis"):
             return "image/avif"
     return fallback
+
+
+@dataclass
+class PageFindings:
+    """What one look at a page found.
+
+    `figure` is a description of a picture that shows information, or
+    None. `header` and `footer` are the running texts printed on every
+    page of the document — they are page furniture, and they are
+    stripped from the material so they do not become content.
+    """
+
+    figure: str | None = None
+    header: str | None = None
+    footer: str | None = None
+
+
+async def _detect_figures_with_cloudflare(
+    image_bytes: bytes,
+    *,
+    content_type: str = "image/jpeg",
+) -> PageFindings:
+    """Look at a page: is there a picture on it, and what is the page's
+    running header and footer?
+
+    The transcription pass is not asked about pictures at all. Asking
+    it, in the same breath as "read this page", produced a graph on
+    two pages of a real algebra textbook that contain nothing but
+    prose — and a made-up graph is worse than no graph, because the
+    student is then taught something that is not in their material.
+
+    A separate pass, asked one focused question, is far more reliable:
+    "does this page hold a picture that shows information?" It answers
+    NO for a page of text and YES for a page of graphs, and it names
+    the equations on those graphs correctly.
+
+    The same pass reports the running header and footer, which are
+    then stripped from the transcribed text. A footer left in becomes
+    a paragraph in the student's lesson.
+    """
+    import base64
+    import httpx
+
+    if not image_bytes:
+        return PageFindings()
+
+    b64 = base64.b64encode(image_bytes).decode()
+    real_type = _sniff_image_content_type(image_bytes, content_type)
+    data_uri = f"data:{real_type};base64,{b64}"
+    url = (
+        f"https://api.cloudflare.com/client/v4/accounts/"
+        f"{settings.cloudflare_account_id}/ai/run/"
+        f"@cf/meta/llama-3.2-11b-vision-instruct"
+    )
+    headers = {
+        "Authorization": f"Bearer {settings.cloudflare_api_token}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "prompt": FIGURE_DETECTION_PROMPT,
+        "image": data_uri,
+        "max_tokens": 700,
+        "temperature": 0.0,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(url, json=body, headers=headers)
+        if resp.status_code != 200:
+            logger.warning("[figure] detection HTTP %s", resp.status_code)
+            return PageFindings()
+        answer = (resp.json().get("result", {}).get("response", "") or "").strip()
+    except Exception as exc:
+        logger.warning("[figure] detection failed: %s", exc)
+        return PageFindings()
+
+    if not answer:
+        return PageFindings()
+
+    picture_line = ""
+    description = ""
+    header = None
+    footer = None
+
+    for line in answer.splitlines():
+        stripped = _clean_detection_line(line)
+        if not stripped:
+            continue
+        upper = stripped.upper()
+        if upper.startswith("PICTURE:"):
+            picture_line = stripped.split(":", 1)[1].strip().upper()
+        elif upper.startswith("DESCRIPTION:"):
+            description = stripped.split(":", 1)[1].strip()
+        elif upper.startswith("HEADER:"):
+            header = _clean_furniture(stripped.split(":", 1)[1].strip())
+        elif upper.startswith("FOOTER:"):
+            footer = _clean_furniture(stripped.split(":", 1)[1].strip())
+        elif not description and not picture_line:
+            # The model wrote it in its own way. A leading YES or NO
+            # is the verdict; anything else is the description.
+            if stripped.upper().startswith("YES"):
+                picture_line = "YES"
+            elif stripped.upper().startswith("NO"):
+                picture_line = "NO"
+            else:
+                description = stripped
+
+    if not picture_line:
+        picture_line = "NO"
+
+    figure = None
+    if picture_line.startswith("YES") and description:
+        if description.strip().upper() == "NONE":
+            figure = None
+        elif _is_decoration_only(description):
+            logger.info("[figure] only decoration on the page, not a figure")
+        else:
+            figure = description
+
+    return PageFindings(figure=figure, header=header, footer=footer)
+
+
+def _clean_detection_line(line: str) -> str:
+    """Tidy one line of the detection answer.
+
+    The model likes to bold its labels — `**PICTURE:** YES` — and a
+    label that cannot be found is a figure that is silently lost.
+    """
+    cleaned = (line or "").strip()
+    cleaned = cleaned.replace("**", "").replace("`", "").replace("*", "")
+    return cleaned.strip()
+
+
+def _clean_furniture(value: str | None) -> str | None:
+    """Normalise a reported header or footer, or None if there is none."""
+    if not value:
+        return None
+    cleaned = value.strip().strip("\"'").strip()
+    if not cleaned or cleaned.upper() == "NONE":
+        return None
+    # A page number on its own is furniture too, and it is handled by
+    # the repetition check rather than by the stripper.
+    if len(cleaned) <= 4 and cleaned.isdigit():
+        return None
+    return cleaned
+
+
+def _strip_furniture(text: str, header: str | None, footer: str | None) -> str:
+    """Remove the running header and footer from a page's text."""
+    if not text:
+        return text
+    lines = text.splitlines()
+    kept = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            kept.append(line)
+            continue
+        if header and stripped.casefold() == header.casefold():
+            continue
+        if footer and stripped.casefold() == footer.casefold():
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip()
+
+
+# The words that mean a picture carries information. A description
+# with none of them is describing decoration: a letterhead, a crest, a
+# border. A crest never mentions an axis.
+_INFORMATION_WORDS = (
+    "graph", "axis", "axes", "curve", "parabola", "plotted", "plot",
+    "vertex", "equation", "label", "table", "diagram", "photograph",
+    "photo", "chart", "map", "circuit", "bar chart", "pie chart",
+    "scale", "tick", "coordinate", "shaded", "arrow", "flowchart",
+    "flow chart", "slope", "intercept", "polynomial", "sequence",
+    "matrix", "network", "function", "gradient", "illustration",
+    "blueprint", "sketch of", "drawn of",
+)
+
+
+def _is_decoration_only(description: str) -> bool:
+    """True when the description is only about decoration.
+
+    A letterhead logo is described with words like "crest", "cross" and
+    "circular". A graph is described with words like "axis", "vertex"
+    and "parabola". So the test is not "does it mention a logo" but
+    "does it mention anything that shows information" — and a
+    description that mentions neither is not worth teaching.
+    """
+    lowered = (description or "").lower()
+    if not lowered:
+        return True
+    for word in _INFORMATION_WORDS:
+        if word in lowered:
+            return False
+    return True
 
 
 async def _ocr_image_with_cloudflare(
@@ -1390,6 +1604,19 @@ async def _process_sow_image_job(
 
         if not extracted_text.strip():
             raise RuntimeError("image_ocr_empty")
+
+        # A second, focused pass looks for a picture on the page and
+        # reports the running header and footer. The transcription
+        # pass is not asked about pictures: doing both in one call
+        # made the model describe a graph that was not there.
+        findings = await _detect_figures_with_cloudflare(
+            contents, content_type=content_type
+        )
+        extracted_text = _strip_furniture(
+            extracted_text, findings.header, findings.footer
+        )
+        if findings.figure:
+            extracted_text = f"{extracted_text}\n\n[FIGURE: {findings.figure}]"
 
         await _mark_job_status(job_id, "processing", progress=45, stage="reading_pages")
         pages, figures = await _build_material_artifacts(

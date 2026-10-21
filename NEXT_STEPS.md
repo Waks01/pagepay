@@ -1,10 +1,22 @@
 # Next Steps - Notifications Testing
 
+> **Superseded (Oct 2026).** This document describes the original
+> notifications bring-up. The FCM backend and the notification settings
+> modal are **already shipped** — `backend/app/services/fcm.py`,
+> `backend/app/routers/notifications.py`, and the Profile → Notifications
+> modal in `page/src/app/(app)/profile/`.
+>
+> The path `client/` in the steps below is the **legacy** Expo app. The
+> active frontend is **`page/`** (Expo SDK 57).
+>
+> For what is actually outstanding, see `roadmap.md` → "What Phase 9 still
+> owes" and `PRICING_AND_UNIT_ECONOMICS.md` §7.
+
 ## 🎯 What You Need to Do Now
 
 ### **Step 1: Install Dependencies** (2 minutes)
 ```bash
-cd client
+cd page
 npm install
 ```
 
@@ -21,7 +33,7 @@ npx expo run:android
 ```bash
 cd backend
 
-# Run migration to create notification tables
+# Run migrations
 alembic upgrade head
 
 # Install Firebase Admin SDK

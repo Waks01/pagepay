@@ -12,8 +12,14 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
-from app.services.wallet import kobo_to_points
-from app.core.config import settings
+# `kobo_to_points` lives in app.services.money and `settings` in
+# app.config. The previous paths (app.services.wallet,
+# app.core.config) do not exist, so importing this module raised
+# ImportError - and because bills.py imports it inside six request
+# handlers, every bill purchase that took the discount path returned
+# HTTP 500 instead of applying the discount.
+from app.services.money import kobo_to_points
+from app.config import settings
 
 
 # Constants

@@ -157,8 +157,25 @@ AdMob verifies rewarded ads on **both platforms**:
 
 ### 4.2 One-time setup (AdMob UI)
 1. On the **rewarded ad unit** → enable **Server-side verification**.
-2. Set your **callback URL** (PagePay: `https://pagepay-fff6.onrender.com/api/v1/study/ads/complete` — the route to rebuild).
+2. Set your **callback URL** (PagePay: `https://pagepay-fff6.onrender.com/api/v1/study/ads/complete` — **this route is implemented and live**; it verifies the ECDSA P-256 signature against AdMob's rotating keys, checks the caller reverse-resolves to a Google-owned host, and dedupes on `transaction_id`).
 3. Optionally include user id / custom data from the client.
+
+> **Two failure modes were fixed in the SSV client — do not "simplify" them back out.**
+>
+> 1. **The verifier-key fetch must follow redirects.** `gstatic.com` answers
+>    301 to `www.gstatic.com`, and httpx does not follow redirects by
+>    default. Without `follow_redirects=True` the key fetch failed on
+>    *every* call, so no callback could ever be verified.
+> 2. **The reverse-DNS allowlist must include `1e100.net`.** AdMob's SSV
+>    calls come from Google Front End (`1e100.net`), `dns.google` and
+>    `googleusercontent.com` — not from `googlebot.com`. A narrower list
+>    rejects every real callback.
+>
+> And the rule that follows from them: **a DNS failure must not block a
+> valid callback.** Google re-sends five times then gives up, so a
+> callback refused because a PTR lookup timed out is a permanently lost
+> credit. `origin_is_google()` returns `None` for "couldn't resolve"
+> (allow) and `False` only for "resolved to something non-Google" (refuse).
 
 ### 4.3 Client-side integration (before `show()`)
 ```kotlin

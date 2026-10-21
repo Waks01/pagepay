@@ -13,10 +13,10 @@ Defined in `.kilo/command/*.md`. Each command is a phase with step-by-step imple
 
 ### Agents
 Defined in `.kilo/agent/*.md`. Each agent is a role with responsibilities, tech stack, and rules.
-- **backend.md** — FastAPI, MySQL, Docker, AI router, ad SSV, payments
-- **frontend.md** — Expo SDK 55+, Expo Router, React Native New Architecture
-- **ai.md** — Multi-provider LLM routing, failover, prompt engineering
-- **devops.md** — Docker, EAS Build, CI/CD, deployment
+- **backend.md** — FastAPI, PostgreSQL, Docker, AI router, ad SSV, payments
+- **frontend.md** — Expo SDK 57+, Expo Router, React Native New Architecture
+- **ai.md** — Cloudflare Workers AI routing (standard/premium tiers), metering, cost logging
+- **devops.md** — Docker, EAS Build, CI/CD, Render deployment, Neon
 
 ### Steering/Memory
 `.kilo/steering.md` contains product vision, brand identity, non-negotiable principles, and hard constraints. Read before every implementation decision.
@@ -33,6 +33,8 @@ Defined in `.kilo/agent/*.md`. Each agent is a role with responsibilities, tech 
 | `.kilo/agent/*.md` | Role definitions (backend, frontend, AI, DevOps) |
 | `.kilo/command/*.md` | Phase implementation specs |
 | `roadmap.md` | Full roadmap, Mermaid diagrams, API specs, DB schema |
+| `PRICING_AND_UNIT_ECONOMICS.md` | Current pricing, quotas, payouts, unit economics |
+| `admob.md` | Ad integration reference + rollout checklist |
 
 ---
 
@@ -41,10 +43,10 @@ Defined in `.kilo/agent/*.md`. Each agent is a role with responsibilities, tech 
 1. **Read before you build:** Always read `steering.md` and the relevant agent file before writing code.
 2. **Phase by phase:** Complete one phase end-to-end (backend + frontend + deploy) before starting the next.
 3. **Ship every phase:** Each phase is a live product update. Don't hide work until "Phase 6 complete."
-4. **Dual ad networks:** AdMob + AppLovin MAX always run together. Primary/fallback per placement.
+4. **AdMob only, for now:** AdMob is the one live ad network and the one with a working SSV endpoint. AppLovin's config fields are inert — do not write code against them. The dual-network plan in `roadmap.md` is not implemented.
 5. **Docker backend:** All backend services run in Docker containers. No bare-metal Python processes.
-6. **Expo dev-client only:** From Phase 2 onward, use `expo-dev-client` builds. Expo Go cannot load AdMob/AppLovin adapters.
-7. **Free AI only until revenue:** Use free tier AI providers until you have proven ad revenue. Then upgrade to paid for reliability.
+6. **Expo dev-client only:** From Phase 2 onward, use `expo-dev-client` builds. Expo Go cannot load the AdMob adapter.
+7. **Paid AI, metered:** Cloudflare Workers AI is already paid. The cost control is model routing (standard vs premium), the chat quota, and per-user cost logging — see `PRICING_AND_UNIT_ECONOMICS.md`. Any new AI call site is a new bill: say what it costs, who pays for it, and which quota bounds it.
 
 ---
 
@@ -67,6 +69,8 @@ pagepay/
 ├── kilo.json
 ├── AGENTS.md
 ├── roadmap.md
+├── PRICING_AND_UNIT_ECONOMICS.md   (current pricing + unit economics)
+├── admob.md                          (ad integration reference)
 ├── .kilo/
 │   ├── steering.md
 │   ├── agent/
@@ -80,13 +84,19 @@ pagepay/
 │       ├── phase3-study.md
 │       ├── phase4-payments.md
 │       ├── phase5-community.md
-│       └── phase6-scale.md
+│       ├── phase6-scale.md
+│       ├── phase7-tasks.md
+│       └── phase8-bills.md
 ├── backend/          (code starts here)
 │   ├── app/
+│   ├── alembic/versions/
 │   ├── Dockerfile
 │   └── docker-compose.yml
-└── frontend/         (code starts here)
-    └── app/
+└── page/             (code starts here)
+    ├── src/app/      (Expo Router routes)
+    ├── src/features/
+    ├── src/shared/
+    └── components/
 ```
 
 ---
@@ -95,4 +105,8 @@ pagepay/
 - Update `roadmap.md` when architecture changes
 - Update agent files when tech stack evolves (e.g., new Expo SDK, new AI provider)
 - Update `steering.md` when product strategy shifts
+- Update `PRICING_AND_UNIT_ECONOMICS.md` when pricing, quotas or payouts change
 - Keep phase commands in sync with roadmap — they should mirror each other
+- **When the code changes, the docs change with it.** A doc that describes a
+  provider, database, price or endpoint the code no longer has is worse
+  than no doc — it sends the next agent down the wrong path.

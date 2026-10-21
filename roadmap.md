@@ -1,7 +1,60 @@
 # PagePay: Complete Product Roadmap & System Architecture
-*Last updated: June 2026*
+*Last updated: October 20, 2026*
+
+> **Read this first — everything below the "Original Plan" line was written in June 2026.**
+>
+> The AI provider, database, payments and ad sections describe an
+> architecture the project has since left. The **current** architecture:
+>
+> | Area | Was (below) | Is now |
+> |---|---|---|
+> | Database | MySQL 8.0 | **PostgreSQL 18** (Neon in production, Render-hosted API) |
+> | AI provider | Gemini → Groq → Cerebras → OpenRouter | **Cloudflare Workers AI only**, no failover |
+> | AI models | Gemini 2.5 Flash, Llama 3.3 70B | **Granite 4.0 H-Micro** (standard), **GLM-4.7-Flash** (premium), **Llama-3.2-11B-Vision** (OCR), **MeloTTS** (narration) |
+> | Payments | Flutterwave v4 primary, Paystack fallback | **Paystack only** (Flutterwave config fields are inert) |
+> | Ads | AdMob + AppLovin MAX together | **AdMob only** (AppLovin config fields are inert) |
+> | Premium tier | 3 tiers (Free / Study+ / Complete+) | **One paid plan: ₦3,000/mo or ₦30,000/yr** |
+> | Bills | — | Peyflex **or** BigiSub, selected by `settings.bills_provider` |
+>
+> The authoritative current documents are `.kilo/steering.md`,
+> `PRICING_AND_UNIT_ECONOMICS.md`, `admob.md` and `.kilo/agent/*.md`.
+> Where this file and the code disagree, the code wins — verify before
+> implementing.
 
 ---
+
+## Current Status
+
+| Phase | Name | Status |
+|---|---|---|
+| 1 | Read-to-Earn Core | Shipped |
+| 2 | Ad Monetization Foundation | Shipped (backend SSV live; **client pipeline outstanding**) |
+| 3 | Student AI Exam Prep | Shipped |
+| 4 | Payments & Premium Tier | Shipped (Paystack; tier since collapsed to one plan) |
+| 5 | Referrals & Community | Shipped |
+| 6 | Licensed Content & Scale | Shipped in part — content provider abstraction done; **Redis/CDN/analytics still open** |
+| 7 | Task Marketplace | Shipped |
+| 8 | Bills & VTU | Shipped |
+| 9 | Monetization Hardening | In progress |
+
+### What Phase 9 still owes
+
+1. **The AdMob client pipeline.** The backend SSV endpoint
+   (`GET /api/v1/study/ads/complete`) is live and verified. The app has
+   **no ad code at all** — no config plugin in `app.config.js` (without it
+   the native SDK crashes on launch), no `mobileAds()` init, no ad
+   components, no call sites. Until this ships there are no impressions,
+   and ads are the leg that funds the free tier.
+2. **Upload and exam quotas.** Chat is metered (5/day free, 15/day paid
+   tier, 50 billable/day). Uploads (₦2.60–₦3.58 each) and exams (₦1.35
+   each) are unbounded.
+3. **A routing eval set.** The Standard/Premium split sends simple
+   student questions to Granite, and there is no labelled set measuring
+   whether it answers them correctly.
+
+---
+
+## Original Plan (as planned in June 2026)
 
 ## Design Philosophy
 Ship every phase as a standalone, monetizing product. Each phase is an MVP, not a milestone to hide until completion.
@@ -19,7 +72,7 @@ Ship every phase as a standalone, monetizing product. Each phase is an MVP, not 
 
 ### Backend Build
 - **FastAPI project init** with Python 3.11+
-- **MySQL 8.0** database with async driver (`asyncmy` + SQLAlchemy 2.0 async)
+- **PostgreSQL 18** database with async driver (`asyncpg` + SQLAlchemy 2.0 async) — *as planned in June 2026 this said MySQL 8.0; the project moved to PostgreSQL before implementation*
   - Tables: `users`, `reading_sessions`, `content_catalog`, `ad_events`
 - **JWT authentication** (email/phone + OTP or password)
 - **Reading tracker API:**
@@ -27,7 +80,7 @@ Ship every phase as a standalone, monetizing product. Each phase is an MVP, not 
   - `POST /api/v1/session/heartbeat` → client pings every 10s, server validates scroll_velocity + foreground state
   - `POST /api/v1/session/end` → calculates points, commits to wallet
 - **Admin endpoint:** bulk-import content from Gutendex/GNews
-- **Deploy:** Docker container on Railway, Render, or any VPS (FastAPI + MySQL in separate containers or managed DB)
+- **Deploy:** Docker container on Render.app (FastAPI + managed PostgreSQL on Neon) — *as planned in June 2026 this said Railway; the project deployed to Render*
 
 ### Frontend Build (Expo SDK 55 — New Architecture mandatory)
 - **Required SDK:** Expo SDK 55+ (React Native 0.83, React 19.2, New Architecture mandatory)
@@ -97,37 +150,34 @@ src/
 **Goal:** Attach real revenue to every user interaction.
 
 ### Backend Build
-- **Dual Ad Network scaffolding (AdMob + AppLovin MAX):**
+- **Ad network scaffolding:**
   - `ad_placements` table (id, location, ad_type, priority, primary_provider, fallback_provider)
   - `ad_impressions` table (id, user_id, session_id, ad_type, ad_unit, provider, impression_revenue, timestamp)
-  - Store ad unit IDs for BOTH AdMob and AppLovin in `app_config` table so you can swap or balance load without deploy
-  - **Why dual networks:** AdMob provides highest global fill rate (especially Android). AppLovin MAX provides highest rewarded video eCPMs. Using both prevents single-network rate limiting, account review holds, or unexpected fill drops that can kill your daily revenue.
+  - **As shipped: AdMob only.** The `provider`/`fallback_provider` columns remain so a second network can be added later, but AppLovin is not integrated — `applovin_sdk_key` and `applovin_webhook_secret` are inert config fields.
+  - **Why dual networks was the plan:** AdMob gives the best global fill rate (especially Android); AppLovin MAX gives the best rewarded-video eCPMs. Running both prevents single-network rate limiting, account review holds, or fill drops that can kill daily revenue. **This has not been done.**
 - **Server-Side Verification (SSV) endpoints:**
-  - Webhook `POST /api/v1/ads/google/callback` (AdMob)
-  - Webhook `POST /api/v1/ads/applovin/callback` (AppLovin MAX)
-  - Idempotency checks using both providers' `transaction_id`
+  - Webhook `GET /api/v1/study/ads/complete` (AdMob — AdMob uses GET in practice). *As planned in June 2026 this said `POST /api/v1/ads/google/callback`.*
+  - Idempotency via AdMob's `transaction_id`
+  - AppLovin's webhook was planned but never built.
+  - Verification: ECDSA P-256 against AdMob's rotating public keys, plus a reverse-DNS check that the caller is a Google domain.
 - **Native Ad feed generation:**
   - `GET /api/v1/content/feed/:user_id` → injects sponsored content slots every 4 articles
   - Sponsored entries flagged `is_sponsored: true`
-  - Ad placement rotation logic: alternate between AdMob and AppLovin ad units per user session to distribute load
 - **Reward multiplier logic:**
-  - Base rate: 2 pts for Free, 4 pts for Premium users per verified 1-min slice
-  - After article: "Watch video to double to 10 pts"
-  - SSV from either provider confirms full watch → server bumps reward before commit
+  - Base rate: a flat slice bonus (2 pts) × the user's tier multiplier (1.0x free, 1.5x paid) — *as planned in June 2026 this hardcoded "2 pts Free / 4 pts Premium"*
+  - SSV confirms a full watch → the server credits the user. Ad reward is a flat **16 SV** for free and paid alike — no tier multiplier, deliberately.
 
 ### Frontend Build
-**CRITICAL 2026 NOTE:** Expo Go does NOT ship AdMob adapters. You MUST build a **Development Build** (`expo-dev-client`) with real native code to run AdMob/AppLovin in Expo SDK 55+.
+**CRITICAL 2026 NOTE:** Expo Go does NOT ship AdMob adapters. You MUST build a **Development Build** (`expo-dev-client`) with real native code to run AdMob in Expo SDK 57.
 
-- Use `expo-dev-client` + `react-native-google-mobile-ads` (AdMob) + AppLovin MAX React Native SDK + `@fumitakayamada/expo-applovin-max` (community plugin that handles Gradle/Pod injection for mediation adapters)
-- **Dual network setup:** AdMob as mediation layer (fill rate backbone) + AppLovin MAX as a mediated network within AdMob OR as independent parallel SDK
-  - Primary: AdMob handles banner, native, and interstitial for maximum fill rate
-  - Secondary: AppLovin MAX handles rewarded video for highest eCPMs
-  - Fallback: if one network fails to load, the other serves the ad — prevents blank ad slots and revenue loss
-  - Load balancing: rotate ad unit IDs per session to avoid single-provider rate limits or account flags
+> **Status: the client pipeline was never built.** `react-native-google-mobile-ads` 15.8.0 is in `package.json`, but the config plugin is absent from `app.config.js` (without the App IDs the native SDK crashes on launch), there is no `mobileAds()` init, and there are no ad components or call sites. The backend SSV endpoint is live and waiting. See `admob.md` §9 for the rollout checklist and `.kilo/agent/frontend.md` §6.
+
+- Use `expo-dev-client` + `react-native-google-mobile-ads` (AdMob)
+- **Single network:** AdMob only for now. AppLovin MAX was to be the secondary; it is not integrated.
 - Use **Native Advanced (Custom) Ads** via AdMob styled to match app typography
-- **Interstitial Ads:** trigger after every 3 articles (AdMob primary, AppLovin fallback)
-- **Rewarded Video Ads:** modal after article complete with double-earn (AppLovin primary for eCPM, AdMob fallback)
-- Initialize both SDKs on app startup so ad assets cache aggressively
+- **Interstitial Ads:** at natural breakpoints only — after finishing an exam, leaving the reader, returning to a tab root. Never mid-exam, never mid-lesson, never on app open (AdMob policy prohibits it).
+- **Rewarded Video Ads:** user-initiated, opt-in — the payment chooser's "Watch ad" option on asset + audio unlocks
+- Initialize the SDK on app startup so ad assets cache aggressively
 
 ### Shippable Feature Set (Phase 2)
 ✅ Native in-feed banner ads
@@ -144,31 +194,35 @@ src/
 **Goal:** Attach high-retention student vertical to reduce churn and increase ad inventory per user.
 
 ### Backend Build
-- **AI Provider Router (Python class):**
-  - Priority queue based on task type and token count
-  - Failover: catches 429 errors, auto-rolls to next provider
-- **Table: `ai_provider_health`** tracks recent success rates per provider (circuit breaker pattern)
+- **AI Provider Router (`app/ai/router.py`):**
+  - Single provider: **Cloudflare Workers AI**. No failover, no circuit breaker — a Cloudflare outage is a 503 on every AI feature.
+  - Two text models selected by tier: `ai_standard_model` (Granite 4.0 H-Micro) and `ai_premium_model` (GLM-4.7-Flash), with `app/ai/routing.py::classify_turn()` picking between them for chat
+  - Vision (OCR): `@cf/meta/llama-3.2-11b-vision-instruct`
 - **Study asset generation endpoints:**
   - `POST /api/v1/study/sow/upload` → accepts image or text
-    - If image: OCR via Gemini Vision (multimodal)
-    - Sends to Gemini for curriculum structure (1M ctx window)
+    - If image: OCR via the Cloudflare vision model
+    - If PDF: rendered page by page with PyMuPDF, then OCR'd the same way — the PDF's embedded text layer is not used, because a scan or a photo has none
+    - Parsed on the premium model — a misparsed syllabus is not worth saving a fraction on
   - `POST /api/v1/study/generate` → generates MCQ + flashcard + essay JSON
-    - Route to Groq/Cerebras for speed (flashcards, quick quizzes)
+    - Premium model
   - `POST /api/v1/study/chat` → streaming Q&A on uploaded material
     - FastAPI `StreamingResponse` with generator for token-by-token delivery
+    - Quota-enforced: 5/day free, 15/day paid tier, then purchasable with SV
 - **Tables:**
   - `study_materials` (id, user_id, raw_input, parsed_structure, ai_model_used, created_at)
   - `quiz_sessions` (id, user_id, material_id, score, points_earned, questions, user_answers)
-  - `payments` (id, user_id, amount_ngn, flutterwave_tx_ref, status, created_at, webhook_confirmed)
+  - `payments` (id, user_id, amount_ngn, paystack_tx_ref, status, created_at, webhook_confirmed)
 
-### AI Provider Assignment (2026 reality)
+### AI Provider Assignment (as shipped)
 
-| Task | Primary Provider | Why | Fallback |
-|------|-----------------|-----|----------|
-| SOW/syllabus upload (heavy) | Gemini 2.5 Flash | 1M ctx window, free 100 req/day | Cerebras (1M tokens/day) |
-| Real-time quiz / flashcard | Groq (Llama 3.3 70B) | 320 TPS, 1,000 req/day | Mistral (60 RPM, ~1B tokens/mo) |
-| Chat / Q&A | Groq / Cerebras | Speed | OpenRouter (free models) |
-| Circuit breaker | All providers | Track in DB; skip provider after 3 consecutive failures for 5 min | |
+| Task | Model | Why |
+|------|-------|-----|
+| SOW/syllabus upload (parse) | Premium — `@cf/zai-org/glm-4.7-flash` | A misparsed syllabus is expensive to get wrong |
+| MCQ / flashcard / essay generation | Premium — GLM-4.7-Flash | A wrong answer key is worse than no material |
+| Chat / Q&A | Classified: Granite → GLM | Definitions and recall go to the cheap model; reasoning escalates |
+| Image + PDF page OCR | `@cf/meta/llama-3.2-11b-vision-instruct` | Separate capability, not a text tier |
+| Narration | GLM-4.7-Flash + MeloTTS | Script quality is user-visible |
+| Circuit breaker | **None** | Single provider — the quota and rate limits are what protect us |
 
 ### Frontend Build
 - **New "Study" tab** in bottom navigation (Expo Router)
@@ -203,33 +257,34 @@ src/
 **Goal:** Diversify revenue beyond ads with direct user payments.
 
 ### Backend Build
-- **Flutterwave v4 integration (OAuth 2.0):**
-  - `POST /api/v1/payments/initiate` → returns payment URL / mobile money flow
-  - Webhook `POST /api/v1/payments/flutterwave/callback` → confirms, updates tier, verifies signature hash
-  - Idempotent: store `flutterwave_tx_ref` and verify no duplicate credits
-- **Paystack fallback** behind feature flag, same schema
+- **Paystack integration** — *as planned in June 2026 this said Flutterwave v4 primary with Paystack as fallback. The project went the other way: Paystack is the only live provider and the Flutterwave config fields are inert.*
+  - `POST /api/v1/payments/initiate` → returns payment URL
+  - Webhook `POST /api/v1/payments/paystack/webhook` → confirms, updates tier. Paystack signs with the **secret key** — there is no separate webhook secret.
+  - Idempotent: store the transaction reference and verify no duplicate credits
+  - Paystack also handles wallet deposits and payouts (transfers), with a flat-fee schedule mirrored in config
 - **Subscription logic:**
-  - `tier`: free | premium_monthly | premium_yearly
+  - `tier`: the shipped enum still carries `free | study_plus_monthly | study_plus_yearly | complete_plus_monthly | complete_plus_yearly`, but **all four paid keys resolve to one plan** — ₦3,000/mo or ₦30,000/yr. The old Study+ ₦1,000 / Complete+ ₦2,000 prices are gone.
   - `subscription_expires_at` → cron job reverts to free tier when expired
   - Prevents over-provisioning
 - **Tier-based config:**
-  - Store prices, durations in `app_config` table for OTA price changes
+  - Prices, durations and multipliers live in `backend/app/tier_benefits.json` for OTA price changes
+  - What ₦3,000 buys: free asset unlocks, free audio narration, 15 chat turns/day, 1.5x reading/task/bills/daily multipliers, a 2,500 SV monthly allowance and a 30% top-up discount
 
 ### Frontend Build
 - **Paywall screens:**
-  - Two columns: "Free (Watch Ads)" vs "₦500 / month"
-  - One-tap Flutterwave checkout (card, transfer, USSD, mobile money)
+  - "Free (watch ads)" vs the single paid plan
+  - One-tap Paystack checkout (card, transfer, USSD) — *as planned in June 2026 this said Flutterwave and "₦500 / month"*
   - `expo-web-browser` for hosted payment page
   - Success state: instant premium unlock
 - **Premium indicators:**
   - Gold badge on profile
-  - No ad-gates on study materials
-  - 2x reading points permanently
+  - Ad-free premium experience
+  - 1.5x reading points
 - **Billing history:** list of payments with dates
 
 ### Shippable Feature Set (Phase 4)
-✅ One-tap Flutterwave checkout
-✅ Monthly premium subscription (₦500–1,000)
+✅ One-tap Paystack checkout
+✅ Monthly premium subscription (₦3,000/mo or ₦30,000/yr)
 ✅ Ad-free premium experience for students
 ✅ Billing history
 ✅ Play Store update: "PagePay: Read, Study, Learn & Earn"
@@ -308,74 +363,91 @@ src/
 ┌────────────────────────────▼───────────────────────────────────────┐
 │                    FASTAPI BACKEND (Docker)                         │
 │  ┌──────────────────────────────────────────────────────────────┐  │
-│ │  AI ROUTER (single endpoint, provider selection)              │  │
-│ │  POST /api/v1/ai/route → Gemini / Groq / Cerebras / Mistral   │  │
+│ │  AI ROUTER (route_ai — a Python function, not an endpoint)    │  │
+│ │  standard: Granite 4.0 H-Micro │ premium: GLM-4.7-Flash       │  │
+│ │  vision: Llama-3.2-11B-Vision  │ tts: MeloTTS                │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │ │  READING ENGINE  │  AD SSV VERIFIER  │  REFERRAL ENGINE       │  │
 │  └──────────────────────────┬───────────────────────────────────┘  │
 │                             │                                       │
 │  ┌──────────────────────────▼───────────────────────────────────┐  │
-│ │  MySQL 8.0 (asyncmy + SQLAlchemy 2.0 async)                  │  │
+│ │  PostgreSQL 18 (asyncpg + SQLAlchemy 2.0 async)              │  │
 │ │  users │ wallets │ sessions │ ad_events │ study_materials    │  │
 │ │  quiz_history │ payments │ referrals │ content_catalog       │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
-                             │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-     ┌─────────────────┐ ┌───────────┐ ┌──────────────────┐
-      │ CONTENT FEEDS   │ │ AI PROVIDERS│ │ AD NETWORKS          │
-      │ • Gutendex      │ │ • Gemini   │ │ • Google AdMob       │
-      │   (public domain)│ │ • Groq     │ │   (fill rate anchor) │
-      │ • GNews (free)  │ │ • Cerebras │ │ • AppLovin MAX       │
-      │ • Hive API      │ │ • Mistral  │ │   (rewarded eCPM)    │
-      │ • RSS           │ │ • OpenRouter│ │ (dual for load share)│
-     └─────────────────┘ └───────────┘ └──────────────────┘
-                             │
-                    ┌─────────▼─────────┐
-                    │ PAYMENT GATEWAYS  │
-                    │ • Flutterwave v4  │
-                    │ • Paystack        │
-                    └───────────────────┘
+                              │
+               ┌───────────────┼───────────────┐
+               ▼               ▼               ▼
+      ┌─────────────────┐ ┌───────────┐ ┌──────────────────┐
+       │ CONTENT FEEDS   │ │ AI PROVIDER│ │ AD NETWORK         │
+       │ • Gutendex      │ │ • Cloudflare│ │ • Google AdMob    │
+       │   (public domain)│ │   Workers AI│ │   (only network)  │
+       │ • GNews (free)  │ │   (single) │ │                    │
+       │ • OpenStax (OER)│ │            │ │                    │
+       │ • RSS           │ │            │ │                    │
+      └─────────────────┘ └───────────┘ └──────────────────┘
+                              │
+                     ┌─────────▼─────────┐
+                     │ PAYMENT GATEWAY   │
+                     │ • Paystack        │
+                     │   (only provider) │
+                     └───────────────────┘
 ```
 
 ---
 
-## AI Router Logic (Python code pattern)
+## AI Router Logic (as shipped)
+
+There is no provider list and no failover. The whole client is `app/ai/router.py`:
 
 ```python
-import logging
-from tenacity import retry, stop_after_attempt
+# backend/app/ai/router.py
+from app.ai.routing import PREMIUM, STANDARD
 
-PROVIDERS = [
-    {"name": "gemini", "model": "gemini-2.5-flash", "rpd": 1500, "rpm": 15, "try": call_gemini},
-    {"name": "cerebras", "model": "gpt-oss-120b", "rpd": 1000000, "rpm": 5, "try": call_cerebras},
-    {"name": "groq", "model": "llama-3.3-70b-versatile", "rpd": 1000, "rpm": 30, "try": call_groq},
-    {"name": "mistral", "model": "mistral-small-latest", "rpm": 60, "try": call_mistral},
-    {"name": "openrouter", "model": "deepseek/deepseek-chat:free", "rpd": 50, "rpm": 20, "try": call_openrouter},
-]
+def resolve_model(model_tier: str | None = None) -> str:
+    """Map a tier to a model id.
 
-async def route_ai(prompt: str, task_type: str):
-    # Filter providers compatible with task type
-    candidates = [p for p in PROVIDERS if p["name"] not in get_circuit_open()]
-    
-    for provider in candidates:
-        try:
-            return await provider["try"](prompt)
-        except RateLimitError:
-            mark_failed(provider["name"])
-            continue
-        except Exception as e:
-            logging.warning(f"{provider['name']} error: {e}")
-            continue
-    
-    raise HTTPException(503, "All AI providers temporarily saturated.")
+    An unknown or missing tier resolves to premium. That is deliberate:
+    a cheap wrong answer costs a student more than a saved fraction.
+    """
+    if model_tier == STANDARD:
+        return settings.ai_standard_model      # Granite 4.0 H-Micro
+    return settings.ai_premium_model            # GLM-4.7-Flash
+
+async def route_ai(prompt, task_type="heavy", model_tier=None, db=None):
+    model = resolve_model(model_tier)
+    # POST https://api.cloudflare.com/client/v4/accounts/{id}/ai/run/{model}
+    # Cloudflare returns the text in `result.response` — NOT in
+    # result.choices[0].message.content (that is the OpenAI-compatible shape).
+    ...
+    return {"response", "provider", "model", "usage", "latency_ms", "cost_usd"}
 ```
+
+For chat turns, `app/ai/routing.py::classify_turn()` picks the tier from the
+question. `settings.ai_routing_enabled = False` forces everything to premium
+while validating the split.
+
+**Cost control is the quota, not the failover.** Free chat is 5/day
+(`study_chat_daily_limit`), paid tier 15/day, then 50 billable turns/day
+bought with SV at 15 SV (standard) / 35 SV (premium). `services/ai_usage.py`
+enforces it; `services/ai_cost.py` and `AiUsageLog.cost_usd` make it
+measurable.
 
 ---
 
 ## Database Schema (SQLAlchemy 2.0 async models)
+
+> The models below are the **June 2026 design sketch**. The live schema is
+> `backend/app/models/__init__.py` — it is the single source of truth and
+> has grown well past this (study assets, exams, tasks, sponsors, community
+> notes, wallets, notifications, fraud, admin RBAC). Note that the tier
+> enum sketched here is also out of date: the shipped `UserTier` still
+> carries four paid keys (`study_plus_monthly`, `study_plus_yearly`,
+> `complete_plus_monthly`, `complete_plus_yearly`) that all resolve to the
+> same single ₦3,000 plan, because renaming the enum is a data migration
+> and an unknown key falls back to the *free* tier.
 
 ```python
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -470,8 +542,8 @@ class Payment(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     amount_kobo: Mapped[int] = mapped_column(BigInteger)  # NGN in kobo (₦500 = 50000)
-    flutterwave_tx_ref: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
-    provider: Mapped[str] = mapped_column(String(50))  # flutterwave, paystack
+    paystack_tx_ref: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    provider: Mapped[str] = mapped_column(String(50))  # paystack (the only live provider)
     status: Mapped[str] = mapped_column(String(50), default="pending")  # pending, success, failed
     tier_granted: Mapped[str | None] = mapped_column(String(50), nullable=True)
     webhook_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -508,41 +580,54 @@ graph LR
 | Phase | Primary Risk | Mitigation |
 |-------|-------------|------------|
 | 1 | Zero content depth | Start with 50 curated public domain chapters + 200 GNews articles |
-| 2 | Single ad network fill/eCPM drop or account ban | Implement client-side scroll validation + server heartbeat checks BEFORE SSV; test with test ads 2 weeks; run both AdMob and AppLovin simultaneously for fill redundancy and eCPM competition |
+| 2 | Single ad network fill/eCPM drop or account ban | Implement client-side scroll validation + server heartbeat checks BEFORE SSV; test with test ads 2 weeks. **Dual-network redundancy is still the stated mitigation and is not implemented — AdMob is the only network.** |
 | 3 | AI hallucination in study material | Add "Report wrong answer" button; per-session disclaimer "AI-generated, verify with textbook" |
-| 4 | Payment gateway stress | Use Flutterwave v4 sandbox 30 days; test webhook idempotency thoroughly |
+| 4 | Payment gateway stress | Use the Paystack sandbox; test webhook idempotency thoroughly |
 | 5 | Referral abuse | Cap daily referral bonuses; server validates referee completed 5-min verified reading session |
 | 6 | Content licensing costs | Negotiate Taboola first (no upfront cost); defer NewsBreak until proven DAU |
+| 9 | AI cost outruns revenue | Standard/Premium model routing, per-user cost logging, metered chat, upload/exam quotas (**quotas still missing**) |
+| 9 | Ads do not fund the free tier | Build the AdMob client pipeline; keep the ad payout at 16 SV flat and the credit in `service_credit_balance` |
 
 ---
 
-## Content Provider Status (June 2026)
+## Content Provider Status
 
-| Provider | Auth Required | Free Quota | Revenue Share | Launch Ready |
-|----------|--------------|------------|---------------|--------------|
-| **Gutendex / Gutenberg** | No | Unlimited | Yes (commercial reuse, keep PG license) | **Yes — Day 1** |
-| **GNews** | API key | 100 req/day free | No (your AdMob owns monetization) | **Yes — Day 1** |
-| **NewsAPI.org** | API key | 100 req/day dev | No | **Yes — Day 1** |
-| **Hive Blockchain** | No | Unlimited | Yes (c curation rewards) | **Yes — but Web3 complexity** |
-| **Taboola/Outbrain** | Yes | N/A | Yes (revenue share) | **No — requires live DAU proof** |
-| **Wattpad Enterprise** | Yes | N/A | Yes (revenue share) | **No — B2B contract, not self-serve** |
-| **NewsBreak** | Yes | N/A | Yes (revenue share) | **No — selective approval, needs traffic** |
+| Provider | Auth Required | Free Quota | Revenue Share | Launch Ready | Shipped |
+|----------|--------------|------------|---------------|--------------|---------|
+| **Gutendex / Gutenberg** | No | Unlimited | Yes (commercial reuse, keep PG license) | **Yes — Day 1** | ✅ |
+| **GNews** | API key | 100 req/day free | No (your AdMob owns monetization) | **Yes — Day 1** | ✅ `services/content/gnews.py` |
+| **OpenStax (OER textbooks)** | No | Unlimited | Yes (CC-licensed) | Yes | ✅ `services/content/openstax.py` |
+| **NewsAPI.org** | API key | 100 req/day dev | No | **Yes — Day 1** | ❌ not integrated |
+| **Hive Blockchain** | No | Unlimited | Yes (curation rewards) | **Yes — but Web3 complexity** | ❌ not integrated |
+| **Taboola/Outbrain** | Yes | N/A | Yes (revenue share) | **No — requires live DAU proof** | ❌ not integrated |
+| **Wattpad Enterprise** | Yes | N/A | Yes (revenue share) | **No — B2B contract, not self-serve** | ❌ not integrated |
+| **NewsBreak** | Yes | N/A | Yes (revenue share) | **No — selective approval, needs traffic** | ❌ not integrated |
 
 ---
 
-## AI Provider Status (June 2026)
+## AI Provider Status (as shipped — October 2026)
 
-| Provider | Free Tier | No Credit Card | Commercial Use | Fragility |
-|----------|-----------|----------------|----------------|-----------|
-| **Google AI Studio** | Gemini 2.5 Flash: ~1,500 req/day, 1M ctx | Yes | Yes | Stable — reduced from 2025 levels, but reliable |
-| **Groq** | ~1,000 req/day, 30 RPM | Yes | Yes | Stable — no surprises |
-| **Cerebras** | ~1M tokens/day, 5 RPM | Yes (previously required card, now free) | Yes | **Volatile** — catalog dropped from 12 models to 2 in 2026; hardcode model names at your risk |
-| **Mistral** | ~1B tokens/month Experiment tier | Yes | **No** — data used for training | Requires paid tier for production data |
-| **OpenRouter** | 20+ free models, 20 RPM, 50 req/day | Yes | Yes | Stable — single key replaces 5 accounts |
-| **GitHub Models** | ~150 req/day (various models) | Yes | Caveats | Moderate — limited but reliable |
+The free multi-provider pool is **gone**. It was removed in commit `cd01eff`.
+There is one provider and no failover.
+
+| Model | Role | List price (USD/M) | Free tier | Commercial use |
+|---|---|---|---|---|
+| **`@cf/ibm-granite/granite-4.0-h-micro`** | Standard text | $0.017 in / $0.112 out | 10,000 neurons/day | Yes |
+| **`@cf/zai-org/glm-4.7-flash`** | Premium text | $0.060 in / $0.400 out | 10,000 neurons/day | Yes |
+| **`@cf/meta/llama-3.2-11b-vision-instruct`** | Vision / OCR | $0.049 in / $0.676 out | 10,000 neurons/day | Yes |
+| **`@cf/myshell-ai/melotts`** | TTS | $0.0002 / audio-min | included | Yes |
 
 **Decision for PagePay:**
-1. Primary: Gemini Flash (heavy SOW uploads, 1M context)
-2. Secondary: Groq (real-time quizzes, fastest open-weight)
-3. Tertiary: OpenRouter free models (failover, no-card single-key simplicity)
-4. Optional add: Cerebras if you need massive batch tokens (but watch the catalog volatility)
+1. Single provider: **Cloudflare Workers AI** — no failover, no circuit breaker.
+2. **Standard/Premium split** rather than a provider list: `classify_turn()`
+   sends definitions and recall to Granite (₦0.68/turn) and escalates
+   reasoning to GLM-4.7-Flash (₦2.43/turn). That is a 3.6x cost cut on any
+   turn the cheap model can answer correctly.
+3. **The cost control is the quota.** Free chat 5/day, paid tier 15/day,
+   then SV-purchased turns capped at 50/day. Uploads and exams are still
+   unmetered — that is an open gap.
+4. **Per-user cost logging** (`AiUsageLog.cost_usd`, `services/ai_cost.py`)
+   is what makes the model measurable. Without it none of the above can be
+   tuned.
+
+Full analysis: `PRICING_AND_UNIT_ECONOMICS.md`.

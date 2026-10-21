@@ -13,40 +13,47 @@
   },
   "techStack": {
     "frontend": {
-      "framework": "Expo SDK 55+",
-      "reactNative": "0.83",
+      "framework": "Expo SDK 57",
+      "reactNative": "0.86",
       "react": "19.2",
       "navigation": "expo-router",
+      "routesRoot": "page/src/app",
       "stateManagement": {
         "server": "TanStack Query v5",
         "client": "Zustand",
-        "persistent": "MMKV"
+        "persistent": "expo-secure-store"
       },
       "architecture": "New Architecture (mandatory)",
       "build": "expo-dev-client (EAS Build)"
     },
     "backend": {
       "framework": "FastAPI (Python 3.11+)",
-      "database": "MySQL 8.0",
+      "database": "PostgreSQL 18 (Neon in production, Render-hosted API)",
       "orm": "SQLAlchemy 2.0 (async)",
-      "driver": "asyncmy",
-      "deployment": "Docker container"
+      "driver": "asyncpg",
+      "deployment": "Docker container on Render.app"
     },
     "ads": {
       "primary": "Google AdMob (mediation layer)",
-      "secondary": "AppLovin MAX (rewarded video)",
-      "plugin": "@fumitakayamada/expo-applovin-max"
+      "secondary": "AppLovin MAX (not implemented — inert config only)",
+      "plugin": "@fumitakayamada/expo-applovin-max",
+      "status": "Backend SSV live; the client pipeline is not built yet (no config plugin, no components)"
     },
     "ai": {
-      "router": "Custom Python failover system",
-      "primary": "Google AI Studio (Gemini 2.5 Flash)",
-      "secondary": "Groq (Llama 3.3 70B)",
-      "tertiary": "OpenRouter (free models)",
-      "optional": "Cerebras (volatile)"
+      "router": "Cloudflare Workers AI, single provider — no failover",
+      "standard": "@cf/ibm-granite/granite-4.0-h-micro (definitions, recall)",
+      "premium": "@cf/zai-org/glm-4.7-flash (reasoning, marking, generation)",
+      "vision": "@cf/meta/llama-3.2-11b-vision-instruct (image + rendered PDF page OCR)",
+      "tts": "@cf/myshell-ai/melotts (narration)"
     },
     "payments": {
-      "primary": "Flutterwave v4 (OAuth 2.0)",
-      "fallback": "Paystack"
+      "primary": "Paystack",
+      "fallback": null,
+      "note": "Flutterwave config fields exist but are not wired to any router"
+    },
+    "bills": {
+      "providers": ["peyflex", "bigisub"],
+      "selected": "settings.bills_provider (default: peyflex)"
     }
   },
   "phases": [
@@ -54,7 +61,7 @@
       "id": 1,
       "name": "Read-to-Earn Core",
       "duration": "Weeks 1-3",
-      "status": "pending",
+      "status": "shipped",
       "commands": [
         ".kilo/command/phase1-core.md"
       ]
@@ -63,7 +70,7 @@
       "id": 2,
       "name": "Ad Monetization Foundation",
       "duration": "Weeks 4-6",
-      "status": "pending",
+      "status": "shipped",
       "commands": [
         ".kilo/command/phase2-ads.md"
       ]
@@ -72,7 +79,7 @@
       "id": 3,
       "name": "Student AI Exam Prep",
       "duration": "Weeks 7-10",
-      "status": "pending",
+      "status": "shipped",
       "commands": [
         ".kilo/command/phase3-study.md"
       ]
@@ -81,7 +88,7 @@
       "id": 4,
       "name": "Payments & Premium Tier",
       "duration": "Weeks 11-13",
-      "status": "pending",
+      "status": "shipped",
       "commands": [
         ".kilo/command/phase4-payments.md"
       ]
@@ -90,7 +97,7 @@
       "id": 5,
       "name": "Referrals & Community",
       "duration": "Weeks 14-18",
-      "status": "pending",
+      "status": "shipped",
       "commands": [
         ".kilo/command/phase5-community.md"
       ]
@@ -99,10 +106,33 @@
       "id": 6,
       "name": "Licensed Content & Scale",
       "duration": "Weeks 19+",
-      "status": "pending",
+      "status": "shipped",
       "commands": [
         ".kilo/command/phase6-scale.md"
       ]
+    },
+    {
+      "id": 7,
+      "name": "Task Marketplace",
+      "status": "shipped",
+      "commands": [
+        ".kilo/command/phase7-tasks.md"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Bills & VTU",
+      "status": "shipped",
+      "commands": [
+        ".kilo/command/phase8-bills.md"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Monetization Hardening",
+      "status": "in_progress",
+      "commands": [],
+      "notes": "Model routing + metering, one paid tier (N3,000), per-user AI cost logging all shipped. Outstanding: the AdMob client pipeline, upload/exam quotas, the Granite routing eval set."
     }
   ],
   "agents": [
@@ -110,7 +140,7 @@
       "id": "backend",
       "name": "Backend Engineer",
       "file": ".kilo/agent/backend.md",
-      "description": "FastAPI, MySQL, Docker, AI router, ad SSV"
+      "description": "FastAPI, PostgreSQL, Docker, AI router, ad SSV"
     },
     {
       "id": "frontend",

@@ -8,14 +8,27 @@ import { useTranslation } from 'react-i18next';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { EXAM_TYPES } from '@/src/shared/lib/exam-types';
+import { EDUCATION_LEVELS, type EducationLevel } from '@/src/features/study/api';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { PagePaySpinner } from '@/components/PagePaySpinner';
 
 type SowUploadCardProps = {
   uploading: boolean;
   uploadProgress?: number;
+  /**
+   * Server-reported stage code (`reading_pages`, `parsing_ai`, …). When
+   * present it is shown next to the percentage so the user knows what
+   * is happening instead of watching a bar crawl.
+   */
+  uploadStage?: string | null;
   examType: string | null;
   onExamTypeChange: (examType: string | null) => void;
+  /**
+   * How deep the explanation and the narration should be pitched.
+   * "primary" narrates to a young student in plain language.
+   */
+  educationLevel: EducationLevel;
+  onEducationLevelChange: (level: EducationLevel) => void;
   onUploadText: (text: string, examType: string | null) => Promise<void>;
   onUploadImage: (examType: string | null) => Promise<void>;
   onTakePhoto: (examType: string | null) => Promise<void>;
@@ -38,8 +51,11 @@ function UploadStatusIcon({ uploading, progress, tokens }: { uploading: boolean;
 export function SowUploadCard({
   uploading,
   uploadProgress,
+  uploadStage,
   examType,
   onExamTypeChange,
+  educationLevel,
+  onEducationLevelChange,
   onUploadText,
   onUploadImage,
   onTakePhoto,
@@ -149,6 +165,41 @@ export function SowUploadCard({
         ))}
       </View>
 
+      <Text style={[styles.levelLabel, { color: tokens.inkMuted }]}>
+        EXPLAIN IT TO ME AT
+      </Text>
+      <View style={styles.chipsRow}>
+        {EDUCATION_LEVELS.map((option) => (
+          <TouchableOpacity
+            key={option.value}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`Explain at ${option.label} level`}
+            accessibilityState={{ selected: educationLevel === option.value }}
+            onPress={() => onEducationLevelChange(option.value)}
+            style={[
+              styles.chip,
+              {
+                backgroundColor: educationLevel === option.value ? tokens.mintSoft : tokens.paper2,
+                borderColor: educationLevel === option.value ? tokens.mint : tokens.border,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                { color: educationLevel === option.value ? tokens.mint : tokens.inkMuted },
+              ]}
+            >
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={[styles.levelBlurb, { color: tokens.inkFaint }]}>
+        {EDUCATION_LEVELS.find((o) => o.value === educationLevel)?.blurb}
+      </Text>
+
       <TextInput
         style={[styles.textInput, { backgroundColor: tokens.card, borderColor: tokens.border, color: tokens.ink }]}
         placeholder={t('study.sow_upload.placeholder')}
@@ -183,11 +234,18 @@ export function SowUploadCard({
         <View style={styles.progressRow}>
           <UploadStatusIcon uploading={uploading} progress={uploadProgress} tokens={tokens} />
           <View style={{ flex: 1, gap: 4 }}>
-            <Text style={[styles.progressText, { color: tokens.inkMuted }]}>
-              {uploadProgress !== undefined && uploadProgress < 100
-                ? t('study.sow_upload.processing', { percent: uploadProgress })
-                : t('study.sow_upload.processing_ellipsis')}
-            </Text>
+            <View style={styles.progressLabelRow}>
+              <Text style={[styles.progressText, { color: tokens.inkMuted }]}>
+                {uploadProgress !== undefined && uploadProgress < 100
+                  ? t('study.sow_upload.processing', { percent: uploadProgress })
+                  : t('study.sow_upload.processing_ellipsis')}
+              </Text>
+              {uploadStage && (
+                <Text style={[styles.stageText, { color: tokens.inkFaint }]}>
+                  {t(`study.sow_upload.stages.${uploadStage}`, { defaultValue: '' })}
+                </Text>
+              )}
+            </View>
             <View
               style={[styles.progressBarTrack, { backgroundColor: tokens.border }]}
               accessibilityRole="progressbar"
@@ -340,6 +398,18 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 4,
   },
+  levelLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  levelBlurb: {
+    fontSize: 12,
+    marginTop: 6,
+    marginBottom: 4,
+  },
   chipsRow: {
     flexDirection: 'row',
     gap: 6,
@@ -383,6 +453,17 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 13,
+  },
+  progressLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  stageText: {
+    fontSize: 11,
+    flexShrink: 1,
+    textAlign: 'right',
   },
   progressBarTrack: {
     height: 6,

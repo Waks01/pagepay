@@ -1,7 +1,10 @@
 # PagePay — Pricing, Unit Economics & Ads Plan
 
-> **Status:** proposed, not implemented. Reference document.
-> **Purpose:** single source of truth for what features cost, what to charge,
+> **Status: mostly implemented.** The model below was proposed in October
+> 2026 and the implementation-order list in §7 has been executed. What is
+> *not* done is marked ❌. Updated October 20, 2026.
+>
+> **Purpose:** single source of truth for what features cost, what we charge,
 > and how ads fit — so pricing decisions are made against measured numbers
 > rather than guesses.
 >
@@ -10,6 +13,22 @@
 > Conversion: **10 SV = ₦1** (`points_per_naira`, `config.py:622`), and points
 > and SV are the same unit — `money.kobo_to_points` is what credits both.
 > FX: ₦1,332.5/USD (CBN NFEM, 9 Oct 2026).
+>
+> **Shipped state of each §7 item:**
+
+| # | Work | Status |
+|---|---|---|
+| 1 | Model routing (Standard/Premium split) | ✅ shipped — `app/ai/routing.py::classify_turn`, `ai_routing_enabled` |
+| 2 | Fix the ad payout inconsistency (20 vs 16/24) | ✅ shipped — `rewarded_ad_gross_points` / `rewarded_ad_payout_points` |
+| 3 | Meter chat at 15/35 SV by tier | ✅ shipped — `study_chat_sv_standard` / `study_chat_sv_premium` |
+| 3b | Rename the payout config, derive it from the revenue share | ✅ shipped — `platform_ad_revenue_percent` |
+| 4 | Cap generation behind unlock | ✅ shipped — charged at generation, not at unlock |
+| 5 | Quotas: uploads 2/mo, exams 3/day, chat 5/day | ⚠️ **chat only** — uploads and exams are still unmetered |
+| 6 | Ad formats: native rewarded + banner + breakpoint interstitials | ❌ **the client pipeline was never built** |
+| 7 | Collapse to one tier at ₦3,000 | ✅ shipped — `6ce5d72` |
+| 8 | Per-user cost logging (p50/p90/p99 by cohort) | ✅ shipped — `AiUsageLog.cost_usd`, `services/ai_cost.py` |
+| 9 | *(new)* SV allowance + top-up discount | ✅ shipped — `services/sv_allowance.py`, `premium_top_up_discount_percent` |
+| 10 | *(new)* Routing eval set — the quality bar Granite must clear | ❌ **not started** — no labelled set exists |
 
 ---
 
@@ -161,6 +180,12 @@ is the recurring unbounded cost.
 
 ### Tiers
 
+> **Shipped.** One paid plan, not two. The four legacy tier keys
+> (`study_plus_monthly`, `study_plus_yearly`, `complete_plus_monthly`,
+> `complete_plus_yearly`) all resolve to this same plan — renaming the
+> `UserTier` enum is a data migration, and an unknown key falls back to the
+> *free* tier, so a rename could silently demote paying users.
+
 | | Free | **PagePay+** |
 |---|---|---|
 | **Price** | ₦0 | **₦3,000/mo or ₦30,000/yr** |
@@ -172,6 +197,14 @@ is the recurring unbounded cost.
 | Uploads | 2/month | 6/month |
 | Ads | **optional rewarded** (16 SV/ad) | **none — ad-free is the upgrade reason** |
 | Asset unlock / narration | paid | paid, drawn from allowance |
+
+> **Rows marked in the table above that are NOT yet enforced:** the
+> per-tier chat allowances (the shipped caps are 5/day free, 15/day paid
+> tier, 50 SV-purchased turns/day), the exam quota (3/day vs unlimited),
+> and the upload quota (2/month vs 6/month). Only the 5/15/50 chat quota
+> and the 2,500 SV allowance are actually wired today. The allowance and
+> the 30% top-up discount **are** shipped (`services/sv_allowance.py`,
+> `premium_top_up_discount_percent`); the quotas are not.
 
 | PagePay+ at full use | |
 |---|---|
@@ -307,21 +340,31 @@ eact-native-google-mobile-ads is already a dependency; no ad code
 
 ## 7. Implementation order
 
-| # | Work | Effort | Why in this position |
-|---|---|---|---|
-| 1 | **Model routing** (Standard/Premium split) | 2–3 days + eval set | 3.6× cost cut; every later decision depends on it |
-| 2 | **Fix the ad payout inconsistency** (20 vs 16/24) | 1 hour | Cheap; blocks any ad work |
-| 3 | **Meter chat** at 15/35 SV by tier | 1 day | Closes the ₦3,645/user/month hole |
-| 3b | **Rename `rewarded_ad_payout_points` to gross; derive payout from `platform_ad_revenue_percent`** | 1 hr | Prevents the 20-vs-16 confusion that misled this analysis |
-| 4 | **Cap generation behind unlock** | 0.5 day | Stops paying ₦2.13 for unbought assets |
-| 5 | **Quotas**: uploads 2/mo, exams 3/day, chat 5/day | 0.5 day | Bounds free-tier cost |
-| 6 | **Ad formats**: native rewarded + small banner + breakpoint interstitials | 4–5 days | Funds the reward economy (~60% margin); gives the paid tier a real ad-free reason |
-| 7 | **Collapse to one tier at ₦3,000** | 1 day | After the multipliers are trustworthy |
-| 8 | **Per-user cost logging** (p50/p90/p99 by cohort) | 1 day | Without this, none of the above is measurable |
+| # | Work | Effort | Status | Why in this position |
+|---|---|---|---|---|
+| 1 | **Model routing** (Standard/Premium split) | 2–3 days + eval set | ✅ done (eval set still missing) | 3.6× cost cut; every later decision depends on it |
+| 2 | **Fix the ad payout inconsistency** (20 vs 16/24) | 1 hour | ✅ done | Cheap; blocks any ad work |
+| 3 | **Meter chat** at 15/35 SV by tier | 1 day | ✅ done | Closes the ₦3,645/user/month hole |
+| 3b | **Rename `rewarded_ad_payout_points` to gross; derive payout from `platform_ad_revenue_percent`** | 1 hr | ✅ done | Prevents the 20-vs-16 confusion that misled this analysis |
+| 4 | **Cap generation behind unlock** | 0.5 day | ✅ done | Stops paying ₦2.13 for unbought assets |
+| 5 | **Quotas**: uploads 2/mo, exams 3/day, chat 5/day | 0.5 day | ⚠️ chat only | Bounds free-tier cost — **uploads and exams are still unbounded** |
+| 6 | **Ad formats**: native rewarded + small banner + breakpoint interstitials | 4–5 days | ❌ **not started** | Funds the reward economy (~60% margin); gives the paid tier a real ad-free reason |
+| 7 | **Collapse to one tier at ₦3,000** | 1 day | ✅ done | After the multipliers are trustworthy |
+| 8 | **Per-user cost logging** (p50/p90/p99 by cohort) | 1 day | ✅ done | Without this, none of the above is measurable |
+| 9 | **SV allowance + top-up discount** | 1 day | ✅ done | Makes ₦3,000 defensible against cost |
+| 10 | **Routing eval set** | 1–2 days | ❌ **not started** | The quality bar Granite must clear before it answers students anything |
 
 Step 8 is not optional in spirit — every source emphasises that you cannot
 manage this model without cost-per-active-user telemetry split by free and
 paid.
+
+**The critical path now is #6.** Everything else is in place, but the app
+has no ad code at all: no config plugin in `app.config.js` (without the App
+IDs the native SDK crashes on launch), no `mobileAds()` init, no ad
+components, no call sites. The backend SSV endpoint
+(`GET /api/v1/study/ads/complete`) is live and verified. Until the client
+ships there are no impressions, and ads are the leg that funds the free
+tier. See `admob.md` §9 for the rollout checklist.
 
 ---
 
@@ -329,25 +372,34 @@ paid.
 
 **Taken:**
 
-1. **One tier** at ₦3,000/mo or ₦30,000/yr for now. A second tier can
-   be added later, once ad-free and Premium-AI limits give a genuine reason
-   for one.
+1. **One tier** at ₦3,000/mo or ₦30,000/yr for now. A second tier can be
+   added later, once ad-free and Premium-AI limits give a genuine reason
+   for one. *(shipped)*
 2. **Ad payout is 16 SV flat**, for free and paid users alike, with no
    multiplier. The tier difference is ad-free vs ads, not payout size.
+   *(shipped)*
 3. **Ad formats:** native advanced rewarded (user-initiated) plus small
    banners, with interstitials at natural breakpoints only — never
-   mid-exam, never mid-lesson, never on app open.
+   mid-exam, never mid-lesson, never on app open. *(decided; not built)*
 4. **Ad revenue model:** ₦2.00 gross per ad (20 SV) at the $1.50 eCPM
    assumption; 16 SV credited to the user. Net ₦1.19 per ad, because the
    payout is service (costing ~₦0.81) not cash.
+5. **SV allowance and top-up discount shipped** — 2,500 SV/month and 30%
+   off top-ups, both credited as service credit so the liability stays
+   service rather than cash.
 
 **Still open:**
 
-5. **Routing eval set** — what is the minimum quality bar Granite must
+6. **Routing eval set** — what is the minimum quality bar Granite must
    clear on student questions before it answers anything? Needs a labelled
-   set of real student questions per subject.
-6. **Narration pricing** — 76 SV/episode is our healthiest margin. Should
+   set of real student questions per subject. *This is the open risk in the
+   3.6× cost cut: a router that sends hard maths to the light tier saves
+   money while students quietly get wrong answers.*
+7. **Upload and exam quotas** — §7 item 5 is only half done. Uploads cost
+   ₦2.60–₦3.58 and exams ₦1.35 each, and neither is bounded today.
+8. **Narration pricing** — 76 SV/episode is our healthiest margin. Should
    PagePay+ include a small narration allowance instead of requiring SV?
+9. **The AdMob client pipeline** — §7 item 6, the critical path.
 
 ---
 

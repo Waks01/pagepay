@@ -52,3 +52,7 @@ firebase-service-account.js
 push_trace.log
 git_token_helper.sh
 client
+
+# Scratch directory of extracted page images used while building the
+# study pipeline. Not source - 35MB of test fixtures.
+/words

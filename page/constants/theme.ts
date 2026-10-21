@@ -64,6 +64,12 @@ export const PagePay = {
     error: '#DC2626',
     gold: '#B8862C',
     indigo: '#2A2F58',
+    /**
+     * The surface a code listing sits on. It is a shade darker than
+     * the paper in every scheme: code is a different kind of thing
+     * from prose, and it should look like it.
+     */
+    codeSurface: '#F4F5F7',
     // ── Aliases ──────────────────────────────────────────────────
     // Semantic names consumed by premium, bills, and rewards screens.
     // Keep these pointing at the brand palette so a palette change in
@@ -99,6 +105,8 @@ export const PagePay = {
     error: '#F87171',
     gold: '#D4A85A',
     indigo: '#8E93C8',
+    /** See light. */
+    codeSurface: '#1B1F26',
     // ── Aliases (see light) ──────────────────────────────────────
     primary: '#34C39B',
     primaryFaint: '#16261F',
@@ -131,6 +139,8 @@ export const PagePay = {
     error: '#A04A1F',
     gold: '#8A6420',
     indigo: '#4A3B6B',
+    /** See light. */
+    codeSurface: '#EFE3C9',
     // ── Aliases (see light) ──────────────────────────────────────
     primary: '#7C5E2A',
     primaryFaint: '#F0E4C2',

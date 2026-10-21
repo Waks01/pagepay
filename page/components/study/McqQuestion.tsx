@@ -15,6 +15,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 
 import { Fonts, PagePay } from '@/constants/theme';
+import { RichText } from '@/components/study/RichText';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 
 type McqQuestionProps = {
@@ -184,7 +185,14 @@ export function McqQuestion({
       )}
       
       <View style={styles.questionHeader}>
-        <Text style={[styles.question, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>{question}</Text>
+        <RichText
+          color={tokens.ink}
+          fontSize={17}
+          lineHeight={26}
+          style={{ fontFamily: Fonts.editorialSemiBold as string, flex: 1 }}
+        >
+          {question}
+        </RichText>
         {onBookmark && (
           <TouchableOpacity
             onPress={onBookmark}
@@ -266,7 +274,14 @@ export function McqQuestion({
                   {String.fromCharCode(65 + idx)}
                 </Text>
               </View>
-              <Text style={[styles.optionText, { color: tokens.ink }]}>{opt}</Text>
+                <RichText
+                  color={tokens.ink}
+                  fontSize={15}
+                  lineHeight={21}
+                  style={styles.optionText}
+                >
+                  {opt}
+                </RichText>
               {showAnswer && idx === correct_index && (
                 <Ionicons name="checkmark-circle" size={20} color={tokens.mint} accessibilityLabel="Correct answer" />
               )}
@@ -282,7 +297,14 @@ export function McqQuestion({
           <Text style={[styles.explanationLabel, { color: isCorrect ? tokens.mint : tokens.signal }]}>
             {isCorrect ? '✨ Correct!' : '❌ Incorrect'}
           </Text>
-          <Text style={[styles.explanationText, { color: tokens.inkMuted }]}>{explanation}</Text>
+          <RichText
+            color={tokens.inkMuted}
+            fontSize={14}
+            lineHeight={21}
+            style={styles.explanationText}
+          >
+            {explanation}
+          </RichText>
         </Animated.View>
       )}
     </Animated.View>
@@ -310,12 +332,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  question: {
-    fontSize: 19,
-    lineHeight: 26,
-    letterSpacing: -0.2,
-    flex: 1,
   },
   questionHeader: {
     flexDirection: 'row',

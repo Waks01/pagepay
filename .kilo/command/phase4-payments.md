@@ -63,26 +63,36 @@ Add to `.env`:
 ```
 PAYSTACK_SECRET_KEY=sk_test_...
 PAYSTACK_PUBLIC_KEY=pk_test_...
-PAYSTACK_WEBHOOK_SECRET=...
 ```
+There is no `PAYSTACK_WEBHOOK_SECRET` — Paystack signs webhooks with the **secret key**.
 
-## Pricing (Nigeria)
-- **Study+ Monthly**: ₦1,000 (~$0.65)
-- **Study+ Yearly**: ₦10,000 (~$6.50, save ₦2,000)
-- **Complete+ Monthly**: ₦2,000 (~$1.30)
-- **Complete+ Yearly**: ₦20,000 (~$13.00, save ₦4,000)
+## Pricing (Nigeria) — as shipped
+- **Premium Monthly**: ₦3,000
+- **Premium Yearly**: ₦30,000
 
-## Study+ Benefits
+> **One plan, not two.** The June 2026 plan had Study+ (₦1,000/₦10,000) and
+> Complete+ (₦2,000/₦20,000). They shipped as one **₦3,000/mo or ₦30,000/yr**
+> plan (commit `6ce5d72`) — the two tiers differed only in multipliers on
+> broken code paths, so there was nothing to justify a 2x price gap. The four
+> legacy `UserTier` keys still exist and all resolve to this same plan,
+> because renaming the enum is a data migration and an unknown key falls
+> back to the *free* tier.
+>
+> What ₦3,000 buys: free asset unlocks, free audio narration, 15 chat
+> turns/day, 1.5x reading/task/bills/daily multipliers, a **2,500 SV monthly
+> allowance** and a **30% top-up discount** (both service credit, never
+> cashable). Ad rewards stay 1.0x — free and paid both get a flat 16 SV.
+
+## Premium Benefits
 1. **Free study material unlocks** (no points cost)
 2. **Full audio narration** (all units)
 3. **Skip education unit progression**
-
-## Complete+ Benefits (everything in Study+ plus)
-1. **2x point multipliers** on reading, tasks, daily rewards, bills cashback
-2. **Optional ads on novels** (skip for 3 pts/slice or watch for 33 pts/slice)
-3. **Priority task verification**
-4. **Gold Complete+ badge**
-5. **Billing history** access
+4. **1.5x point multipliers** on reading, tasks, daily rewards, bills cashback
+5. **Ad-free** — this is the upgrade reason; rewarded ads are optional for free users
+6. **Priority task verification**
+7. **Gold badge**
+8. **Billing history** access
+9. **2,500 SV monthly allowance** + 30% top-up discount
 
 ## Test Mode
 Use Paystack test cards:

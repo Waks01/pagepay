@@ -14,6 +14,7 @@ import {
   deleteMaterial,
   updateMaterial,
   type UploadProgressCallback,
+  type EducationLevel,
 } from '../api';
 import { clearMaterialFileCache } from '../storage';
 
@@ -35,7 +36,8 @@ export function useMaterial(id: number) {
 export function useUploadSow() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ text, exam_type }: { text: string; exam_type?: string | null }) => uploadSowText(text, exam_type),
+    mutationFn: ({ text, exam_type, education_level }: { text: string; exam_type?: string | null; education_level?: EducationLevel }) =>
+      uploadSowText(text, exam_type, education_level),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['study', 'materials'] });
     },
@@ -49,7 +51,8 @@ export function useUploadSowImage() {
       file: { uri: string; name: string; type: string };
       exam_type?: string | null;
       onProgress?: UploadProgressCallback;
-    }) => uploadSowImage(payload.file, payload.exam_type, payload.onProgress),
+      education_level?: EducationLevel;
+    }) => uploadSowImage(payload.file, payload.exam_type, payload.onProgress, payload.education_level),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['study', 'materials'] });
     },
@@ -64,7 +67,8 @@ export function useUploadSowDocument() {
       exam_type?: string | null;
       selected_pages?: number[] | null;
       onProgress?: UploadProgressCallback;
-    }) => uploadSowDocument(payload.file, payload.exam_type, payload.selected_pages, payload.onProgress),
+      education_level?: EducationLevel;
+    }) => uploadSowDocument(payload.file, payload.exam_type, payload.selected_pages, payload.onProgress, payload.education_level),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['study', 'materials'] });
     },

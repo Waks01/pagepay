@@ -35,6 +35,7 @@ import { Fonts, PagePay } from "@/constants/theme";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PageHeader } from "@/components/PageHeader";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
+import { RichText } from "@/components/study/RichText";
 
 type ExamStatus = "loading" | "active" | "submitted" | "timed_out" | "not_found";
 
@@ -353,9 +354,14 @@ export default function ExamActiveScreen() {
           <Text style={[styles.questionEyebrow, { color: tokens.inkMuted }]}>
             QUESTION {String(currentIndex + 1).padStart(2, "0")} OF {questions.length}
           </Text>
-          <Text style={[styles.questionText, { color: tokens.ink, fontFamily: Fonts.editorialSemiBold as string }]}>
+          <RichText
+            color={tokens.ink}
+            fontSize={19}
+            lineHeight={28}
+            style={{ fontFamily: Fonts.editorialSemiBold as string }}
+          >
             {currentQuestion.question}
-          </Text>
+          </RichText>
         </Animated.View>
 
         <View style={styles.optionsContainer}>
@@ -382,7 +388,14 @@ export default function ExamActiveScreen() {
                     {letter}
                   </Text>
                 </View>
-                <Text style={[styles.optionText, { color: tokens.ink }]}>{option}</Text>
+                <RichText
+                  color={tokens.ink}
+                  fontSize={16}
+                  lineHeight={23}
+                  style={styles.optionText}
+                >
+                  {option}
+                </RichText>
                 {isSelected && <Ionicons name="checkmark-circle" size={18} color={tokens.mint} />}
               </Pressable>
             );

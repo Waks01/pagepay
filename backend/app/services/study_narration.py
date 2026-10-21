@@ -23,6 +23,8 @@ failure and refunds, rather than silently reading raw material.
 
 from __future__ import annotations
 
+import re
+
 from app.ai.prompts import NARRATION_LEVEL_GUIDANCE, STUDY_NARRATION_SCRIPT
 from app.config import settings
 from app.services.audio_pricing import (
@@ -60,6 +62,110 @@ def _get_topics(parsed_structure: object) -> list[dict]:
     return [t for t in topics if isinstance(t, dict)]
 
 
+def _speak_math(text: str) -> str:
+    """Turn a LaTeX expression into something a voice can say.
+
+    The reader typesets a formula; a listener cannot. "\\frac{a}{b}"
+    read aloud character by character is nonsense, so it becomes "a
+    over b", and the symbols a school syllabus uses become their
+    names.
+    """
+    if not text:
+        return ""
+
+    spoken = text
+
+    # Fractions first: they contain braces that the other rules would
+    # otherwise trip over.
+    for _ in range(6):
+        match = re.search(r"\\frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}", spoken)
+        if not match:
+            break
+        numerator = _speak_math(match.group(1)).strip()
+        denominator = _speak_math(match.group(2)).strip()
+        spoken = (
+            spoken[: match.start()]
+            + f" {numerator} over {denominator} "
+            + spoken[match.end() :]
+        )
+
+    for _ in range(6):
+        match = re.search(r"\\sqrt\s*\{([^{}]*)\}", spoken)
+        if not match:
+            break
+        spoken = (
+            spoken[: match.start()]
+            + " the square root of "
+            + _speak_math(match.group(1))
+            + spoken[match.end() :]
+        )
+
+    # Superscripts and subscripts.
+    spoken = re.sub(
+        r"\^\s*\{([^{}]*)\}",
+        lambda m: " to the power " + _speak_math(m.group(1)).strip(),
+        spoken,
+    )
+    spoken = re.sub(
+        r"\^\s*(\w)",
+        lambda m: " to the power " + m.group(1),
+        spoken,
+    )
+    spoken = re.sub(
+        r"_\s*\{([^{}]*)\}",
+        lambda m: " subscript " + _speak_math(m.group(1)).strip(),
+        spoken,
+    )
+    spoken = re.sub(
+        r"_\s*(\w)",
+        lambda m: " subscript " + m.group(1),
+        spoken,
+    )
+
+    for command, name in _SPOKEN_SYMBOLS.items():
+        spoken = spoken.replace("\\" + command, name)
+
+    # Whatever is left of the LaTeX is noise for a listener.
+    spoken = spoken.replace("\\", " ")
+    spoken = spoken.replace("{", " ").replace("}", " ")
+    spoken = re.sub(r"\s+", " ", spoken)
+    return spoken.strip()
+
+
+# The symbols a school syllabus actually uses, and what they are called
+# out loud.
+_SPOKEN_SYMBOLS = {
+    "times": " times ",
+    "cdot": " times ",
+    "div": " divided by ",
+    "pm": " plus or minus ",
+    "leq": " less than or equal to ",
+    "geq": " greater than or equal to ",
+    "neq": " not equal to ",
+    "approx": " approximately ",
+    "infty": " infinity ",
+    "rightarrow": " goes to ",
+    "Rightarrow": " therefore ",
+    "alpha": " alpha ",
+    "beta": " beta ",
+    "gamma": " gamma ",
+    "delta": " delta ",
+    "theta": " theta ",
+    "lambda": " lambda ",
+    "mu": " mu ",
+    "pi": " pi ",
+    "sigma": " sigma ",
+    "phi": " phi ",
+    "omega": " omega ",
+    "Delta": " delta ",
+    "Sigma": " sigma ",
+    "Omega": " omega ",
+    "sum": " the sum of ",
+    "prod": " the product of ",
+    "int": " the integral of ",
+}
+
+
 def _render_block(block: dict) -> str:
     """Render one block into plain source text for the model."""
     kind = _clean(block.get("type")).lower()
@@ -85,7 +191,10 @@ def _render_block(block: dict) -> str:
     if kind == "formula":
         text = _clean(block.get("text"))
         description = _clean(block.get("description"))
-        return f"Formula {text} — {description}" if description else f"Formula {text}"
+        spoken = _speak_math(text)
+        if description:
+            return f"Formula: {spoken}. {description}"
+        return f"Formula: {spoken}" if spoken else ""
     if kind == "table":
         headers = [_clean(h) for h in (block.get("headers") or []) if isinstance(h, str)]
         rows = block.get("rows") or []
@@ -99,6 +208,40 @@ def _render_block(block: dict) -> str:
         # Code is source for a reader, not for a listener; the model
         # describes what it does instead of reciting syntax.
         return "Code example in " + (_clean(block.get("language")) or "code") + " (describe, do not recite)"
+    if kind == "figure":
+        # The picture itself cannot be spoken. The description that
+        # comes with it was written for exactly this moment, so the
+        # listener is told what the diagram shows.
+        text = _clean(block.get("text"))
+        if not text:
+            return ""
+        index = block.get("figure_index")
+        label = f"Figure {index}: " if index else "Figure: "
+        return label + text
+    if kind == "statement":
+        # A theorem or a rule. The label says what kind of claim it
+        # is, which is exactly the part a listener cannot see.
+        text = _clean(block.get("text"))
+        if not text:
+            return ""
+        label = _clean(block.get("label")) or "Statement"
+        return f"{label}: {text}"
+    if kind == "definition":
+        # A term and its meaning. The term is spoken first so the
+        # listener knows what is being defined.
+        text = _clean(block.get("text"))
+        term = _clean(block.get("term"))
+        if not text:
+            return term
+        if not term:
+            return text
+        return f"{term} means {text}"
+    if kind == "recap":
+        items = [_clean(v) for v in (block.get("items") or []) if isinstance(v, str)]
+        items = [i for i in items if i]
+        if not items:
+            return ""
+        return "What to remember: " + "; ".join(items)
     return ""
 
 
@@ -342,12 +485,18 @@ async def generate_episode_script(
     episode_index: int = 0,
     total_episodes: int = 1,
     max_chars: int | None = None,
+    db=None,
+    user_id: int | None = None,
 ) -> tuple[str, str, int]:
     """Generate the spoken script for one episode of a topic.
 
     Returns (script, level, char_count). Raises on failure so the caller
     can mark the batch failed and refund — no silent fallback to raw
     material.
+
+    `db` and `user_id` should be passed together: without them the
+    model's spend never reaches the usage log, and the cost of
+    narration becomes invisible to the admin cost breakdown.
     """
     from app.ai.router import route_ai
 
@@ -376,6 +525,9 @@ async def generate_episode_script(
         prompt,
         task_type="heavy",
         max_tokens=4000,
+        db=db,
+        user_id=user_id,
+        endpoint="narration_script",
     )
     script = _clean(result.get("response") or "")
     if not script:

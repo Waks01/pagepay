@@ -1,8 +1,19 @@
 # PagePay Admin Panel - Gap Analysis & Implementation Roadmap
 
-**Document Version**: 1.0  
-**Date**: July 16, 2026  
-**Status**: Comprehensive audit of missing features and functionality gaps
+**Document Version**: 1.1  
+**Date**: July 16, 2026 (status refreshed Oct 20, 2026)  
+**Status**: Audit of missing features in the admin panel
+
+> **How to read this document.** The Phase 1 (P0) items below were
+> re-verified on 2026-07-17 and are marked **✅ DONE** — the stale ❌ marks
+> that used to sit under them have been corrected. The Phase 2/3/4 sections
+> are the **still-open** gaps; they were written in July 2026 and have not
+> been re-audited since, so treat each ❌ as "last known open" rather than
+> "definitely still open". Verify against the code before starting any of
+> them.
+>
+> For the current state of the product as a whole, see `roadmap.md` and
+> `PRICING_AND_UNIT_ECONOMICS.md`.
 
 ---
 
@@ -13,9 +24,9 @@ This document identifies **all missing features** and **functionality gaps** in 
 **Quick Stats:**
 
 - 🔴 **Critical Issues**: 5 items — all verified DONE as of 2026-07-17 (see per-item notes)
-- 🟠 **High Priority**: 15 items (implement in Phase 2)
-- 🟡 **Medium Priority**: 20 items (implement in Phase 3)
-- 🟢 **Low Priority**: 15+ items (implement in Phase 4+)
+- 🟠 **High Priority**: 15 items (Phase 2) — open
+- 🟡 **Medium Priority**: 20 items (Phase 3) — open
+- 🟢 **Low Priority**: 15+ items (Phase 4+) — open
 
 ---
 
@@ -68,9 +79,9 @@ admin/src/shared/components/Sidebar.tsx (nav added)
 - ✅ Suspicious Sessions
 - ✅ Duplicate Accounts
 - ✅ Referral Abuse
-- ❌ Ad Fraud (MISSING)
+- ✅ Ad Fraud
 
-**Implementation Plan**:
+**Implementation Plan**: *(completed — the plan below is kept for reference)*
 
 1. Add 4th tab "Ad Fraud" to FraudPage.tsx
 2. Query `/admin/ads/suspicious-users` endpoint
@@ -95,10 +106,10 @@ admin/src/shared/components/Sidebar.tsx (nav added)
 
 **Testing**:
 
-- [ ] Verify query returns real data
-- [ ] Confirm risk level colors work
-- [ ] Test ban user action
-- [ ] Test filter changes
+- [x] Verify query returns real data
+- [x] Confirm risk level colors work
+- [x] Test ban user action
+- [x] Test filter changes
 
 ---
 

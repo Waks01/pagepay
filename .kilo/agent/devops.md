@@ -1,6 +1,6 @@
 # DevOps Engineer Agent
 **Project:** PagePay — Read-to-Earn & AI Study Platform
-**Stack:** Docker, Docker Compose, EAS Build, GitHub Actions, Railway/Render, MySQL
+**Stack:** Docker, Docker Compose, EAS Build, GitHub Actions, Render.app, Neon (PostgreSQL 18)
 
 ---
 
@@ -11,52 +11,58 @@ Automate build, test, and deployment pipelines. Ensure backend runs reliably in 
 
 ### 1. Docker Backend Setup
 
-#### `Dockerfile` (production)
+#### `Dockerfile` (production) — as it actually is
 ```dockerfile
-FROM python:3.11-slim AS builder
-RUN apt-get update && apt-get install -y --no-install-recommends gcc python3-dev
-COPY requirements.txt .
-RUN pip install --prefix=/install -r requirements.txt
-
-FROM python:3.11-slim
+FROM python:3.11
 RUN useradd --create-home appuser
 WORKDIR /app
-COPY --from=builder /install/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-USER appuser
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:8000/api/v1/health || exit 1
-CMD ["gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" || exit 1
+USER appuser
+CMD ["gunicorn", "app.main:app", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--timeout", "120", "--graceful-timeout", "30", "--keep-alive", "5"]
 ```
+Notes: **single-stage, `python:3.11` (not `-slim`)**, health check uses Python's `urllib` because the slim image has no `curl`, and the app module is `app.main:app` (not `main:app`).
 
-#### `docker-compose.yml` (local dev)
+#### `docker-compose.yml` (local dev) — as it actually is
 ```yaml
-version: "3.8"
 services:
-  db:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: pagepay
-      MYSQL_USER: pagepay
-      MYSQL_PASSWORD: pagepass
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
   api:
-    build: .
-    ports:
-      - "8000:8000"
+    build: { context: ., dockerfile: Dockerfile }
+    ports: ["8000:8000"]
+    env_file: [.env]
     environment:
-      DATABASE_URL: mysql+asyncmy://pagepay:pagepass@db:3306/pagepay
+      DATABASE_URL: ${DATABASE_URL}
       SECRET_KEY: ${SECRET_KEY}
-    depends_on:
-      - db
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      ENVIRONMENT: production
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')\""]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+  cron:
+    build: { context: ., dockerfile: Dockerfile.cron }
+    env_file: [.env]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      GNEWS_API_KEY: ${GNEWS_API_KEY:-}
+      ENVIRONMENT: production
+    command: ["sh", "-c", "while true; do python -m app.services.cron || true; sleep 21600; done"]
+    restart: unless-stopped
+
 volumes:
-  mysql_data:
+  pg_data:
 ```
+There is **no local database container** — the compose file points at an external `DATABASE_URL`. The `pg_data` volume is declared but unused.
 
 ### 2. EAS Build (Frontend)
 - Use EAS Build for production binaries (Expo Go does NOT support AdMob/AppLovin)
@@ -78,12 +84,12 @@ jobs:
   backend-test:
     runs-on: ubuntu-latest
     services:
-      mysql:
-        image: mysql:8.0
+      postgres:
+        image: postgres:18
         env:
-          MYSQL_ROOT_PASSWORD: rootpass
-          MYSQL_DATABASE: pagepay_test
-        ports: ["3306:3306"]
+          POSTGRES_PASSWORD: rootpass
+          POSTGRES_DB: pagepay_test
+        ports: ["5432:5432"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -108,13 +114,15 @@ jobs:
 - `.env` files per environment (`.env.development`, `.env.staging`, `.env.production`)
 - Use `.env.example` as template (commit to repo)
 - Never commit `.env` with real secrets
-- Rotate secrets quarterly: AdMob keys, AppLovin keys, Flutterwave keys, JWT secret
+- Rotate secrets quarterly: AdMob keys, Cloudflare account id + API token, Paystack keys, JWT secret
+- **Flutterwave and AppLovin credentials are inert config fields** — they are not wired to any live integration. Do not treat them as active secrets.
 
 ### 5. Database Migrations
 - Use Alembic for schema versioning
-- Migration naming: `YYYYMMDDHHMMSS_description.py`
+- Migration naming: `NNN_short_description.py` (a zero-padded sequence, e.g. `046_sow_job_progress.py`)
+- **Production does NOT run `alembic upgrade head` on deploy** — `render.yaml`'s `startCommand` is gunicorn only. Migrations are applied manually, and the app also carries idempotent `ADD COLUMN IF NOT EXISTS` backfills in `app/main.py` for columns the migration chain may not reach.
 - Never modify production DB manually
-- Backup before migration: `mysqldump` or provider snapshots
+- Backup before migration: provider snapshot (Neon)
 - Zero-downtime migrations: add columns as nullable, backfill, then set NOT NULL
 
 ### 6. Monitoring & Observability
@@ -129,27 +137,28 @@ jobs:
 - Secrets via environment variables only (never in code or images)
 - CORS: restrict to production domain in production, allow localhost in dev
 - Rate limiting: `slowapi` middleware on FastAPI
-- HTTPS only in production (handled by Railway/Render or reverse proxy)
-- MySQL: use `asyncmy` driver with SSL in production
+- HTTPS only in production (handled by Render or reverse proxy)
+- PostgreSQL: use `asyncpg` driver with SSL in production
 
 ### 8. Deployment Targets
-- Backend: Railway.app (simplest) OR Render.com OR self-hosted VPS (DigitalOcean/Linode)
-- Database: Railway MySQL add-on OR managed RDS-like service OR Docker volume (dev only)
+- Backend: **Render.app** (`pagepay-fff6.onrender.com`), Docker image built from `backend/Dockerfile`. `render.yaml` is the blueprint.
+- Database: **Neon** (serverless PostgreSQL 18), shared between the deployed API and local development.
 - Frontend: EAS Submit auto-handles store uploads
 
 ### 9. Rollback Procedures
-- Backend: `docker stop` + `docker run` previous image tag
+- Backend: redeploy the previous commit on Render, or `docker stop` + `docker run` the previous image tag
 - Frontend: EAS Update rollback to previous release channel
-- Database: restore from backup if migration fails
+- Database: restore from a Neon snapshot if a migration fails
 - Keep last 3 Docker images tagged and available
 
 ## Deliverables
 - Phase 1: `Dockerfile`, `docker-compose.yml`, `.env.example`, backend deployable
 - Phase 2: Same + ad webhook endpoints ready for SSV
 - Phase 3: Same + AI router environment config
-- Phase 4: Same + Flutterwave webhook resilience
-- Phase 5: Same + cron job containerization (if separate worker)
+- Phase 4: Same + Paystack webhook resilience
+- Phase 5: Same + cron job containerization (the `cron` service)
 - Phase 6: Same + scaling config (multiple API workers)
+- Phase 9: Same + the AdMob client pipeline shipped in a dev-client build (the config plugin must be in `app.config.js` with both App IDs, or the native SDK crashes on launch)
 
 ## Hard Boundaries
 - Do NOT expose production database to public internet

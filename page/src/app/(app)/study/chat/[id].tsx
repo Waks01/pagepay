@@ -12,6 +12,7 @@ import { sendChatMessage, ChatRefusedError, type ChatRequest } from '@/src/featu
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 import { PageHeader } from '@/components/PageHeader';
+import { RichText } from '@/components/study/RichText';
 
 function ShimmerBar({ style: extraStyle, color }: { style?: object; color?: string }) {
   const opacity = useSharedValue(0.4);
@@ -368,14 +369,30 @@ export default function StudyChatScreen() {
                   },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.bubbleText,
-                    { color: msg.role === 'user' ? tokens.mintText : msg.status === 'error' ? tokens.error : tokens.ink },
-                  ]}
-                >
-                  {msg.status === 'error' ? `Something went wrong. ${msg.text}` : msg.text}
-                </Text>
+                {msg.status === 'error' ? (
+                  <Text
+                    style={[
+                      styles.bubbleText,
+                      { color: tokens.error },
+                    ]}
+                  >
+                    {`Something went wrong. ${msg.text}`}
+                  </Text>
+                ) : (
+                  // The tutor writes its answers from the lesson, so
+                  // they carry the same inline mathematics the
+                  // material does.
+                  <RichText
+                    color={
+                      msg.role === 'user' ? tokens.mintText : tokens.ink
+                    }
+                    fontSize={15}
+                    lineHeight={22}
+                    style={styles.bubbleText}
+                  >
+                    {msg.text}
+                  </RichText>
+                )}
                 {msg.status === 'error' && msg.failedInput ? (
                   <Pressable
                     onPress={() => {

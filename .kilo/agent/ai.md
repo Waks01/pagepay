@@ -1,15 +1,20 @@
 # AI Architect Agent
 **Project:** PagePay — Read-to-Earn & AI Study Platform
-**Stack:** Python (FastAPI), Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`)
+**Stack:** Python (FastAPI), Cloudflare Workers AI — Granite 4.0 H-Micro, GLM-4.7-Flash, Llama-3.2-11B-Vision, MeloTTS
 
-> **Correction (Oct 2026):** the free multi-provider pool described below
-> (Gemini/Groq/Cerebras/OpenRouter/Kilo Gateway) was removed in commit
-> `cd01eff`. Production runs a single paid Cloudflare endpoint —
-> `backend/app/ai/router.py` is the whole client. Read that section of
-> `steering.md` first: no failover (Cloudflare outage = 503 on every AI
-> feature) and a paid model, so the daily quota and rate limits in
-> `services/ai_usage.py` + `study.py` are load-bearing. Treat the
-> provider tables below as historical context only.
+> **Single provider.** The free multi-provider pool (Gemini / Groq /
+> Cerebras / OpenRouter / Mistral / Kilo Gateway) was removed in commit
+> `cd01eff`. `backend/app/ai/router.py` is the whole client.
+>
+> There is **no failover and no circuit breaker** — a Cloudflare outage
+> is a 503 on every AI feature. The daily quota and rate limits in
+> `services/ai_usage.py` and `routers/study.py` are therefore
+> load-bearing, not optional.
+>
+> The models are **paid** (list price, not free tier). Every AI call
+> costs money, so the routing split, the quotas and the per-user cost
+> logging are the levers that keep the product solvent. See
+> `PRICING_AND_UNIT_ECONOMICS.md`.
 
 ---
 
@@ -18,78 +23,62 @@ Design, implement, and maintain the AI routing system. Ensure students get fast,
 
 ## Core Responsibilities
 
-### 1. Provider Configuration (June 2026 Status)
+### 1. Model Configuration (as it actually is)
 
-| Provider | Model (Free Tier) | RPM | TPM | RPD | Context Window | Best For | Commercial Use |
-|----------|------------------|-----|-----|-----|----------------|----------|----------------|
-| Google AI Studio | `gemini-2.5-flash` | 15 | 250K | 1,500 | 1M tokens | Heavy SOW uploads, long documents | Yes |
-| Groq | `llama-3.3-70b-versatile` | 30 | ~6K | ~1,000 | 128K | Real-time quizzes, flashcards, chat | Yes |
-| Cerebras | `gpt-oss-120b` | 5 | 30K | ~1M tokens/day | 1M tokens | Batch processing (optional) | Yes (volatile) |
-| Mistral | `mistral-small-latest` | 60 | 500K | ~1B tokens/mo | 32K-256K | Failover volume | No (training opt-in) |
-| OpenRouter | `deepseek/deepseek-chat:free` | 20 | — | 50/day (1K with $10) | 1M | Unified failover key | Yes |
+| Model id | Role | Cost to us | Used for |
+|---|---|---|---|
+| `@cf/ibm-granite/granite-4.0-h-micro` | **Standard** | ~₦0.68/turn | Definitions, recall, direct lookups, rephrasing |
+| `@cf/zai-org/glm-4.7-flash` | **Premium** | ~₦2.43/turn | Multi-step reasoning, exam strategy, "why" questions, marking |
+| `@cf/meta/llama-3.2-11b-vision-instruct` | Vision | ~₦3.58/image | OCR of uploaded images and rendered PDF pages |
+| `@cf/myshell-ai/melotts` | TTS | $0.0002/audio-min | All narration |
 
-### 2. Router Architecture Pattern
+Config lives in `app/config.py`:
+- `ai_standard_model`, `ai_premium_model` — override via `AI_STANDARD_MODEL` / `AI_PREMIUM_MODEL`
+- `ai_routing_enabled` — when false, everything routes to premium (used to validate the split)
+- `ai_model_cost_usd` — published list price per model, used to compute `AiUsageLog.cost_usd` at write time so telemetry survives a price change
+
+**Cloudflare returns text in `result.response`.** It does *not* use the OpenAI-compatible `result.choices[0].message.content`. Reading the wrong key silently yields an empty response and a 503 — this has bitten the SOW parser before. `route_ai` reads `result.response` first and falls back to the OpenAI shape.
+
+### 2. Router Architecture
+
+`route_ai()` in `app/ai/router.py` is a **Python function, not an HTTP endpoint**. Callers import it.
 
 ```python
-from fastapi import HTTPException
-import logging
-
-PROVIDERS = [
-    {"name": "gemini", "model": "gemini-2.5-flash", "try": call_gemini, "tokens_per_day": 1500000},
-    {"name": "groq", "model": "llama-3.3-70b-versatile", "try": call_groq, "tokens_per_day": 100000},
-    {"name": "cerebras", "model": "gpt-oss-120b", "try": call_cerebras, "tokens_per_day": 1000000},
-    {"name": "openrouter", "model": "deepseek/deepseek-chat:free", "try": call_openrouter, "tokens_per_day": 50000},
-]
-
-async def route_ai(prompt: str, task_type: str, max_tokens: int = 4000):
-    candidates = [p for p in PROVIDERS if p["name"] not in get_circuit_open()]
-    
-    for provider in candidates:
-        if task_type == "heavy" and provider["name"] not in ["gemini", "cerebras"]:
-            continue
-        if task_type == "fast" and provider["name"] not in ["groq", "openrouter"]:
-            continue
-        try:
-            return await provider["try"](prompt, provider["model"], max_tokens)
-        except RateLimitError:
-            mark_failed(provider["name"])
-            continue
-        except Exception as e:
-            logging.warning(f"{provider['name']} error: {e}")
-            continue
-    
-    raise HTTPException(503, "All AI providers temporarily saturated.")
+async def route_ai(
+    prompt: str,
+    task_type: str = "heavy",       # ignored for model selection today
+    model_tier: str | None = None,  # "standard" | "premium" | None
+    db=None,
+    max_tokens: int | None = None,
+) -> dict:
+    """Returns {"response", "provider", "model", "usage", "latency_ms", "cost_usd"}"""
 ```
+
+- `resolve_model(model_tier)` maps a tier to a model id. **An unknown or missing tier resolves to premium** — deliberately, so a bad tier argument can never silently downgrade a student to a weaker model.
+- Generation tasks (SOW parse, asset generation, exam questions) omit `model_tier` and always get premium. A misparsed syllabus or a wrong answer key is not worth saving a fraction on.
+- The classifier in `app/ai/routing.py::classify_turn()` picks the tier for chat turns. It errs toward premium: a cheap wrong answer costs a student more than a saved fraction.
 
 ### 3. Task Routing Rules
 
-| Request Type | Primary Provider | Fallback Order | Why |
-|--------------|-----------------|----------------|-----|
-| SOW/syllabus upload (heavy, multi-page) | Gemini 2.5 Flash | Cerebras → OpenRouter | 1M context window |
-| Real-time MCQ generation | Groq (Llama 3.3 70B) | OpenRouter → Gemini | Speed (320 TPS) |
-| Flashcard generation | Groq | OpenRouter | Speed |
-| Chat / Q&A (streaming) | Groq | OpenRouter → Cerebras | Speed + streaming |
-| Circuit breaker failover | Any saturated provider | Next in queue | Prevents total outage |
+| Request type | Model | Why |
+|---|---|---|
+| SOW/syllabus upload | Premium | Misparsing a syllabus is expensive to get wrong |
+| MCQ / exam question generation | Premium | A wrong answer key is worse than no material |
+| Asset generation (explanations, flashcards) | Premium | Same |
+| Chat / Q&A | Classified standard → premium | Definitions and recall go to Granite; reasoning escalates |
+| Image/PDF OCR | Vision model | Separate capability, not a text tier |
+| Narration | Premium + MeloTTS | Script quality is user-visible |
 
-### 4. Circuit Breaker Implementation
-- Store `ai_provider_health` table:
-  - `provider_name` (PK)
-  - `consecutive_failures`
-  - `last_failure_at`
-  - `circuit_open_until`
-- Logic:
-  - On failure: increment counter
-  - If counter >= 3: set `circuit_open_until = now() + 5 minutes`
-  - Skip provider if `circuit_open_until > now()`
-  - On success: reset counter to 0
-- Admin endpoint to manually reset circuits
+### 4. No circuit breaker
+
+There is no `ai_provider_health` table and no circuit-breaker state. A failed Cloudflare call raises; callers convert it to a 503 with a user-safe message. Do not reintroduce a multi-provider failover list without first reading `PRICING_AND_UNIT_ECONOMICS.md` — a second provider is a second bill, and the routing split already does the cost work.
 
 ### 5. Prompt Engineering Standards
-- All prompts go through a single ` prompts.py ` file for version control
+- All prompts go through a single `app/ai/prompts.py` file for version control
 - Include system prompts for each task type
 - Always request JSON output for structured data (MCQs, flashcards)
 - Temperature: 0.3 for factual tasks (quiz generation), 0.7 for creative (explanations)
-- Max tokens: allocate to avoid unnecessary cost even on free tiers
+- Max tokens: allocate to avoid unnecessary cost — every token is money
 
 ### 6. Response Parsing
 - Use Pydantic models to validate AI JSON responses
@@ -102,23 +91,33 @@ async def route_ai(prompt: str, task_type: str, max_tokens: int = 4000):
 - Frontend renders token-by-token (React Native `Text` updating)
 - Timeout: 30s max for any single streaming response
 
-### 8. Observability
+### 8. Quotas and Metering
+- Free chat quota: 5/day (`study_chat_daily_limit`); Premium: 15/day (`study_chat_premium_daily_limit`)
+- Beyond the quota a student can **buy turns with SV**: 15 SV standard, 35 SV premium (`study_chat_sv_standard` / `study_chat_sv_premium`), capped at 50 billable turns/day (`study_chat_paid_daily_limit`)
+- Uploads and exams are deliberately **not** metered per-use — upload is the entry point and exams are the retention hook. Their cost is bounded by quotas that are still to be added.
+- Enforced via `services/ai_usage.py` (`check_and_record` / `peek_count` / `release`)
+
+### 9. Observability
 - Log `provider`, `model`, `task_type`, `latency_ms`, `token_count`, `status` for every call
-- Track daily usage per provider in `ai_usage_daily` table
-- Alert if a provider's daily quota reaches 80% capacity
+- `AiUsageLog` carries `cost_usd`; `services/ai_cost.py` aggregates per-user cost
+- The unit-economics model is only trustworthy if per-user cost is measurable — this is not optional
+
+### 10. Image and PDF reading
+- Images and PDF pages are read by the **vision model**, not by text extraction. A PDF is rendered page by page with PyMuPDF and each page goes to the vision model — the same code path as an uploaded image. A PDF's embedded text layer is not used, because a scan or a photo has none.
+- Render at 1400px wide for OCR; the 900px preview thumbnails are too soft to read.
 
 ## Deliverables
 - Phase 1: N/A (no AI dependency)
 - Phase 2: N/A
-- Phase 3: AI router, SOW parser, MCQ/flashcard/essay generator, streaming chat, circuit breaker
+- Phase 3: AI router, SOW parser, MCQ/flashcard/essay generator, streaming chat
 - Phase 4: N/A (payment-focused)
 - Phase 5: N/A
 - Phase 6: Content provider abstraction (may use AI for summarization)
+- Phase 9: Standard/Premium model routing, per-user cost logging, metered chat turns
 
 ## Hard Boundaries
-- Do NOT use production paid APIs during development — use free tiers only
 - Do NOT store full AI prompts in DB (privacy + cost); store only metadata (model name, token count)
-- Do NOT bypass circuit breaker for any reason in production code
 - Do NOT use sync LLM libraries in async FastAPI routes (always async client calls)
-- **Production Only:** No mock AI responses in committed code. Every route must call a real provider endpoint. If a provider is rate-limited, the router must failover to the next — never return a canned response.
-- **Test Gate:** AI routes must be tested against real provider APIs (free tiers) in integration tests. Verify failover logic by temporarily disabling a provider and confirming the next one serves the request.
+- **Production Only:** No mock AI responses in committed code. Every route must call the real provider. If Cloudflare is unavailable, return a 503 with a user-safe message — never a canned response.
+- **Test Gate:** Tests must **not** call the live provider. Monkeypatch `route_ai` (and the OCR helper) with a stub. A test that hits Cloudflare is slow, non-deterministic and burns the daily allowance.
+- **Cost Gate:** Any new AI call site is a new bill. Before adding one, say what it costs per use, who pays for it, and which quota bounds it.
