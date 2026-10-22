@@ -407,7 +407,11 @@
       "cost_label": "Iye ṣiá¹£e",
       "unlocking": "Ń ṣi...",
       "unlocked_title": "A Ṣi Ohun",
-      "unlocked_body": "O lọ wo ohun elo yii nigbakugba báyìì."
+      "unlocked_body": "O lọ wo ohun elo yii nigbakugba báyìì.",
+      "wallet_ads": "Wo àwọn ìpolé",
+      "ads_needed": "Gba {{amount}} sv fún àwọn ìpolé kọ̀ọ̀kan · O kù {{count}} sí i",
+      "ads_ready": "O ti gba tó pẹ̀lẹ́ - ṣí i ní báyìí",
+      "watch_ad": "Wo ìpolé kan"
     },
     "loading_material_title": null,
     "loading_material_subtitle": null,

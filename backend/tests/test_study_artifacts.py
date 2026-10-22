@@ -289,6 +289,39 @@ class TestGroundingAudit:
         assert study_grounding.numbers_in("(-1, 2)") == {"-1", "2"}
 
 
+class TestAdAudioUnlock:
+    """A student with no money must still be able to reach the audio.
+
+    The unlock used to be a dead end for anyone without service credits
+    or cashable points: the endpoint rejected the ad method and the
+    modal had no ad option at all.
+    """
+
+    def test_the_ad_method_is_accepted(self):
+        from app.routers import study as study_router
+
+        # The endpoint must not reject 'ad' outright any more.
+        source = open(study_router.__file__, encoding="utf-8").read()
+        assert '{"sv", "cashable", "ad"}' in source
+
+    def test_the_ad_custom_data_names_the_material(self):
+        from app.routers import study as study_router
+
+        assert study_router._audio_unlock_target("unlock:material:42") == 42
+        assert study_router._audio_unlock_target("unlock:material:0") is None
+        assert study_router._audio_unlock_target("unlock:material:x") is None
+        assert study_router._audio_unlock_target("pagepay_rewarded") is None
+        assert study_router._audio_unlock_target("") is None
+        assert study_router._audio_unlock_target(None) is None
+
+    def test_a_wrongly_formatted_target_is_refused(self):
+        from app.routers import study as study_router
+
+        assert study_router._audio_unlock_target("unlock:42") is None
+        assert study_router._audio_unlock_target("material:42") is None
+        assert study_router._audio_unlock_target("unlock:material:42:7") is None
+
+
 class TestPlatformConfig:
     """The public config endpoint must not 500 because the database blinked.
 

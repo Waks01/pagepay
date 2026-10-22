@@ -15,6 +15,7 @@ import {
   View,
   RefreshControl,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -35,6 +36,7 @@ import {
   useMaterials,
   useUploadSow,
   useUploadSowImage,
+  useUploadSowImages,
   useUploadSowDocument,
   useClaimQuizBonus,
   useGenerateExample,
@@ -197,6 +199,11 @@ export default function StudyScreen() {
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
+  const viewerWidth = useWindowDimensions().width;
+  const previewIndex = Math.max(
+    0,
+    previewFiles.findIndex((f) => f.uri === previewFile?.uri),
+  );
 
   // Read the user from the global store. The user object is loaded
   // once at app start — no per-screen /me fetch.
@@ -204,6 +211,7 @@ export default function StudyScreen() {
 
   const uploadMutation = useUploadSow();
   const uploadImageMutation = useUploadSowImage();
+  const uploadImagesMutation = useUploadSowImages();
   const uploadDocumentMutation = useUploadSowDocument();
   const { pickImage, pickImages, takePhoto } = useImagePicker();
   const { pickDocument } = useDocumentPicker();
@@ -413,29 +421,30 @@ export default function StudyScreen() {
       const isPdf = previewFile.type === "application/pdf";
       console.log("[study/index] confirmUpload routing", { isImage, isPdf });
       if (isImage) {
-        // Upload all selected images
-        const filesToUpload = previewFiles.length > 1 ? previewFiles : [previewFile];
-        for (let i = 0; i < filesToUpload.length; i++) {
-          const f = filesToUpload[i];
-          setUploadProgress(Math.round((i / filesToUpload.length) * 50));
-          console.log("[study/index] confirmUpload calling uploadSowImage", { idx: i, name: f.name });
-            const { job_id } = await uploadImageMutation.mutateAsync({
-              file: { uri: f.uri, name: f.name, type: f.type },
-              exam_type: examType,
-              onProgress: handleUploadProgress,
-              education_level: educationLevel,
-            });
-          console.log("[study/index] confirmUpload image job_id", { job_id, idx: i });
-          setAiProcessing(true);
-          setUploadProgress(80);
-          const job = await pollSowJob(job_id, handlePollTick);
-          console.log("[study/index] confirmUpload poll result", { job, idx: i });
-          setAiProcessing(false);
-          if (job.status === "failed" || !job.material_id) {
-            throw new Error(job.error || "Image processing failed");
-          }
-          await finalizeUploadSuccess(job.material_id);
+        // Every selected image is a page of ONE material. Uploading
+        // them one at a time and navigating to the first result left
+        // the rest of the student's document on the floor — the app
+        // went to the first material and never came back for the
+        // others.
+        const filesToUpload =
+          previewFiles.length > 1 ? previewFiles : [previewFile];
+        // The stage is set before the request so the bar says
+        // something even if the browser never reports a total length.
+        setUploadStage("uploading");
+        const { job_id } = await uploadImagesMutation.mutateAsync({
+          files: filesToUpload,
+          exam_type: examType,
+          onProgress: handleUploadProgress,
+          education_level: educationLevel,
+        });
+        setAiProcessing(true);
+        setUploadProgress(80);
+        const job = await pollSowJob(job_id, handlePollTick);
+        setAiProcessing(false);
+        if (job.status === "failed" || !job.material_id) {
+          throw new Error(job.error || "Image processing failed");
         }
+        await finalizeUploadSuccess(job.material_id);
       } else if (isPdf) {
         console.log("[study/index] confirmUpload calling uploadSowDocument");
         const selectedPagesArray = pdfPreviewPages
@@ -641,6 +650,7 @@ export default function StudyScreen() {
             uploading={
               uploadMutation.isPending ||
               uploadImageMutation.isPending ||
+              uploadImagesMutation.isPending ||
               uploadDocumentMutation.isPending ||
               aiProcessing
             }
@@ -994,25 +1004,60 @@ export default function StudyScreen() {
           style={styles.imageViewerOverlay}
           onPress={() => setImageViewerVisible(false)}
         >
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <PinchGestureHandler
-              onGestureEvent={(e) => {
-                scale.value = Math.max(1, e.nativeEvent.scale);
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{ width: "100%", flex: 1 }}
+          >
+            {/* A gallery, not a single image. The student picked
+                several pages and the viewer has to let them see all of
+                them — showing one at a time with no way forward meant
+                the other pages were invisible. */}
+            <FlatList
+              data={previewFiles}
+              horizontal
+              pagingEnabled
+              keyExtractor={(item, index) => `${item.uri}-${index}`}
+              initialScrollIndex={previewIndex}
+              getItemLayout={(_, index) => ({
+                length: viewerWidth,
+                offset: viewerWidth * index,
+                index,
+              })}
+              onMomentumScrollEnd={(event) => {
+                const index = Math.round(
+                  event.nativeEvent.contentOffset.x / viewerWidth,
+                );
+                const next = previewFiles[index];
+                if (next) setPreviewFile(next);
               }}
-              onEnded={() => {
-                if (scale.value < 1.1) {
-                  scale.value = withSpring(1);
-                }
-              }}
-            >
-              <Animated.View style={styles.imageViewerWrap}>
-                <Animated.Image
-                  source={{ uri: previewFile?.uri }}
-                  style={[styles.imageViewerImage, animatedStyle]}
-                  resizeMode="contain"
-                />
-              </Animated.View>
-            </PinchGestureHandler>
+              renderItem={({ item }) => (
+                <PinchGestureHandler
+                  onGestureEvent={(e) => {
+                    scale.value = Math.max(1, e.nativeEvent.scale);
+                  }}
+                  onEnded={() => {
+                    if (scale.value < 1.1) {
+                      scale.value = withSpring(1);
+                    }
+                  }}
+                >
+                  <Animated.View style={styles.imageViewerWrap}>
+                    <Animated.Image
+                      source={{ uri: item.uri }}
+                      style={[styles.imageViewerImage, animatedStyle]}
+                      resizeMode="contain"
+                    />
+                  </Animated.View>
+                </PinchGestureHandler>
+              )}
+            />
+            {previewFiles.length > 1 && (
+              <View style={styles.imageViewerCounterWrap} pointerEvents="none">
+                <Text style={styles.imageViewerCounter}>
+                  {previewIndex + 1} of {previewFiles.length}
+                </Text>
+              </View>
+            )}
             <Pressable
               style={styles.imageViewerClose}
               onPress={() => setImageViewerVisible(false)}
@@ -1355,5 +1400,21 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     borderRadius: 20,
     padding: 4,
+  },
+
+  imageViewerCounterWrap: {
+    position: "absolute",
+    bottom: 40,
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+
+  imageViewerCounter: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

@@ -280,6 +280,53 @@ export async function uploadSowImage(
   return data;
 }
 
+/**
+ * Upload several images as ONE material — the pages of a document.
+ *
+ * The whole set goes in a single request, so the progress the user
+ * sees is the real byte progress of the whole upload, and the server
+ * can read every page before it builds the lesson.
+ */
+export async function uploadSowImages(
+  files: Array<{ uri: string; name: string; type: string }>,
+  exam_type?: string | null,
+  onProgress?: UploadProgressCallback,
+  education_level?: EducationLevel,
+): Promise<SowUploadJobAccepted> {
+  console.log(
+    "[study/api] uploadSowImages START",
+    { count: files.length, exam_type },
+  );
+  const form = new FormData();
+  for (const file of files) {
+    form.append(
+      "files",
+      {
+        uri: file.uri,
+        name: file.name,
+        type: file.type || "application/octet-stream",
+      } as any,
+    );
+  }
+  if (exam_type) {
+    form.append("exam_type", exam_type);
+  }
+  if (education_level) {
+    form.append("education_level", education_level);
+  }
+
+  const res = await apiUpload(
+    "/api/v1/study/sow/upload-images",
+    form,
+    onProgress ? { onProgress } : undefined,
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Upload failed");
+  }
+  return res.json();
+}
+
 export async function uploadSowDocument(
   file: { uri: string; name: string; type: string },
   exam_type?: string | null,

@@ -193,7 +193,7 @@ export async function openAdInspector(): Promise<void> {
  */
 export function requestOptionsFor(
   userId?: string | number | null,
-  options: { ssv?: boolean } = {},
+  options: { ssv?: boolean; customData?: string } = {},
 ) {
   const withSsv = options.ssv ?? false;
   return {
@@ -209,7 +209,11 @@ export function requestOptionsFor(
             // anything identifying in it - the internal numeric user
             // id is the right value.
             userId: String(userId),
-            customData: 'pagepay_rewarded',
+            // The custom data tells the server what this ad is
+            // paying for. It comes back in the SSV callback, which is
+            // where the grant is actually made — the client's own
+            // reward event is not proof that an ad was watched.
+            customData: options.customData ?? 'pagepay_rewarded',
           },
         }
       : {}),
@@ -242,6 +246,7 @@ type RewardedState = {
 export function useRewardedAd(
   userId?: string | number | null,
   onReward?: () => void,
+  customData?: string,
 ): RewardedState {
   const rewarded = useRef<RewardedAd | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -261,7 +266,7 @@ export function useRewardedAd(
   const build = () => {
     const instance = RewardedAd.createForAdRequest(
       ACTIVE_AD_UNITS.rewarded,
-      requestOptionsFor(userId, { ssv: true }),
+      requestOptionsFor(userId, { ssv: true, customData }),
     );
     // A rewarded ad fires its own LOADED event
     // (RewardedAdEventType.LOADED === "rewarded_loaded"), not the

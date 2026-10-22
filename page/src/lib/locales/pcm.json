@@ -416,7 +416,11 @@
       "unlocking": "Dey unlock...",
       "error_title": "Unlock Fail",
       "unlocked_title": "Audio don Unlock",
-      "unlocked_body": "You fit listen to this material anytime now."
+      "unlocked_body": "You fit listen to this material anytime now.",
+      "wallet_ads": "Watch ads",
+      "ads_needed": "Collect {{amount}} sv for each ad · {{count}} more to go",
+      "ads_ready": "You don collect enough - unlock am now",
+      "watch_ad": "Watch one ad"
     },
     "loading_material_title": null,
     "loading_material_subtitle": null,

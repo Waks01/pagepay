@@ -264,6 +264,104 @@ async def upload_sow(
     )
 
 
+@router.post("/sow/upload-images", response_model=SowUploadJobAccepted, status_code=202)
+async def upload_sow_images(
+    files: list[UploadFile] = File(...),
+    exam_type: str | None = Form(default=None),
+    education_level: str | None = Form(default=None),
+    request: Request = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload several images as ONE material — the pages of a document.
+
+    A student who photographs a textbook, or scans a syllabus, has a
+    dozen pages and wants one material, not a dozen. This is the same
+    thing as uploading the PDF, without needing to make a PDF.
+
+    Every image is a page: each is read, checked and OCR'd, each is
+    stored as a page image, and the whole set is parsed together into
+    one lesson.
+    """
+    try:
+        exam_type = normalize_exam_type(exam_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    if not settings.cloudflare_account_id or not settings.cloudflare_api_token:
+        logger.error("[sow/upload-images] Cloudflare not configured")
+        raise HTTPException(status_code=503, detail="Cloudflare Workers AI not configured")
+
+    if not files:
+        raise HTTPException(status_code=400, detail="No images were uploaded")
+    if len(files) > _OCR_MAX_PAGES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Too many images: {len(files)}. "
+                f"A material can have up to {_OCR_MAX_PAGES} pages."
+            ),
+        )
+
+    images: list[tuple[str, bytes, str]] = []
+    total_bytes = 0
+    for index, upload in enumerate(files):
+        ctype = (upload.content_type or "").lower().split(";", 1)[0].strip()
+        if ctype not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(
+                status_code=415,
+                detail=(
+                    f"Unsupported image type for page {index + 1}: {ctype!r}. "
+                    "Use JPEG, PNG, WEBP, or HEIC."
+                ),
+            )
+        safe_name = safe_filename(upload.filename, fallback=f"page{index + 1}.jpg")
+        try:
+            contents = await upload.read()
+        except Exception as e:
+            logger.exception("[sow/upload-images] file.read() failed: %s", e)
+            raise HTTPException(
+                status_code=400, detail=f"Could not read page {index + 1}: {e}"
+            )
+        if not contents:
+            raise HTTPException(status_code=400, detail=f"Page {index + 1} is empty")
+        if len(contents) > MAX_SOW_IMAGE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"Page {index + 1} is too large "
+                    f"(max {MAX_SOW_IMAGE_BYTES // (1024 * 1024)} MB)"
+                ),
+            )
+        total_bytes += len(contents)
+        images.append((safe_name, contents, upload.content_type or "image/jpeg"))
+
+    if total_bytes > MAX_SOW_IMAGE_BYTES * _OCR_MAX_PAGES:
+        raise HTTPException(status_code=413, detail="The pages are too large together")
+
+    job = SowUploadJob(id=str(uuid.uuid4()), user_id=current_user.id, status="queued")
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    logger.info(
+        "[sow/upload-images] job queued id=%s user=%s pages=%s bytes=%s",
+        job.id, current_user.id, len(images), total_bytes,
+    )
+
+    asyncio.create_task(
+        _process_sow_images_job(
+            job_id=job.id,
+            user_id=current_user.id,
+            exam_type=exam_type,
+            images=images,
+            education_level=_normalise_education_level(education_level),
+        )
+    )
+
+    return SowUploadJobAccepted(job_id=job.id, status="queued")
+
+
 @router.post("/sow/upload-image", response_model=SowUploadJobAccepted, status_code=202)
 async def upload_sow_image(
     file: UploadFile = File(...),
@@ -1788,6 +1886,171 @@ async def _persist_material(
             )
         await db.commit()
         return material.id
+
+
+async def _process_sow_images_job(
+    job_id: str,
+    user_id: int,
+    exam_type: str | None,
+    images: list[tuple[str, bytes, str]],
+    education_level: str | None = None,
+) -> None:
+    """Read several images as the pages of one material.
+
+    Each image is a page: it is transcribed, it is looked at for
+    pictures, and it is stored as a page image. The pages are then
+    parsed together, so the student gets one lesson over their whole
+    document rather than one material per photograph.
+    """
+    logger.info(
+        "[sow/upload-images worker] START job=%s user=%s pages=%s",
+        job_id, user_id, len(images),
+    )
+    level = education_level or settings.study_education_default_level
+    total = len(images)
+
+    try:
+        await _mark_job_status(job_id, "processing", progress=8, stage="reading_pages")
+
+        semaphore = asyncio.Semaphore(_OCR_PAGE_CONCURRENCY)
+        read_count = 0
+
+        async def read_page(index: int, name: str, contents: bytes, ctype: str):
+            """Transcribe one page and look for a picture on it."""
+            nonlocal read_count
+            try:
+                async with semaphore:
+                    text = await _ocr_page_with_fallback(
+                        contents, ctype, user_id=user_id
+                    )
+                    findings = await _detect_figures_with_cloudflare(
+                        contents, content_type=ctype
+                    )
+                text = _strip_furniture(text, findings.header, findings.footer)
+                if findings.figure:
+                    text = f"{text}\n\n[FIGURE: {findings.figure}]"
+                return index, name, contents, ctype, text, findings
+            finally:
+                read_count += 1
+                await _mark_job_status(
+                    job_id,
+                    "processing",
+                    progress=8 + int((read_count / total) * 32),
+                    stage="reading_pages",
+                )
+
+        results = await asyncio.gather(
+            *(read_page(i, n, c, t) for i, (n, c, t) in enumerate(images)),
+            return_exceptions=True,
+        )
+
+        pages_read = []
+        for result in results:
+            if isinstance(result, BaseException):
+                logger.warning(
+                    "[sow/upload-images worker] a page failed: %s", result
+                )
+                continue
+            pages_read.append(result)
+
+        if not pages_read:
+            raise RuntimeError("image_ocr_failed")
+
+        pages_read.sort(key=lambda item: item[0])
+        source_text = "\n\n".join(item[4] for item in pages_read if item[4].strip())
+        if not source_text.strip():
+            raise RuntimeError("image_ocr_empty")
+
+        await _mark_job_status(job_id, "processing", progress=45, stage="reading_pages")
+
+        # The pages become the material's page images, and the pictures
+        # found on them become its figures.
+        page_artifacts_list: list = []
+        figure_artifacts_list: list = []
+        for index, name, contents, ctype, _text, findings in pages_read:
+            key = f"{settings.cloudflare_r2_pages_prefix}/{job_id}/{index + 1}.jpg"
+            stored = page_artifacts.upload_object(key, contents, "image/jpeg")
+            page_artifacts_list.append(
+                page_artifacts.PageArtifact(
+                    page=index + 1,
+                    width=0,
+                    height=0,
+                    image_key=stored,
+                    image_url=page_artifacts.object_url(stored),
+                    is_scan=True,
+                )
+            )
+            if findings.figure:
+                figure_key = (
+                    f"{settings.cloudflare_r2_figures_prefix}/{job_id}/{index + 1}.png"
+                )
+                figure_stored = page_artifacts.upload_object(
+                    figure_key, contents, "image/jpeg"
+                )
+                figure_artifacts_list.append(
+                    page_artifacts.FigureArtifact(
+                        index=index + 1,
+                        page=index + 1,
+                        bbox=(0.0, 0.0, 0.0, 0.0),
+                        width=0,
+                        height=0,
+                        image_key=figure_stored,
+                        image_url=page_artifacts.object_url(figure_stored),
+                        description=findings.figure,
+                    )
+                )
+
+        await _mark_job_status(job_id, "processing", progress=70, stage="parsing_ai")
+        parsed, provider, _ = await _run_sow_parser(source_text)
+        if parsed is None:
+            raise RuntimeError("ai_parser_failed")
+        title = (parsed or {}).get("title", "Untitled material")
+
+        await _mark_job_status(job_id, "processing", progress=85, stage="parsing_ai")
+        async with AsyncSessionLocal() as explain_db:
+            explanation = await _build_explanation_safely(
+                title=title,
+                source_text=source_text,
+                figures=[
+                    {
+                        "figure_index": f.index,
+                        "page": f.page,
+                        "description": f.description,
+                        "caption": f.caption,
+                    }
+                    for f in figure_artifacts_list
+                ],
+                level=level,
+                db=explain_db,
+                user_id=user_id,
+            )
+
+        await _mark_job_status(job_id, "processing", progress=92, stage="saving")
+        material_id = await _persist_material(
+            user_id=user_id,
+            title=title,
+            exam_type=exam_type,
+            raw_input=source_text,
+            parsed_structure=parsed,
+            explanation_structure=explanation,
+            contents=images[0][1] if images else b"",
+            file_mime_type=images[0][2] if images else "image/jpeg",
+            ai_model_used=provider,
+            education_level=level,
+            pages=page_artifacts_list,
+            figures=figure_artifacts_list,
+        )
+
+        logger.info(
+            "[sow/upload-images worker] DONE job=%s material_id=%s pages=%s",
+            job_id, material_id, len(page_artifacts_list),
+        )
+        await _mark_job_status(
+            job_id, "completed", material_id=material_id, progress=100, stage="completed"
+        )
+    except Exception as exc:
+        logger.exception("[sow/upload-images job] %s failed", job_id)
+        await _mark_job_status(job_id, "failed", error=str(exc) or exc.__class__.__name__)
 
 
 async def _process_sow_image_job(
@@ -3703,6 +3966,12 @@ class AudioUnlockResponse(BaseModel):
     new_balance: int
     url: str | None = None
     provider: str | None = None
+    # True when the unlock is waiting on an ad. The grant is made by
+    # the server when AdMob's callback arrives, not by the client.
+    pending: bool = False
+    # The ad's custom data. The client must send this with the ad, so
+    # the callback knows which material it is paying for.
+    ad_custom_data: str | None = None
 
 
 @router.post("/materials/{material_id}/unlock-audio", response_model=AudioUnlockResponse)
@@ -3713,15 +3982,16 @@ async def unlock_material_audio(
     db: AsyncSession = Depends(get_db),
 ):
     # Payment is sv or cashable — the spendable wallet first, with
-    # withdrawable earnings as the alternative. (The rewarded-ad method
-    # the old UI advertised has no pipeline behind it and stays
-    # rejected.) The request is validated explicitly so it can never
-    # fall off the end of the handler into a None-return 500. `sv` is
-    # stored as-is: it's this endpoint's historical value, unlike the
-    # asset unlock where `sv` is an alias of the legacy `points`.
+    # withdrawable earnings as the alternative. A third way in is
+    # watching a rewarded ad, and that one is granted by the server
+    # when AdMob's callback arrives, so this endpoint only tells the
+    # client what to send with the ad.
     method = str(payload.get("method") or "sv").lower()
-    if method not in {"sv", "cashable"}:
-        raise HTTPException(status_code=400, detail="method must be 'sv' or 'cashable'")
+    if method not in {"sv", "cashable", "ad"}:
+        raise HTTPException(
+            status_code=400,
+            detail="method must be 'sv', 'cashable' or 'ad'",
+        )
 
     material_result = await db.execute(
         select(StudyMaterial).where(
@@ -3758,6 +4028,25 @@ async def unlock_material_audio(
             new_balance=balance_result.scalar_one() or 0,
             url=f"/api/v1/study/tts/audio/{material_id}_cached.mp3",
             provider="cached",
+        )
+
+    if method == "ad":
+        # Nothing is granted here. The unlock is granted by the SSV
+        # callback, which is the only place a watched ad is actually
+        # verified. The client shows the ad carrying this custom data
+        # and then polls `/audio-status` until the unlock appears.
+        balance_result = await db.execute(
+            select(User.service_credit_balance).where(User.id == current_user.id)
+        )
+        return AudioUnlockResponse(
+            unlocked=False,
+            material_id=material_id,
+            cost_sv=0,
+            method="ad",
+            new_balance=balance_result.scalar_one() or 0,
+            provider="ad",
+            pending=True,
+            ad_custom_data=f"unlock:material:{material_id}",
         )
 
     cost_sv = _audio_unlock_cost_sv(material.content)
@@ -5530,6 +5819,13 @@ async def admob_reward_callback(
 
     payout = admob_ssv.payout_points()
 
+    # A watched ad can also be the payment for an audio unlock. The
+    # client says which material it is unlocking through the ad's
+    # custom data, and the grant happens here, where the watch is
+    # actually verified — the client's own reward callback is not
+    # proof of anything.
+    unlock_material_id = _audio_unlock_target(params.get("custom_data"))
+
     # Idempotency. AdMob re-sends a callback up to five times in
     # one-second intervals, so a replay must not credit twice. The
     # transaction_id is the provider's own unique id for the event.
@@ -5572,6 +5868,23 @@ async def admob_reward_callback(
             reward_granted=True,
         )
     )
+
+    # When the ad was watched to unlock the audio, the unlock IS the
+    # reward. The wallet is not credited as well: the student would
+    # be paid twice for one ad, and the ad's margin would go negative.
+    granted_unlock = False
+    if unlock_material_id is not None:
+        granted_unlock = await _grant_audio_unlock_for_ad(
+            db, user_id=user_row.id, material_id=unlock_material_id
+        )
+
+    if granted_unlock:
+        logger.info(
+            "AdMob SSV unlocked audio user=%s material=%s transaction_id=%s",
+            user_row.id, unlock_material_id, transaction_id,
+        )
+        return Response(status_code=200, content="ok")
+
     # Spendable only. A withdrawable ad reward is a payout the ad did
     # not fund — the same guard as bills commission and the allowance.
     if settings.wallet_split_enabled:
@@ -5585,6 +5898,71 @@ async def admob_reward_callback(
         user_row.id, payout, transaction_id,
     )
     return Response(status_code=200, content="ok")
+
+
+def _audio_unlock_target(custom_data: str | None) -> int | None:
+    """The material an ad was watched to unlock, if it was one.
+
+    The client puts `unlock:material:<id>` in the ad's custom data. The
+    grant is made here rather than by the client, because the client's
+    own "reward earned" event is not proof that an ad was watched.
+    """
+    if not custom_data:
+        return None
+    parts = str(custom_data).strip().split(":")
+    if len(parts) != 3 or parts[0] != "unlock" or parts[1] != "material":
+        return None
+    try:
+        material_id = int(parts[2])
+    except ValueError:
+        return None
+    return material_id if material_id > 0 else None
+
+
+async def _grant_audio_unlock_for_ad(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    material_id: int,
+) -> bool:
+    """Give the user the audio unlock for a material an ad paid for.
+
+    Returns True when the unlock was granted. An unlock the user
+    already has is not a failure — they simply watched the ad for
+    nothing extra, and the wallet credit still stands.
+    """
+    material_result = await db.execute(
+        select(StudyMaterial).where(
+            StudyMaterial.id == material_id,
+            StudyMaterial.user_id == user_id,
+        )
+    )
+    if material_result.scalar_one_or_none() is None:
+        logger.warning(
+            "AdMob SSV unlock target material=%s is not this user's",
+            material_id,
+        )
+        return False
+
+    existing_result = await db.execute(
+        select(AudioUnlock).where(
+            AudioUnlock.user_id == user_id,
+            AudioUnlock.material_id == material_id,
+        )
+    )
+    if existing_result.scalar_one_or_none() is not None:
+        return False
+
+    db.add(
+        AudioUnlock(
+            user_id=user_id,
+            material_id=material_id,
+            method="ad",
+            cost_sv=0,
+        )
+    )
+    await db.commit()
+    return True
 
 class AdRevenueRequest(BaseModel):
     """Impression-level ad revenue, reported by the client.

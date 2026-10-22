@@ -18,7 +18,7 @@
     "@tanstack/react-query": "^5.101.4",
     "babel-preset-expo": "^57.0.6",
     "dotenv": "^17.4.2",
-    "expo": "~57.0.17",
+    "expo": "~57.0.31",
     "expo-asset": "^57.0.10",
     "expo-audio": "~57.0.4",
     "expo-blur": "^57.0.2",

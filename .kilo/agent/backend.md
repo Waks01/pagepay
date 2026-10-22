@@ -214,6 +214,15 @@ The teaching layer is not only what the reader shows. It is what the model is ta
 - Audio is stored in R2. The content type is **sniffed from the bytes** (`_audio_content_type`): MeloTTS answers with WAV and edge-tts with MP3, and labelling a WAV as `audio/mpeg` makes some players refuse it.
 - The narration speaks the **teaching layer**, not the faithful structure (`_narration_structure_for`). The faithful layer supplies the topic list.
 
+#### 9h. Unlocking The Audio With An Ad
+A student with no service credits and no cashable points must still be able to reach the audio. Without an ad option the unlock is a dead end, and the audio — the whole point of the material — is unreachable for anyone without money.
+
+- The client asks `POST /materials/{id}/unlock-audio` with `method: "ad"`. The endpoint grants nothing: it returns `pending: true` and the `ad_custom_data` to send with the ad.
+- The client shows the rewarded ad with that custom data (`unlock:material:<id>`) in `serverSideVerificationOptions`. AdMob returns it in the SSV callback.
+- **The grant is made in the SSV callback** (`_grant_audio_unlock_for_ad`), because that is the only place a watched ad is actually verified. The client's own "reward earned" event is not proof of anything.
+- When the ad was for an unlock, the wallet is **not** credited as well. The unlock is the reward; crediting both would pay the student twice for one ad and put the ad margin negative.
+- The client polls `GET /materials/{id}/audio-status` until the unlock appears. The callback is asynchronous and can trail the ad closing by a second or two.
+
 ### 10. Testing Requirements
 - Unit tests with `pytest` + `httpx.AsyncClient` (test FastAPI routes)
 - Database tests: use PostgreSQL test container for local dev; production uses PostgreSQL 18 on Render

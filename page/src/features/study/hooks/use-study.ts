@@ -6,6 +6,7 @@ import {
   unlockAsset,
   uploadSowText,
   uploadSowImage,
+  uploadSowImages,
   uploadSowDocument,
   claimQuizBonus,
   routeAi,
@@ -53,6 +54,27 @@ export function useUploadSowImage() {
       onProgress?: UploadProgressCallback;
       education_level?: EducationLevel;
     }) => uploadSowImage(payload.file, payload.exam_type, payload.onProgress, payload.education_level),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['study', 'materials'] });
+    },
+  });
+}
+
+export function useUploadSowImages() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      files: Array<{ uri: string; name: string; type: string }>;
+      exam_type?: string | null;
+      onProgress?: UploadProgressCallback;
+      education_level?: EducationLevel;
+    }) =>
+      uploadSowImages(
+        payload.files,
+        payload.exam_type,
+        payload.onProgress,
+        payload.education_level,
+      ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['study', 'materials'] });
     },

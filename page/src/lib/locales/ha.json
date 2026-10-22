@@ -407,7 +407,11 @@
       "cost_label": "Farashin buɗewa",
       "unlocking": "Ana buɗewa...",
       "unlocked_title": "An Buɗe Sauti",
-      "unlocked_body": "Yanzu za ka iya saurare wannan kayan a kowane lokaci."
+      "unlocked_body": "Yanzu za ka iya saurare wannan kayan a kowane lokaci.",
+      "wallet_ads": "Kalli ads",
+      "ads_needed": "Samu {{amount}} sv a kowane ad · Kana {{count}} zuwa",
+      "ads_ready": "Ka shiga ka karɗi - buɗe yanzu",
+      "watch_ad": "Kalli ad"
     },
     "loading_material_title": null,
     "loading_material_subtitle": null,

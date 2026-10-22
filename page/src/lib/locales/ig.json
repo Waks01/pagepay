@@ -407,7 +407,11 @@
       "cost_label": "Uru imepe",
       "unlocking": "Na- emepe...",
       "unlocked_title": "Emepere Ã¡Â»Â¤da",
-      "unlocked_body": "Ã¡Â»Å nwere ike ige ntÃ¡Â»â€¹ ihe a n'oge Ã¡Â»Â bÃ¡Â»Â¥la."
+      "unlocked_body": "Ã¡Â»Å nwere ike ige ntÃ¡Â»â€¹ ihe a n'oge Ã¡Â»Â bÃ¡Â»Â¥la.",
+      "wallet_ads": "Lee mgbalahụ",
+      "ads_needed": "Nweta {{amount}} sv maka mmgbalụ ọbụla · Ọ dịka {{count}} ọzọ",
+      "ads_ready": "Ị natara ihe ọ dịka ọtụtụ - mepere ọzọ",
+      "watch_ad": "Lee mgbalahụ"
     },
     "loading_material_title": null,
     "loading_material_subtitle": null,

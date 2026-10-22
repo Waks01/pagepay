@@ -31,6 +31,18 @@ type Props = {
   showAmount?: boolean;
   /** How many SV one view is worth, for the label. */
   amountSv?: number;
+  /**
+   * What this ad is paying for, sent to the server with the ad and
+   * returned in the SSV callback. Use it when the ad unlocks
+   * something specific rather than crediting the wallet.
+   */
+  customData?: string;
+  /**
+   * Set when the ad unlocks something rather than crediting the
+   * wallet. The button then does not wait for a balance to move — the
+   * caller waits for the unlock instead.
+   */
+  skipCreditWait?: boolean;
   style?: object;
 };
 
@@ -43,6 +55,8 @@ export function RewardedAdButton({
   label = 'Watch ad',
   showAmount = true,
   amountSv = 16,
+  customData,
+  skipCreditWait = false,
   style,
 }: Props) {
   const scheme = useEffectiveScheme();
@@ -89,10 +103,18 @@ export function RewardedAdButton({
   const { show, isLoaded, isShowing, error } = useRewardedAd(
     user?.id,
     () => {
+      if (skipCreditWait) {
+        // The ad unlocks something, so no balance is going to move.
+        // The caller waits for the unlock.
+        setCrediting(true);
+        onEarned?.();
+        return;
+      }
       // UX only - the server credits the SV via SSV.
       balanceBeforeRef.current = balance;
       void waitForCredit();
     },
+    customData,
   );
 
   const onPress = useCallback(() => {

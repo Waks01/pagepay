@@ -380,6 +380,7 @@
       },
       "stages": {
         "queued": "Preparing your document…",
+        "uploading": "Sending your pages…",
         "reading_pages": "Reading the pages…",
         "parsing_ai": "Building your study plan…",
         "saving": "Saving your material…",
@@ -539,7 +540,11 @@
       "error_title": "Unlock Failed",
       "status_error": "Could not load the unlock price. Close and try again.",
       "unlocked_title": "Audio Unlocked",
-      "unlocked_body": "You can now listen to this material anytime."
+      "unlocked_body": "You can now listen to this material anytime.",
+      "wallet_ads": "Watch ads",
+      "ads_needed": "Earn {{amount}} sv per ad · {{count}} more to go",
+      "ads_ready": "You've earned enough - unlock now",
+      "watch_ad": "Watch an ad"
     }
   },
   "auth": {

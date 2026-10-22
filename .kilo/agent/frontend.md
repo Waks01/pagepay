@@ -102,6 +102,12 @@ There is **no `components/ads/` directory** — the ad components described in o
 - A screen that can be restored onto the stack without its parameter — a stale navigation state, a deep link — must check before it requests. `/content/undefined` is a 404 and a screen with nothing to show; step back instead.
 - A public config endpoint must not fail because the database is briefly unreachable. Serve the documented fallback.
 
+### 4d. Uploading Several Pages
+- **Several images are ONE material, not several.** A student who photographs a textbook has a dozen pages and wants one lesson, not a dozen. `POST /study/sow/upload-images` takes them all in one request, reads each as a page, and builds a single material. Uploading them one at a time and navigating to the first result left the rest of the document on the floor.
+- One request also means the progress bar is the **real byte progress of the whole upload** (`xhr.upload.onprogress` gives `loaded` and `total` for the entire body). Uploading file by file made the total meaningless.
+- The progress bar has two windows: **0–80 % is the wire** (real bytes), **80–100 % is the server** (reading pages, parsing with the model, saving). The stage label says which one is happening.
+- A full-screen image viewer of a multi-page pick must be a **paged gallery**, not one image with no way forward.
+
 ### 4b. Rendering the Parts That Are Not Prose
 A study material contains worked calculations, formulas, code listings, quotes, theorems and tables. Each has a shape of its own, and each is rendered by its own component in `components/study/`.
 

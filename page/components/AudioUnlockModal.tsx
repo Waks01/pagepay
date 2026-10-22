@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -15,9 +15,13 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { apiFetch } from "@/src/shared/api/client";
 import { PagePay } from "@/constants/theme";
-import { useCurrentUser } from "@/src/shared/lib/current-user";
+import {
+  useCurrentUser,
+  useCurrentUserStore,
+} from "@/src/shared/lib/current-user";
 import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import { PagePaySpinner } from "@/components/PagePaySpinner";
+import { RewardedAdButton } from "@/src/components/ads/RewardedAdButton";
 
 type Props = {
   visible: boolean;
@@ -34,7 +38,24 @@ type AudioUnlockStatus = {
   cost_sv: number;
 };
 
-type UnlockMethod = "sv" | "cashable";
+/**
+ * How the student pays for the audio.
+ *
+ * `ads` is the third way in, and it is the one that costs them nothing:
+ * a watched rewarded ad credits 16 sv to their spendable wallet, and
+ * they keep watching until they have exactly what the unlock costs.
+ *
+ * It is deliberately not a single ad for the whole unlock. The server
+ * does have a one-shot `method="ad"` grant, but the unlock price scales
+ * with the material length, so handing over a whole unlock for one ad
+ * loses money on anything long. Accumulating credits it and unlocking
+ * with sv from there is what the student asked for and what the
+ * platform can afford.
+ */
+type UnlockMethod = "sv" | "cashable" | "ads";
+
+/** Service credits one rewarded ad is worth. */
+const AD_EARN_SV = 16;
 
 type SheetProps = {
   materialId: number;
@@ -136,6 +157,79 @@ function UnlockSheet({
   // SV is the primary wallet; the choice sticks across opens so a user
   // who prefers spending earnings isn't re-prompted every unlock.
   const [method, setMethod] = useState<UnlockMethod>("sv");
+  // The ad's custom data, which tells the server's callback which
+  // material this ad is paying for.
+  const [adCustomData, setAdCustomData] = useState<string | null>(null);
+  const [adPending, setAdPending] = useState(false);
+
+  /**
+   * Ask the server what to send with the ad.
+   *
+   * The grant is made by the server when AdMob's callback arrives,
+   * so the client never decides on its own that the ad was watched.
+   * This call has no side effect — it only hands over the custom data.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(
+          `/api/v1/study/materials/${materialId}/unlock-audio`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ method: "ad" }),
+          },
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.ad_custom_data) {
+          setAdCustomData(data.ad_custom_data);
+        }
+      } catch {
+        // The ad path is optional. If the server will not give us the
+        // custom data, the wallet options still work.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [materialId]);
+
+  /**
+   * Wait for the server's SSV callback to grant the unlock.
+   *
+   * The callback is asynchronous and can trail the ad closing by a
+   * second or two, so poll the status until the unlock appears.
+   */
+  const waitForAdUnlock = useCallback(async () => {
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 1500));
+      try {
+        const res = await apiFetch(
+          `/api/v1/study/materials/${materialId}/audio-status`,
+        );
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data?.unlocked) {
+          setAdPending(false);
+          qc.invalidateQueries({ queryKey: ["audio-unlock-status", materialId] });
+          onUnlocked();
+          return;
+        }
+      } catch {
+        // Keep polling; the callback may still be on its way.
+      }
+    }
+    setAdPending(false);
+    setUnlockError(
+      t(
+        "study.audio_unlock.ad_timeout",
+        "Your reward is still on its way. Try again in a moment.",
+      ),
+    );
+  }, [materialId, onUnlocked, qc, t]);
 
   const alreadyUnlocked = status?.unlocked === true;
   const cost = status?.cost_sv ?? 0;
@@ -147,16 +241,36 @@ function UnlockSheet({
   const anyAffordable = wallets.some((w) => canPay(w.balance));
   const shortfall = Math.max(0, cost - (method === "sv" ? svBalance : cashableBalance));
 
+  // Ads credit the spendable wallet, so the "ads" method is really
+  // "earn sv by watching", and it becomes unlockable once the sv they
+  // have (including what they have already earned from ads) covers the
+  // price.
+  const svShortfall = Math.max(0, cost - svBalance);
+  const adsNeeded = Math.ceil(svShortfall / AD_EARN_SV);
+  const adsCanUnlock = cost > 0 && svShortfall <= 0;
+
+  /** Refresh the wallet after an ad credits the student. */
+  const refreshBalance = useCallback(async () => {
+    await useCurrentUserStore.getState().refresh();
+    qc.invalidateQueries({ queryKey: ["audio-unlock-status", materialId] });
+  }, [qc, materialId]);
+
   const handleUnlock = async () => {
     setUnlocking(true);
     setUnlockError(null);
     try {
+      // On the ads path the student has earned the credits, so the
+      // unlock is paid with sv like any other. The server's "ad" method
+      // is not what we want here - that one defers the grant to the SSV
+      // callback for a single ad covering the whole price, and the
+      // student may have needed several.
+      const payMethod = method === "ads" ? "sv" : method;
       const res = await apiFetch(
         `/api/v1/study/materials/${materialId}/unlock-audio`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method }),
+          body: JSON.stringify({ method: payMethod }),
         },
       );
       if (!res.ok) {
@@ -248,14 +362,32 @@ function UnlockSheet({
 
             <View style={styles.walletList}>
               {wallets.map((wallet) => {
-                const affordable = canPay(wallet.balance);
+                const isAds = wallet.key === "ads";
+                // The ads option is never greyed out - it is the way a
+                // student with no money gets the audio.
+                const affordable = isAds || canPay(wallet.balance);
                 const selected = method === wallet.key;
                 return (
                   <Pressable
                     key={wallet.key}
                     onPress={() => setMethod(wallet.key)}
-                    disabled={!affordable || unlocking}
+                    disabled={!isAds && (!affordable || unlocking)}
                     accessibilityRole="radio"
+                    accessibilityLabel={
+                      isAds
+                        ? t(
+                            "study.audio_unlock.wallet_ads",
+                            "Watch ads",
+                          )
+                        : t(
+                            wallet.key === "sv"
+                              ? "study.audio_unlock.wallet_sv"
+                              : "study.audio_unlock.wallet_cashable",
+                            wallet.key === "sv"
+                              ? "Service credits"
+                              : "Cashable points",
+                          )
+                    }
                     accessibilityState={{ selected, disabled: !affordable }}
                     style={[
                       styles.walletRow,
@@ -278,20 +410,39 @@ function UnlockSheet({
                     </View>
                     <View style={styles.walletInfo}>
                       <Text style={[styles.walletLabel, { color: tokens.ink }]}>
-                        {t(
-                          wallet.key === "sv"
-                            ? "study.audio_unlock.wallet_sv"
-                            : "study.audio_unlock.wallet_cashable",
-                          wallet.key === "sv" ? "Service credits" : "Cashable points",
-                        )}
+                        {isAds
+                          ? t("study.audio_unlock.wallet_ads", "Watch ads")
+                          : t(
+                              wallet.key === "sv"
+                                ? "study.audio_unlock.wallet_sv"
+                                : "study.audio_unlock.wallet_cashable",
+                              wallet.key === "sv"
+                                ? "Service credits"
+                                : "Cashable points",
+                            )}
                       </Text>
                       <Text style={[styles.walletBalance, { color: tokens.inkMuted }]}>
-                        {affordable
-                          ? `${wallet.balance} ${wallet.unit}`
-                          : t("study.audio_unlock.need_more", {
-                              count: cost - wallet.balance,
-                              defaultValue: "Need {{count}} more",
-                            })}
+                        {isAds
+                          ? adsCanUnlock
+                            ? t(
+                                "study.audio_unlock.ads_ready",
+                                "You've earned enough - unlock now",
+                              )
+                            : t(
+                                "study.audio_unlock.ads_needed",
+                                {
+                                  count: adsNeeded,
+                                  amount: AD_EARN_SV,
+                                  defaultValue:
+                                    "Earn {{amount}} sv per ad · {{count}} more to go",
+                                },
+                              )
+                          : affordable
+                            ? `${wallet.balance} ${wallet.unit}`
+                            : t("study.audio_unlock.need_more", {
+                                count: cost - wallet.balance,
+                                defaultValue: "Need {{count}} more",
+                              })}
                       </Text>
                     </View>
                   </Pressable>
@@ -299,7 +450,20 @@ function UnlockSheet({
               })}
             </View>
 
-            {!anyAffordable && (
+            {/* The ad path. Watching credits the spendable wallet, and
+                the student unlocks from there once they have covered the
+                price - so the progress has to be visible while they
+                watch. */}
+            {method === "ads" && (
+              <RewardedAdButton
+                style={styles.adButton}
+                onEarned={refreshBalance}
+                label={t("study.audio_unlock.watch_ad", "Watch an ad")}
+                amountSv={AD_EARN_SV}
+              />
+            )}
+
+            {!anyAffordable && method !== "ads" && (
               <View
                 style={[styles.shortfallBox, { borderColor: tokens.signal + "55" }]}
               >
@@ -324,30 +488,85 @@ function UnlockSheet({
                 "Unlock instantly with service credits or cashable points. Audio is generated once and yours forever.",
               )}
             </Text>
+
+            {/* The way in for a student who cannot pay. Without it the
+                unlock is a dead end, and the audio — the whole point
+                of the material — is unreachable for anyone without
+                money. One ad unlocks the audio outright. */}
+            {adCustomData ? (
+              <View
+                style={[
+                  styles.earnBox,
+                  { borderColor: tokens.border, backgroundColor: tokens.mintFaint },
+                ]}
+              >
+                <View style={styles.earnHeader}>
+                  <Ionicons
+                    name="play-circle-outline"
+                    size={18}
+                    color={tokens.mint}
+                  />
+                  <Text style={[styles.earnTitle, { color: tokens.ink }]}>
+                    {t(
+                      "study.audio_unlock.watch_ad",
+                      "Watch an ad to unlock",
+                    )}
+                  </Text>
+                </View>
+                <Text style={[styles.earnSub, { color: tokens.inkMuted }]}>
+                  {t(
+                    "study.audio_unlock.watch_ad_sub",
+                    "One short video unlocks the audio. No points needed.",
+                  )}
+                </Text>
+                <RewardedAdButton
+                  style={styles.earnButton}
+                  label={
+                    adPending
+                      ? t("study.audio_unlock.ad_pending", "Waiting for your reward…")
+                      : t("study.audio_unlock.watch_ad_cta", "Watch an ad")
+                  }
+                  showAmount={false}
+                  customData={adCustomData}
+                  skipCreditWait
+                  onEarned={() => {
+                    void waitForAdUnlock();
+                  }}
+                />
+              </View>
+            ) : null}
           </ScrollView>
 
-          <Pressable
-            onPress={handleUnlock}
-            disabled={unlocking || !anyAffordable}
-            style={({ pressed }) => [
-              styles.cta,
-              {
-                backgroundColor: tokens.mint,
-                opacity: pressed || unlocking || !anyAffordable ? 0.6 : 1,
-              },
-            ]}
-          >
-            <Text style={styles.ctaText}>
-              {unlocking
-                ? t("study.audio_unlock.unlocking", "Unlocking…")
-                : anyAffordable
-                  ? t("study.audio_unlock.cta", "Unlock for {{cost}} {{unit}}", {
-                      cost,
-                      unit: method === "sv" ? "sv" : "pts",
-                    })
-                  : t("study.audio_unlock.cta_short", "Not enough balance")}
-            </Text>
-          </Pressable>
+          {/* On the ads path the unlock becomes available once the earned
+              credits cover the price, and it is paid with those credits
+              like any other unlock. Until then the ad button above is
+              the way forward. */}
+          {method === "ads" && !adsCanUnlock ? null : (
+            <Pressable
+              onPress={handleUnlock}
+              disabled={unlocking || !anyAffordable}
+              style={({ pressed }) => [
+                styles.cta,
+                {
+                  backgroundColor: tokens.mint,
+                  opacity: pressed || unlocking || !anyAffordable ? 0.6 : 1,
+                },
+              ]}
+            >
+              <Text style={styles.ctaText}>
+                {unlocking
+                  ? t("study.audio_unlock.unlocking", "Unlocking…")
+                  : anyAffordable
+                    ? t("study.audio_unlock.cta", "Unlock for {{cost}} {{unit}}", {
+                        cost,
+                        // Paid from the credits the ads earned, so it is
+                        // service credits whichever row is selected.
+                        unit: method === "cashable" ? "pts" : "sv",
+                      })
+                    : t("study.audio_unlock.cta_short", "Not enough balance")}
+              </Text>
+            </Pressable>
+          )}
 
           {!!unlockError && (
             <Pressable onPress={() => setUnlockError(null)} style={styles.secondaryCta}>
@@ -442,6 +661,9 @@ const styles = StyleSheet.create({
   walletList: {
     gap: 8,
   },
+  adButton: {
+    marginTop: 2,
+  },
   walletRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -490,6 +712,28 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 13,
     lineHeight: 18,
+  },
+  earnBox: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 8,
+  },
+  earnHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  earnTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  earnSub: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  earnButton: {
+    marginTop: 4,
   },
   cta: {
     paddingVertical: 14,
