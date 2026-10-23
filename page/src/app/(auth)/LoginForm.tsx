@@ -9,6 +9,7 @@ import {
   Text,
   View,
   Image,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -55,8 +56,8 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-   const [errorTrigger, setErrorTrigger] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [errorTrigger, setErrorTrigger] = useState(false);
 
    // Stable change handlers. Each one only clears its own field error after
   // the first keystroke — never `formError` and never in `onFocus`. Clearing
@@ -121,6 +122,7 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
         } else {
           setFormError(detail || `HTTP ${status}`);
         }
+      
         setErrorTrigger(true);
         setTimeout(() => setErrorTrigger(false), 600);
         return;
@@ -143,29 +145,8 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
 
       const needsVerification = user?.email_verified === false && !!user?.email;
       if (needsVerification) {
-        Alert.alert(
-          t('auth.login.errors.email_not_verified_title', { defaultValue: 'Email Not Verified' }),
-          t('auth.login.errors.email_not_verified_body', { defaultValue: 'Please verify your email address before accessing your account. Check your inbox for the verification code.' }),
-          [
-            {
-              text: t('common.cancel', { defaultValue: 'Cancel' }),
-              style: 'cancel',
-            },
-            {
-              text: t('verify_email.resend', { defaultValue: 'Resend Code' }),
-              onPress: () => {
-                router.replace({
-                  pathname: '/(auth)/verify-email-code',
-                  params: { email: email.trim() },
-                });
-              },
-            },
-          ],
-        );
-        router.replace({
-          pathname: '/(auth)/verify-email-code',
-          params: { email: email.trim() },
-        });
+        setShowVerifyModal(true);
+        setLoading(false);
         return;
       }
 
@@ -191,7 +172,7 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       
       {/* Success redirect overlay */}
-      <SuccessRedirect visible={success} />
+      <SuccessRedirect visible={false} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -271,7 +252,7 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
                   <AnimatedSubmitButton
                     title={t('auth.login.sign_in')}
                     isLoading={loading}
-                    isSuccess={success}
+                    isSuccess={false}
                     onPress={handleLogin}
                   />
 
@@ -301,9 +282,93 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
           </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={showVerifyModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowVerifyModal(false)}
+      >
+        <View style={verifyModalStyles.overlay}>
+          <View style={[verifyModalStyles.sheet, { backgroundColor: tokens.card, borderColor: tokens.border, borderWidth: 1 }]}>
+            <Text style={[verifyModalStyles.title, { color: tokens.ink }]}>
+              {t('auth.login.errors.email_not_verified_title', { defaultValue: 'Email Not Verified' })}
+            </Text>
+            <Text style={[verifyModalStyles.body, { color: tokens.inkMuted }]}>
+              {t('auth.login.errors.email_not_verified_body', { defaultValue: 'Please verify your email address before accessing your account. Check your inbox for the verification code.' })}
+            </Text>
+            <View style={verifyModalStyles.actions}>
+              <Pressable
+                style={[verifyModalStyles.button, { backgroundColor: 'transparent', borderWidth: 1, borderColor: tokens.border }]}
+                onPress={() => setShowVerifyModal(false)}
+              >
+                <Text style={[verifyModalStyles.buttonText, { color: tokens.inkMuted }]}>
+                  {t('common.cancel', { defaultValue: 'Cancel' })}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[verifyModalStyles.button, { backgroundColor: tokens.mint }]}
+                onPress={() => {
+                  setShowVerifyModal(false);
+                  router.replace({
+                    pathname: '/(auth)/verify-email-code',
+                    params: { email: email.trim() },
+                  });
+                }}
+              >
+                <Text style={[verifyModalStyles.buttonText, { color: '#0b1026' }]}>
+                  {t('verify_email.resend', { defaultValue: 'Resend Code' })}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
+
+const verifyModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  sheet: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 20,
+    padding: 24,
+    gap: 16,
+  },
+  title: {
+    fontSize: 20,
+    fontFamily: 'SpaceGrotesk_700Bold',
+    textAlign: 'center',
+  },
+  body: {
+    fontSize: 14,
+    fontFamily: 'SpaceGrotesk_500Medium',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  button: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  buttonText: {
+    fontSize: 15,
+    fontFamily: 'SpaceGrotesk_700Bold',
+  },
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
