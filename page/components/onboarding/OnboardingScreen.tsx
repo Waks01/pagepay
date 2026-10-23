@@ -174,12 +174,17 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   footer: {
-    marginTop: 'auto',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     gap: 22,
-    alignItems: 'stretch',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 8,
   },
   ctaWrap: {
-    position: 'relative',
+    width: '100%',
   },
   cta: {
     borderRadius: 14,

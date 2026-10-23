@@ -164,18 +164,18 @@ async def test_unlock_ad_method_is_rejected(client: AsyncClient, db_session):
 
 
 @pytest.mark.asyncio
-async def test_upload_sow_image_returns_job_id(
+async def test_upload_sow_image_returns_material_id(
     client: AsyncClient, db_session, monkeypatch
 ):
-    """The image upload endpoint should return 202 + a job_id immediately,
-    NOT block on Cloudflare Vision. The actual AI work happens in a
-    background task that we monkey-patch to a fast stub."""
+    """The image upload endpoint is now synchronous (201 + material_id),
+    not async with job polling. The AI parser runs inline so the
+    parsed material is immediately available for the podcast feature."""
     user = User(email="imgjob@test.com", password_hash="hash")
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
 
-    # Patch the AI parser to a no-op so the background worker doesn't
+    # Patch the AI parser to a no-op so the sync worker doesn't
     # need a real LLM key. The OCR step is patched too (Cloudflare
     # Vision would otherwise try to hit the live API).
     from app.routers import study as study_router
@@ -194,17 +194,10 @@ async def test_upload_sow_image_returns_job_id(
         files={"file": ("test.jpg", b"\x00" * 16, "image/jpeg")},
         headers=_auth_header(user.id),
     )
-    assert res.status_code == 202
+    assert res.status_code == 201
     data = res.json()
-    assert "job_id" in data and data["status"] == "queued"
-
-    # The job row must exist in the DB (created by the endpoint handler).
-    from app.models import SowUploadJob
-    import uuid as _uuid
-    job = await db_session.get(SowUploadJob, data["job_id"])
-    assert job is not None
-    assert job.user_id == user.id
-    assert job.status == "queued"
+    assert "material_id" in data and isinstance(data["material_id"], int)
+    assert data["title"] == "Fake Material"
 
 
 @pytest.mark.asyncio

@@ -3,10 +3,13 @@ FROM python:3.11
 # separated from the text around them. It is never used to read the
 # material — the vision model does that. Optional at runtime: without it
 # a scanned page is kept as one whole figure, which loses nothing.
+# ffmpeg is used to compress WAV audio (Cloudflare MeloTTS) to MP3
+# before uploading to R2, saving ~93% storage/egress cost.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         tesseract-ocr \
-        tesseract-ocr-eng && \
+        tesseract-ocr-eng \
+        ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home appuser
 WORKDIR /app

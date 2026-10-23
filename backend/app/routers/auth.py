@@ -197,6 +197,7 @@ async def register(payload: UserRegister, request: Request, db: AsyncSession = D
 
 @router.get("/me", response_model=UserMe)
 async def me(current_user: User = Depends(get_current_user)):
+    logger.info(f"[ME] user profile requested: user_id={current_user.id}, email={current_user.email}")
     return UserMe(
         id=current_user.id,
         email=current_user.email,
@@ -341,6 +342,7 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     identity = form.username.strip()
+    logger.info(f"[LOGIN] attempting login with identity: {identity[:50]}... (truncated)")
     query = select(User).where(
         (User.email == identity)
         | (User.phone == identity)
@@ -349,11 +351,13 @@ async def login(
     result = await db.execute(query)
     user = result.scalar_one_or_none()
     if not user:
+        logger.warning(f"[LOGIN] user NOT found for identity: {identity[:50]}...")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    logger.info(f"[LOGIN] user found: id={user.id}, email={user.email}, locked_until={user.locked_until}")
 
     # Check account lockout
     if user.locked_until and user.locked_until > datetime.utcnow():
@@ -554,9 +558,11 @@ async def delete_account(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(request: Request, db: AsyncSession = Depends(get_db)):
     """Exchange a valid refresh token for a new access token."""
+    logger.info("[REFRESH] token refresh attempt")
     body = await request.json()
     refresh_token_str = body.get("refresh_token")
     if not refresh_token_str:
+        logger.warning("[REFRESH] missing refresh_token in body")
         raise HTTPException(status_code=400, detail="refresh_token required")
 
     token_hash = _hash_refresh_token(refresh_token_str)
@@ -569,12 +575,15 @@ async def refresh(request: Request, db: AsyncSession = Depends(get_db)):
     )
     token = result.scalar_one_or_none()
     if not token:
+        logger.warning("[REFRESH] invalid/expired/revoked refresh token")
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     user = await db.get(User, token.user_id)
     if not user or user.status != "active":
+        logger.warning(f"[REFRESH] user not found or inactive: user_id={token.user_id}, status={user.status if user else 'N/A'}")
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
+    logger.info(f"[REFRESH] success for user_id={user.id}")
     access_token = create_access_token(user.id)
     new_refresh_token_str = create_refresh_token()
     new_refresh_token = RefreshToken(

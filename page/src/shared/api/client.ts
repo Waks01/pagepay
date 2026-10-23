@@ -75,8 +75,23 @@ export async function publicApiFetch(
     ...options.headers,
   };
 
+  if (__DEV__) {
+    const method = options.method || "GET";
+    const bodyKind = isFormData
+      ? "FormData"
+      : options.body
+        ? typeof options.body === "string"
+          ? `json(${options.body.length}b)`
+          : "body"
+        : "none";
+    console.log(
+      `[publicApiFetch] → ${method} ${API_URL}${path} body=${bodyKind}`,
+    );
+  }
+
+  let res: Response;
   try {
-    return await fetch(`${API_URL}${path}`, {
+    res = await fetch(`${API_URL}${path}`, {
       ...options,
       headers,
     });
@@ -88,6 +103,20 @@ export async function publicApiFetch(
       `Can't reach the server at ${API_URL}. Check your connection and try again.`,
     );
   }
+
+  if (__DEV__) {
+    console.log(`[publicApiFetch] ← ${res.status} ${API_URL}${path}`);
+    if (!res.ok) {
+      try {
+        const errorBody = await res.clone().json();
+        console.log(`[publicApiFetch] ERROR body: ${JSON.stringify(errorBody).slice(0, 500)}`);
+      } catch {
+        // Non-JSON error response
+      }
+    }
+  }
+
+  return res;
 }
 
 export async function apiFetch(
@@ -146,6 +175,17 @@ export async function apiFetch(
 
     if (__DEV__) {
       console.log(`[apiFetch] ← ${res.status} ${API_URL}${path}`);
+      // Log error response body for debugging
+      if (!res.ok) {
+        try {
+          const errorBody = await res.clone().json();
+          console.log(`[apiFetch] ERROR body: ${JSON.stringify(errorBody).slice(0, 500)}`);
+          // Reset the response so it can still be read by the caller
+          // (clone already consumed, but the original res is still valid)
+        } catch {
+          // Non-JSON error response, ignore
+        }
+      }
     }
 
     if (res.status === 502 && attempt < retries) {

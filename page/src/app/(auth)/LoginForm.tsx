@@ -83,14 +83,17 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
     const v = validate();
     setErrors(v);
     if (Object.keys(v).length > 0) {
+      console.log('[LOGIN] validation failed', v);
       setErrorTrigger(true);
       setTimeout(() => setErrorTrigger(false), 600);
       return;
     }
 
+    console.log('[LOGIN] starting login attempt for email:', email.trim());
     setLoading(true);
     try {
       const fingerprint = await getDeviceFingerprint();
+      console.log('[LOGIN] device fingerprint:', fingerprint);
       const res = await apiFetch('/api/v1/auth/login', {
         method: 'POST',
         headers: {
@@ -100,15 +103,18 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
         body: `username=${encodeURIComponent(email.trim())}&password=${encodeURIComponent(password)}`,
       });
 
+      console.log('[LOGIN] response status:', res.status);
       if (!res.ok) {
         const status = res.status;
         let detail = '';
         try {
           const data = await res.json();
           detail = typeof data?.detail === 'string' ? data.detail : '';
+          console.log('[LOGIN] error response body:', data);
         } catch {
           /* non-JSON response */
         }
+        console.error('[LOGIN] login failed with status:', status, 'detail:', detail);
         if (status === 401 && !detail) {
           setFormError(t('auth.login.errors.credentials_mismatch'));
         } else {
@@ -120,6 +126,7 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
       }
 
       const data = await res.json();
+      console.log('[LOGIN] login successful, user_id:', data.user?.id, 'token received:', !!data.access_token);
       await saveToken(data.access_token);
       if (data.refresh_token) {
         await saveRefreshToken(data.refresh_token);
@@ -129,9 +136,38 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
       // first screen render (Home) can read the user object from
       // memory instead of waiting for the auth gate's bootstrap.
       const { bootstrapCurrentUser } = await import('@/src/shared/lib/current-user');
-      await bootstrapCurrentUser();
+      const user = await bootstrapCurrentUser();
 
       await registerFCMToken();
+
+      const needsVerification = user?.email_verified === false && !!user?.email;
+      if (needsVerification) {
+        Alert.alert(
+          t('auth.login.errors.email_not_verified_title', { defaultValue: 'Email Not Verified' }),
+          t('auth.login.errors.email_not_verified_body', { defaultValue: 'Please verify your email address before accessing your account. Check your inbox for the verification code.' }),
+          [
+            {
+              text: t('common.cancel', { defaultValue: 'Cancel' }),
+              style: 'cancel',
+            },
+            {
+              text: t('verify_email.resend', { defaultValue: 'Resend Code' }),
+              onPress: () => {
+                router.replace({
+                  pathname: '/(auth)/verify-email-code',
+                  params: { email: email.trim() },
+                });
+              },
+            },
+          ],
+        );
+        router.replace({
+          pathname: '/(auth)/verify-email-code',
+          params: { email: email.trim() },
+        });
+        return;
+      }
+
       router.replace('/home');
     } catch {
       setFormError(t('auth.login.errors.connection_error'));

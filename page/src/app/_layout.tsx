@@ -235,7 +235,14 @@ function useAuthGate() {
             router.replace("/home");
           } else {
             // Already inside the app (or at root): bootstrap user data
-            void bootstrapCurrentUser();
+            const me = await bootstrapCurrentUser();
+            if (me && me.email && me.email_verified === false) {
+              router.replace({
+                pathname: "/(auth)/verify-email-code",
+                params: { email: me.email },
+              } as any);
+              return;
+            }
           }
         }
       } catch (e) {

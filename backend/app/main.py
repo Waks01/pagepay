@@ -449,6 +449,56 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Log every incoming request and outgoing response for debugging."""
+    async def dispatch(self, request: Request, call_next):
+        import time
+        import json
+        start_time = time.time()
+        
+        # Read body for logging (but don't consume it for the handler)
+        body = b""
+        if request.method in ("POST", "PUT", "PATCH"):
+            body = await request.body()
+            # Re-create request with body for downstream handlers
+            async def receive():
+                return {"type": "http.request", "body": body}
+            request._receive = receive
+        
+        # Log request
+        auth_header = request.headers.get("authorization", "")
+        auth_preview = f"Bearer {auth_header[7:20]}..." if auth_header.startswith("Bearer ") else "none"
+        logger.info(f"[REQ] {request.method} {request.url.path} | auth={auth_preview} | body_len={len(body)}")
+        if body and len(body) < 2000:
+            try:
+                # Mask sensitive fields
+                body_str = body.decode()
+                if "password" in body_str.lower():
+                    body_str = body_str.replace('"password":', '"password": "[REDACTED]"')
+                logger.info(f"[REQ BODY] {body_str}")
+            except:
+                pass
+        
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            duration = (time.time() - start_time) * 1000
+            logger.error(f"[REQ ERROR] {request.method} {request.url.path} | {type(exc).__name__}: {exc} | {duration:.0f}ms")
+            raise
+        
+        duration = (time.time() - start_time) * 1000
+        status = response.status_code
+        logger.info(f"[RES] {request.method} {request.url.path} | {status} | {duration:.0f}ms")
+        
+        # Log response body for errors
+        if status >= 400:
+            # We can't easily read response body here without consuming it
+            # The endpoint itself should log its error details
+            pass
+        
+        return response
+
+
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 app.add_middleware(
@@ -460,6 +510,7 @@ app.add_middleware(
 )
 app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(CSRFMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 API_PREFIX = "/api/v1"
 

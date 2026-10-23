@@ -20,8 +20,16 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, password_hash: str) -> bool:
     try:
-        return bcrypt.checkpw(password.encode("utf-8")[:72], password_hash.encode("utf-8"))
+        result = bcrypt.checkpw(password.encode("utf-8")[:72], password_hash.encode("utf-8"))
+        if not result:
+            import logging
+            logger = logging.getLogger("uvicorn.error")
+            logger.warning(f"[AUTH] password verification FAILED for user_id=*** (hash length={len(password_hash)})")
+        return result
     except (ValueError, TypeError):
+        import logging
+        logger = logging.getLogger("uvicorn.error")
+        logger.warning(f"[AUTH] password verification ERROR - invalid hash format")
         return False
 
 

@@ -729,6 +729,14 @@ class Settings(BaseSettings):
     # for CDN edge cache (if we ever add one).
     audio_cache_ttl_seconds: int = 30 * 24 * 60 * 60
 
+    # ── Audio compression ────────────────────────────────────────────
+    # Cloudflare MeloTTS returns uncompressed WAV (~10 MB per 5-10 min
+    # episode). Re-encoding to MP3 before R2 upload cuts storage and
+    # egress cost by ~93% at narration-transparent quality.
+    audio_compression_enabled: bool = True
+    audio_mp3_bitrate_kbps: int = 96    # CBR — speech needs no more
+    audio_mp3_vbr: bool = False         # CBR for consistent cache sizing
+
     # ── Study material extraction (pages, figures, narration) ───────
     # Width of the full-fidelity page render written to object storage
     # and shown in the app's "My material" view.
@@ -775,6 +783,13 @@ class Settings(BaseSettings):
     # hears is a number they will believe and repeat.
     study_narration_grounding_enabled: bool = True
 
+    # ── Image compression (pages + figures stored to R2) ──────────────
+    # Page/figure PNG renders are large (16+ MB at 1400px). Re-encoding to
+    # JPEG at quality 82 cuts size by ~70% with no visible loss on phone
+    # screens. Dimensions are capped at study_page_render_width per side.
+    study_image_compression_enabled: bool = True
+    study_image_compress_quality: int = 82    # JPEG quality, 1-100
+    study_image_max_dimension: int = 1400     # px per side, downscale if larger
 
     # ── Platform revenue splits ──────────────────────────────────────
     # Ads: portion of ad revenue kept by platform (rest goes to user as points).

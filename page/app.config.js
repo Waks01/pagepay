@@ -16,6 +16,16 @@ if (
   plugins.push("expo-asset");
 }
 
+for (const plugin of ["expo-image", "expo-secure-store", "expo-sharing", "expo-web-browser"]) {
+  if (
+    !plugins.some(
+      (p) => p === plugin || (Array.isArray(p) && p[0] === plugin),
+    )
+  ) {
+    plugins.push(plugin);
+  }
+}
+
 // AdMob (Google Mobile Ads). The plugin writes the app id into
 // AndroidManifest.xml and Info.plist during prebuild - the SDK crashes
 // on launch without it, so this is not optional. The app id is the

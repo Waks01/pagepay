@@ -264,7 +264,7 @@ async def upload_sow(
     )
 
 
-@router.post("/sow/upload-images", response_model=SowUploadJobAccepted, status_code=202)
+@router.post("/sow/upload-images", response_model=SowUploadResponse, status_code=201)
 async def upload_sow_images(
     files: list[UploadFile] = File(...),
     exam_type: str | None = Form(default=None),
@@ -282,6 +282,9 @@ async def upload_sow_images(
     Every image is a page: each is read, checked and OCR'd, each is
     stored as a page image, and the whole set is parsed together into
     one lesson.
+
+    Runs synchronously — no job / polling needed — so the response
+    contains the new `material_id` and `parsed_structure` immediately.
     """
     try:
         exam_type = normalize_exam_type(exam_type)
@@ -339,30 +342,24 @@ async def upload_sow_images(
     if total_bytes > MAX_SOW_IMAGE_BYTES * _OCR_MAX_PAGES:
         raise HTTPException(status_code=413, detail="The pages are too large together")
 
-    job = SowUploadJob(id=str(uuid.uuid4()), user_id=current_user.id, status="queued")
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-
-    logger.info(
-        "[sow/upload-images] job queued id=%s user=%s pages=%s bytes=%s",
-        job.id, current_user.id, len(images), total_bytes,
+    # Run synchronously — no job / polling needed
+    material_id, title, parsed, explanation, provider = await _process_sow_images_sync(
+        db=db,
+        user_id=current_user.id,
+        exam_type=exam_type,
+        images=images,
+        education_level=_normalise_education_level(education_level),
     )
 
-    asyncio.create_task(
-        _process_sow_images_job(
-            job_id=job.id,
-            user_id=current_user.id,
-            exam_type=exam_type,
-            images=images,
-            education_level=_normalise_education_level(education_level),
-        )
+    return SowUploadResponse(
+        material_id=material_id,
+        title=title,
+        exam_type=exam_type,
+        parsed_structure=parsed,
     )
 
-    return SowUploadJobAccepted(job_id=job.id, status="queued")
 
-
-@router.post("/sow/upload-image", response_model=SowUploadJobAccepted, status_code=202)
+@router.post("/sow/upload-image", response_model=SowUploadResponse, status_code=201)
 async def upload_sow_image(
     file: UploadFile = File(...),
     exam_type: str | None = Form(default=None),
@@ -372,11 +369,15 @@ async def upload_sow_image(
     db: AsyncSession = Depends(get_db),
 ):
     """Upload a SOW image. The file is read and validated synchronously
-    so the 5 MB cap + content-type allowlist still hold before we
-    return. OCR (Cloudflare vision) + SOW AI parsing then run in a
-    background task. The client polls
-    `GET /api/v1/study/sow/jobs/{job_id}` to drive its progress bar
-    through the 80→100 window.
+    so the 5 MB cap + content-type allowlist still hold before the request
+    returns. OCR, AI parsing and explanation all run in-process — no job
+    or polling needed. The response contains the new `material_id` and
+    `parsed_structure` so the podcast and other features work
+    immediately.
+
+    The process mirrors the synchronous `POST /study/sow/upload` text path:
+    Cloudflare Vision OCR → figure detection → AI SOW parser → explanation
+    → material persisted in Postgres.
     """
     try:
         exam_type = normalize_exam_type(exam_type)
@@ -392,15 +393,12 @@ async def upload_sow_image(
         file.content_type,
         content_length,
     )
-    logger.info("[sow/upload-image] cloudinary_in_scope=%s", __name__)
 
     if not settings.cloudflare_account_id or not settings.cloudflare_api_token:
         logger.error("[sow/upload-image] Cloudflare not configured")
         raise HTTPException(status_code=503, detail="Cloudflare Workers AI not configured")
 
-    # Content-type allowlist — `file.content_type` is set by the
-    # client and is attacker-controlled. Reject anything other than
-    # the types Gemini Vision actually accepts.
+    # Content-type allowlist
     ctype = (file.content_type or "").lower().split(";", 1)[0].strip()
     if ctype not in ALLOWED_IMAGE_TYPES:
         logger.warning("[sow/upload-image] unsupported ctype: %s", ctype)
@@ -409,8 +407,7 @@ async def upload_sow_image(
             detail=f"Unsupported image type: {ctype!r}. Use JPEG, PNG, WEBP, or HEIC.",
         )
 
-    # Sanitize the filename BEFORE we read the body so a hostile
-    # path-traversal filename never touches the DB or the log.
+    # Sanitize filename before reading the body
     safe_name = safe_filename(file.filename, fallback="upload.jpg")
     logger.info("[sow/upload-image] safe_name=%s", safe_name)
 
@@ -420,11 +417,6 @@ async def upload_sow_image(
         logger.exception("[sow/upload-image] file.read() failed: %s", e)
         raise HTTPException(status_code=400, detail=f"Could not read uploaded file: {e}")
 
-    logger.info(
-        "[sow/upload-image] read %s bytes (limit=%s)",
-        len(contents),
-        MAX_SOW_IMAGE_BYTES,
-    )
     if not contents:
         logger.warning("[sow/upload-image] empty file")
         raise HTTPException(status_code=400, detail="Empty file")
@@ -439,31 +431,23 @@ async def upload_sow_image(
             detail=f"Image too large (max {MAX_SOW_IMAGE_BYTES // (1024*1024)} MB)",
         )
 
-    # Insert the job row, fire the worker, return immediately.
-    job = SowUploadJob(id=str(uuid.uuid4()), user_id=current_user.id, status="queued")
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-
-    logger.info(
-        "[sow/upload-image] job queued id=%s user=%s dispatching background worker",
-        job.id,
-        current_user.id,
+    # Run the full pipeline synchronously — no job / polling needed
+    material_id, title, parsed, explanation, provider = await _process_sow_image_sync(
+        db=db,
+        user_id=current_user.id,
+        exam_type=exam_type,
+        contents=contents,
+        safe_name=safe_name,
+        content_type=file.content_type or "image/jpeg",
+        education_level=_normalise_education_level(education_level),
     )
 
-    asyncio.create_task(
-        _process_sow_image_job(
-            job_id=job.id,
-            user_id=current_user.id,
-            exam_type=exam_type,
-            contents=contents,
-            safe_name=safe_name,
-            content_type=file.content_type or "image/jpeg",
-            education_level=_normalise_education_level(education_level),
-        )
+    return SowUploadResponse(
+        material_id=material_id,
+        title=title,
+        exam_type=exam_type,
+        parsed_structure=parsed,
     )
-
-    return SowUploadJobAccepted(job_id=job.id, status="queued")
 
 
 # ── PDF page rendering ───────────────────────────────────────────────
@@ -701,7 +685,7 @@ async def preview_sow_pdf(
         raise HTTPException(status_code=500, detail=f"PDF rendering failed: {exc}") from exc
 
 
-@router.post("/sow/upload-document", response_model=SowUploadJobAccepted, status_code=202)
+@router.post("/sow/upload-document", response_model=SowUploadResponse, status_code=201)
 async def upload_sow_document(
     file: UploadFile = File(...),
     exam_type: str | None = Form(default=None),
@@ -713,9 +697,9 @@ async def upload_sow_document(
 ):
     """Upload a SOW document (PDF, DOCX, TXT). The file is read and
     validated synchronously so the 10 MB cap holds; text extraction
-    + SOW AI parsing then run in a background task. The client
-    polls `GET /api/v1/study/sow/jobs/{job_id}` to drive its progress
-    bar through the 80→100 window.
+    + SOW AI parsing then run in-process — no job / polling needed.
+    The response contains the new `material_id` and `parsed_structure`
+    immediately.
 
     For PDFs, `selected_pages` is a JSON array of 1-indexed page
     numbers to include. If omitted, all pages are used.
@@ -734,7 +718,6 @@ async def upload_sow_document(
         file.content_type,
         content_length,
     )
-    logger.info("[sow/upload-document] cloudinary_in_scope=%s", __name__)
     safe_name = safe_filename(file.filename, fallback="document")
     logger.info("[sow/upload-document] safe_name=%s", safe_name)
 
@@ -745,12 +728,6 @@ async def upload_sow_document(
             "[sow/upload-document] file.read() failed: %s", e,
         )
         raise HTTPException(status_code=400, detail=f"Could not read uploaded file: {e}")
-
-    logger.info(
-        "[sow/upload-document] read %s bytes (limit=%s)",
-        len(contents),
-        MAX_SOW_DOC_BYTES,
-    )
 
     if not contents:
         logger.warning("[sow/upload-document] empty file")
@@ -766,9 +743,7 @@ async def upload_sow_document(
             detail=f"Document too large (max {MAX_SOW_DOC_BYTES // (1024*1024)} MB)",
         )
 
-    # Reject early if the extension is not one we know how to parse —
-    # do this inline so the client gets a fast 400 instead of finding
-    # out via the polling endpoint.
+    # Reject early if the extension is not one we know how to parse
     filename_lower = safe_name.lower()
     if not (
         filename_lower.endswith(".pdf")
@@ -784,30 +759,115 @@ async def upload_sow_document(
             detail="Unsupported file type. Upload PDF, DOCX, or TXT.",
         )
 
-    job = SowUploadJob(id=str(uuid.uuid4()), user_id=current_user.id, status="queued")
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
+    # Run synchronously — no job / polling needed
+    material_id, title, parsed, explanation, provider = await _process_sow_document_sync(
+        db=db,
+        user_id=current_user.id,
+        exam_type=exam_type,
+        contents=contents,
+        safe_name=safe_name,
+        selected_pages=selected_pages,
+        education_level=_normalise_education_level(education_level),
+    )
+
+    return SowUploadResponse(
+        material_id=material_id,
+        title=title,
+        exam_type=exam_type,
+        parsed_structure=parsed,
+    )
+
+
+async def _process_sow_document_sync(
+    db: AsyncSession,
+    user_id: int,
+    exam_type: str | None,
+    contents: bytes,
+    safe_name: str,
+    selected_pages: str | None = None,
+    education_level: str | None = None,
+) -> tuple[int, str, dict | None, dict | None, str | None]:
+    """Synchronous processing for document SOW upload.
+
+    Extracts text from the document (PDF/DOCX/TXT), runs the SOW parser
+    and explanation synchronously, and persists the material.
+    Returns (material_id, title, parsed_structure, explanation_structure, provider).
+    """
+    level = education_level or settings.study_education_default_level
+    logger.info(
+        "[sow/upload-document sync] START user=%s bytes=%s filename=%s",
+        user_id, len(contents), safe_name,
+    )
+
+    extracted_text = await _extract_document_text(
+        contents,
+        safe_name,
+        selected_pages=selected_pages,
+        on_progress=None,
+        user_id=user_id,
+    )
+    logger.info(
+        "[sow/upload-document sync] extract done text_len=%s",
+        len(extracted_text or ""),
+    )
+
+    if not extracted_text.strip():
+        raise HTTPException(status_code=400, detail="No text could be extracted from the document")
+
+    pages, figures = await _build_material_artifacts(
+        key_prefix=safe_name,
+        contents=contents,
+        is_pdf=safe_name.lower().endswith(".pdf"),
+        is_docx=safe_name.lower().endswith((".docx", ".doc")),
+        content_type="application/pdf",
+        extracted_text=extracted_text,
+    )
+    notes = _figure_notes(figures)
+    source_text = f"{extracted_text}{notes}"
+
+    parsed, provider, _ = await _run_sow_parser(source_text)
+    logger.info(
+        "[sow/upload-document sync] parser done provider=%s",
+        provider,
+    )
+
+    title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
+
+    explanation = await _build_explanation_safely(
+        title=title,
+        source_text=source_text,
+        figures=figures,
+        level=level,
+        db=db,
+        user_id=user_id,
+    )
+
+    material_id = await _persist_material(
+        user_id=user_id,
+        title=title,
+        exam_type=exam_type,
+        raw_input=source_text,
+        parsed_structure=parsed,
+        explanation_structure=explanation,
+        contents=contents,
+        file_mime_type=(
+            "application/pdf" if safe_name.lower().endswith(".pdf")
+            else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            if safe_name.lower().endswith((".docx", ".doc"))
+            else "text/plain" if safe_name.lower().endswith(".txt")
+            else "application/octet-stream"
+        ),
+        ai_model_used=provider,
+        education_level=level,
+        pages=pages,
+        figures=figures,
+    )
 
     logger.info(
-        "[sow/upload-document] job queued id=%s user=%s dispatching background worker",
-        job.id,
-        current_user.id,
+        "[sow/upload-document sync] DONE material_id=%s",
+        material_id,
     )
-
-    asyncio.create_task(
-        _process_sow_document_job(
-            job_id=job.id,
-            user_id=current_user.id,
-            exam_type=exam_type,
-            contents=contents,
-            safe_name=safe_name,
-            selected_pages=selected_pages,
-            education_level=_normalise_education_level(education_level),
-        )
-    )
-
-    return SowUploadJobAccepted(job_id=job.id, status="queued")
+    return material_id, title, parsed, explanation, provider
 
 
 @router.get("/sow/jobs/{job_id}", response_model=SowUploadJobStatus)
@@ -2167,6 +2227,97 @@ async def _process_sow_image_job(
     except Exception as exc:
         logger.exception("SOW image job %s failed", job_id)
         await _mark_job_status(job_id, "failed", error=str(exc) or exc.__class__.__name__)
+
+
+async def _process_sow_image_sync(
+    db: AsyncSession,
+    user_id: int,
+    exam_type: str | None,
+    contents: bytes,
+    safe_name: str,
+    content_type: str,
+    education_level: str | None = None,
+) -> tuple[int, str, dict | None, dict | None, str | None]:
+    """Synchronous processing for single image SOW upload.
+
+    Runs the full OCR + AI pipeline inline in the request. Returns
+    (material_id, title, parsed_structure, explanation_structure, provider)
+    so the caller can respond immediately with the material.
+    """
+    level = education_level or settings.study_education_default_level
+    logger.info(
+        "[sow/upload-image sync] START user=%s bytes=%s filename=%s",
+        user_id, len(contents), safe_name,
+    )
+
+    extracted_text = await _ocr_page_with_fallback(
+        contents, content_type, user_id=user_id
+    )
+    logger.info(
+        "[sow/upload-image sync] OCR done text_len=%s",
+        len(extracted_text or ""),
+    )
+
+    if not extracted_text.strip():
+        raise HTTPException(status_code=400, detail="No text could be extracted from the image")
+
+    findings = await _detect_figures_with_cloudflare(
+        contents, content_type=content_type
+    )
+    extracted_text = _strip_furniture(
+        extracted_text, findings.header, findings.footer
+    )
+    if findings.figure:
+        extracted_text = f"{extracted_text}\n\n[FIGURE: {findings.figure}]"
+
+    pages, figures = await _build_material_artifacts(
+        key_prefix=safe_name,
+        contents=contents,
+        is_pdf=False,
+        content_type=content_type,
+        extracted_text=extracted_text,
+        max_pages=1,
+    )
+    notes = _figure_notes(figures)
+    source_text = f"{extracted_text}{notes}"
+
+    parsed, provider, _ = await _run_sow_parser(source_text)
+    logger.info(
+        "[sow/upload-image sync] parser done provider=%s keys=%s",
+        provider, list((parsed or {}).keys()) if isinstance(parsed, dict) else None,
+    )
+
+    title = (parsed or {}).get("title", safe_name) if isinstance(parsed, dict) else safe_name
+
+    explanation = await _build_explanation_safely(
+        title=title,
+        source_text=source_text,
+        figures=figures,
+        level=level,
+        db=db,
+        user_id=user_id,
+    )
+
+    material_id = await _persist_material(
+        user_id=user_id,
+        title=title,
+        exam_type=exam_type,
+        raw_input=f"[IMAGE: {safe_name}]\n{source_text}",
+        parsed_structure=parsed,
+        explanation_structure=explanation,
+        contents=contents,
+        file_mime_type=content_type or "image/jpeg",
+        ai_model_used=provider,
+        education_level=level,
+        pages=pages,
+        figures=figures,
+    )
+
+    logger.info(
+        "[sow/upload-image sync] DONE material_id=%s",
+        material_id,
+    )
+    return material_id, title, parsed, explanation, provider
 
 
 async def _process_sow_document_job(

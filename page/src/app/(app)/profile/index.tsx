@@ -613,6 +613,53 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* ── Email Verification ──────────────────────────────────── */}
+        {meQuery && meQuery.email_verified === false && !!meQuery.email && (
+          <View
+            style={[
+              styles.verifyBanner,
+              { backgroundColor: tokens.signalSoft, borderColor: tokens.signal },
+            ]}
+          >
+            <View style={[styles.verifyIcon, { backgroundColor: tokens.signalSoft }]}>
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color={tokens.signal}
+              />
+            </View>
+            <View style={styles.verifyInfo}>
+              <Text
+                style={[
+                  styles.verifyTitle,
+                  { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
+                ]}
+              >
+                {t("profile.verify_email.title", { defaultValue: "Verify Your Email" })}
+              </Text>
+              <Text style={[styles.verifyHint, { color: tokens.inkMuted }]}>
+                {t("profile.verify_email.hint", {
+                  defaultValue: "We sent a 6-digit code to your email. Verify to unlock your account.",
+                })}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() =>
+                router.replace({
+                  pathname: "/(auth)/verify-email-code",
+                  params: { email: meQuery?.email || "" },
+                })
+              }
+              hitSlop={8}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.verifyAction, { color: tokens.signal }]}>
+                {t("profile.verify_email.action", { defaultValue: "Verify" })}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* ── Username ─────────────────────────────────────────── */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: tokens.inkMuted }]}>
@@ -1741,6 +1788,38 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 6,
     marginLeft: 4,
+  },
+  verifyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 12,
+  },
+  verifyIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  verifyInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  verifyTitle: {
+    fontSize: 14,
+    letterSpacing: -0.1,
+  },
+  verifyHint: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  verifyAction: {
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   // Role cards
   roleCard: {

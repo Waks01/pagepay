@@ -432,6 +432,46 @@ def crop_region_png(page, bbox: tuple[float, float, float, float], zoom: float) 
 # ── Storage ───────────────────────────────────────────────────────────
 
 
+def _compress_image_to_jpeg(data: bytes, quality: int = 82, max_dimension: int = 1400) -> bytes:
+    """Compress image bytes to JPEG, capping dimensions.
+
+    PNG crops from PyMuPDF are large (~2 MB each at 1400px). Re-encoding to
+    JPEG at quality 82 with a dimension cap cuts size by ~70-80% with no
+    visible loss on phone screens for study material.
+
+    Args:
+        data: Source image bytes (PNG, JPEG, WEBP, etc.)
+        quality: JPEG quality 1-100.
+        max_dimension: Maximum width or height in pixels; scales down if exceeded.
+
+    Returns:
+        JPEG bytes, or the original bytes if compression is disabled or fails.
+    """
+    if not settings.study_image_compression_enabled:
+        return data
+    try:
+        from PIL import Image
+    except ImportError:
+        return data
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            if img.mode in ("RGBA", "P", "LA"):
+                img = img.convert("RGB")
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+            w, h = img.size
+            if max(w, h) > max_dimension:
+                scale = max_dimension / max(w, h)
+                new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+                img = img.resize(new_size, Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="jpeg", quality=quality, optimize=True)
+            return buf.getvalue()
+    except Exception as exc:
+        logger.warning("[artifacts] image compression failed: %s", exc)
+        return data
+
+
 def upload_object(key: str, data: bytes, content_type: str) -> str | None:
     """Write bytes to object storage. Returns the key, or None on failure.
 
@@ -554,6 +594,12 @@ def build_image_artifacts(
         extension, real_type = "jpg", content_type or "image/jpeg"
 
     key = f"{settings.cloudflare_r2_pages_prefix}/{key_prefix}/1.{extension}"
+    # Compress before upload if enabled and original is PNG/WEBP (JPG is already compressed)
+    if settings.study_image_compression_enabled and extension not in ("jpg", "jpeg"):
+        contents = _compress_image_to_jpeg(contents, quality=settings.study_image_compress_quality, max_dimension=settings.study_image_max_dimension)
+        # If PNG was compressed to JPEG, adjust extension and content_type
+        if contents[:3] == b"\xff\xd8\xff":  # JPEG signature
+            extension, real_type = "jpg", "image/jpeg"
     stored = _upload(key, contents, real_type)
     return [
         PageArtifact(
@@ -703,8 +749,18 @@ def build_figure_artifacts(
                 if not data:
                     continue
                 index = len(artifacts) + 1
-                key = f"{settings.cloudflare_r2_figures_prefix}/{key_prefix}/{index}.png"
-                stored = _upload(key, data, "image/png")
+                # Figures are PNG crops. Compress to JPEG before upload if enabled.
+                if settings.study_image_compression_enabled:
+                    data = _compress_image_to_jpeg(
+                        data,
+                        quality=settings.study_image_compress_quality,
+                        max_dimension=settings.study_image_max_dimension,
+                    )
+                    key = f"{settings.cloudflare_r2_figures_prefix}/{key_prefix}/{index}.jpg"
+                    stored = _upload(key, data, "image/jpeg")
+                else:
+                    key = f"{settings.cloudflare_r2_figures_prefix}/{key_prefix}/{index}.png"
+                    stored = _upload(key, data, "image/png")
                 artifacts.append(
                     FigureArtifact(
                         index=index,
