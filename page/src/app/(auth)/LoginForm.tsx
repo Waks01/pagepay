@@ -112,13 +112,14 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
           detail = typeof data?.detail === 'string' ? data.detail : '';
           console.log('[LOGIN] error response body:', data);
         } catch {
-          /* non-JSON response */
+          /* non-JSON response body (e.g. 502 HTML from proxy) — show status text instead */
+          detail = res.statusText || `HTTP ${status}`;
         }
         console.error('[LOGIN] login failed with status:', status, 'detail:', detail);
         if (status === 401 && !detail) {
           setFormError(t('auth.login.errors.credentials_mismatch'));
         } else {
-          setFormError(detail || t('common.connection_error_with_status', { status }));
+          setFormError(detail || `HTTP ${status}`);
         }
         setErrorTrigger(true);
         setTimeout(() => setErrorTrigger(false), 600);
@@ -169,8 +170,15 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
       }
 
       router.replace('/home');
-    } catch {
-      setFormError(t('auth.login.errors.connection_error'));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.toLowerCase().includes('unauthorized')) {
+        setFormError(t('auth.login.errors.credentials_mismatch'));
+      } else if (message.toLowerCase().includes('account locked')) {
+        setFormError(message);
+      } else {
+        setFormError(message);
+      }
       setErrorTrigger(true);
       setTimeout(() => setErrorTrigger(false), 600);
     } finally {

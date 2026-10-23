@@ -69,8 +69,14 @@ export default function ForgotPasswordScreen() {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setFormError(typeof data?.detail === 'string' ? data.detail : t('forgot_password.errors.send_failed'));
+        let detail = '';
+        try {
+          const data = await res.json();
+          detail = typeof data?.detail === 'string' ? data.detail : '';
+        } catch {
+          detail = res.statusText || `HTTP ${res.status}`;
+        }
+        setFormError(detail || `HTTP ${res.status}`);
         setErrorTrigger(true);
         setTimeout(() => setErrorTrigger(false), 600);
         return;
@@ -79,8 +85,9 @@ export default function ForgotPasswordScreen() {
       const data = await res.json();
       setSuccess(true);
       router.replace({ pathname: '/home/forgot-password-otp', params: { identifier: trimmed } });
-    } catch {
-      setFormError(t('forgot_password.errors.connection_error'));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setFormError(message);
       setErrorTrigger(true);
       setTimeout(() => setErrorTrigger(false), 600);
     } finally {

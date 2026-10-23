@@ -57,14 +57,15 @@ export default function ForgotPasswordOtpScreen() {
           body: JSON.stringify(body),
         });
         if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          const detail =
-            typeof data?.detail === 'string'
-              ? data.detail
-              : t('forgot_password_otp.error_generic', {
-                  defaultValue: 'Invalid code.',
-                });
-          setError(detail);
+          let detail = '';
+          try {
+            const data = await res.json();
+            detail = typeof data?.detail === 'string' ? data.detail : '';
+          } catch {
+            detail = res.statusText || `HTTP ${res.status}`;
+          }
+          setError(detail || `HTTP ${res.status}`);
+          return;
         } else {
           const data = await res.json().catch(() => ({ reset_token: '' }));
           setMessage(
@@ -79,12 +80,9 @@ export default function ForgotPasswordOtpScreen() {
             800
           );
         }
-      } catch {
-        setError(
-          t('forgot_password_otp.error_connection', {
-            defaultValue: 'Network error. Try again.',
-          })
-        );
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        setError(message);
       } finally {
         setVerifying(false);
       }
@@ -115,14 +113,14 @@ export default function ForgotPasswordOtpScreen() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(
-          typeof data?.detail === 'string'
-            ? data.detail
-            : t('forgot_password_otp.resend_error', {
-                defaultValue: 'Could not resend code.',
-              })
-        );
+        let detail = '';
+        try {
+          const data = await res.json();
+          detail = typeof data?.detail === 'string' ? data.detail : '';
+        } catch {
+          detail = res.statusText || `HTTP ${res.status}`;
+        }
+        setError(detail || `HTTP ${res.status}`);
       } else {
         setMessage(
           t('forgot_password_otp.resend_success', {
@@ -130,12 +128,9 @@ export default function ForgotPasswordOtpScreen() {
           })
         );
       }
-    } catch {
-      setError(
-        t('forgot_password_otp.error_connection', {
-          defaultValue: 'Network error. Try again.',
-        })
-      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
     } finally {
       setResending(false);
     }

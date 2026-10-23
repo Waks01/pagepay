@@ -71,8 +71,14 @@ export default function ResetPasswordScreen() {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setFormError(typeof data?.detail === 'string' ? data.detail : t('reset_password.errors.reset_failed'));
+        let detail = '';
+        try {
+          const data = await res.json();
+          detail = typeof data?.detail === 'string' ? data.detail : '';
+        } catch {
+          detail = res.statusText || `HTTP ${res.status}`;
+        }
+        setFormError(detail || `HTTP ${res.status}`);
         setErrorTrigger(true);
         setTimeout(() => setErrorTrigger(false), 600);
         return;
@@ -80,8 +86,9 @@ export default function ResetPasswordScreen() {
 
       setSuccess(true);
       setTimeout(() => router.replace('/(auth)/' as any), 1500);
-    } catch {
-      setFormError(t('reset_password.errors.connection_error'));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setFormError(message);
       setErrorTrigger(true);
       setTimeout(() => setErrorTrigger(false), 600);
     } finally {

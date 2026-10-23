@@ -11,8 +11,8 @@ type NetworkErrorProps = {
 };
 
 export function NetworkError({
-  title = "Something went wrong",
-  message = "We couldn’t load this screen. Check your connection and try again.",
+  title = "Error",
+  message = "Request failed. Check your connection and try again.",
   retryLabel = "Retry",
   onRetry,
 }: NetworkErrorProps) {
