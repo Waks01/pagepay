@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { apiFetch } from '@/src/shared/api/client';
+import { publicApiFetch } from '@/src/shared/api/client';
 import { AnimatedInput } from '@/components/AnimatedInput';
 import { Field, PasswordToggle } from '@/components/Field';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -64,7 +64,7 @@ export default function ResetPasswordScreen() {
 
     setLoading(true);
     try {
-      const res = await apiFetch('/api/v1/auth/reset-password', {
+      const res = await publicApiFetch('/api/v1/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, new_password: password }),

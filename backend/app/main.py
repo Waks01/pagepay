@@ -461,8 +461,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         if request.method in ("POST", "PUT", "PATCH"):
             body = await request.body()
             # Re-create request with body for downstream handlers
+            _body_sent = False
+
             async def receive():
-                return {"type": "http.request", "body": body}
+                nonlocal _body_sent
+                if _body_sent:
+                    return {"type": "http.disconnect"}
+                _body_sent = True
+                return {"type": "http.request", "body": body, "more_body": False}
             request._receive = receive
         
         # Log request

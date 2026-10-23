@@ -205,8 +205,13 @@ function useAuthGate() {
   useEffect(() => {
     setOnUnauthenticated(() => {
       const currentSegment = segments[0];
+      // Don't redirect on public screens that don't require auth
+      const isPublicScreen = segments.some(s =>
+        ['forgot-password', 'forgot-password-otp', 'reset-password'].includes(s)
+      );
       // Only redirect if we're in the app (not already on auth/onboarding screens)
-      if (currentSegment === "(app)") {
+      // AND not on a public screen
+      if (currentSegment === "(app)" && !isPublicScreen) {
         router.replace("/(auth)/" as Href);
       }
     });
@@ -224,24 +229,37 @@ function useAuthGate() {
 
         if (!token) {
           // No token: redirect to onboarding or login
-          if (!onboardingCompleted && !inOnboarding) {
-            router.replace("/(onboarding)/" as Href);
-          } else if (onboardingCompleted && !inAuth) {
-            router.replace("/(auth)/" as Href);
+          const isPublicScreen = segments.some(s =>
+            ['forgot-password', 'forgot-password-otp', 'reset-password'].includes(s)
+          );
+          if (!isPublicScreen) {
+            if (!onboardingCompleted && !inOnboarding) {
+              router.replace("/(onboarding)/" as Href);
+            } else if (onboardingCompleted && !inAuth) {
+              router.replace("/(auth)/" as Href);
+            }
           }
         } else {
           // Has token: redirect to app or bootstrap user
           if (inAuth || inOnboarding) {
             router.replace("/home");
           } else {
-            // Already inside the app (or at root): bootstrap user data
-            const me = await bootstrapCurrentUser();
-            if (me && me.email && me.email_verified === false) {
-              router.replace({
-                pathname: "/(auth)/verify-email-code",
-                params: { email: me.email },
-              } as any);
-              return;
+            // Skip user bootstrap when on a public screen (forgot-password,
+            // reset-password) — those flows must work without a valid session
+            // token, and an expired token here triggers a 401 → auto-redirect.
+            const isPublicScreen = segments.some(s =>
+              ['forgot-password', 'forgot-password-otp', 'reset-password'].includes(s)
+            );
+            if (!isPublicScreen) {
+              // Already inside the app (or at root): bootstrap user data
+              const me = await bootstrapCurrentUser();
+              if (me && me.email && me.email_verified === false) {
+                router.replace({
+                  pathname: "/(auth)/verify-email-code",
+                  params: { email: me.email },
+                } as any);
+                return;
+              }
             }
           }
         }

@@ -14,7 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { apiFetch } from '@/src/shared/api/client';
+import { publicApiFetch } from '@/src/shared/api/client';
 import { OtpInput } from '@/components/OtpInput';
 import { PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
@@ -51,7 +51,7 @@ export default function ForgotPasswordOtpScreen() {
         else if (isPhone) body.phone = trimmed;
         else body.username = trimmed.toLowerCase();
 
-        const res = await apiFetch('/api/v1/auth/forgot-password/verify-otp', {
+        const res = await publicApiFetch('/api/v1/auth/forgot-password/verify-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -109,7 +109,7 @@ export default function ForgotPasswordOtpScreen() {
       else if (isPhone) body.phone = trimmed;
       else body.username = trimmed.toLowerCase();
 
-      const res = await apiFetch('/api/v1/auth/forgot-password', {
+      const res = await publicApiFetch('/api/v1/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

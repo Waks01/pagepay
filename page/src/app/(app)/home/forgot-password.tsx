@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { apiFetch } from '@/src/shared/api/client';
+import { publicApiFetch } from '@/src/shared/api/client';
 import { AnimatedInput } from '@/components/AnimatedInput';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { AuthScreenEntrance, ErrorShake, SuccessRedirect } from '@/components/animations';
@@ -62,7 +62,7 @@ export default function ForgotPasswordScreen() {
         body.username = trimmed.toLowerCase();
       }
 
-      const res = await apiFetch('/api/v1/auth/forgot-password', {
+      const res = await publicApiFetch('/api/v1/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
