@@ -618,15 +618,19 @@ export default function ProfileScreen() {
           <View
             style={[
               styles.verifyBanner,
-              { backgroundColor: tokens.signalSoft, borderColor: tokens.signal },
+              {
+                backgroundColor: tokens.signalSoft,
+                borderColor: tokens.signal,
+              },
             ]}
           >
-            <View style={[styles.verifyIcon, { backgroundColor: tokens.signalSoft }]}>
-              <Ionicons
-                name="mail-outline"
-                size={20}
-                color={tokens.signal}
-              />
+            <View
+              style={[
+                styles.verifyIcon,
+                { backgroundColor: tokens.signalSoft },
+              ]}
+            >
+              <Ionicons name="mail-outline" size={20} color={tokens.signal} />
             </View>
             <View style={styles.verifyInfo}>
               <Text
@@ -635,20 +639,23 @@ export default function ProfileScreen() {
                   { color: tokens.ink, fontFamily: "SpaceGrotesk_700Bold" },
                 ]}
               >
-                {t("profile.verify_email.title", { defaultValue: "Verify Your Email" })}
+                {t("profile.verify_email.title", {
+                  defaultValue: "Verify Your Email",
+                })}
               </Text>
               <Text style={[styles.verifyHint, { color: tokens.inkMuted }]}>
                 {t("profile.verify_email.hint", {
-                  defaultValue: "We sent a 6-digit code to your email. Verify to unlock your account.",
+                  defaultValue:
+                    "We sent a 6-digit code to your email. Verify to unlock your account.",
                 })}
               </Text>
             </View>
             <Pressable
               onPress={() =>
-                router.replace({
-                  pathname: "/(auth)/verify-email-code",
+                router.push({
+                  pathname: "/verify-email",
                   params: { email: meQuery?.email || "" },
-                })
+                } as any)
               }
               hitSlop={8}
               accessibilityRole="button"
@@ -1168,7 +1175,9 @@ export default function ProfileScreen() {
             }
             onPress={() =>
               router.push(
-                pinStatusQuery.data?.has_pin ? "/home/pin/change" : "/home/pin/setup",
+                pinStatusQuery.data?.has_pin
+                  ? "/home/pin/change"
+                  : "/home/pin/setup",
               )
             }
           />

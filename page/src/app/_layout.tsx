@@ -1,6 +1,6 @@
 ﻿import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
 import * as Splash from "expo-splash-screen";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { View, StyleSheet, useColorScheme } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -20,14 +20,10 @@ import {
 } from "@/src/shared/lib/preferences";
 import { getToken, warmTokenCache } from "@/src/shared/lib/storage";
 import { bootstrapCurrentUser } from "@/src/shared/lib/current-user";
-import {
-  setOnUnauthenticated,
-  apiFetch,
-  API_URL,
-} from "@/src/shared/api/client";
+import { setOnUnauthenticated, apiFetch } from "@/src/shared/api/client";
 import "@/src/lib/i18n";
 import { SplashOverlay } from "@/components/SplashOverlay";
-import { Stack, useRouter, useSegments, type Href } from "expo-router";
+import { Stack, useRouter, type Href } from "expo-router";
 import { PaystackProvider } from "expo-paystack";
 import Constants from "expo-constants";
 import BannerNotification, {
@@ -37,7 +33,6 @@ import {
   connectSocket,
   disconnectSocket,
   onNotification,
-  offNotification,
 } from "@/src/lib/socket";
 import {
   handleNotificationTap,
@@ -68,8 +63,12 @@ export default function RootLayout() {
     Fraunces_600SemiBold,
   });
   const [splashDismissed, setSplashDismissed] = useState(false);
-  const isReady = useAuthGate();
   const hydrated = usePreferences((s) => s.hydrated);
+  const onboardingCompleted = usePreferences((s) => s.onboardingCompleted);
+
+  // Session state - the ONLY source of truth for authentication
+  const [session, setSession] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const [bannerNotifications, setBannerNotifications] = useState<
     BannerNotificationItem[]
@@ -95,14 +94,32 @@ export default function RootLayout() {
     [router],
   );
 
+  // Load auth session ONCE on mount
   useEffect(() => {
-    if (!isReady) return;
+    if (!hydrated) return;
 
-    let cleanup: (() => void) | undefined;
+    (async () => {
+      try {
+        const token = await getToken();
+        setSession(token);
+
+        // Bootstrap user if logged in
+        if (token) {
+          await bootstrapCurrentUser();
+        }
+      } catch (e) {
+        console.error("Auth initialization failed", e);
+      } finally {
+        setAuthLoading(false);
+      }
+    })();
+  }, [hydrated]);
+
+  // Socket connection
+  useEffect(() => {
+    if (!session) return;
 
     const initSocket = async () => {
-      const token = await getToken();
-      if (!token) return;
       try {
         const meRes = await apiFetch("/api/v1/auth/me");
         if (!meRes.ok) return;
@@ -136,25 +153,15 @@ export default function RootLayout() {
     initSocket();
 
     return () => {
-      if (cleanup) cleanup();
       disconnectSocket();
     };
-  }, [isReady]);
+  }, [session]);
 
   useEffect(() => {
     void bootstrapPreferences();
-    // Eagerly load the auth token into memory so the first
-    // apiFetch on any screen is a memory read, not a bridge
-    // roundtrip to expo-secure-store. Without this, every tab
-    // switch waits on multiple secure-store reads before its
-    // useQuery hooks can issue their network requests.
     warmTokenCache();
   }, []);
 
-  // Initialise the Google Mobile Ads SDK once, at the root, so every
-  // screen that shows an ad finds the SDK already warm. This is
-  // fire-and-forget: the app is fully usable if it fails, and
-  // `initAds` never rejects.
   useEffect(() => {
     void initAds();
   }, []);
@@ -164,13 +171,14 @@ export default function RootLayout() {
     return cleanup;
   }, []);
 
-  if (!fontsLoaded || !hydrated || !isReady) {
-    console.log("[_layout] Not ready:", {
-      fontsLoaded,
-      hydrated,
-      isReady,
-      splashDismissed,
+  // Register 401 handler - setSession to null to trigger guard redirect
+  useEffect(() => {
+    setOnUnauthenticated(() => {
+      setSession(null);
     });
+  }, []);
+
+  if (!fontsLoaded || !hydrated || authLoading) {
     return (
       <View style={styles.splashContainer}>
         {!splashDismissed && (
@@ -180,7 +188,8 @@ export default function RootLayout() {
     );
   }
 
-  console.log("[_layout] Rendering main Stack");
+  const isAuthenticated = !!session;
+  const needsOnboarding = !onboardingCompleted;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -193,9 +202,26 @@ export default function RootLayout() {
               onPress={handleBannerPress}
             />
             <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(onboarding)" />
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="(app)" />
+              {/* Onboarding: shown to unauthenticated users who haven't completed onboarding */}
+              <Stack.Protected guard={!isAuthenticated && needsOnboarding}>
+                <Stack.Screen name="(onboarding)" />
+              </Stack.Protected>
+
+              {/* Auth screens: shown to unauthenticated users who completed onboarding */}
+              <Stack.Protected guard={!isAuthenticated && !needsOnboarding}>
+                <Stack.Screen name="(auth)" />
+              </Stack.Protected>
+
+              {/* App screens: shown only to authenticated users */}
+              <Stack.Protected guard={isAuthenticated}>
+                <Stack.Screen name="(app)" />
+              </Stack.Protected>
+
+              {/* Verify email: accessible from both auth and app */}
+              <Stack.Screen
+                name="verify-email"
+                options={{ presentation: "modal" }}
+              />
             </Stack>
           </PaystackProvider>
           <StatusBar style="auto" />
@@ -203,86 +229,6 @@ export default function RootLayout() {
       </ThemeProvider>
     </QueryClientProvider>
   );
-}
-
-function useAuthGate() {
-  const router = useRouter();
-  const segments = useSegments();
-  const [isReady, setIsReady] = useState(false);
-  const hydrated = usePreferences((s) => s.hydrated);
-  const onboardingCompleted = usePreferences((s) => s.onboardingCompleted);
-
-  // Stabilize segments reference using a ref to break the feedback loop
-  const segmentsRef = useRef(segments);
-  const navigatingRef = useRef(false);
-
-  // Keep segmentsRef current without triggering effects
-  useEffect(() => {
-    segmentsRef.current = segments;
-  }, [segments]);
-
-  // Register the unauthenticated callback so apiFetch can redirect to login on 401
-  useEffect(() => {
-    setOnUnauthenticated(() => {
-      const currentSegment = segmentsRef.current[0];
-      // Only redirect if we're in the app (not already on auth/onboarding screens)
-      if (currentSegment === "(app)") {
-        router.replace("/(auth)/" as Href);
-      }
-    });
-  }, [router]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-
-    (async () => {
-      // Navigation guard: prevent concurrent navigation attempts
-      if (navigatingRef.current) return;
-
-      try {
-        navigatingRef.current = true;
-
-        const token = await getToken();
-        const inOnboarding = segmentsRef.current[0] === "(onboarding)";
-        const inAuth = segmentsRef.current[0] === "(auth)";
-        const inApp = segmentsRef.current[0] === "(app)";
-
-        if (!token) {
-          // No token: redirect to onboarding or login
-          if (!onboardingCompleted && !inOnboarding) {
-            router.replace("/(onboarding)/" as Href);
-          } else if (onboardingCompleted && !inAuth) {
-            router.replace("/(auth)/" as Href);
-          }
-        } else {
-          // Has token: redirect to app or bootstrap user
-          if (inAuth || inOnboarding) {
-            router.replace("/home");
-          } else {
-            // Already inside the app (or at root): bootstrap user data
-            const me = await bootstrapCurrentUser();
-            if (me && me.email && me.email_verified === false) {
-              router.replace({
-                pathname: "/(auth)/verify-email-code",
-                params: { email: me.email },
-              } as any);
-              return;
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Auth gate failed", e);
-      } finally {
-        setIsReady(true);
-        // Reset navigation guard after a short delay to allow navigation to settle
-        setTimeout(() => {
-          navigatingRef.current = false;
-        }, 100);
-      }
-    })();
-  }, [hydrated, onboardingCompleted]);
-
-  return isReady;
 }
 
 const styles = StyleSheet.create({

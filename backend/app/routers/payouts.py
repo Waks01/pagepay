@@ -273,7 +273,17 @@ async def _process_wallet_deposit(payment: Payment, reference: str, db: AsyncSes
         else:
             logger.error("❌ Wallet deposit webhook: USER %s NOT FOUND for ref=%s", payment.user_id, reference)
     else:
-        logger.warning("⚠️  No deposit_amount_kobo in metadata or amount is 0")
+        # This is an ERROR, not a warning - the payment was confirmed SUCCESS
+        # but the user was NOT credited. The payment record shows success
+        # but points never moved. This needs immediate investigation.
+        logger.error(
+            "❌ CRITICAL: Wallet deposit succeeded but user NOT credited! "
+            "ref=%s user_id=%s payment_id=%s metadata=%s",
+            reference,
+            payment.user_id,
+            payment.id,
+            metadata,
+        )
 
 
 def _premium_activated_body(tier: UserTier) -> str:

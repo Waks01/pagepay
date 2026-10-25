@@ -148,12 +148,19 @@ async def get_transaction_history(
     for tx in payment_result.scalars().all():
         subtype = tx.tier
         description = "Wallet Deposit" if tx.tier == "wallet_deposit" else f"Premium Subscription ({tx.tier})"
+        
+        # For wallet_deposit, show the actual deposit amount, not the total charge (which includes fee)
+        if tx.tier == "wallet_deposit" and tx.payment_metadata and tx.payment_metadata.get("deposit_amount_kobo"):
+            display_amount = tx.payment_metadata["deposit_amount_kobo"]
+        else:
+            display_amount = tx.amount_kobo  # Fallback for backwards compatibility
+        
         items.append(TransactionHistoryItem(
             id=tx.id,
             type="payment",
             subtype=subtype,
             status=tx.status,
-            amount=tx.amount_kobo,
+            amount=display_amount,
             unit="NGN",
             description=description,
             reference=tx.provider_tx_ref,
