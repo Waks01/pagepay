@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -10,35 +10,41 @@ import {
   View,
   Image,
   Modal,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
-import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
 
-import { apiFetch } from '@/src/shared/api/client';
-import { saveToken, saveRefreshToken, getRefreshToken } from '@/src/shared/lib/storage';
-import { getDeviceFingerprint } from '@/src/shared/lib/device-fingerprint';
+import { apiFetch } from "@/src/shared/api/client";
 import {
-  displayName,
-  initials,
-} from '@/src/shared/lib/display-name';
+  saveToken,
+  saveRefreshToken,
+  getRefreshToken,
+} from "@/src/shared/lib/storage";
+import { getDeviceFingerprint } from "@/src/shared/lib/device-fingerprint";
+import { displayName, initials } from "@/src/shared/lib/display-name";
 import {
   persistLanguage,
   persistTheme,
   usePreferences,
-} from '@/src/shared/lib/preferences';
-import { clearToken } from '@/src/shared/lib/storage';
-import { registerFCMToken } from '@/src/lib/notifications';
-import { AnimatedInput } from '@/components/AnimatedInput';
-import { PasswordToggle } from '@/components/Field';
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { AuthScreenEntrance, AnimatedSubmitButton, ErrorShake, SuccessRedirect } from '@/components/animations';
-import { PagePay } from '@/constants/theme';
-import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
+} from "@/src/shared/lib/preferences";
+import { clearToken } from "@/src/shared/lib/storage";
+import { registerFCMToken } from "@/src/lib/notifications";
+import { AnimatedInput } from "@/components/AnimatedInput";
+import { PasswordToggle } from "@/components/Field";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import {
+  AuthScreenEntrance,
+  AnimatedSubmitButton,
+  ErrorShake,
+  SuccessRedirect,
+} from "@/components/animations";
+import { PagePay } from "@/constants/theme";
+import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 
-type FieldErrors = Partial<Record<'email' | 'password', string>>;
+type FieldErrors = Partial<Record<"email" | "password", string>>;
 
 type Props = {
   onSwitchToRegister?: () => void;
@@ -50,8 +56,8 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
   const scheme = useEffectiveScheme();
   const tokens = PagePay[scheme];
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -59,7 +65,7 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [errorTrigger, setErrorTrigger] = useState(false);
 
-   // Stable change handlers. Each one only clears its own field error after
+  // Stable change handlers. Each one only clears its own field error after
   // the first keystroke — never `formError` and never in `onFocus`. Clearing
   // state from `onFocus` was the cause of the focus-jumping loop on Android:
   // focus → setState → layout pass → focus stolen → next field grabs focus.
@@ -74,8 +80,8 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
 
   const validate = useCallback((): FieldErrors => {
     const e: FieldErrors = {};
-    if (!email.trim()) e.email = t('auth.login.errors.enter_email');
-    if (!password) e.password = t('auth.login.errors.enter_password');
+    if (!email.trim()) e.email = t("auth.login.errors.enter_email");
+    if (!password) e.password = t("auth.login.errors.enter_password");
     return e;
   }, [email, password, t]);
 
@@ -84,52 +90,62 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
     const v = validate();
     setErrors(v);
     if (Object.keys(v).length > 0) {
-      console.log('[LOGIN] validation failed', v);
+      console.log("[LOGIN] validation failed", v);
       setErrorTrigger(true);
       setTimeout(() => setErrorTrigger(false), 600);
       return;
     }
 
-    console.log('[LOGIN] starting login attempt for email:', email.trim());
+    console.log("[LOGIN] starting login attempt for email:", email.trim());
     setLoading(true);
     try {
       const fingerprint = await getDeviceFingerprint();
-      console.log('[LOGIN] device fingerprint:', fingerprint);
-      const res = await apiFetch('/api/v1/auth/login', {
-        method: 'POST',
+      console.log("[LOGIN] device fingerprint:", fingerprint);
+      const res = await apiFetch("/api/v1/auth/login", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-Device-Fingerprint': fingerprint,
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Device-Fingerprint": fingerprint,
         },
         body: `username=${encodeURIComponent(email.trim())}&password=${encodeURIComponent(password)}`,
       });
 
-      console.log('[LOGIN] response status:', res.status);
+      console.log("[LOGIN] response status:", res.status);
       if (!res.ok) {
         const status = res.status;
-        let detail = '';
+        let detail = "";
         try {
           const data = await res.json();
-          detail = typeof data?.detail === 'string' ? data.detail : '';
-          console.log('[LOGIN] error response body:', data);
+          detail = typeof data?.detail === "string" ? data.detail : "";
+          console.log("[LOGIN] error response body:", data);
         } catch {
           /* non-JSON response body (e.g. 502 HTML from proxy) — show status text instead */
           detail = res.statusText || `HTTP ${status}`;
         }
-        console.error('[LOGIN] login failed with status:', status, 'detail:', detail);
+        console.error(
+          "[LOGIN] login failed with status:",
+          status,
+          "detail:",
+          detail,
+        );
         if (status === 401 && !detail) {
-          setFormError(t('auth.login.errors.credentials_mismatch'));
+          setFormError(t("auth.login.errors.credentials_mismatch"));
         } else {
           setFormError(detail || `HTTP ${status}`);
         }
-      
+
         setErrorTrigger(true);
         setTimeout(() => setErrorTrigger(false), 600);
         return;
       }
 
       const data = await res.json();
-      console.log('[LOGIN] login successful, user_id:', data.user?.id, 'token received:', !!data.access_token);
+      console.log(
+        "[LOGIN] login successful, user_id:",
+        data.user?.id,
+        "token received:",
+        !!data.access_token,
+      );
       await saveToken(data.access_token);
       if (data.refresh_token) {
         await saveRefreshToken(data.refresh_token);
@@ -138,7 +154,8 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
       // Pre-populate the global user store before navigating so the
       // first screen render (Home) can read the user object from
       // memory instead of waiting for the auth gate's bootstrap.
-      const { bootstrapCurrentUser } = await import('@/src/shared/lib/current-user');
+      const { bootstrapCurrentUser } =
+        await import("@/src/shared/lib/current-user");
       const user = await bootstrapCurrentUser();
 
       await registerFCMToken();
@@ -150,12 +167,12 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
         return;
       }
 
-      router.replace('/home');
+      router.replace("/home");
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      if (message.toLowerCase().includes('unauthorized')) {
-        setFormError(t('auth.login.errors.credentials_mismatch'));
-      } else if (message.toLowerCase().includes('account locked')) {
+      if (message.toLowerCase().includes("unauthorized")) {
+        setFormError(t("auth.login.errors.credentials_mismatch"));
+      } else if (message.toLowerCase().includes("account locked")) {
         setFormError(message);
       } else {
         setFormError(message);
@@ -169,13 +186,13 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
 
   return (
     <View style={[styles.root, { backgroundColor: tokens.paper }]}>
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} />
+
       {/* Success redirect overlay */}
       <SuccessRedirect visible={false} />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.flex}
       >
         <ScrollView
@@ -183,23 +200,28 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <SafeAreaView edges={['top', 'bottom']}>
+          <SafeAreaView edges={["top", "bottom"]}>
             <ErrorShake trigger={errorTrigger}>
               <View style={styles.cardWrap}>
                 <View style={[styles.card, { backgroundColor: tokens.card }]}>
                   <AuthScreenEntrance
-                    title={t('auth.login.title')}
-                    subtitle={t('auth.login.subtitle')}
+                    title={t("auth.login.title")}
+                    subtitle={t("auth.login.subtitle")}
                   />
 
                   {formError ? (
                     <View
                       style={[
                         styles.banner,
-                        { backgroundColor: tokens.signalSoft, borderColor: tokens.signal },
+                        {
+                          backgroundColor: tokens.signalSoft,
+                          borderColor: tokens.signal,
+                        },
                       ]}
                     >
-                      <Text style={[styles.bannerText, { color: tokens.signal }]}>
+                      <Text
+                        style={[styles.bannerText, { color: tokens.signal }]}
+                      >
                         {formError}
                       </Text>
                     </View>
@@ -207,10 +229,10 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
 
                   <View style={{ gap: 14 }}>
                     <AnimatedInput
-                      label={t('auth.login.email_label')}
+                      label={t("auth.login.email_label")}
                       value={email}
                       onChangeText={onChangeEmail}
-                      placeholder={t('auth.login.email_placeholder')}
+                      placeholder={t("auth.login.email_placeholder")}
                       autoCapitalize="none"
                       autoCorrect={false}
                       textContentType="username"
@@ -218,10 +240,10 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
                       error={errors.email}
                     />
                     <AnimatedInput
-                      label={t('auth.login.password_label')}
+                      label={t("auth.login.password_label")}
                       value={password}
                       onChangeText={onChangePassword}
-                      placeholder={t('auth.login.password_placeholder')}
+                      placeholder={t("auth.login.password_placeholder")}
                       secureTextEntry={!showPassword}
                       autoCapitalize="none"
                       autoCorrect={false}
@@ -240,33 +262,37 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
 
                   <View style={styles.forgotRow}>
                     <Pressable
-                      onPress={() => router.push('/home/forgot-password')}
+                      onPress={() => router.push("/home/forgot-password")}
                       hitSlop={8}
                     >
                       <Text style={[styles.forgot, { color: tokens.mint }]}>
-                        {t('auth.login.forgot_password')}
+                        {t("auth.login.forgot_password")}
                       </Text>
                     </Pressable>
                   </View>
 
                   <AnimatedSubmitButton
-                    title={t('auth.login.sign_in')}
+                    title={t("auth.login.sign_in")}
                     isLoading={loading}
                     isSuccess={false}
                     onPress={handleLogin}
                   />
 
                   <View style={styles.tertiaryRow}>
-                    <Text style={[styles.tertiaryMuted, { color: tokens.inkMuted }]}>
-                      {t('auth.login.new_to_pagepay')}
+                    <Text
+                      style={[styles.tertiaryMuted, { color: tokens.inkMuted }]}
+                    >
+                      {t("auth.login.new_to_pagepay")}
                     </Text>
-                     <Pressable
-                       onPress={onSwitchToRegister}
-                       hitSlop={6}
-                       style={styles.tertiaryLinkGroup}
-                     >
-                      <Text style={[styles.tertiaryLink, { color: tokens.mint }]}>
-                        {t('auth.login.create_account')}
+                    <Pressable
+                      onPress={onSwitchToRegister}
+                      hitSlop={6}
+                      style={styles.tertiaryLinkGroup}
+                    >
+                      <Text
+                        style={[styles.tertiaryLink, { color: tokens.mint }]}
+                      >
+                        {t("auth.login.create_account")}
                       </Text>
                       <Ionicons
                         name="chevron-forward"
@@ -290,36 +316,48 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
         onRequestClose={() => setShowVerifyModal(false)}
       >
         <View style={verifyModalStyles.overlay}>
-          <View style={[verifyModalStyles.sheet, { backgroundColor: tokens.card, borderColor: tokens.border, borderWidth: 1 }]}>
+          <View
+            style={[
+              verifyModalStyles.sheet,
+              {
+                backgroundColor: tokens.card,
+                borderColor: tokens.border,
+                borderWidth: 1,
+              },
+            ]}
+          >
             <Text style={[verifyModalStyles.title, { color: tokens.ink }]}>
-              {t('auth.login.errors.email_not_verified_title', { defaultValue: 'Email Not Verified' })}
+              {t("auth.login.errors.email_not_verified_title", {
+                defaultValue: "Email Not Verified",
+              })}
             </Text>
             <Text style={[verifyModalStyles.body, { color: tokens.inkMuted }]}>
-              {t('auth.login.errors.email_not_verified_body', { defaultValue: 'Please verify your email address before accessing your account. Check your inbox for the verification code.' })}
+              {t("auth.login.errors.email_not_verified_body", {
+                defaultValue:
+                  "Please verify your email address before accessing your account. Check your inbox for the verification code.",
+              })}
             </Text>
             <View style={verifyModalStyles.actions}>
-              <Pressable
-                style={[verifyModalStyles.button, { backgroundColor: 'transparent', borderWidth: 1, borderColor: tokens.border }]}
+              <PrimaryButton
+                title={t("common.cancel", { defaultValue: "Cancel" })}
                 onPress={() => setShowVerifyModal(false)}
-              >
-                <Text style={[verifyModalStyles.buttonText, { color: tokens.inkMuted }]}>
-                  {t('common.cancel', { defaultValue: 'Cancel' })}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[verifyModalStyles.button, { backgroundColor: tokens.mint }]}
+                variant="ghost"
+                style={verifyModalStyles.actionButton}
+              />
+              <PrimaryButton
+                title={t("verify_email.resend", {
+                  defaultValue: "Resend Code",
+                })}
                 onPress={() => {
                   setShowVerifyModal(false);
                   router.replace({
-                    pathname: '/(auth)/verify-email-code',
+                    pathname: "/(auth)/verify-email-code",
                     params: { email: email.trim() },
                   });
                 }}
-              >
-                <Text style={[verifyModalStyles.buttonText, { color: '#0b1026' }]}>
-                  {t('verify_email.resend', { defaultValue: 'Resend Code' })}
-                </Text>
-              </Pressable>
+                variant="mint"
+                style={verifyModalStyles.actionButton}
+              />
             </View>
           </View>
         </View>
@@ -331,13 +369,13 @@ export default function LoginScreen({ onSwitchToRegister }: Props) {
 const verifyModalStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 24,
   },
   sheet: {
-    width: '100%',
+    width: "100%",
     maxWidth: 420,
     borderRadius: 20,
     padding: 24,
@@ -345,28 +383,21 @@ const verifyModalStyles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontFamily: 'SpaceGrotesk_700Bold',
-    textAlign: 'center',
+    fontFamily: "SpaceGrotesk_700Bold",
+    textAlign: "center",
   },
   body: {
     fontSize: 14,
-    fontFamily: 'SpaceGrotesk_500Medium',
-    textAlign: 'center',
+    fontFamily: "SpaceGrotesk_500Medium",
+    textAlign: "center",
     lineHeight: 22,
   },
   actions: {
-    flexDirection: 'row',
-    gap: 10,
+    flexDirection: "row",
+    gap: 12,
   },
-  button: {
+  actionButton: {
     flex: 1,
-    borderRadius: 999,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  buttonText: {
-    fontSize: 15,
-    fontFamily: 'SpaceGrotesk_700Bold',
   },
 });
 
@@ -380,13 +411,13 @@ const styles = StyleSheet.create({
   },
   cardWrap: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   card: {
     borderRadius: 20,
     padding: 24,
     gap: 12,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 12 },
@@ -395,7 +426,7 @@ const styles = StyleSheet.create({
   brand: {
     fontSize: 18,
     letterSpacing: 2,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   headline: {
     fontSize: 28,
@@ -419,32 +450,32 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   forgotRow: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
     marginTop: 4,
     marginBottom: 4,
   },
   forgot: {
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   tertiaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     gap: 6,
     marginTop: 8,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   tertiaryMuted: {
     fontSize: 14,
   },
   tertiaryLink: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   tertiaryLinkGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 2,
   },
   tertiaryLinkChevron: {
