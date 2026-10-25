@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
+﻿import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
 import * as Splash from "expo-splash-screen";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { View, StyleSheet, useColorScheme } from "react-native";
@@ -20,7 +20,11 @@ import {
 } from "@/src/shared/lib/preferences";
 import { getToken, warmTokenCache } from "@/src/shared/lib/storage";
 import { bootstrapCurrentUser } from "@/src/shared/lib/current-user";
-import { setOnUnauthenticated, apiFetch, API_URL } from "@/src/shared/api/client";
+import {
+  setOnUnauthenticated,
+  apiFetch,
+  API_URL,
+} from "@/src/shared/api/client";
 import "@/src/lib/i18n";
 import { SplashOverlay } from "@/components/SplashOverlay";
 import { Stack, useRouter, useSegments, type Href } from "expo-router";
@@ -35,7 +39,10 @@ import {
   onNotification,
   offNotification,
 } from "@/src/lib/socket";
-import { handleNotificationTap, setupNotificationListeners } from "@/src/lib/notifications";
+import {
+  handleNotificationTap,
+  setupNotificationListeners,
+} from "@/src/lib/notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { initAds } from "@/src/shared/lib/ads";
 
@@ -64,7 +71,9 @@ export default function RootLayout() {
   const isReady = useAuthGate();
   const hydrated = usePreferences((s) => s.hydrated);
 
-  const [bannerNotifications, setBannerNotifications] = useState<BannerNotificationItem[]>([]);
+  const [bannerNotifications, setBannerNotifications] = useState<
+    BannerNotificationItem[]
+  >([]);
 
   const handleBannerDismiss = useCallback((id: number) => {
     setBannerNotifications((prev) => prev.filter((n) => n.id !== id));
@@ -72,7 +81,9 @@ export default function RootLayout() {
 
   const handleBannerPress = useCallback(
     (notification: BannerNotificationItem) => {
-      setBannerNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+      setBannerNotifications((prev) =>
+        prev.filter((n) => n.id !== notification.id),
+      );
       handleNotificationTap(
         {
           data: notification.data ?? undefined,
@@ -112,7 +123,9 @@ export default function RootLayout() {
               );
             }, 8000);
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
-            queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
+            queryClient.invalidateQueries({
+              queryKey: ["notifications-unread-count"],
+            });
           });
         }
       } catch (error) {
@@ -152,6 +165,12 @@ export default function RootLayout() {
   }, []);
 
   if (!fontsLoaded || !hydrated || !isReady) {
+    console.log("[_layout] Not ready:", {
+      fontsLoaded,
+      hydrated,
+      isReady,
+      splashDismissed,
+    });
     return (
       <View style={styles.splashContainer}>
         {!splashDismissed && (
@@ -161,31 +180,23 @@ export default function RootLayout() {
     );
   }
 
+  console.log("[_layout] Rendering main Stack");
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <PaystackProvider publicKey={PAYSTACK_PUBLIC_KEY}>
-            {!isReady || !fontsLoaded ? (
-              <View style={{ flex: 1 }}>
-                {!splashDismissed ? (
-                  <SplashOverlay onDone={() => setSplashDismissed(true)} />
-                ) : null}
-              </View>
-            ) : (
-              <>
-                <BannerNotification
-                  notifications={bannerNotifications}
-                  onDismiss={handleBannerDismiss}
-                  onPress={handleBannerPress}
-                />
-                <Stack screenOptions={{ headerShown: false }}>
-                  <Stack.Screen name="(onboarding)" />
-                  <Stack.Screen name="(auth)" />
-                  <Stack.Screen name="(app)" />
-                </Stack>
-              </>
-            )}
+            <BannerNotification
+              notifications={bannerNotifications}
+              onDismiss={handleBannerDismiss}
+              onPress={handleBannerPress}
+            />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(onboarding)" />
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(app)" />
+            </Stack>
           </PaystackProvider>
           <StatusBar style="auto" />
         </GestureHandlerRootView>
@@ -201,65 +212,61 @@ function useAuthGate() {
   const hydrated = usePreferences((s) => s.hydrated);
   const onboardingCompleted = usePreferences((s) => s.onboardingCompleted);
 
+  // Stabilize segments reference using a ref to break the feedback loop
+  const segmentsRef = useRef(segments);
+  const navigatingRef = useRef(false);
+
+  // Keep segmentsRef current without triggering effects
+  useEffect(() => {
+    segmentsRef.current = segments;
+  }, [segments]);
+
   // Register the unauthenticated callback so apiFetch can redirect to login on 401
   useEffect(() => {
     setOnUnauthenticated(() => {
-      const currentSegment = segments[0];
-      // Don't redirect on public screens that don't require auth
-      const isPublicScreen = segments.some(s =>
-        ['forgot-password', 'forgot-password-otp', 'reset-password'].includes(s)
-      );
+      const currentSegment = segmentsRef.current[0];
       // Only redirect if we're in the app (not already on auth/onboarding screens)
-      // AND not on a public screen
-      if (currentSegment === "(app)" && !isPublicScreen) {
+      if (currentSegment === "(app)") {
         router.replace("/(auth)/" as Href);
       }
     });
-  }, [router, segments]);
+  }, [router]);
 
   useEffect(() => {
     if (!hydrated) return;
 
     (async () => {
+      // Navigation guard: prevent concurrent navigation attempts
+      if (navigatingRef.current) return;
+
       try {
+        navigatingRef.current = true;
+
         const token = await getToken();
-        const inOnboarding = segments[0] === "(onboarding)";
-        const inAuth = segments[0] === "(auth)";
-        const inApp = segments[0] === "(app)";
+        const inOnboarding = segmentsRef.current[0] === "(onboarding)";
+        const inAuth = segmentsRef.current[0] === "(auth)";
+        const inApp = segmentsRef.current[0] === "(app)";
 
         if (!token) {
           // No token: redirect to onboarding or login
-          const isPublicScreen = segments.some(s =>
-            ['forgot-password', 'forgot-password-otp', 'reset-password'].includes(s)
-          );
-          if (!isPublicScreen) {
-            if (!onboardingCompleted && !inOnboarding) {
-              router.replace("/(onboarding)/" as Href);
-            } else if (onboardingCompleted && !inAuth) {
-              router.replace("/(auth)/" as Href);
-            }
+          if (!onboardingCompleted && !inOnboarding) {
+            router.replace("/(onboarding)/" as Href);
+          } else if (onboardingCompleted && !inAuth) {
+            router.replace("/(auth)/" as Href);
           }
         } else {
           // Has token: redirect to app or bootstrap user
           if (inAuth || inOnboarding) {
             router.replace("/home");
           } else {
-            // Skip user bootstrap when on a public screen (forgot-password,
-            // reset-password) — those flows must work without a valid session
-            // token, and an expired token here triggers a 401 → auto-redirect.
-            const isPublicScreen = segments.some(s =>
-              ['forgot-password', 'forgot-password-otp', 'reset-password'].includes(s)
-            );
-            if (!isPublicScreen) {
-              // Already inside the app (or at root): bootstrap user data
-              const me = await bootstrapCurrentUser();
-              if (me && me.email && me.email_verified === false) {
-                router.replace({
-                  pathname: "/(auth)/verify-email-code",
-                  params: { email: me.email },
-                } as any);
-                return;
-              }
+            // Already inside the app (or at root): bootstrap user data
+            const me = await bootstrapCurrentUser();
+            if (me && me.email && me.email_verified === false) {
+              router.replace({
+                pathname: "/(auth)/verify-email-code",
+                params: { email: me.email },
+              } as any);
+              return;
             }
           }
         }
@@ -267,9 +274,13 @@ function useAuthGate() {
         console.error("Auth gate failed", e);
       } finally {
         setIsReady(true);
+        // Reset navigation guard after a short delay to allow navigation to settle
+        setTimeout(() => {
+          navigatingRef.current = false;
+        }, 100);
       }
     })();
-  }, [hydrated, router, onboardingCompleted, segments]);
+  }, [hydrated, onboardingCompleted]);
 
   return isReady;
 }
