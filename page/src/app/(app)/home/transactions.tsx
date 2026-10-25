@@ -140,11 +140,13 @@ export default function TransactionHistoryScreen() {
 
   const formatAmount = (item: TransactionHistoryItem) => {
     const prefix = item.amount > 0 ? "+" : "";
+    // Backend sends amount in kobo (100 kobo = ₦1), so divide by 100 to get naira
+    const amountInNaira = Math.abs(item.amount) / 100;
     const suffix =
       item.unit === "NGN"
         ? item.type === "payout" || item.type === "bill"
-          ? `₦${Math.abs(item.amount)}`
-          : `${prefix}₦${item.amount}`
+          ? `₦${amountInNaira.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : `${prefix}₦${amountInNaira.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         : `${prefix}${item.amount} ${item.unit}`;
     return suffix;
   };

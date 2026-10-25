@@ -392,9 +392,10 @@ export default function WalletScreen() {
               </View>
             </View>
           )}
-          {/* Earn without money. The credit lands via the SSV callback
-              on the server, so the balance is refreshed a moment after
-              the ad closes rather than optimistically. */}
+          {/* Earn without money. The credit is granted immediately on the
+              client when the ad finishes (EARNED_REWARD). The SSV
+              callback verifies it server-side in the background for
+              fraud-guard; it does not block the UI. */}
           <View style={{ marginTop: 14, gap: 8 }}>
             <RewardedAdButton
               onEarned={() => {

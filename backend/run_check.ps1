@@ -1,0 +1,1 @@
+.venv\Scripts\python check_user.py > output_check.txt 2>&1
