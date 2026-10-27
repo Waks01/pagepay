@@ -11,9 +11,7 @@
       "package": "com.pagepay.mobiles",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -39,8 +37,7 @@
       "expo-build-properties",
       "expo-secure-store",
       "expo-sharing",
-      "expo-video",
-      "react-native-google-mobile-ads"
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -30,6 +30,71 @@
       "version": "0.8.0",
       "hash": "d8a9adb6",
       "addedAt": "2026-10-27T10:36:39.385Z"
+    },
+    "skeleton": {
+      "version": "0.8.0",
+      "hash": "d183ed57",
+      "addedAt": "2026-10-27T20:34:20.576Z"
+    },
+    "animate": {
+      "version": "0.8.0",
+      "hash": "9b194e57",
+      "addedAt": "2026-10-27T20:34:20.580Z"
+    },
+    "chip": {
+      "version": "0.8.0",
+      "hash": "52b60755",
+      "addedAt": "2026-10-27T20:34:20.582Z"
+    },
+    "separator": {
+      "version": "0.8.0",
+      "hash": "2f3da415",
+      "addedAt": "2026-10-27T20:34:20.586Z"
+    },
+    "avatar": {
+      "version": "0.8.0",
+      "hash": "28e28da3",
+      "addedAt": "2026-10-27T20:34:20.588Z"
+    },
+    "tabs": {
+      "version": "0.8.0",
+      "hash": "9e1d27c3",
+      "addedAt": "2026-10-27T20:34:20.589Z"
+    },
+    "bottom-sheet": {
+      "version": "0.8.0",
+      "hash": "dcc5d0d5",
+      "addedAt": "2026-10-27T20:34:20.591Z"
+    },
+    "fold": {
+      "version": "0.8.0",
+      "hash": "3e2821d5",
+      "addedAt": "2026-10-27T20:34:20.594Z"
+    },
+    "dialog": {
+      "version": "0.8.0",
+      "hash": "8763d365",
+      "addedAt": "2026-10-27T20:34:20.596Z"
+    },
+    "toast": {
+      "version": "0.8.0",
+      "hash": "5c368d45",
+      "addedAt": "2026-10-27T20:34:20.598Z"
+    },
+    "alert": {
+      "version": "0.8.0",
+      "hash": "3fbf4eda",
+      "addedAt": "2026-10-27T20:34:20.600Z"
+    },
+    "progress": {
+      "version": "0.8.0",
+      "hash": "093baf30",
+      "addedAt": "2026-10-27T20:34:20.602Z"
+    },
+    "badge": {
+      "version": "0.8.0",
+      "hash": "9279cc98",
+      "addedAt": "2026-10-27T20:34:20.604Z"
     }
   }
 }
