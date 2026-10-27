@@ -1,0 +1,97 @@
+{
+  "expo": {
+    "name": "pagepay",
+    "slug": "pagepay",
+    "version": "1.0.0",
+    "owner": "kenzola_money",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "client",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"],
+        "NSPhotoLibraryAddUsageDescription": "PagePay needs access to save narration episodes to your library.",
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true
+      }
+    },
+    "android": {
+      "package": "com.kenzola.pagepay",
+      "adaptiveIcon": {
+        "backgroundColor": "#0E7C66",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": true,
+      "googleServicesFile": "./google-services.json"
+    },
+    "plugins": [
+      "expo-router",
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics",
+      "@react-native-firebase/messaging",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.1.20",
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "extraBackgroundColor": "#FBFAF6",
+            "packagingOptions": {
+              "pickFirst": ["**/libcrypto.so"]
+            }
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FBFAF6",
+          "dark": {
+            "image": "./assets/images/splash-icon.png",
+            "backgroundColor": "#0E1116"
+          }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "PagePay needs access to your photos to upload study materials.",
+          "cameraPermission": "PagePay needs access to your camera to take photos for study materials."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true,
+          "enableBackgroundRecording": false,
+          "recordAudioAndroid": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "PagePay needs access to your photos to upload study materials.",
+          "savePhotosPermission": "PagePay needs access to save narration episodes to your library."
+        }
+      ],
+      "expo-video"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "https://pagepay-fff6.onrender.com",
+      "router": {},
+      "eas": {
+        "projectId": "cd073eef-398e-4fd3-bba5-b5c4cb98df79"
+      }
+    }
+  }
+}

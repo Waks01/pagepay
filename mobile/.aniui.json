@@ -1,0 +1,29 @@
+{
+  "componentsDir": "src/components/ui",
+  "utilPath": "src/lib/utils.ts",
+  "theme": "rose",
+  "tsx": true,
+  "style": "uniwind",
+  "installed": {
+    "text": {
+      "version": "0.8.0",
+      "hash": "9a3434aa",
+      "addedAt": "2026-10-26T21:37:01.988Z"
+    },
+    "button": {
+      "version": "0.8.0",
+      "hash": "d8a9adb6",
+      "addedAt": "2026-10-26T21:37:02.003Z"
+    },
+    "theme-provider": {
+      "version": "0.8.0",
+      "hash": "d38461eb",
+      "addedAt": "2026-10-26T21:37:02.005Z"
+    },
+    "input": {
+      "version": "0.8.0",
+      "hash": "66d8fcde",
+      "addedAt": "2026-10-26T21:37:20.034Z"
+    }
+  }
+}
