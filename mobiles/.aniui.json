@@ -1,1 +1,35 @@
-{"componentsDir":"src/components/ui","utilPath":"src/lib/utils.ts","theme":"default","tsx":true,"style":"uniwind","sdkGeneration":"v5"}
+{
+  "componentsDir": "src/components/ui",
+  "utilPath": "src/lib/utils.ts",
+  "theme": "default",
+  "tsx": true,
+  "style": "uniwind",
+  "sdkGeneration": "v5",
+  "installed": {
+    "card": {
+      "version": "0.8.0",
+      "hash": "9c588269",
+      "addedAt": "2026-10-27T10:36:39.370Z"
+    },
+    "text": {
+      "version": "0.8.0",
+      "hash": "9a3434aa",
+      "addedAt": "2026-10-27T10:36:39.373Z"
+    },
+    "input": {
+      "version": "0.8.0",
+      "hash": "66d8fcde",
+      "addedAt": "2026-10-27T10:36:39.377Z"
+    },
+    "theme-provider": {
+      "version": "0.8.0",
+      "hash": "5c39e43d",
+      "addedAt": "2026-10-27T10:36:39.382Z"
+    },
+    "button": {
+      "version": "0.8.0",
+      "hash": "d8a9adb6",
+      "addedAt": "2026-10-27T10:36:39.385Z"
+    }
+  }
+}
