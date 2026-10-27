@@ -1,24 +1,6 @@
 import './global.css';
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { PortalHost } from '@rn-primitives/portal';
+import { Stack } from 'expo-router';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
-
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AnimatedSplashOverlay />
-        <AppTabs />
-      </ThemeProvider>
-      <PortalHost />
-    </GestureHandlerRootView>
-  );
+export default function RootLayout() {
+  return <Stack />;
 }
