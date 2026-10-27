@@ -1,10 +1,10 @@
 # Dependencies
 backend/.venv/
-frontend/node_modules/
+node_modules/
 
 # Build outputs
-frontend/.expo/
-frontend/dist/
+mobiles/.expo/
+mobiles/dist/
 
 # Environment
 backend/.env
