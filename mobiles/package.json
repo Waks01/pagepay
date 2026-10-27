@@ -17,6 +17,7 @@
     "@react-navigation/native": "^7.5.1",
     "@rn-primitives/portal": "^1.5.3",
     "@tanstack/react-query": "^5.105.0",
+    "ansi-escapes": "^7.3.0",
     "babel-preset-expo": "~57.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
