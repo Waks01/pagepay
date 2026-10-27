@@ -56,6 +56,7 @@
     "i18next": "^26.5.11",
     "lottie-react-native": "~7.3.8",
     "lucide-react-native": "^1.62.0",
+    "metro-source-map": "^0.87.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-i18next": "^17.1.9",
