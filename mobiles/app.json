@@ -31,8 +31,6 @@
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
       "@react-native-firebase/messaging",
-      "expo-asset",
-      "expo-audio",
       "expo-build-properties",
       "expo-secure-store",
       "expo-sharing",
