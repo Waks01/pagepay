@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PagePay wordmark — billboard / splash / marketing version.
+  2400 x 720 artboard.
+
+  Layout:
+    - Monogram on the left (square 432 px block, 144 px from top + left)
+    - "PagePay" wordmark on the right, Space Grotesk 700 Bold, tight tracking
+    - The "P" in "PagePay" is set ~10 % larger than the rest (visual rhyme
+      with the monogram)
+    - A 60 px mint kicker bar sits centered under the wordmark
+    - Optional ® mark at the end of "PagePay", in inkMuted, 30 % size
+    - Cream paper background
+
+  The font stack includes Space Grotesk first so the in-app
+  expo-google-fonts/space-grotesk asset matches the export.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 2400 720"
+     role="img"
+     aria-label="PagePay wordmark">
+  <title>PagePay wordmark</title>
+  <desc>PagePay monogram on the left and the PagePay wordmark in mint
+        Space Grotesk Bold on the right, on a cream paper background.
+        A short mint kicker bar sits under the wordmark, and a small
+        registered-trademark glyph follows the "y".</desc>
+
+  <!-- Cream paper background -->
+  <rect width="2400" height="720" fill="#FBFAF6"/>
+
+  <!--
+    Monogram block, left. 432 px square, inset 144 px from top and left.
+    Inlines the same P geometry as monogram.svg, scaled 0.421875×
+    (1024 -> 432) and translated into place.
+  -->
+  <g transform="translate(144, 144) scale(0.421875)">
+    <!-- Mint squircle background -->
+    <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224" fill="#0E7C66"/>
+
+    <!-- P glyph (cream, with chamfered lower-right) -->
+    <g>
+      <path fill="#FBFAF6" fill-rule="evenodd" d="
+        M 248  192
+        L 600  192
+        C 788  192  912  312  912  432
+        C 912  552  788  672  600  672
+        L 420  672
+        L 420  832
+        L 360  892
+        L 248  892
+        Z
+        M 420  360
+        L 600  360
+        C 676  360  736  392  736  432
+        C 736  472  676  504  600  504
+        L 420  504
+        Z
+      "/>
+      <!-- Chamfer wedge (mint) -->
+      <path fill="#0E7C66" d="
+        M 360  892
+        L 420  832
+        L 420  892
+        Z
+      "/>
+    </g>
+
+    <!-- Coin + ring + highlight in counter -->
+    <circle cx="580" cy="432" r="56" fill="#0E7C66"/>
+    <circle cx="580" cy="432" r="48" fill="none" stroke="#FBFAF6" stroke-width="6" opacity="0.6"/>
+    <circle cx="566" cy="418" r="6" fill="#FBFAF6" opacity="0.5"/>
+
+    <!-- Sparkle -->
+    <g transform="translate(760, 320)">
+      <path fill="#FBFAF6" d="
+        M 0 -28
+        L 6 -6
+        L 28 0
+        L 6 6
+        L 0 28
+        L -6 6
+        L -28 0
+        L -6 -6
+        Z
+      "/>
+      <path fill="#FBFAF6" opacity="0.7" transform="translate(40, 40) scale(0.4)" d="
+        M 0 -28
+        L 6 -6
+        L 28 0
+        L 6 6
+        L 0 28
+        L -6 6
+        L -28 0
+        L -6 -6
+        Z
+      "/>
+    </g>
+  </g>
+
+  <!--
+    "PagePay" wordmark. Space Grotesk 700 Bold with tight tracking
+    (-12 px in 320 px font size = -0.0375 em, which approximates
+    letter-spacing: -0.02em in CSS). The opening "P" is set 10 %
+    larger than the rest as a visual rhyme with the monogram.
+
+    Text-anchor "start" with x=780 puts the wordmark to the right
+    of the monogram block, vertically centered (y=500 for a 320 px
+    font baseline-aligned to the monogram center).
+  -->
+  <text x="780" y="500"
+        font-family="'Space Grotesk', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        font-weight="700"
+        font-size="320"
+        letter-spacing="-12"
+        fill="#0E7C66"><tspan font-size="352">P</tspan>age<tspan font-size="352">P</tspan>ay</text>
+
+  <!--
+    Kicker bar under the wordmark. 60 px wide, 4 px tall, rounded
+    ends. Mint fill. Centered under the "agePa" portion of the text.
+  -->
+  <rect x="1000" y="540" width="60" height="4" rx="2" fill="#0E7C66"/>
+
+  <!--
+    Tiny ® glyph at the end of "PagePay". inkMuted color, ~30 %
+    size. Hand-editable; remove if it doesn't fit the brand voice.
+  -->
+  <text x="1690" y="410"
+        font-family="'Space Grotesk', system-ui, sans-serif"
+        font-weight="500"
+        font-size="96"
+        fill="#6B7280">®</text>
+</svg>

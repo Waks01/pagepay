@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Android adaptive icon FOREGROUND ONLY.
+  1024 x 1024 artboard, transparent background.
+
+  The foreground layer is masked at runtime by the launcher's chosen
+  shape (circle, squircle, teardrop, etc.). The glyph must therefore
+  fit inside the 66 % safe zone, which on a 1024 artboard is a
+  432 x 432 box centered at (512, 512), i.e. glyph lives in the box
+  (296, 296) .. (728, 728).
+
+  The exported PNG should be 1024 x 1024 with the glyph sized at 432
+  px in the center. The 60 % outer region can be cut by the mask.
+
+  For hand-editing, the safe-zone guide below is commented out —
+  uncomment to see the 432 x 432 box and the 1024 x 1024 artboard
+  border while designing.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1024 1024"
+     role="img"
+     aria-label="PagePay adaptive icon foreground">
+  <title>PagePay adaptive foreground</title>
+  <desc>Mint squircle background with a cream letter P, coin, and
+        sparkle. Glyph fits within the 66 % safe zone of a 1024 x 1024
+        Android adaptive icon. Background will be replaced at runtime
+        by the adaptive-icon background color; the foreground retains
+        its own mint squircle so the glyph reads as a complete unit
+        on any wallpaper.</desc>
+
+  <!--
+    ============= SAFE-ZONE GUIDE (uncomment to view) =============
+    [1024 x 1024 artboard border]
+    <rect x="0" y="0" width="1024" height="1024" fill="none" stroke="#FF00FF" stroke-width="2" stroke-dasharray="8 8"/>
+    [432 x 432 safe zone]
+    <rect x="296" y="296" width="432" height="432" fill="none" stroke="#00FFFF" stroke-width="2" stroke-dasharray="8 8"/>
+    [512 x 512 inscribed circle (squircle approximation)]
+    <circle cx="512" cy="512" r="256" fill="none" stroke="#FFFF00" stroke-width="2" stroke-dasharray="4 4"/>
+    ================================================================
+  -->
+
+  <!--
+    Glyph: same monogram as monogram.svg, scaled to fit a 432 px
+    square centered in the 1024 artboard. We embed the squircle
+    background so the icon reads correctly even when the launcher
+    mask crops close to the safe zone.
+  -->
+  <g transform="translate(296, 296) scale(0.421875)">
+    <!-- Mint squircle -->
+    <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224" fill="#0E7C66"/>
+
+    <!-- P glyph (cream) -->
+    <path fill="#FBFAF6" fill-rule="evenodd" d="
+      M 248  192
+      L 600  192
+      C 788  192  912  312  912  432
+      C 912  552  788  672  600  672
+      L 420  672
+      L 420  832
+      L 360  892
+      L 248  892
+      Z
+      M 420  360
+      L 600  360
+      C 676  360  736  392  736  432
+      C 736  472  676  504  600  504
+      L 420  504
+      Z
+    "/>
+
+    <!-- Chamfer wedge (mint) -->
+    <path fill="#0E7C66" d="
+      M 360  892
+      L 420  832
+      L 420  892
+      Z
+    "/>
+
+    <!-- Coin + ring + highlight -->
+    <circle cx="580" cy="432" r="56" fill="#0E7C66"/>
+    <circle cx="580" cy="432" r="48" fill="none" stroke="#FBFAF6" stroke-width="6" opacity="0.6"/>
+    <circle cx="566" cy="418" r="6" fill="#FBFAF6" opacity="0.5"/>
+
+    <!-- Sparkle -->
+    <g transform="translate(760, 320)">
+      <path fill="#FBFAF6" d="
+        M 0 -28
+        L 6 -6
+        L 28 0
+        L 6 6
+        L 0 28
+        L -6 6
+        L -28 0
+        L -6 -6
+        Z
+      "/>
+      <path fill="#FBFAF6" opacity="0.7" transform="translate(40, 40) scale(0.4)" d="
+        M 0 -28
+        L 6 -6
+        L 28 0
+        L 6 6
+        L 0 28
+        L -6 6
+        L -28 0
+        L -6 -6
+        Z
+      "/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Monochrome (single-color) version of the PagePay monogram.
+  Used for Android themed icon slots, dark-mode wallpapers, and
+  print at 1-color.
+
+  No squircle background — the P is the only positive shape, so the
+  parent context shows through. No coin, no sparkles, no inner ring
+  (those are decorative; the monochrome version is for a 1-color
+  reproduce-anywhere context). Just the P silhouette.
+
+  Uses currentColor so consumers can re-tint via CSS.
+  Defaults to mint #0E7C66 when currentColor is not set.
+  (For the SVG itself, currentColor is set to mint via the
+  color attribute below.)
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1024 1024"
+     fill="currentColor"
+     color="#0E7C66"
+     role="img"
+     aria-label="PagePay monochrome mark">
+  <title>PagePay monochrome mark</title>
+  <desc>Single-color version of the PagePay P glyph with a chamfered
+        lower-right stem. No background, no decorative details.
+        Optimized for system-themed icon slots and 1-color print.</desc>
+
+  <!--
+    P silhouette: outer + inner counter (even-odd fill).
+    A 12 px chamfer is cut from the lower-right of the stem by
+    drawing a small "negative" subpath in the same fill, which
+    collapses to a straight diagonal because the counter path
+    doesn't overlap it. Hand-editable; the chamfer is in the outer
+    subpath itself rather than as a separate fill.
+  -->
+  <path fill="currentColor" fill-rule="evenodd" d="
+    M 248  192
+    L 600  192
+    C 788  192  912  312  912  432
+    C 912  552  788  672  600  672
+    L 420  672
+    L 420  832
+    L 360  892
+    L 248  892
+    Z
+    M 420  360
+    L 600  360
+    C 676  360  736  392  736  432
+    C 736  472  676  504  600  504
+    L 420  504
+    Z
+  "/>
+</svg>

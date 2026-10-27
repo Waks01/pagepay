@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PagePay monogram — production app icon.
+  1024 x 1024 artboard. iOS squircle background (radius 224) in mint,
+  cream "P" glyph with a chamfered lower-right stem, an inner-ring
+  coin in the counter, and a 3-point sparkle glyph for the "earn" hint.
+
+  Reads cleanly from 29 px (iOS settings) to 1024 px (App Store hero).
+  No gradients, no strokes under 24 px in 1024 viewBox, no fine details
+  smaller than 8 px.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1024 1024"
+     role="img"
+     aria-label="PagePay app icon">
+  <title>PagePay monogram</title>
+  <desc>Mint squircle background with a cream letter P. The lower-right
+        corner of the P stem is chamfered to suggest a folded page. A
+        small mint coin (with a 1.5 px inner ring) sits in the counter
+        of the P, and a 3-point sparkle sits to the right of the coin.</desc>
+
+  <!--
+    Subtle dimensional filter for the P: a soft inner shadow at low
+    opacity gives the cream glyph a touch of weight against the mint
+    background. Implemented as a filter (not a fill) so it scales
+    cleanly on export.
+  -->
+  <defs>
+    <filter id="pp-inner-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="6"/>
+      <feOffset dx="0" dy="3" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.18"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!--
+    iOS squircle background. 224 px corner radius (iOS app icon
+    standard at 1024 artboard). Solid mint (#0E7C66) at 100 % opacity
+    so the icon pops on home-screen wallpapers.
+  -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224" fill="#0E7C66"/>
+
+  <!--
+    The "P" glyph. Cream fill (#FBFAF6) on the mint background.
+    Two subpaths: outer silhouette (clockwise) and inner counter
+    (clockwise). With fill-rule="evenodd" the inner subpath becomes
+    a hole, exposing the mint background.
+
+    A 12 px chamfer is cut from the lower-right of the stem to
+    suggest a folded page corner. Implemented as a second small
+    mint-colored path on top of the P, not as a complex single
+    path — easier to hand-tune.
+  -->
+  <g filter="url(#pp-inner-shadow)">
+    <path fill="#FBFAF6" fill-rule="evenodd" d="
+      M 248  192
+      L 600  192
+      C 788  192  912  312  912  432
+      C 912  552  788  672  600  672
+      L 420  672
+      L 420  832
+      L 360  892
+      L 248  892
+      Z
+      M 420  360
+      L 600  360
+      C 676  360  736  392  736  432
+      C 736  472  676  504  600  504
+      L 420  504
+      Z
+    "/>
+  </g>
+
+  <!--
+    Mint chamfer wedge — sits on top of the P's lower-right corner to
+    carve out the folded-page look. Reads as a page corner turning
+    over. 12 px chamfer matches the spec.
+  -->
+  <path fill="#0E7C66" d="
+    M 360  892
+    L 420  832
+    L 420  892
+    Z
+  "/>
+
+  <!--
+    Coin disc inside the P's counter.
+    - Outer ring: mint (#0E7C66), solid 56 px radius
+    - Inner ring: 1.5 px cream stroke at 48 px radius, gives the
+      coin dimensionality without using a gradient
+    - Highlight: 4 px cream dot in the top-left, suggests reflection
+      on a real coin (subtle, only visible at large sizes)
+  -->
+  <circle cx="580" cy="432" r="56" fill="#0E7C66"/>
+  <circle cx="580" cy="432" r="48" fill="none" stroke="#FBFAF6" stroke-width="3" opacity="0.6"/>
+  <circle cx="566" cy="418" r="6" fill="#FBFAF6" opacity="0.5"/>
+
+  <!--
+    Sparkle / star glyph next to the coin. 3-point star, 32 px wide,
+    positioned at the top-right of the bowl. Reinforces the "earn"
+    intent without spelling it out. Hand-editable path.
+  -->
+  <g transform="translate(760, 320)">
+    <path fill="#FBFAF6" d="
+      M 0 -28
+      L 6 -6
+      L 28 0
+      L 6 6
+      L 0 28
+      L -6 6
+      L -28 0
+      L -6 -6
+      Z
+    "/>
+    <!-- A tiny secondary sparkle for layering (1/3 size, offset) -->
+    <path fill="#FBFAF6" opacity="0.7" transform="translate(40, 40) scale(0.4)" d="
+      M 0 -28
+      L 6 -6
+      L 28 0
+      L 6 6
+      L 0 28
+      L -6 6
+      L -28 0
+      L -6 -6
+      Z
+    "/>
+  </g>
+</svg>
