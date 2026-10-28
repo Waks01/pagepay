@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "613094324464",
+    "project_id": "pagepay-17639",
+    "storage_bucket": "pagepay-17639.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:613094324464:android:cdc4ba506df8b4a88e2a35",
+        "android_client_info": {
+          "package_name": "com.kenzola.pagepay"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQXOXlEgPByJeguRUWbgVkQZXraxSlbuk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

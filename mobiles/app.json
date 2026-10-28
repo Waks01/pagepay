@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.pagepay.mobiles",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -18,20 +19,15 @@
       "predictiveBackGestureEnabled": false
     },
     "ios": {
-      "bundleIdentifier": "com.pagepay.mobiles",
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.pagepay.mobiles"
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#208AEF"
-    },
     "plugins": [
       "expo-router",
+      "expo-splash-screen",
       "@react-native-community/datetimepicker",
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
