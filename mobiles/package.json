@@ -64,7 +64,7 @@
     "react-native-gesture-handler": "~2.32.0",
     "react-native-google-mobile-ads": "^17.4.0",
     "react-native-linear-gradient": "^2.8.3",
-    "react-native-reanimated": "4.5.1",
+    "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
@@ -88,12 +88,16 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start",
+    "start": "expo start --clear",
+    "start:dev": "powershell -ExecutionPolicy Bypass -File ./scripts/start-dev-with-ip.ps1",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "lint": "expo lint"
+    "dev:api-url": "powershell -ExecutionPolicy Bypass -File ./scripts/set-dev-api-url.ps1",
+    "dev:ip": "powershell -ExecutionPolicy Bypass -File ./scripts/print-dev-ip.ps1",
+    "android": "expo start --android --clear",
+    "ios": "expo start --ios --clear",
+    "web": "expo start --web --clear",
+    "lint": "expo lint",
+    "eas-build-pre-install": "node ./scripts/setup-google-services.js"
   },
   "private": true
 }

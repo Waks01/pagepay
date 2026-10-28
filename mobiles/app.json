@@ -9,37 +9,23 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.pagepay.mobiles",
-      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-foreground.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
-      "predictiveBackGestureEnabled": false
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.pagepay.pagepay",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "ios": {
       "bundleIdentifier": "com.pagepay.mobiles"
     },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
     "plugins": [
-      "expo-router",
-      "expo-splash-screen",
-      "@react-native-community/datetimepicker",
-      "@react-native-firebase/app",
-      "@react-native-firebase/crashlytics",
-      "@react-native-firebase/messaging",
-      "expo-build-properties",
-      "expo-secure-store",
-      "expo-sharing",
-      "expo-video"
+      "expo-router"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
       "router": {},
