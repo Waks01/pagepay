@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "pagepay",
-    "slug": "pgepay",
+    "slug": "mobiles",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,20 +9,45 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.pagepay.mobiles",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundColor": "#ffffff"
-      }
-    },
+        "backgroundColor": "#0E7C66",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
+      },
     "ios": {
-      "bundleIdentifier": "com.pagepay.mobiles",
+      "bundleIdentifier": "com.pagepay.pagepay",
       "googleServicesFile": "./GoogleService-Info.plist"
     },
+    "ios": {
+      "bundleIdentifier": "com.pagepay.mobiles"
+    },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FBFAF6",
+          "dark": {
+            "image": "./assets/images/splash-icon.png",
+            "backgroundColor": "#0E1116"
+          }
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics",
+      "@react-native-firebase/messaging",
+      "expo-build-properties",
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-video"
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "reactCompiler": true
     },
     "extra": {
       "router": {},
