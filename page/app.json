@@ -11,7 +11,9 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
+        "UIBackgroundModes": [
+          "audio"
+        ],
         "NSPhotoLibraryAddUsageDescription": "PagePay needs access to save narration episodes to your library.",
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true
@@ -40,7 +42,9 @@
             "targetSdkVersion": 36,
             "extraBackgroundColor": "#FBFAF6",
             "packagingOptions": {
-              "pickFirst": ["**/libcrypto.so"]
+              "pickFirst": [
+                "**/libcrypto.so"
+              ]
             }
           }
         }
@@ -89,9 +93,7 @@
     "extra": {
       "apiUrl": "https://pagepay-fff6.onrender.com",
       "router": {},
-      "eas": {
-        "projectId": "cd073eef-398e-4fd3-bba5-b5c4cb98df79"
-      }
+      "eas": {}
     }
   }
 }

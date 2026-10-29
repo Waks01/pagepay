@@ -99,5 +99,8 @@
     "lint": "expo lint",
     "eas-build-pre-install": "node ./scripts/setup-google-services.js"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "promise": "7.3.1"
+  }
 }

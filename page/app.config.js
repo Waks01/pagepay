@@ -90,6 +90,9 @@ module.exports = ({ config }) => {
           process.env.EXPO_PUBLIC_API_URL ||
           "https://pagepay-fff6.onrender.com",
         paystackPublicKey: process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY || "",
+        eas: {
+          projectId: "8430df09-8d74-4476-9d55-9c777584732a",
+        },
       },
     },
   };
