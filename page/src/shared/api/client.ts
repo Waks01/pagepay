@@ -22,6 +22,15 @@ export function setOnUnauthenticated(cb: () => void) {
   _onUnauthenticated = cb;
 }
 
+let _onAuthenticated: (() => void) | null = null;
+export function setOnAuthenticated(cb: () => void) {
+  _onAuthenticated = cb;
+}
+
+export function notifyAuthenticated() {
+  _onAuthenticated?.();
+}
+
 let _isRefreshing = false;
 let _refreshPromise: Promise<void> | null = null;
 
@@ -109,7 +118,9 @@ export async function publicApiFetch(
     if (!res.ok) {
       try {
         const errorBody = await res.clone().json();
-        console.log(`[publicApiFetch] ERROR body: ${JSON.stringify(errorBody).slice(0, 500)}`);
+        console.log(
+          `[publicApiFetch] ERROR body: ${JSON.stringify(errorBody).slice(0, 500)}`,
+        );
       } catch {
         // Non-JSON error response
       }
@@ -179,7 +190,9 @@ export async function apiFetch(
       if (!res.ok) {
         try {
           const errorBody = await res.clone().json();
-          console.log(`[apiFetch] ERROR body: ${JSON.stringify(errorBody).slice(0, 500)}`);
+          console.log(
+            `[apiFetch] ERROR body: ${JSON.stringify(errorBody).slice(0, 500)}`,
+          );
           // Reset the response so it can still be read by the caller
           // (clone already consumed, but the original res is still valid)
         } catch {
@@ -225,7 +238,10 @@ export async function apiFetch(
     return res;
   }
 
-  throw lastError || new Error(`Failed to reach ${API_URL}${path} after ${retries + 1} attempts`);
+  throw (
+    lastError ||
+    new Error(`Failed to reach ${API_URL}${path} after ${retries + 1} attempts`)
+  );
 }
 
 /**
@@ -366,7 +382,8 @@ export async function apiUpload(
         ok: xhr.status >= 200 && xhr.status < 300,
         status: xhr.status,
         statusText: xhr.statusText || "",
-        json: () => Promise.resolve().then(() => JSON.parse(xhr.responseText || "null")),
+        json: () =>
+          Promise.resolve().then(() => JSON.parse(xhr.responseText || "null")),
         text: () => Promise.resolve(xhr.responseText || ""),
       };
       resolve(result);
@@ -415,7 +432,12 @@ function extractErrorDetail(body: string, statusText: string): string {
  * Fetch user's current tier and subscription status
  */
 export async function getUserTier(): Promise<{
-  tier: "free" | "study_plus_monthly" | "study_plus_yearly" | "complete_plus_monthly" | "complete_plus_yearly";
+  tier:
+    | "free"
+    | "study_plus_monthly"
+    | "study_plus_yearly"
+    | "complete_plus_monthly"
+    | "complete_plus_yearly";
   is_premium: boolean;
   expires_at: string | null;
 }> {

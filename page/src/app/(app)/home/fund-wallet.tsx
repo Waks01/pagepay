@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -42,65 +42,15 @@ export default function FundWalletScreen() {
 
   const [amount, setAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
-  const [checkingPayment, setCheckingPayment] = useState(false);
 
-  const pollPaymentStatus = async (reference: string) => {
-    console.log(
-      "🔍 [PAYMENT] Starting payment verification for reference:",
-      reference,
-    );
-    setCheckingPayment(true);
-    let attempts = 0;
-
-    const checkStatus = async (): Promise<boolean> => {
-      try {
-        attempts++;
-        console.log(`🔄 [PAYMENT] Polling attempt ${attempts}/10...`);
-
-        console.log("📊 [PAYMENT] Refetching user data...");
-        await qc.refetchQueries({ queryKey: ["me"] });
-        console.log("✅ [PAYMENT] User data refetched");
-
-        const me = useCurrentUserStore.getState().user;
-        if (me) {
-          console.log("✅ [PAYMENT] User data refreshed after deposit");
-          return true;
-        }
-
-        if (attempts < 10) {
-          console.log(`⏳ [PAYMENT] Waiting 2s before next attempt...`);
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          return checkStatus();
-        }
-
-        console.log("⚠️ [PAYMENT] Max attempts reached");
-        return false;
-      } catch (e) {
-        console.error("❌ [PAYMENT] Error during check:", e);
-        return false;
-      }
-    };
-
-    const success = await checkStatus();
-    setCheckingPayment(false);
-
-    console.log("🏁 [PAYMENT] Polling complete. Success:", success);
-
-    Alert.alert(
-      success
-        ? t("fund_wallet.payment_success_title")
-        : t("fund_wallet.payment_processing_title"),
-      success
-        ? t("fund_wallet.payment_success_body")
-        : t("fund_wallet.payment_processing_body"),
-    );
-
-    console.log("🔄 [PAYMENT] Final query invalidation...");
-    await qc.invalidateQueries({ queryKey: ["me"] });
-    await qc.invalidateQueries({ queryKey: ["payments", "history"] });
-    console.log("🏠 [PAYMENT] Navigating back...");
-    router.back();
-  };
+  // Refresh wallet data when user returns to this screen after payment
+  useFocusEffect(
+    useCallback(() => {
+      console.log("🔄 [FUND-WALLET] Screen focused - refreshing wallet data");
+      void qc.invalidateQueries({ queryKey: ["me"] });
+      void qc.invalidateQueries({ queryKey: ["payments", "history"] });
+    }, [qc]),
+  );
 
   const depositMutation = useMutation({
     mutationFn: async () => {
@@ -151,29 +101,126 @@ export default function FundWalletScreen() {
     onSuccess: async (data) => {
       console.log("🚀 [DEPOSIT] Opening in-app payment...");
       try {
-        await initializePayment({
-          email: (await apiFetch("/api/v1/auth/me").then(r => r.json())).email,
+        const meRes = await apiFetch("/api/v1/auth/me");
+        const meData = meRes.ok ? await meRes.json() : {};
+        const userEmail = meData?.email || "";
+
+        // DO NOT AWAIT - initializePayment opens a modal and returns immediately
+        // The callbacks handle completion logic, not post-await code
+        initializePayment({
+          email: userEmail,
           amount: data.amount_kobo,
           currency: "NGN",
           accessCode: data.access_code,
           reference: data.reference,
           onSuccess: (tx) => {
             console.log("✅ [DEPOSIT] Payment successful in-app:", tx);
+            // Show immediate success feedback
+            Alert.alert(
+              t("fund_wallet.payment_success_title"),
+              t("fund_wallet.payment_success_body"),
+              [{ text: t("premium.ok") }],
+            );
+            // Webhook will handle the deposit confirmation
+            // Refresh wallet data after a short delay to allow webhook processing
+            setTimeout(async () => {
+              console.log(
+                "🔄 [DEPOSIT] Refreshing wallet data after payment...",
+              );
+              await Promise.all([
+                qc.invalidateQueries({ queryKey: ["me"] }),
+                qc.invalidateQueries({ queryKey: ["payments", "history"] }),
+              ]);
+              console.log("✅ [DEPOSIT] Wallet data refreshed");
+              console.log("🏠 [DEPOSIT] Navigating back...");
+              router.back();
+            }, 3000);
           },
-          onCancel: () => {
+          onCancel: async () => {
             console.log("❌ [DEPOSIT] Payment cancelled by user");
+            // Call backend to update payment status
+            try {
+              const cancelUrl = `/api/v1/wallet/deposit/cancel`;
+              console.log(
+                "🔄 [DEPOSIT] Updating payment status to cancelled...",
+              );
+              console.log("🔗 [DEPOSIT] Cancel URL:", cancelUrl);
+              const cancelRes = await apiFetch(cancelUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ reference: data.reference }),
+              });
+              console.log(
+                "📥 [DEPOSIT] Cancel response status:",
+                cancelRes.status,
+              );
+              if (cancelRes.ok) {
+                const responseData = await cancelRes.json();
+                console.log("✅ [DEPOSIT] Payment status updated to cancelled");
+                console.log("📄 [DEPOSIT] Response data:", responseData);
+              } else {
+                const errorText = await cancelRes.text();
+                console.error(
+                  "❌ [DEPOSIT] Failed to update cancel status:",
+                  cancelRes.status,
+                  cancelRes.statusText,
+                );
+                console.error("📄 [DEPOSIT] Error response:", errorText);
+              }
+            } catch (err) {
+              console.error("❌ [DEPOSIT] Error updating cancel status:", err);
+            }
+
+            Alert.alert(
+              t("fund_wallet.payment_cancelled_title", "Payment Cancelled"),
+              t(
+                "fund_wallet.payment_cancelled_body",
+                "You cancelled the payment. Your wallet balance remains unchanged.",
+              ),
+            );
+            // Refresh data to reflect cancellation
+            setTimeout(async () => {
+              await qc.invalidateQueries({ queryKey: ["me"] });
+            }, 1000);
           },
-          onError: (err) => {
+          onError: async (err) => {
             console.error("❌ [DEPOSIT] Payment error:", err);
+            // Call backend to update payment status
+            try {
+              console.log("🔄 [DEPOSIT] Updating payment status to failed...");
+              const failRes = await apiFetch(`/api/v1/wallet/deposit/fail`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ reference: data.reference }),
+              });
+              if (failRes.ok) {
+                console.log("✅ [DEPOSIT] Payment status updated to failed");
+              } else {
+                console.error(
+                  "❌ [DEPOSIT] Failed to update error status:",
+                  failRes.status,
+                  failRes.statusText,
+                );
+              }
+            } catch (err) {
+              console.error("❌ [DEPOSIT] Error updating error status:", err);
+            }
+
+            Alert.alert(
+              t("fund_wallet.payment_error_title", "Payment Failed"),
+              t(
+                "fund_wallet.payment_error_body",
+                "Something went wrong during payment. Please try again.",
+              ),
+            );
+            // Refresh data to reflect error status
+            setTimeout(async () => {
+              await qc.invalidateQueries({ queryKey: ["me"] });
+            }, 1000);
           },
         });
 
-        console.log("👤 [DEPOSIT] In-app payment closed");
-
-        console.log(
-          "🔍 [DEPOSIT] User returned from payment - checking status...",
-        );
-        pollPaymentStatus(data.reference);
+        console.log("👤 [DEPOSIT] Payment modal opened (async)");
       } catch (e) {
         console.error("❌ [DEPOSIT] Failed to open in-app payment:", e);
         Alert.alert(
@@ -264,7 +311,7 @@ export default function FundWalletScreen() {
                   { color: amount === a ? tokens.mintText : tokens.mint },
                 ]}
               >
-                 {(a * 10).toLocaleString()} SV
+                {(a * 10).toLocaleString()} SV
               </Text>
             </TouchableOpacity>
           ))}
@@ -349,7 +396,7 @@ export default function FundWalletScreen() {
                   { color: tokens.mint, fontWeight: "700" },
                 ]}
               >
-                 {pointsToReceive.toLocaleString()} SV
+                {pointsToReceive.toLocaleString()} SV
               </Text>
             </View>
             <View
@@ -364,31 +411,21 @@ export default function FundWalletScreen() {
         {/* Pay button */}
         <TouchableOpacity
           onPress={() => depositMutation.mutate()}
-          disabled={!canSubmit || depositMutation.isPending || checkingPayment || paystackLoading}
+          disabled={!canSubmit || depositMutation.isPending || paystackLoading}
           style={[
             styles.payBtn,
             {
               backgroundColor: canSubmit ? tokens.mint : tokens.border,
-              opacity: depositMutation.isPending || checkingPayment || paystackLoading ? 0.7 : 1,
+              opacity: depositMutation.isPending || paystackLoading ? 0.7 : 1,
             },
           ]}
         >
-          {depositMutation.isPending || checkingPayment || paystackLoading ? (
+          {depositMutation.isPending || paystackLoading ? (
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
               <ActivityIndicator color={tokens.mintText} />
-              {checkingPayment && (
-                <Text
-                  style={[
-                    styles.payText,
-                    { color: tokens.mintText, fontSize: 14 },
-                  ]}
-                >
-                  {t("fund_wallet.verifying_payment")}
-                </Text>
-              )}
-              {paystackLoading && !checkingPayment && (
+              {paystackLoading && (
                 <Text
                   style={[
                     styles.payText,

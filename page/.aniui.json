@@ -1,0 +1,8 @@
+{
+  "componentsDir": "components/ui",
+  "utilPath": "lib/utils.ts",
+  "theme": "green",
+  "style": "uniwind",
+  "tsx": true,
+  "sdkGeneration": "v5"
+}
