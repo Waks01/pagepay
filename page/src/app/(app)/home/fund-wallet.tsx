@@ -138,6 +138,8 @@ export default function FundWalletScreen() {
           },
           onCancel: async () => {
             console.log("❌ [DEPOSIT] Payment cancelled by user");
+            let cancelStatusUpdated = false;
+
             // Call backend to update payment status
             try {
               const cancelUrl = `/api/v1/wallet/deposit/cancel`;
@@ -145,6 +147,7 @@ export default function FundWalletScreen() {
                 "🔄 [DEPOSIT] Updating payment status to cancelled...",
               );
               console.log("🔗 [DEPOSIT] Cancel URL:", cancelUrl);
+              console.log("📝 [DEPOSIT] Reference:", data.reference);
               const cancelRes = await apiFetch(cancelUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -158,6 +161,7 @@ export default function FundWalletScreen() {
                 const responseData = await cancelRes.json();
                 console.log("✅ [DEPOSIT] Payment status updated to cancelled");
                 console.log("📄 [DEPOSIT] Response data:", responseData);
+                cancelStatusUpdated = true;
               } else {
                 const errorText = await cancelRes.text();
                 console.error(
@@ -171,13 +175,24 @@ export default function FundWalletScreen() {
               console.error("❌ [DEPOSIT] Error updating cancel status:", err);
             }
 
-            Alert.alert(
-              t("fund_wallet.payment_cancelled_title", "Payment Cancelled"),
-              t(
-                "fund_wallet.payment_cancelled_body",
-                "You cancelled the payment. Your wallet balance remains unchanged.",
-              ),
-            );
+            if (cancelStatusUpdated) {
+              Alert.alert(
+                t("fund_wallet.payment_cancelled_title", "Payment Cancelled"),
+                t(
+                  "fund_wallet.payment_cancelled_body",
+                  "You cancelled the payment. Your wallet balance remains unchanged.",
+                ),
+              );
+            } else {
+              Alert.alert(
+                t("fund_wallet.payment_cancelled_title", "Payment Cancelled"),
+                t(
+                  "fund_wallet.payment_cancelled_body",
+                  "You cancelled the payment, but we could not confirm the cancellation with the server. Please contact support if you are charged.",
+                ),
+              );
+            }
+
             // Refresh data to reflect cancellation
             setTimeout(async () => {
               await qc.invalidateQueries({ queryKey: ["me"] });
@@ -185,6 +200,8 @@ export default function FundWalletScreen() {
           },
           onError: async (err) => {
             console.error("❌ [DEPOSIT] Payment error:", err);
+            let failStatusUpdated = false;
+
             // Call backend to update payment status
             try {
               console.log("🔄 [DEPOSIT] Updating payment status to failed...");
@@ -193,8 +210,12 @@ export default function FundWalletScreen() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ reference: data.reference }),
               });
+              console.log("📥 [DEPOSIT] Fail response status:", failRes.status);
               if (failRes.ok) {
+                const responseData = await failRes.json();
                 console.log("✅ [DEPOSIT] Payment status updated to failed");
+                console.log("📄 [DEPOSIT] Response data:", responseData);
+                failStatusUpdated = true;
               } else {
                 console.error(
                   "❌ [DEPOSIT] Failed to update error status:",
@@ -206,13 +227,24 @@ export default function FundWalletScreen() {
               console.error("❌ [DEPOSIT] Error updating error status:", err);
             }
 
-            Alert.alert(
-              t("fund_wallet.payment_error_title", "Payment Failed"),
-              t(
-                "fund_wallet.payment_error_body",
-                "Something went wrong during payment. Please try again.",
-              ),
-            );
+            if (failStatusUpdated) {
+              Alert.alert(
+                t("fund_wallet.payment_error_title", "Payment Failed"),
+                t(
+                  "fund_wallet.payment_error_body",
+                  "Something went wrong during payment. Please try again.",
+                ),
+              );
+            } else {
+              Alert.alert(
+                t("fund_wallet.payment_error_title", "Payment Failed"),
+                t(
+                  "fund_wallet.payment_error_body",
+                  "Something went wrong during payment. We could not confirm the failure with the server. Please contact support if you are charged.",
+                ),
+              );
+            }
+
             // Refresh data to reflect error status
             setTimeout(async () => {
               await qc.invalidateQueries({ queryKey: ["me"] });
