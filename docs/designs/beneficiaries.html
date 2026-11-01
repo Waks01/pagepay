@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en" data-scheme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PagePay — Beneficiaries</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="theme.css">
+  <style>
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--s4) var(--s5);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-row .back-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--r-pill);
+      background: none;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--ink);
+    }
+    .header-row h1 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 17px;
+      margin: 0;
+    }
+    .header-row .add-btn {
+      background: none;
+      border: none;
+      color: var(--mint);
+      cursor: pointer;
+      padding: var(--s2);
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .search {
+      padding: var(--s4) var(--s5);
+    }
+    .search .input {
+      background: var(--paper-2);
+      padding-left: 44px;
+    }
+
+    .group-label {
+      padding: var(--s3) var(--s5) var(--s2);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+    }
+
+    .ben-row {
+      display: flex;
+      align-items: center;
+      gap: var(--s3);
+      padding: var(--s4) var(--s5);
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+    }
+    .ben-row:hover { background: var(--paper-2); }
+    .ben-row .avatar { width: 44px; height: 44px; }
+    .ben-row .info { flex: 1; min-width: 0; }
+    .ben-row .info .name {
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 2px;
+    }
+    .ben-row .info .meta {
+      font-size: 12px;
+      color: var(--ink-muted);
+      display: flex;
+      gap: var(--s2);
+      align-items: center;
+    }
+    .ben-row .info .meta .dot {
+      width: 3px;
+      height: 3px;
+      background: var(--ink-faint);
+      border-radius: var(--r-pill);
+    }
+    .ben-row .info .meta .network {
+      color: var(--mint);
+      font-weight: 600;
+    }
+    .ben-row .send {
+      padding: var(--s2) var(--s4);
+      background: var(--mint-soft);
+      color: var(--mint);
+      border-radius: var(--r-pill);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .empty-row {
+      display: flex;
+      align-items: center;
+      gap: var(--s3);
+      padding: var(--s4) var(--s5);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .empty-row:hover { background: var(--paper-2); }
+    .empty-row .add-tile {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--r-pill);
+      border: 1.5px dashed var(--border-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink-muted);
+    }
+    .empty-row .info .name { font-weight: 600; font-size: 15px; color: var(--ink); }
+    .empty-row .info .meta { font-size: 12px; color: var(--ink-muted); }
+
+    .fav-row {
+      display: flex;
+      align-items: center;
+      gap: var(--s2);
+      padding: var(--s1) var(--s5) var(--s3);
+    }
+    .fav-row .chip { font-size: 11px; }
+
+    .footer-action {
+      position: absolute;
+      bottom: 80px;
+      left: var(--s5);
+      right: var(--s5);
+    }
+  </style>
+</head>
+<body>
+  <div class="theme-switch" role="tablist" aria-label="Theme">
+    <button data-theme="light" class="active">Light</button>
+    <button data-theme="dark">Dark</button>
+    <button data-theme="sepia">Sepia</button>
+  </div>
+
+  <div class="phone">
+    <div class="status-bar">
+      <span>9:41</span>
+      <div class="right">
+        <span>●●●●</span>
+        <span>Wi-Fi</span>
+        <span>100%</span>
+      </div>
+    </div>
+
+    <div class="screen">
+      <div class="header-row">
+        <a href="home-main.html" class="back-btn" aria-label="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </a>
+        <h1>Beneficiaries</h1>
+        <button class="add-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          New
+        </button>
+      </div>
+
+      <div class="search">
+        <div class="input-wrap">
+          <input class="input" placeholder="Search by name, phone, or email" style="padding-left: 44px;">
+          <span class="input-icon" style="left: var(--s4);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </span>
+        </div>
+      </div>
+
+      <div class="fav-row">
+        <span class="chip chip-mint">★ Favourites</span>
+        <span class="chip">Recent</span>
+        <span class="chip">All</span>
+      </div>
+
+      <div class="group-label">Phone contacts · 4</div>
+
+      <div class="ben-row">
+        <div class="avatar" style="background: #FFE3D7; color: #C2410C;">AO</div>
+        <div class="info">
+          <div class="name">Adaeze Okafor</div>
+          <div class="meta">
+            <span class="network">MTN</span>
+            <span class="dot"></span>
+            <span>0803 ••• 7890</span>
+            <span class="dot"></span>
+            <span>★ Favourite</span>
+          </div>
+        </div>
+        <a href="buy-airtime.html" class="send">Send</a>
+      </div>
+
+      <div class="ben-row">
+        <div class="avatar" style="background: var(--mint-soft); color: var(--mint);">CI</div>
+        <div class="info">
+          <div class="name">Chinedu Ibe</div>
+          <div class="meta">
+            <span class="network">Airtel</span>
+            <span class="dot"></span>
+            <span>0902 ••• 1234</span>
+            <span class="dot"></span>
+            <span>2 sends</span>
+          </div>
+        </div>
+        <a href="buy-airtime.html" class="send">Send</a>
+      </div>
+
+      <div class="ben-row">
+        <div class="avatar" style="background: rgba(42,47,88,0.12); color: var(--indigo);">FE</div>
+        <div class="info">
+          <div class="name">Fatima Eze</div>
+          <div class="meta">
+            <span class="network">Glo</span>
+            <span class="dot"></span>
+            <span>0805 ••• 5566</span>
+            <span class="dot"></span>
+            <span>★ Favourite</span>
+          </div>
+        </div>
+        <a href="buy-airtime.html" class="send">Send</a>
+      </div>
+
+      <div class="ben-row">
+        <div class="avatar" style="background: rgba(184,134,44,0.15); color: var(--gold);">TA</div>
+        <div class="info">
+          <div class="name">Tunde Adekunle</div>
+          <div class="meta">
+            <span class="network">9mobile</span>
+            <span class="dot"></span>
+            <span>0809 ••• 0011</span>
+          </div>
+        </div>
+        <a href="buy-airtime.html" class="send">Send</a>
+      </div>
+
+      <div class="group-label">Saved wallets · 2</div>
+
+      <div class="ben-row">
+        <div class="avatar" style="background: var(--paper-2); color: var(--ink);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></svg>
+        </div>
+        <div class="info">
+          <div class="name">Adaeze Okafor</div>
+          <div class="meta">pagepay.app/adaeze · Wallet ID</div>
+        </div>
+        <a href="fund-wallet.html" class="send">Fund</a>
+      </div>
+
+      <div class="empty-row">
+        <div class="add-tile">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        </div>
+        <div class="info">
+          <div class="name">Add from contacts</div>
+          <div class="meta">Grant access to import from phone</div>
+        </div>
+      </div>
+
+      <div class="spacer-6"></div>
+
+      <nav class="tabbar">
+        <a href="home-main.html" class="tab active">
+          <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></div>
+          Home
+        </a>
+        <a href="#" class="tab">
+          <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg></div>
+          Read
+        </a>
+        <a href="#" class="tab">
+          <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 L15 8 L22 9 L17 14 L18 21 L12 18 L6 21 L7 14 L2 9 L9 8 Z"></path></svg></div>
+          Rewards
+        </a>
+        <a href="#" class="tab">
+          <div class="tab-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></svg></div>
+          Me
+        </a>
+      </nav>
+    </div>
+  </div>
+
+  <script>
+    const switcher = document.querySelector('.theme-switch');
+    switcher.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.documentElement.dataset.scheme = btn.dataset.theme;
+        switcher.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      });
+    });
+  </script>
+</body>
+</html>

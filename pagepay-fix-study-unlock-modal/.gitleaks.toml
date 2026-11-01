@@ -1,0 +1,65 @@
+# Gitleaks config for PagePay.
+# Docs: https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
+#
+# We start with the built-in ruleset (built-in rules are auto-applied
+# if this file exists with no `[[rules]]` blocks). Add custom rules
+# below for project-specific patterns.
+
+title = "PagePay gitleaks config"
+
+# Don't scan these — they're either:
+#   - test data with fake keys
+#   - fixtures
+#   - lock files
+[extend]
+# Use gitleaks' default ruleset. Override individual rules below
+# if you find false positives in your codebase.
+
+# Allowlist false-positive patterns found during the initial scan.
+# Each entry is a regex; lines matching these are NOT reported.
+[allowlist]
+description = "PagePay-specific false-positive allowlist"
+paths = [
+  '''client/design-preview/.*''',     # static HTML mockup, no real secrets
+  '''.*\.example$''',                  # .env.example files
+  '''.*package-lock\.json$''',
+  '''.*yarn\.lock$''',
+  '''.*poetry\.lock$''',
+  '''.*Pipfile\.lock$''',
+  '''\.secrets\.baseline$''',          # detect-secrets baseline (whitelisted findings)
+]
+
+# Stopwords: lines containing these alongside a potential secret are
+# considered test data, not real secrets. Add to this list as needed.
+stopwords = [
+  '''pagepay-dev''',
+  '''dev-admin-token''',
+  '''change-me''',
+  '''test''',
+  '''example''',
+  '''dummy''',
+  '''placeholder''',
+  '''TODO''',
+  '''xxx''',
+]
+
+# Custom rules for patterns the default ruleset misses.
+# These were chosen based on the security audit findings.
+[[rules]]
+id = "pagepay-admob-app-id"
+description = "AdMob App ID (public by design, but log if committed alongside other secrets)"
+# AdMob App IDs are public — listed in MANIFEST.MF of every APK.
+# This rule is informational; we don't want false positives on
+# app.config.js where they live legitimately.
+regex = '''ca-app-pub-[0-9]{10,}~[0-9]{8,}'''
+tags = ["admob", "public-key"]
+# Skip app.config.js where these live by design
+[rules.allowlist]
+paths = ['''client/app\.config\.js$''']
+
+[[rules]]
+id = "pagepay-internal-endpoint"
+description = "Internal API endpoint (e.g. localhost, .internal, .local) in source"
+# Catches accidental commits of internal hostnames in URLs
+regex = '''https?://[a-z0-9-]+\.(internal|local|corp|lan)[:/][^\s'"<>)]*'''
+tags = ["internal-endpoint"]

@@ -64,6 +64,7 @@ The `initializePayment()` call site does not include any polling function in the
 ### Structural Parity with Premium Tier
 
 The fund-wallet implementation follows the same pattern as the premium tier upgrade in premium/index.tsx:
+
 - Initiate backend transaction to get access code
 - Pass access code and user email to non-awaited `initializePayment()`
 - Handle all completion logic in callbacks
@@ -74,4 +75,3 @@ The fund-wallet implementation follows the same pattern as the premium tier upgr
 The only structural difference is the backend endpoint naming (wallet/deposit vs. payments/status paths), which reflects different backend route signatures between the two payment types.
 
 </details>
-

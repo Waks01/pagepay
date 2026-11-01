@@ -1,0 +1,68 @@
+# Pre-commit hooks for PagePay.
+# Install once:  pip install pre-commit && pre-commit install
+# Run manually:  pre-commit run --all-files
+# Update hooks:  pre-commit autoupdate
+#
+# All hooks read-only — they only fail commits when they find issues.
+# They do NOT modify your code automatically. Use `pre-commit run --all-files`
+# to see what would fail before committing.
+
+repos:
+  # ── detect-secrets ──────────────────────────────────────────────
+  # Entropy + regex-based secret scanner. Catches high-entropy
+  # strings (API keys, tokens) that pure regex would miss. Uses
+  # a baseline file (`.secrets.baseline`) so existing false
+  # positives don't trip every commit.
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: |
+          (?x)^(
+            .*package-lock\.json|
+            .*yarn\.lock|
+            .*poetry\.lock|
+            .*Pipfile\.lock|
+            .*\.lock|
+            client/design-preview/.*|
+            .*\.md|
+            .*\.example
+          )$
+
+  # ── gitleaks ───────────────────────────────────────────────────
+  # Git-aware secret scanner. Catches things detect-secrets misses
+  # in committed history (e.g. a secret that was added then deleted
+  # in the same commit). Complements detect-secrets.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # ── bandit ─────────────────────────────────────────────────────
+  # Python security linter. Catches: hardcoded passwords, weak
+  # crypto (md5/sha1 for security), eval/exec, SQL string
+  # concatenation, pickle, assert statements used for security,
+  # and ~40 other Python-specific issues.
+  # Config: backend/.bandit (excludes tests, skips B101 in tests).
+  - repo: https://github.com/PyCQA/bandit
+    rev: '1.7.10'
+    hooks:
+      - id: bandit
+        args: ['-c', 'backend/.bandit']
+        additional_dependencies: ['bandit[toml]']
+
+  # ── standard hygiene hooks ─────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^.*\.(md|lock)$
+      - id: end-of-file-fixer
+        exclude: ^.*\.(md|lock)$
+      - id: check-yaml
+      - id: check-json
+        exclude: ^client/package-lock\.json$
+      - id: check-merge-conflict
+      - id: detect-private-key
+        # Catches accidental SSH/PGP private key commits

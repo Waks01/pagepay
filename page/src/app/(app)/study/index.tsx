@@ -31,7 +31,11 @@ import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 
 import { apiFetch, apiUpload } from "@/src/shared/api/client";
 import { getExamTypeLabel } from "@/src/shared/lib/exam-types";
-import { pollSowJob, type SowJobStatus, type EducationLevel } from "@/src/features/study/api";
+import {
+  pollSowJob,
+  type SowJobStatus,
+  type EducationLevel,
+} from "@/src/features/study/api";
 import {
   useMaterials,
   useUploadSow,
@@ -54,6 +58,7 @@ import { useEffectiveScheme } from "@/src/shared/hooks/use-effective-scheme";
 import NotificationBell from "@/components/NotificationBell";
 import { SkeletonPage } from "@/components/skeletons";
 import { Skeleton as SkeletonBase } from "@/components/Skeleton";
+import { PagePaySpinner } from "@/components/PagePaySpinner";
 
 // Pass the server's actual error message through unchanged so the user
 // can see exactly what failed. Only translate when the message is empty
@@ -104,7 +109,9 @@ type AssetInfo = {
   content?: unknown;
 };
 
-export function getTopicNames(parsed: Record<string, unknown> | null): string[] {
+export function getTopicNames(
+  parsed: Record<string, unknown> | null,
+): string[] {
   if (!parsed) return [];
   const topics = parsed.topics as TopicInfo[] | undefined;
   if (!topics) return [];
@@ -180,17 +187,30 @@ export default function StudyScreen() {
    * is the default: a student who uploads a syllabus wants it explained
    * the way a good teacher would, not the way a paper is written.
    */
-  const [educationLevel, setEducationLevel] = useState<EducationLevel>("primary");
+  const [educationLevel, setEducationLevel] =
+    useState<EducationLevel>("primary");
   const [materialLoading, setMaterialLoading] = useState(false);
   const materialFetchIdRef = useRef(0);
   const [generateMode, setGenerateMode] = useState<"topic" | "all">("all");
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [generateCount, setGenerateCount] = useState<number>(15);
-  const [previewFile, setPreviewFile] = useState<{ uri: string; name: string; type: string } | null>(null);
-  const [previewFiles, setPreviewFiles] = useState<Array<{ uri: string; name: string; type: string }>>([]);
+  const [previewFile, setPreviewFile] = useState<{
+    uri: string;
+    name: string;
+    type: string;
+  } | null>(null);
+  const [previewFiles, setPreviewFiles] = useState<
+    Array<{ uri: string; name: string; type: string }>
+  >([]);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [selectedPages, setSelectedPages] = useState<number[]>([]);
-  const [pdfPreviewPages, setPdfPreviewPages] = useState<Array<{ page: number; total: number; image_base64: string; width: number; height: number }> | null>(null);
+  const [pdfPreviewPages, setPdfPreviewPages] = useState<Array<{
+    page: number;
+    total: number;
+    image_base64: string;
+    width: number;
+    height: number;
+  }> | null>(null);
   const [pdfTruncated, setPdfTruncated] = useState(false);
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
   const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
@@ -305,7 +325,9 @@ export default function StudyScreen() {
         return;
       }
       const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-      const valid = files.filter((f) => !f.type || validTypes.includes(f.type.toLowerCase()));
+      const valid = files.filter(
+        (f) => !f.type || validTypes.includes(f.type.toLowerCase()),
+      );
       if (valid.length === 0) {
         throw new Error(t("study.errors.invalid_file_type"));
       }
@@ -366,11 +388,13 @@ export default function StudyScreen() {
       setPreviewFile({ uri: file.uri, name: file.name, type: file.type });
 
       if (file.type === "application/pdf") {
+        // Show the modal with loading state FIRST
+        setPreviewVisible(true);
         setPdfPreviewLoading(true);
         setPdfPreviewPages(null);
         setPdfTruncated(false);
         setPdfTotalPages(0);
-          setSelectedPages([]);
+        setSelectedPages([]);
         try {
           const form = new FormData();
           form.append("file", {
@@ -378,29 +402,59 @@ export default function StudyScreen() {
             name: file.name,
             type: file.type,
           } as any);
-          const uploadResult = await apiUpload("/api/v1/study/sow/preview-pdf", form as any);
+          // Set upload stage to show extraction is happening
+          setUploadStage("extracting");
+          const uploadResult = await apiUpload(
+            "/api/v1/study/sow/preview-pdf",
+            form as any,
+          );
           if (!uploadResult.ok) {
-            const err = await uploadResult.json().catch(() => ({ detail: "Failed to preview PDF" }));
+            const err = await uploadResult
+              .json()
+              .catch(() => ({ detail: "Failed to preview PDF" }));
             throw new Error(err.detail || "Failed to preview PDF");
           }
           const data = await uploadResult.json();
           const pages = data.pages || [];
           setPdfPreviewPages(pages);
-          setSelectedPages(pages.map((p: any) => p.page));
+
+          // CRITICAL: The backend preview endpoint caps at 20 pages for preview rendering,
+          // but reports the actual total page count in `data.total`. We ALWAYS want to
+          // upload all pages, so we set selectedPages to include every page from 1 to total.
+          // The preview only shows the first 20 as thumbnails, but ALL pages will be uploaded.
+          const totalPages = Number(data.total ?? pages.length);
+          console.log(
+            "[study/index] PDF total pages:",
+            totalPages,
+            "preview pages:",
+            pages.length,
+          );
+
+          // Select ALL pages by default - this is what gets sent to the upload endpoint
+          const allPageNumbers = Array.from(
+            { length: totalPages },
+            (_, i) => i + 1,
+          );
+          setSelectedPages(allPageNumbers);
+
           // The server caps the preview at a page limit; surface it so
-          // the user knows the rest of the document still uploads.
+          // the user knows the preview is truncated but ALL pages will still upload
           setPdfTruncated(Boolean(data.truncated));
-          setPdfTotalPages(Number(data.total ?? pages.length));
+          setPdfTotalPages(totalPages);
         } catch (err) {
           console.error("[study/index] PDF preview failed:", err);
-          setError(err instanceof Error ? err.message : "Failed to preview PDF");
+          setError(
+            err instanceof Error ? err.message : "Failed to preview PDF",
+          );
           setRetryAction(() => () => handleUploadDocument(examType));
         } finally {
           setPdfPreviewLoading(false);
+          clearUploadProgress();
         }
+      } else {
+        // For non-PDF files, show modal immediately
+        setPreviewVisible(true);
       }
-
-      setPreviewVisible(true);
     } catch (err) {
       console.log("[study/index] handleUploadDocument ERROR", err);
       clearUploadProgress();
@@ -412,7 +466,10 @@ export default function StudyScreen() {
   };
 
   const confirmUpload = async () => {
-    console.log("[study/index] confirmUpload START", { previewFile, count: previewFiles.length });
+    console.log("[study/index] confirmUpload START", {
+      previewFile,
+      count: previewFiles.length,
+    });
     if (!previewFile) return;
     setPreviewVisible(false);
     resetUploadProgress();
@@ -444,19 +501,40 @@ export default function StudyScreen() {
         if (job.status === "failed" || !job.material_id) {
           throw new Error(job.error || "Image processing failed");
         }
+        // Clear state BEFORE navigation
+        setPreviewFile(null);
+        setPreviewFiles([]);
         await finalizeUploadSuccess(job.material_id);
       } else if (isPdf) {
         console.log("[study/index] confirmUpload calling uploadSowDocument");
         const selectedPagesArray = pdfPreviewPages
           ? [...selectedPages].sort((a, b) => a - b)
           : undefined;
-        if (pdfPreviewPages && (!selectedPagesArray || selectedPagesArray.length === 0)) {
+        if (
+          pdfPreviewPages &&
+          (!selectedPagesArray || selectedPagesArray.length === 0)
+        ) {
           throw new Error("Please select at least one page to upload");
         }
+        // If ALL pages are selected (which is the default), send the full list
+        // so the server processes every page from the PDF
+        const pagesToSend = selectedPagesArray;
+        console.log(
+          "[study/index] PDF upload - selected pages count:",
+          pagesToSend?.length || "ALL (undefined)",
+          "pages:",
+          pagesToSend
+            ? `[${pagesToSend[0]}...${pagesToSend[pagesToSend.length - 1]}]`
+            : "undefined (all)",
+        );
         const { job_id } = await uploadDocumentMutation.mutateAsync({
-          file: { uri: previewFile.uri, name: previewFile.name, type: previewFile.type },
+          file: {
+            uri: previewFile.uri,
+            name: previewFile.name,
+            type: previewFile.type,
+          },
           exam_type: examType,
-          selected_pages: selectedPagesArray,
+          selected_pages: pagesToSend,
           onProgress: handleUploadProgress,
           education_level: educationLevel,
         });
@@ -469,6 +547,9 @@ export default function StudyScreen() {
             describeUploadError(job.error, t) || "Document processing failed",
           );
         }
+        // Clear state BEFORE navigation
+        setPreviewFile(null);
+        setPreviewFiles([]);
         await finalizeUploadSuccess(job.material_id);
       } else {
         throw new Error("Unsupported file type");
@@ -797,8 +878,8 @@ export default function StudyScreen() {
                         ]}
                         numberOfLines={1}
                       >
-                        {getExamTypeLabel(m.exam_type).toUpperCase()}{" "}
-                        · {m.asset_types.join(" · ")}
+                        {getExamTypeLabel(m.exam_type).toUpperCase()} ·{" "}
+                        {m.asset_types.join(" · ")}
                       </Text>
                     </View>
                     <Ionicons
@@ -832,7 +913,6 @@ export default function StudyScreen() {
         </View>
       </ScrollView>
 
-
       {/* Pre-upload preview */}
       <Modal
         visible={previewVisible}
@@ -845,7 +925,10 @@ export default function StudyScreen() {
           onPress={() => setPreviewVisible(false)}
         >
           <Pressable
-            style={[styles.previewModal, { backgroundColor: tokens.card, borderColor: tokens.border }]}
+            style={[
+              styles.previewModal,
+              { backgroundColor: tokens.card, borderColor: tokens.border },
+            ]}
             onPress={(e) => e.stopPropagation()}
           >
             <Text style={[styles.previewTitle, { color: tokens.ink }]}>
@@ -862,23 +945,41 @@ export default function StudyScreen() {
                       onPress={() => setPreviewFile(f)}
                       onLongPress={() => {
                         if (previewFiles.length <= 1) return;
-                        setPreviewFiles((prev) => prev.filter((_, i) => i !== idx));
+                        setPreviewFiles((prev) =>
+                          prev.filter((_, i) => i !== idx),
+                        );
                         setPreviewFile((prev) => {
                           if (!prev) return null;
-                          const remaining = previewFiles.filter((_, i) => i !== idx);
+                          const remaining = previewFiles.filter(
+                            (_, i) => i !== idx,
+                          );
                           return remaining.length > 0 ? remaining[0] : null;
                         });
                       }}
-                      style={[styles.previewThumb, previewFile?.uri === f.uri && { borderColor: tokens.mint, borderWidth: 2 }]}
+                      style={[
+                        styles.previewThumb,
+                        previewFile?.uri === f.uri && {
+                          borderColor: tokens.mint,
+                          borderWidth: 2,
+                        },
+                      ]}
                     >
-                      <Image source={{ uri: f.uri }} style={styles.previewThumbImg} resizeMode="cover" />
+                      <Image
+                        source={{ uri: f.uri }}
+                        style={styles.previewThumbImg}
+                        resizeMode="cover"
+                      />
                       <Pressable
                         onPress={() => {
                           if (previewFiles.length <= 1) return;
-                          setPreviewFiles((prev) => prev.filter((_, i) => i !== idx));
+                          setPreviewFiles((prev) =>
+                            prev.filter((_, i) => i !== idx),
+                          );
                           setPreviewFile((prev) => {
                             if (!prev) return null;
-                            const remaining = previewFiles.filter((_, i) => i !== idx);
+                            const remaining = previewFiles.filter(
+                              (_, i) => i !== idx,
+                            );
                             return remaining.length > 0 ? remaining[0] : null;
                           });
                         }}
@@ -904,8 +1005,29 @@ export default function StudyScreen() {
             {previewFile?.type === "application/pdf" && (
               <View style={styles.previewPdfContainer}>
                 {pdfPreviewLoading ? (
-                  <View style={styles.loadingPages}>
-                    <SkeletonBase height={420} width="100%" borderRadius={12} />
+                  <View
+                    style={[
+                      styles.loadingPages,
+                      { justifyContent: "center", alignItems: "center" },
+                    ]}
+                  >
+                    <PagePaySpinner />
+                    <Text
+                      style={[
+                        styles.pdfLoadingText,
+                        { color: tokens.inkMuted, marginTop: 16 },
+                      ]}
+                    >
+                      {uploadStage === "extracting"
+                        ? t(
+                            "study.sow_upload.extracting_pages",
+                            "Extracting pages...",
+                          )
+                        : t(
+                            "study.sow_upload.loading_preview",
+                            "Loading preview...",
+                          )}
+                    </Text>
                   </View>
                 ) : pdfPreviewPages && pdfPreviewPages.length > 0 ? (
                   // FlatList, not ScrollView.map: a paging ScrollView
@@ -937,12 +1059,28 @@ export default function StudyScreen() {
                           style={styles.pdfPageItem}
                         >
                           <Image
-                            source={{ uri: `data:image/jpeg;base64,${page.image_base64}` }}
+                            source={{
+                              uri: `data:image/jpeg;base64,${page.image_base64}`,
+                            }}
                             style={styles.pdfPageImage}
                             resizeMode="contain"
                           />
-                          <View style={[styles.pdfPageCheck, { backgroundColor: isSelected ? tokens.mint : "rgba(0,0,0,0.4)" }]}>
-                            <Text style={[styles.pdfPageCheckText, { color: "#fff" }]}>
+                          <View
+                            style={[
+                              styles.pdfPageCheck,
+                              {
+                                backgroundColor: isSelected
+                                  ? tokens.mint
+                                  : "rgba(0,0,0,0.4)",
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.pdfPageCheckText,
+                                { color: "#fff" },
+                              ]}
+                            >
                               Page {page.page}
                             </Text>
                           </View>
@@ -952,20 +1090,39 @@ export default function StudyScreen() {
                   />
                 ) : (
                   <View style={styles.previewPdfPlaceholder}>
-                    <Ionicons name="document-text-outline" size={48} color={tokens.mint} />
-                    <Text style={[styles.previewPdfText, { color: tokens.inkMuted }]}>
+                    <Ionicons
+                      name="document-text-outline"
+                      size={48}
+                      color={tokens.mint}
+                    />
+                    <Text
+                      style={[
+                        styles.previewPdfText,
+                        { color: tokens.inkMuted },
+                      ]}
+                    >
                       PDF preview will be available after upload
                     </Text>
                   </View>
                 )}
                 {!pdfPreviewLoading && pdfTruncated && (
                   <View style={styles.pdfTruncatedNote}>
-                    <Ionicons name="information-circle-outline" size={14} color={tokens.inkMuted} />
-                    <Text style={[styles.pdfTruncatedText, { color: tokens.inkMuted }]}>
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={14}
+                      color={tokens.inkMuted}
+                    />
+                    <Text
+                      style={[
+                        styles.pdfTruncatedText,
+                        { color: tokens.inkMuted },
+                      ]}
+                    >
                       {t("study.sow_upload.pdf_preview_truncated", {
-                        count: pdfTotalPages,
+                        preview: 20,
+                        total: pdfTotalPages,
                         defaultValue:
-                          "Showing the first {{count}} pages. Tick the pages you want and upload.",
+                          "Preview shows first 20 pages of {{total}} total. All {{total}} pages will be uploaded. You can deselect specific pages if needed.",
                       })}
                     </Text>
                   </View>
@@ -977,7 +1134,9 @@ export default function StudyScreen() {
                 onPress={() => setPreviewVisible(false)}
                 style={[styles.previewBtn, { borderColor: tokens.border }]}
               >
-                <Text style={[styles.previewBtnText, { color: tokens.inkMuted }]}>
+                <Text
+                  style={[styles.previewBtnText, { color: tokens.inkMuted }]}
+                >
                   {t("common.cancel")}
                 </Text>
               </Pressable>
@@ -985,7 +1144,9 @@ export default function StudyScreen() {
                 onPress={confirmUpload}
                 style={[styles.previewBtn, { backgroundColor: tokens.mint }]}
               >
-                <Text style={[styles.previewBtnText, { color: tokens.mintText }]}>
+                <Text
+                  style={[styles.previewBtnText, { color: tokens.mintText }]}
+                >
                   {t("study.upload_confirm", "Upload")}
                 </Text>
               </Pressable>
@@ -1333,6 +1494,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
   },
+
+  pdfLoadingText: {
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+
   pdfTruncatedNote: {
     flexDirection: "row",
     alignItems: "center",

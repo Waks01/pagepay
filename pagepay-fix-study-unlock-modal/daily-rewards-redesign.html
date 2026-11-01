@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Daily Rewards - Redesign</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .phone-frame {
+            width: 100%;
+            max-width: 400px;
+            background: #ffffff;
+            border-radius: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .screen {
+            background: #f8f9fa;
+            min-height: 800px;
+            position: relative;
+        }
+
+        /* Header */
+        .header {
+            padding: 16px 20px;
+            background: #ffffff;
+            border-bottom: 1px solid #e8e8e8;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .back-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            background: #f5f5f5;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .back-btn:active {
+            transform: scale(0.95);
+            background: #e8e8e8;
+        }
+
+        .back-btn svg {
+            width: 20px;
+            height: 20px;
+            color: #1a1a1a;
+        }
+
+        .header-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a1a;
+            letter-spacing: -0.3px;
+        }
+
+        .header-spacer {
+            width: 40px;
+        }
+
+        /* Content */
+        .content {
+            padding: 20px;
+            padding-bottom: 40px;
+        }
+
+        /* Streak Hero Card */
+        .streak-hero {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 24px;
+            padding: 28px 24px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25);
+        }
+
+        .streak-hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }
+
+        .streak-hero::after {
+            content: '';
+            position: absolute;
+            bottom: -30%;
+            left: -10%;
+            width: 150px;
+            height: 150px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 50%;
+        }
+
+        .streak-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .streak-emoji {
+            font-size: 56px;
+            line-height: 1;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+            animation: bounce 2s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        .streak-info {
+            flex: 1;
+        }
+
+        .streak-number {
+            font-size: 42px;
+            font-weight: 800;
+            color: #ffffff;
+            line-height: 1;
+            margin-bottom: 6px;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .streak-label {
+            font-size: 15px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.95);
+            margin-bottom: 8px;
+        }
+
+        .streak-progress {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .streak-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        .streak-dot.filled {
+            background: #ffffff;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+        }
+
+        .streak-dot.current {
+            background: #fbbf24;
+            box-shadow: 0 0 12px rgba(251, 191, 36, 0.8);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.8; }
+        }
+
+        /* Claim Button */
+        .claim-button {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 20px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .claim-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.6s;
+        }
+
+        .claim-button:hover::before {
+            left: 100%;
+        }
+
+        .claim-button:active {
+            transform: scale(0.98);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+        }
+
+        .claim-emoji {
+            font-size: 40px;
+            line-height: 1;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+        }
+
+        .claim-content {
+            flex: 1;
+        }
+
+        .claim-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 4px;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .claim-subtitle {
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .claim-arrow {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            backdrop-filter: blur(10px);
+        }
+
+        .claim-arrow svg {
+            width: 18px;
+            height: 18px;
+            color: #ffffff;
+        }
+
+        /* Section Title */
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 16px;
+            letter-spacing: -0.3px;
+        }
+
+        /* Week Card */
+        .week-card {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            border: 1px solid #f0f0f0;
+        }
+
+        .week-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .week-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .week-badge {
+            background: #f3f4f6;
+            color: #6b7280;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+
+        .day-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+        }
+
+        .day-card {
+            aspect-ratio: 1;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            position: relative;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .day-card.available {
+            background: #ffffff;
+            border-color: #10b981;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+        }
+
+        .day-card.available:active {
+            transform: scale(0.95);
+        }
+
+        .day-card.claimed {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-color: #10b981;
+        }
+
+        .day-card.future {
+            background: #f9fafb;
+            border-color: #e5e7eb;
+        }
+
+        .day-card.today {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            border-color: #fbbf24;
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3); }
+            50% { box-shadow: 0 4px 20px rgba(251, 191, 36, 0.5); }
+        }
+
+        .day-number {
+            font-size: 11px;
+            font-weight: 700;
+            color: #6b7280;
+        }
+
+        .day-card.claimed .day-number,
+        .day-card.today .day-number {
+            color: #ffffff;
+        }
+
+        .day-emoji {
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .day-card.future .day-emoji {
+            opacity: 0.4;
+        }
+
+        .day-value {
+            font-size: 11px;
+            font-weight: 700;
+            color: #10b981;
+        }
+
+        .day-card.claimed .day-value,
+        .day-card.today .day-value {
+            color: #ffffff;
+        }
+
+        .day-card.future .day-value {
+            color: #9ca3af;
+        }
+
+        .check-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 16px;
+            height: 16px;
+            background: #ffffff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .check-badge svg {
+            width: 10px;
+            height: 10px;
+            color: #10b981;
+        }
+
+        /* Milestones */
+        .milestones {
+            margin-top: 8px;
+        }
+
+        .milestone-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            border: 1px solid #f0f0f0;
+            transition: all 0.2s;
+        }
+
+        .milestone-card:active {
+            transform: scale(0.98);
+        }
+
+        .milestone-emoji {
+            font-size: 32px;
+            line-height: 1;
+        }
+
+        .milestone-info {
+            flex: 1;
+        }
+
+        .milestone-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 4px;
+        }
+
+        .milestone-subtitle {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 6px;
+        }
+
+        .milestone-progress {
+            font-size: 12px;
+            font-weight: 600;
+            color: #10b981;
+        }
+
+        .milestone-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        /* Responsive */
+        @media (max-width: 380px) {
+            .day-grid {
+                gap: 6px;
+            }
+            .day-card {
+                border-radius: 12px;
+            }
+            .day-emoji {
+                font-size: 18px;
+            }
+            .day-value {
+                font-size: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="phone-frame">
+        <div class="screen">
+            <!-- Header -->
+            <div class="header">
+                <div class="back-btn">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </div>
+                <div class="header-title">Daily Rewards</div>
+                <div class="header-spacer"></div>
+            </div>
+
+            <div class="content">
+                <!-- Streak Hero -->
+                <div class="streak-hero">
+                    <div class="streak-content">
+                        <div class="streak-emoji">🔥</div>
+                        <div class="streak-info">
+                            <div class="streak-number">5</div>
+                            <div class="streak-label">Day Streak</div>
+                            <div class="streak-progress">
+                                <div class="streak-dot filled"></div>
+                                <div class="streak-dot filled"></div>
+                                <div class="streak-dot filled"></div>
+                                <div class="streak-dot filled"></div>
+                                <div class="streak-dot filled"></div>
+                                <div class="streak-dot current"></div>
+                                <div class="streak-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Claim Button -->
+                <div class="claim-button">
+                    <div class="claim-emoji">🎯</div>
+                    <div class="claim-content">
+                        <div class="claim-title">Claim Today's Reward</div>
+                        <div class="claim-subtitle">Day 6 • +500 points</div>
+                    </div>
+                    <div class="claim-arrow">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Week 1 -->
+                <div class="section-title">Week 1</div>
+                <div class="week-card">
+                    <div class="week-header">
+                        <div class="week-title">Days 1-7</div>
+                        <div class="week-badge">Completed</div>
+                    </div>
+                    <div class="day-grid">
+                        <div class="day-card claimed">
+                            <span class="day-number">Day 1</span>
+                            <span class="day-emoji">🎯</span>
+                            <span class="day-value">+100</span>
+                            <div class="check-badge">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="day-card claimed">
+                            <span class="day-number">Day 2</span>
+                            <span class="day-emoji">⚡</span>
+                            <span class="day-value">+150</span>
+                            <div class="check-badge">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="day-card claimed">
+                            <span class="day-number">Day 3</span>
+                            <span class="day-emoji">🚀</span>
+                            <span class="day-value">+200</span>
+                            <div class="check-badge">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="day-card claimed">
+                            <span class="day-number">Day 4</span>
+                            <span class="day-emoji">💪</span>
+                            <span class="day-value">+300</span>
+                            <div class="check-badge">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="day-card claimed">
+                            <span class="day-number">Day 5</span>
+                            <span class="day-emoji">🔥</span>
+                            <span class="day-value">+400</span>
+                            <div class="check-badge">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="day-card today">
+                            <span class="day-number">Day 6</span>
+                            <span class="day-emoji">⭐</span>
+                            <span class="day-value">+500</span>
+                        </div>
+                        <div class="day-card future">
+                            <span class="day-number">Day 7</span>
+                            <span class="day-emoji">🏆</span>
+                            <span class="day-value">+750</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Milestones -->
+                <div class="section-title">Milestones</div>
+                <div class="milestones">
+                    <div class="milestone-card">
+                        <div class="milestone-emoji">🛡️</div>
+                        <div class="milestone-info">
+                            <div class="milestone-title">Two Week Warrior</div>
+                            <div class="milestone-subtitle">Day 14 • 20% bonus multiplier</div>
+                            <div class="milestone-progress">9 days to go</div>
+                        </div>
+                        <div class="milestone-icon">🎯</div>
+                    </div>
+                    <div class="milestone-card">
+                        <div class="milestone-emoji">👑</div>
+                        <div class="milestone-info">
+                            <div class="milestone-title">Three Week Legend</div>
+                            <div class="milestone-subtitle">Day 21 • 1500 bonus points</div>
+                            <div class="milestone-progress">16 days to go</div>
+                        </div>
+                        <div class="milestone-icon">⭐</div>
+                    </div>
+                    <div class="milestone-card">
+                        <div class="milestone-emoji">💎</div>
+                        <div class="milestone-info">
+                            <div class="milestone-title">Monthly Master</div>
+                            <div class="milestone-subtitle">Day 30 • 50% bonus multiplier</div>
+                            <div class="milestone-progress">25 days to go</div>
+                        </div>
+                        <div class="milestone-icon">🏆</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Add touch feedback for mobile
+        document.querySelectorAll('.claim-button, .day-card, .milestone-card').forEach(el => {
+            el.addEventListener('touchstart', () => {
+                el.style.transform = 'scale(0.98)';
+            });
+            el.addEventListener('touchend', () => {
+                el.style.transform = 'scale(1)';
+            });
+        });
+
+        // Simulate claim button press
+        document.querySelector('.claim-button').addEventListener('click', () => {
+            alert('🎉 Reward Claimed!\n⭐ Day 6\n+500 points');
+        });
+    </script>
+</body>
+</html>

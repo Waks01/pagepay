@@ -1,0 +1,76 @@
+# Semgrep custom rules for PagePay.
+# These are ADDITIONAL rules on top of the registry rulesets
+# (p/security-audit, p/python, p/javascript, p/secrets, p/owasp-top-ten,
+# p/fastapi, p/typescript, p/react) used in .github/workflows/security.yml.
+#
+# The registry rulesets catch most issues. This file adds project-
+# specific patterns the audit found that aren't in any default ruleset.
+
+rules:
+  # ── Custom: catch the C1 admin_payouts timezone bug pattern ────
+  # `datetime.now(timezone.utc)` when timezone is not imported will
+  # raise NameError at runtime. We can't catch the missing import
+  # with semgrep, but we can flag the suspicious pattern.
+  - id: pagepay-datetime-timezone-usage
+    pattern-regex: 'datetime\.now\s*\(\s*timezone\s*\.'
+    message: |
+      datetime.now(timezone.utc) requires `from datetime import timezone`.
+      Verify the import is present, or use `datetime.utcnow()` for
+      consistency with the rest of the codebase.
+    severity: WARNING
+    languages: [python]
+    paths:
+      include: ["backend/"]
+
+  # ── Custom: catch the C3 unvalidated proof URL in tasks.py ─────
+  - id: pagepay-unvalidated-url-storage
+    patterns:
+      - pattern: |
+          $X.proof_url = $Y
+      - metavariable-regex:
+          metavariable: $Y
+          regex: '^(?!https?://)'
+    message: |
+      proof_url is stored without URL validation. Should validate:
+        - http/https scheme only
+        - not a private IP range (10.x, 192.168.x, 127.x, 169.254.x)
+        - not javascript: or data:
+    severity: ERROR
+    languages: [python]
+    paths:
+      include: ["backend/app/routers/tasks.py"]
+
+  # ── Custom: catch the H9 estimated word count ─────────────────
+  - id: pagepay-fake-content-length
+    pattern-regex: '\b(estimated|guess|fake|mock)[_a-z]*word[s]?_?count'
+    message: |
+      Fraud-detection code is using a fake content length. Look up
+      the actual word count from ContentCatalog to avoid passing
+      garbage to the fraud model.
+    severity: WARNING
+    languages: [python]
+    paths:
+      include: ["backend/app/services/fraud_detection.py", "backend/app/routers/sessions.py"]
+
+  # ── Custom: catch the C6 webhook no-rate-limit gap ────────────
+  - id: pagepay-public-webhook-no-rate-limit
+    patterns:
+      - pattern: |
+          @router.post(...webhook...)
+          ...
+          async def $X(..., request: Request, ...):
+            ...
+      - pattern-not: |
+          @router.post(...webhook...)
+          @limiter.limit(...)
+          ...
+          async def $X(..., request: Request, ...):
+            ...
+    message: |
+      Webhook endpoint has no @limiter.limit() decorator. Even though
+      the signature is verified, add rate limiting to defend against
+      signature brute-force attempts.
+    severity: INFO
+    languages: [python]
+    paths:
+      include: ["backend/app/routers/"]

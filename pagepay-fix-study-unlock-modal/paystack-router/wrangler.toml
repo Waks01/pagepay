@@ -1,0 +1,10 @@
+name = "paystack-webhook-router"
+main = "src/index.ts"
+compatibility_date = "2024-06-01"
+
+# Bindings are set via `wrangler secret put` or dashboard.
+# Do NOT put secrets in this file.
+
+[vars]
+# Optional: list your projects here for documentation purposes.
+# The actual routing table lives in src/index.ts.
