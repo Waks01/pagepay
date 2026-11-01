@@ -1,0 +1,98 @@
+================================================================================
+PHASE D AUDIO NARRATION — REVIEW FIXES SUMMARY
+Date: 2026-01-11
+Status: COMPLETED
+================================================================================
+
+OVERVIEW
+--------
+Applied fixes to Phase D audio narration system to address 7 review findings.
+All critical and medium-severity issues fixed. Two low-priority issues deferred.
+One high-priority issue (cost audit trail) partially fixed pending DB schema.
+
+FINDINGS & STATUS
+-----------------
+
+[HIGH] 1. Missing import in migration 039_add_audio_unlocks.py
+   Status: ✅ FIXED
+   Change: Added "import sqlalchemy as sa" to line 14
+   Impact: Migration 039 will now run without NameError
+   File: backend/alembic/versions/039_add_audio_unlocks.py
+
+[HIGH] 2. Missing cost audit trail (AiUsageLog integration)
+   Status: ⚠️ PARTIALLY FIXED (logging added, DB table deferred)
+   Changes:
+     • Added [AUDIO_BATCH] log when batch created
+     • Added [AUDIO_COST] log when episode generated
+     • Added [AUDIO_REFUND] log when episode fails and refunds
+     • All logs include: user_id, episode/batch_id, cost_sv, provider, char_count
+   Impact: Audit trail now in application logs; TODO: persist to AiUsageLog table
+   File: backend/app/routers/study.py (lines 3762-3766, 3978-3985, 4026-4032)
+
+[MEDIUM] 3. Stale balance in batch creation response
+   Status: ✅ FIXED
+   Change: balance_sv now returns (current_balance - total_cost_sv)
+   Impact: Frontend displays correct projected balance after charges
+   File: backend/app/routers/study.py (line 3795)
+
+[MEDIUM] 4. Position saving updates all episodes in batch
+   Status: ✅ FIXED
+   Change: save_audio_position now updates only the active (first) episode
+   Impact: Seeking in one episode no longer affects others
+   File: backend/app/routers/study.py (lines 4074-4088)
+
+[MEDIUM] 5. No balance check in retry endpoint
+   Status: ✅ FIXED
+   Changes:
+     • Added balance check before retry
+     • Returns HTTP 402 if insufficient balance
+     • Re-deducts cost for retry attempts
+   Impact: Prevents unlimited retries without balance
+   File: backend/app/routers/study.py (lines 4128-4145)
+
+[LOW] 6. Per-model TTS cost configuration
+   Status: ⚠️ DEFERRED
+   Reason: Requires pricing lookup table + refactor
+   Next: Add in future phase when provider cost variance becomes significant
+
+[LOW] 7. Concurrent balance update race condition
+   Status: ⚠️ DEFERRED
+   Reason: Requires pessimistic locking; functionally correct for typical loads
+   Next: Add row-level locking (FOR UPDATE) if audio generation becomes bottleneck
+
+FILES MODIFIED
+--------------
+backend/alembic/versions/039_add_audio_unlocks.py     (1 line added: import)
+backend/app/routers/study.py                          (40+ lines modified/added)
+
+DOCUMENTATION
+--------------
+.agents/tasks/phase-d-fixes.md                        (Full detailed fixes)
+.agents/tasks/PHASE-D-FIXES-SUMMARY.txt               (This file)
+
+TESTING CHECKLIST
+-----------------
+✅ Migration 039 has correct imports
+✅ Batch response balance_sv calculated correctly
+✅ Position endpoint updates only one episode
+✅ Retry endpoint returns 402 on insufficient balance
+✅ Cost logging captures audit trail info
+✅ Refund logging captures audit trail info
+
+ROLLOUT NOTES
+-------------
+• All changes backward-compatible with existing API contract
+• No endpoint paths changed
+• No request/response shapes modified
+• Logging added but does not affect responses
+• Balance check in retry is new but prevents invalid state
+• All fixes preserve frontend compatibility
+
+REMAINING WORK FOR NEXT ITERATION
+----------------------------------
+1. Create AiUsageLog migration and table schema
+2. Integrate cost logging to persist to AiUsageLog
+3. Add provider cost lookup table and pricing config
+4. Implement pessimistic locking for balance updates
+
+================================================================================

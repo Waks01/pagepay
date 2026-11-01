@@ -3757,6 +3757,15 @@ async def create_audio_batches(
     for ep in episode_records:
         await db.refresh(ep)
     
+    # Log batch creation for audit trail
+    # TODO: Integrate with AiUsageLog model when available for persistent cost tracking
+    logger.info(
+        "[AUDIO_BATCH] Batch created: user_id=%s, batch_id=%s, material_id=%s, "
+        "total_episodes=%s, total_cost_sv=%s, topic_count=%s",
+        current_user.id, batch.id, material_id, len(episode_records), 
+        total_cost_sv, len(topic_indexes)
+    )
+    
     # Build response
     episode_schemas = [
         AudioEpisodeSchema(
@@ -3783,7 +3792,7 @@ async def create_audio_batches(
     return AudioBatchCreateResultSchema(
         ok=True,
         cost_sv=total_cost_sv,
-        balance_sv=current_user.service_credit_balance,
+        balance_sv=current_user.service_credit_balance - total_cost_sv,
         created=len(episode_records),
         episodes=episode_schemas,
     )
@@ -3909,6 +3918,10 @@ async def generate_next_audio_episode(
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
     
+    # Verify ownership
+    if material.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
     # Extract topic content
     parsed = _json_module.loads(material.parsed_structure or '{}')
     topics_data = _extract_topics_from_structure(parsed)
@@ -3955,6 +3968,11 @@ async def generate_next_audio_episode(
         episode.status = 'ready'
         episode.completed_at = datetime.utcnow()
         
+        # Set active_episode_id if not already set
+        batch = await db.get(AudioBatch, episode.batch_id)
+        if batch and not batch.active_episode_id:
+            batch.active_episode_id = episode.id
+        
         # Deduct cost from user balance
         await db.execute(
             update(User).where(User.id == current_user.id).values(
@@ -3963,6 +3981,16 @@ async def generate_next_audio_episode(
         )
         
         await db.commit()
+        
+        # Log cost deduction for audit trail
+        # TODO: Integrate with AiUsageLog model when available for persistent cost tracking
+        logger.info(
+            "[AUDIO_COST] Episode generated: user_id=%s, episode_id=%s, batch_id=%s, "
+            "material_id=%s, cost_sv=%s, char_count=%s, provider=%s, duration=%s",
+            current_user.id, episode.id, episode.batch_id, material_id, 
+            episode.cost_sv, episode.char_count, used_provider, 
+            len(audio_bytes) if audio_bytes else 0
+        )
         
         # Count remaining queued episodes
         remaining_result = await db.execute(
@@ -4002,6 +4030,15 @@ async def generate_next_audio_episode(
         
         await db.commit()
         
+        # Log refund for audit trail
+        # TODO: Integrate with AiUsageLog model when available for persistent refund tracking
+        logger.warning(
+            "[AUDIO_REFUND] Episode failed and refunded: user_id=%s, episode_id=%s, "
+            "batch_id=%s, material_id=%s, refunded_sv=%s, error=%s",
+            current_user.id, episode.id, episode.batch_id, material_id, 
+            episode.cost_sv, str(e)[:100]
+        )
+        
         # Count remaining queued
         remaining_result = await db.execute(
             select(func.count(AudioEpisode.id)).where(
@@ -4026,7 +4063,7 @@ async def save_audio_position(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Save playback position for a batch."""
+    """Save playback position for the active episode in a batch."""
     from app.models import AudioBatch, AudioEpisode
     
     # Verify batch belongs to current user
@@ -4043,23 +4080,27 @@ async def save_audio_position(
     if position_seconds < 0:
         raise HTTPException(status_code=400, detail="position_seconds must be non-negative")
     
-    # Update all episodes in this batch with the position
-    await db.execute(
-        update(AudioEpisode).where(
-            AudioEpisode.batch_id == batch_id
-        ).values(position_seconds=position_seconds)
-    )
-    
-    if completed:
-        # Mark first episode as completed
+    # Find the active episode: use batch.active_episode_id if set, otherwise first episode
+    if batch.active_episode_id:
+        ep_result = await db.execute(
+            select(AudioEpisode).where(AudioEpisode.id == batch.active_episode_id)
+        )
+        episode = ep_result.scalar_one_or_none()
+    else:
+        # Fallback: use first episode by order
         ep_result = await db.execute(
             select(AudioEpisode).where(
                 AudioEpisode.batch_id == batch_id
             ).order_by(AudioEpisode.topic_index, AudioEpisode.episode_index).limit(1)
         )
-        first_ep = ep_result.scalar_one_or_none()
-        if first_ep:
-            first_ep.completed_at = datetime.utcnow()
+        episode = ep_result.scalar_one_or_none()
+    
+    if episode:
+        # Update position for this episode
+        episode.position_seconds = position_seconds
+        
+        if completed:
+            episode.completed_at = datetime.utcnow()
     
     await db.commit()
     
@@ -4072,7 +4113,11 @@ async def retry_audio_batch(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Retry all failed episodes in a batch."""
+    """Retry all failed episodes in a batch.
+    
+    Recalculates costs using current rates. Checks that user has sufficient
+    balance to retry failed episodes. Returns 402 if balance insufficient.
+    """
     from app.models import AudioBatch, AudioEpisode
     
     # Verify batch belongs to user
@@ -4095,7 +4140,15 @@ async def retry_audio_batch(
     if not failed_episodes:
         raise HTTPException(status_code=400, detail="No failed episodes to retry")
     
-    total_refund = sum(ep.cost_sv for ep in failed_episodes)
+    # Recalculate costs using current rate formula
+    total_retry_cost = sum(_calculate_episode_cost_sv(ep.char_count) for ep in failed_episodes)
+    
+    # Check balance before allowing retry
+    if current_user.service_credit_balance < total_retry_cost:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient balance to retry. Need {total_retry_cost} SV, have {current_user.service_credit_balance} SV."
+        )
     
     # Reset episodes
     for ep in failed_episodes:
@@ -4103,15 +4156,15 @@ async def retry_audio_batch(
         ep.error_message = None
         ep.refunded_at = None
     
-    # Restore balance
+    # Deduct cost from balance for retry
     await db.execute(
         update(User).where(User.id == current_user.id).values(
-            service_credit_balance=User.service_credit_balance + total_refund
+            service_credit_balance=User.service_credit_balance - total_retry_cost
         )
     )
     
-    # Update batch
-    batch.refunded_sv = max(0, batch.refunded_sv - total_refund)
+    # Update batch: clear refunded_sv for retried episodes
+    batch.refunded_sv = max(0, batch.refunded_sv - total_retry_cost)
     
     await db.commit()
     

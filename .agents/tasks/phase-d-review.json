@@ -1,0 +1,41 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {
+      "severity": "HIGH",
+      "title": "Missing current_user parameter in generate-next endpoint",
+      "description": "The route handler generate_next_audio_episode() does not declare `current_user: User = Depends(get_current_user)` as a parameter, but the function body references `current_user.id` in 3 places (logger calls and balance operations). This causes a NameError at runtime."
+    },
+    {
+      "severity": "HIGH",
+      "title": "Missing ownership check in generate-next",
+      "description": "generate_next_audio_episode() does not verify that the material belongs to the current user. An attacker can call generate-next/{material_id} for another user's material and trigger TTS synthesis on their batch, consuming their credits."
+    },
+    {
+      "severity": "MEDIUM",
+      "title": "AiUsageLog integration is stubbed with TODOs",
+      "description": "Three cost-tracking operations (batch creation, episode generation, episode refund) are marked TODO and rely on logger.info instead of persisting to AiUsageLog. Cost mutations are not recorded in a persistent ledger, making cost audits impossible without parsing logs."
+    },
+    {
+      "severity": "MEDIUM",
+      "title": "Balance error response inconsistency between endpoints",
+      "description": "create_audio_batches returns HTTP 200 with ok=False on insufficient balance, while retry_audio_batch returns HTTP 402. The two endpoints handle the same error condition differently, which could confuse client-side error handling."
+    },
+    {
+      "severity": "MEDIUM",
+      "title": "Retry logic uses stale episode costs",
+      "description": "When retry_audio_batch executes, it recalculates total_retry_cost using the stored episode.cost_sv values from batch creation time. If TTS pricing changes between creation and retry, the retry uses the old rate instead of the current rate."
+    },
+    {
+      "severity": "LOW",
+      "title": "Position endpoint updates first episode, not active episode",
+      "description": "save_audio_position always updates the position for the first episode in the batch (by topic_index, episode_index order). If the user jumps to a later episode, the position update still goes to the first one."
+    },
+    {
+      "severity": "LOW",
+      "title": "Empty topics create zero-cost episodes that will fail",
+      "description": "Topics with zero or whitespace-only content are accepted and create episodes with cost_sv=0. These episodes will fail during TTS synthesis and require refund/retry. It would be cleaner to reject empty topics at batch-creation time."
+    }
+  ],
+  "reviewDoc": "c:\\Users\\kenik\\OneDrive\\Pictures\\pagepay\\.agents\\tasks\\phase-d-review.md"
+}

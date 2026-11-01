@@ -1798,6 +1798,8 @@ class AudioBatch(Base):
     overall progress (queued → generating → completed).
     
     `topic_indexes` is stored as JSON-encoded text: "[1,3,5]"
+    `active_episode_id` tracks which episode is currently being played/generated,
+    used for position updates. Falls back to first episode if NULL.
     """
     
     __tablename__ = "audio_batches"
@@ -1814,6 +1816,9 @@ class AudioBatch(Base):
     total_cost_sv: Mapped[int] = mapped_column(Integer, nullable=False, server_default='0')
     refunded_sv: Mapped[int] = mapped_column(Integer, nullable=False, server_default='0')
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default='queued')
+    active_episode_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("audio_episodes.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
     __table_args__ = (
