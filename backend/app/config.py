@@ -151,10 +151,13 @@ class Settings(BaseSettings):
     daily_ad_impression_cap: int = 200
 
     # ── Phase 3: AI providers ────────────────────────────────────────
-    # Free-tier keys for the multi-provider router. All three are
-    # optional: if a key is missing the router simply skips that
-    # provider and falls through to the next one in the priority list.
-    # Never commit real keys — use env vars or a secrets manager.
+    # Cloudflare Workers AI (primary provider, 2026+)
+    cf_account_id: str | None = None
+    cf_ai_api_key: str | None = None
+    # Base URL for Cloudflare Workers AI API. Default points to production.
+    cf_ai_base_url: str = "https://api.cloudflare.com/client/v4/accounts"
+    
+    # Legacy providers (fallback, deprecated)
     gemini_api_key: str | None = None
     groq_api_key: str | None = None
     openrouter_api_key: str | None = None
