@@ -654,10 +654,8 @@ async def _ocr_image(
     contents: bytes, content_type: str
 ) -> tuple[str, float]:
     """Extract text from image using Cloudflare Workers AI Vision."""
-    import base64
-    image_b64 = base64.b64encode(contents).decode()
     try:
-        description, cost = await call_cf_vision(image_b64, "Extract all text and content from this image")
+        description, cost = await call_cf_vision(contents, "Extract all text and content from this image")
         return description, cost
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=f"Vision API unavailable: {str(e)[:100]}")
@@ -2272,7 +2270,7 @@ async def chat_study(
 
     # Calculate and log cost upfront based on input size
     input_size_chars = len(full_prompt)
-    cost_neurons = calculate_ai_cost_neurons("chat", input_size_chars)
+    cost_neurons = calculate_ai_cost_neurons("chat", input_size_chars // 4)
     
     log_entry = AiUsageLog(
         user_id=current_user.id,
