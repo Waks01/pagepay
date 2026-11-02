@@ -1866,6 +1866,33 @@ class AudioEpisode(Base):
     )
 
 
+class AiUsageLog(Base):
+    """Persistent log of AI service usage for auditing and cost tracking.
+    
+    Records each AI operation (vision, TTS, chat) with the model used,
+    input tokens/characters, cost in Neurons, and the user who triggered it.
+    Used for per-user cost monitoring, billing reconciliation, and quota enforcement.
+    """
+    
+    __tablename__ = "ai_usage_logs"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    operation: Mapped[str] = mapped_column(String(50), index=True)  # e.g. "audio_batch_create", "audio_episode_generate", "audio_episode_retry", "vision_extract", "chat_response"
+    model: Mapped[str] = mapped_column(String(100))  # e.g. "@cf/deepgram/aura-2-en", "@cf/moondream/moondream3.1-9b-a2b"
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, server_default='0')  # character count for audio/vision, token count for chat
+    cost_neurons: Mapped[float] = mapped_column(Float, nullable=False, server_default='0.0')  # neuron cost; 1000 Neurons ≈ $0.011
+    metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # additional context (batch_id, episode_id, etc.)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    
+    __table_args__ = (
+        Index("ix_ai_usage_logs_user_created", "user_id", "created_at"),
+        Index("ix_ai_usage_logs_operation", "operation", "created_at"),
+    )
+
+
 @sa_event.listens_for(Base.metadata, "after_create")
 def _create_postgres_indexes(target, connection, **kw):
     """Create PostgreSQL-only expression indexes after table creation.

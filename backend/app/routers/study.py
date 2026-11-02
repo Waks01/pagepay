@@ -55,6 +55,7 @@ from app.models import (
     AudioTopic,
     AudioBatch,
     AudioEpisode,
+    AiUsageLog,
 )
 from app.database import AsyncSessionLocal, get_db
 from app.routers.auth import get_current_user
@@ -3693,6 +3694,25 @@ async def create_audio_batches(
     total_cost_sv = 0
     all_episodes_data = []  # (topic_index, episode_data)
     
+    # Validate non-empty topics
+    for topic_index in topic_indexes:
+        topic_item = topics_data[topic_index]
+        topic_content = (
+            topic_item.get('content') or
+            topic_item.get('text') or
+            topic_item.get('description') or
+            ''
+        )
+        if isinstance(topic_item, str):
+            topic_content = topic_item
+        
+        # Validate that topic has non-empty content
+        if not topic_content or not topic_content.strip():
+            raise HTTPException(
+                status_code=422,
+                detail=f"Topic at index {topic_index} has empty content"
+            )
+    
     for topic_index in topic_indexes:
         topic_item = topics_data[topic_index]
         topic_content = (
@@ -3711,12 +3731,9 @@ async def create_audio_batches(
     
     # Check balance
     if current_user.service_credit_balance < total_cost_sv:
-        return AudioBatchCreateResultSchema(
-            ok=False,
-            error='insufficient_balance',
-            detail=f'Need {total_cost_sv} SV to start this batch',
-            cost_sv=total_cost_sv,
-            balance_sv=current_user.service_credit_balance,
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient balance. Need {total_cost_sv} SV, have {current_user.service_credit_balance} SV."
         )
     
     # Create batch record
@@ -3757,14 +3774,30 @@ async def create_audio_batches(
     for ep in episode_records:
         await db.refresh(ep)
     
-    # Log batch creation for audit trail
-    # TODO: Integrate with AiUsageLog model when available for persistent cost tracking
+    # Log batch creation for persistent cost tracking
+    log_entry = AiUsageLog(
+        user_id=current_user.id,
+        operation="audio_batch_create",
+        model="@cf/deepgram/aura-2-en",
+        input_tokens=sum(ep['char_count'] for _, ep in all_episodes_data),
+        cost_neurons=total_cost_sv * 1000.0 / 11.0,  # Convert SV to Neurons: 1000 neurons = $0.011 ≈ 1 SV
+        metadata={
+            'batch_id': batch.id,
+            'material_id': material_id,
+            'total_episodes': len(episode_records),
+            'total_cost_sv': total_cost_sv,
+        }
+    )
+    db.add(log_entry)
+    
     logger.info(
         "[AUDIO_BATCH] Batch created: user_id=%s, batch_id=%s, material_id=%s, "
         "total_episodes=%s, total_cost_sv=%s, topic_count=%s",
         current_user.id, batch.id, material_id, len(episode_records), 
         total_cost_sv, len(topic_indexes)
     )
+    
+    await db.flush()
     
     # Build response
     episode_schemas = [
@@ -3980,10 +4013,22 @@ async def generate_next_audio_episode(
             )
         )
         
-        await db.commit()
+        # Log cost deduction for persistent cost tracking
+        log_entry = AiUsageLog(
+            user_id=current_user.id,
+            operation="audio_episode_generate",
+            model="@cf/deepgram/aura-2-en",
+            input_tokens=episode.char_count,
+            cost_neurons=episode.cost_sv * 1000.0 / 11.0,  # Convert SV to Neurons
+            metadata={
+                'batch_id': episode.batch_id,
+                'episode_id': episode.id,
+                'material_id': material_id,
+                'cost_sv': episode.cost_sv,
+            }
+        )
+        db.add(log_entry)
         
-        # Log cost deduction for audit trail
-        # TODO: Integrate with AiUsageLog model when available for persistent cost tracking
         logger.info(
             "[AUDIO_COST] Episode generated: user_id=%s, episode_id=%s, batch_id=%s, "
             "material_id=%s, cost_sv=%s, char_count=%s, provider=%s, duration=%s",
@@ -3991,6 +4036,8 @@ async def generate_next_audio_episode(
             episode.cost_sv, episode.char_count, used_provider, 
             len(audio_bytes) if audio_bytes else 0
         )
+        
+        await db.commit()
         
         # Count remaining queued episodes
         remaining_result = await db.execute(
@@ -4030,14 +4077,31 @@ async def generate_next_audio_episode(
         
         await db.commit()
         
-        # Log refund for audit trail
-        # TODO: Integrate with AiUsageLog model when available for persistent refund tracking
+        # Log refund for persistent cost tracking
+        log_entry = AiUsageLog(
+            user_id=current_user.id,
+            operation="audio_episode_retry",
+            model="@cf/deepgram/aura-2-en",
+            input_tokens=episode.char_count,
+            cost_neurons=episode.cost_sv * 1000.0 / 11.0,  # Convert SV to Neurons
+            metadata={
+                'batch_id': episode.batch_id,
+                'episode_id': episode.id,
+                'material_id': material_id,
+                'refunded_sv': episode.cost_sv,
+                'error': str(e)[:100],
+            }
+        )
+        db.add(log_entry)
+        
         logger.warning(
             "[AUDIO_REFUND] Episode failed and refunded: user_id=%s, episode_id=%s, "
             "batch_id=%s, material_id=%s, refunded_sv=%s, error=%s",
             current_user.id, episode.id, episode.batch_id, material_id, 
             episode.cost_sv, str(e)[:100]
         )
+        
+        await db.commit()
         
         # Count remaining queued
         remaining_result = await db.execute(
@@ -4080,8 +4144,23 @@ async def save_audio_position(
     if position_seconds < 0:
         raise HTTPException(status_code=400, detail="position_seconds must be non-negative")
     
-    # Find the active episode: use batch.active_episode_id if set, otherwise first episode
-    if batch.active_episode_id:
+    # Find the episode to update
+    # Priority: explicit episode_id in payload, then batch.active_episode_id, then first episode
+    episode = None
+    
+    if 'episode_id' in payload:
+        # Use provided episode_id
+        ep_result = await db.execute(
+            select(AudioEpisode).where(
+                AudioEpisode.id == payload['episode_id'],
+                AudioEpisode.batch_id == batch_id
+            )
+        )
+        episode = ep_result.scalar_one_or_none()
+        if not episode:
+            raise HTTPException(status_code=404, detail="Episode not found in this batch")
+    elif batch.active_episode_id:
+        # Use active_episode_id if set
         ep_result = await db.execute(
             select(AudioEpisode).where(AudioEpisode.id == batch.active_episode_id)
         )
@@ -4098,6 +4177,10 @@ async def save_audio_position(
     if episode:
         # Update position for this episode
         episode.position_seconds = position_seconds
+        
+        # Also update active_episode_id on the batch if we're updating a specific episode
+        if 'episode_id' in payload:
+            batch.active_episode_id = episode.id
         
         if completed:
             episode.completed_at = datetime.utcnow()
