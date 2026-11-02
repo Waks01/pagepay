@@ -2270,7 +2270,7 @@ async def chat_study(
 
     # Calculate and log cost upfront based on input size
     input_size_chars = len(full_prompt)
-    cost_neurons = calculate_ai_cost_neurons("chat", input_size_chars // 4)
+    cost_neurons = calculate_ai_cost_neurons("chat", input_size_chars)
     
     log_entry = AiUsageLog(
         user_id=current_user.id,

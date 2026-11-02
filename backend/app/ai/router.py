@@ -93,7 +93,11 @@ async def call_cf_vision(image_bytes: bytes, prompt: str) -> tuple[str, float]:
         result = resp.json().get("result", {})
         description = result.get("description") or result.get("response") or ""
         
-        return description, NEURONS_PER_IMAGE
+        # Calculate cost using unified function
+        import base64
+        image_size_bytes = len(base64.b64decode(image_bytes)) if isinstance(image_bytes, str) else len(image_bytes)
+        cost_neurons = calculate_ai_cost_neurons("vision", image_size_bytes)
+        return description, cost_neurons
 
 
 async def call_cf_tts(text: str, voice: str = "aura-2-en") -> tuple[bytes, float]:
@@ -125,10 +129,9 @@ async def call_cf_tts(text: str, voice: str = "aura-2-en") -> tuple[bytes, float
             raise RuntimeError(f"Cloudflare TTS API failed: {resp.status_code} {resp.text[:200]}")
         
         audio_bytes = resp.content
-        # Estimate neurons cost: ~1 neuron per 10 characters
-        neurons_cost = max(1, len(text) / 10.0)
-        
-        return audio_bytes, neurons_cost
+        # Calculate cost using unified function
+        cost_neurons = calculate_ai_cost_neurons("audio_tts", len(text))
+        return audio_bytes, cost_neurons
 
 
 async def call_cf_chat(
@@ -173,8 +176,9 @@ async def call_cf_chat(
         response_text = result.get("response") or result.get("content") or ""
         
         # Calculate cost based on input tokens using the unified cost function
-        estimated_input_tokens = sum(len(m.get("content", "")) for m in messages) // 4 + len(system_prompt) // 4
-        cost_neurons = calculate_ai_cost_neurons("chat", estimated_input_tokens * 4)
+        # Estimate input tokens: ~4 chars per token
+        estimated_input_tokens = (sum(len(m.get("content", "")) for m in messages) + len(system_prompt)) // 4
+        cost_neurons = calculate_ai_cost_neurons("chat", estimated_input_tokens)
         
         return response_text, cost_neurons
 
