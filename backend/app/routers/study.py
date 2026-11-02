@@ -222,10 +222,9 @@ async def upload_sow_image(
         content_length,
     )
     logger.info("[sow/upload-image] cloudinary_in_scope=%s", __name__)
-    api_key = settings.gemini_api_key
-    if not api_key:
-        logger.error("[sow/upload-image] Gemini API key not configured")
-        raise HTTPException(status_code=503, detail="Gemini not configured for image upload")
+    if not settings.cf_account_id or not settings.cf_ai_api_key:
+        logger.error("[sow/upload-image] Cloudflare Workers AI credentials not configured")
+        raise HTTPException(status_code=503, detail="Cloudflare Workers AI not configured for image upload")
 
     # Content-type allowlist — `file.content_type` is set by the
     # client and is attacker-controlled. Reject anything other than
@@ -332,10 +331,9 @@ async def upload_sow_images(
             detail=f"Too many files (max 10)",
         )
 
-    api_key = settings.gemini_api_key
-    if not api_key:
-        logger.error("[sow/upload-images] Gemini API key not configured")
-        raise HTTPException(status_code=503, detail="Gemini not configured for image upload")
+    if not settings.cf_account_id or not settings.cf_ai_api_key:
+        logger.error("[sow/upload-images] Cloudflare Workers AI credentials not configured")
+        raise HTTPException(status_code=503, detail="Cloudflare Workers AI not configured for image upload")
 
     # Validate each file: content-type, size, read contents
     file_data_list = []  # list of (contents: bytes, safe_name: str, content_type: str)
@@ -1131,16 +1129,18 @@ async def _process_sow_multi_image_job(
 
         # OCR each image in sequence
         ocr_results = []  # list of (safe_name, extracted_text)
+        total_vision_cost = 0.0
         for idx, (contents, safe_name, content_type) in enumerate(file_data_list):
             logger.info(
                 "[sow/upload-images worker] OCR START file %d/%d: %s",
                 idx + 1, len(file_data_list), safe_name,
             )
             try:
-                extracted_text = await _ocr_image(contents, content_type)
+                extracted_text, vision_cost = await _ocr_image(contents, content_type)
+                total_vision_cost += vision_cost
                 logger.info(
-                    "[sow/upload-images worker] OCR done file %d text_len=%s",
-                    idx + 1, len(extracted_text or ""),
+                    "[sow/upload-images worker] OCR done file %d text_len=%s cost=%s",
+                    idx + 1, len(extracted_text or ""), vision_cost,
                 )
                 if not extracted_text or not extracted_text.strip():
                     logger.warning(
@@ -1214,10 +1214,26 @@ async def _process_sow_multi_image_job(
             await db.commit()
             await db.refresh(material)
             material_id = material.id
+            
+            # Log the total vision cost for all images in the batch
+            if total_vision_cost > 0:
+                vision_log = AiUsageLog(
+                    user_id=user_id,
+                    operation="vision_extract_batch",
+                    model="@cf/moondream/moondream3.1-9b-a2b",
+                    input_tokens=len(merged_text),
+                    cost_neurons=total_vision_cost,
+                    metadata={
+                        "image_count": len(file_data_list),
+                        "education_level": education_level,
+                    }
+                )
+                db.add(vision_log)
+                await db.commit()
 
         logger.info(
-            "[sow/upload-images worker] material created: id=%s page_count=%d",
-            material_id, len(file_data_list),
+            "[sow/upload-images worker] material created: id=%s page_count=%d cost=%s",
+            material_id, len(file_data_list), total_vision_cost,
         )
 
         # Extract figures from all images
