@@ -38,6 +38,27 @@ NEURONS_PER_IMAGE = 150             # ~$0.0015 per image at vision model
 NEURONS_PER_TTS_CHAR = 0.1          # ~$0.0000011 per character
 
 
+def calculate_ai_cost_neurons(operation: str, input_size: int) -> float:
+    """Calculate cost in Neurons based on operation type and input size.
+
+    Args:
+        operation: Type of AI operation ('chat', 'vision', 'audio_tts')
+        input_size: Size of input (tokens for chat, bytes for vision/audio)
+
+    Returns:
+        Cost in Neurons (where 1,000 Neurons approx $0.011)
+    """
+    if operation == "chat":
+        tokens = max(1, input_size // 4)
+        return tokens / 1000.0 * 2.0
+    elif operation == "vision":
+        return 150.0
+    elif operation == "audio_tts":
+        return max(1, input_size * 0.1)
+    else:
+        return 0.0
+
+
 async def call_cf_vision(image_bytes: bytes, prompt: str) -> tuple[str, int]:
     """Call Cloudflare Workers AI vision model (Moondream).
     
@@ -123,7 +144,7 @@ async def call_cf_chat(
         max_tokens: Maximum tokens in response
         
     Returns:
-        Tuple of (response_text, estimated_input_tokens)
+        Tuple of (response_text, cost_neurons)
         
     Raises:
         RuntimeError: if the API call fails
@@ -151,10 +172,11 @@ async def call_cf_chat(
         result = resp.json().get("result", {})
         response_text = result.get("response") or result.get("content") or ""
         
-        # Estimate input tokens: ~4 chars per token
+        # Calculate cost based on input tokens using the unified cost function
         estimated_input_tokens = sum(len(m.get("content", "")) for m in messages) // 4 + len(system_prompt) // 4
+        cost_neurons = calculate_ai_cost_neurons("chat", estimated_input_tokens * 4)
         
-        return response_text, estimated_input_tokens
+        return response_text, cost_neurons
 
 
 async def route_ai(

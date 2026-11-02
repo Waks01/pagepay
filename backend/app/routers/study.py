@@ -24,6 +24,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.prompts import (
     CHAT_TUTOR_SYSTEM,
+    CHAT_TUTOR_SYSTEM_PRIMARY,
+    CHAT_TUTOR_SYSTEM_SECONDARY,
+    CHAT_TUTOR_SYSTEM_TERTIARY,
+    CHAT_TUTOR_SYSTEM_RESEARCH,
     DIAGRAM_GENERATOR,
     ESSAY_ALL_TOPICS_GENERATOR,
     ESSAY_GENERATOR,
@@ -38,7 +42,7 @@ from app.ai.prompts import (
     SOW_PARSER,
     VIDEO_SCRIPT_GENERATOR,
 )
-from app.ai.router import route_ai
+from app.ai.router import route_ai, call_cf_vision, calculate_ai_cost_neurons
 from app.models import (
     AudioUnlock,
     SowUploadJob,
@@ -648,40 +652,17 @@ async def get_sow_job_status(
 # ── Background workers ───────────────────────────────────────────────
 
 
-async def _ocr_image_with_gemini(
-    contents: bytes, content_type: str, api_key: str
-) -> str:
-    """Send the image to Gemini Vision and return the extracted text.
-
-    Kept as a private helper so the image worker stays small. Raises
-    on any failure (network, non-200, empty body) so the worker can
-    mark the job as `failed` with a category string instead of an
-    exception that crashes the asyncio task.
-    """
+async def _ocr_image(
+    contents: bytes, content_type: str
+) -> tuple[str, float]:
+    """Extract text from image using Cloudflare Workers AI Vision."""
     import base64
-    import httpx
-
-    b64 = base64.b64encode(contents).decode()
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-    headers = {"x-goog-api-key": api_key}
-    body = {
-        "contents": [{
-            "parts": [
-                {"text": "Extract all text from this image. Return the raw text exactly as written, preserving structure (headings, bullet points, numbering)."},
-                {"inline_data": {"mime_type": content_type, "data": b64}},
-            ]
-        }],
-        "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.1},
-    }
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(url, json=body, headers=headers)
-        if resp.status_code != 200:
-            raise RuntimeError(f"gemini_vision_http_{resp.status_code}")
-        data = resp.json()
+    image_b64 = base64.b64encode(contents).decode()
     try:
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError("gemini_vision_malformed_response") from exc
+        description, cost = await call_cf_vision(image_b64, "Extract all text and content from this image")
+        return description, cost
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=f"Vision API unavailable: {str(e)[:100]}")
 
 
 async def _extract_document_text(contents: bytes, filename: str, selected_pages: list[int] | None = None) -> str:
@@ -901,18 +882,18 @@ async def _process_sow_image_job(
     try:
         await _mark_job_status(job_id, "processing")
 
-        api_key = settings.gemini_api_key
-        if not api_key:
-            raise RuntimeError("gemini_not_configured")
+        # Check Cloudflare credentials
+        if not settings.cf_account_id or not settings.cf_ai_api_key:
+            raise RuntimeError("cloudflare_not_configured")
 
         try:
-            extracted_text = await _ocr_image_with_gemini(contents, content_type, api_key)
+            extracted_text, vision_neurons_cost = await _ocr_image(contents, content_type)
             logger.info(
-                "[sow/upload-image worker] OCR done job=%s text_len=%s",
-                job_id, len(extracted_text or ""),
+                "[sow/upload-image worker] OCR done job=%s text_len=%s cost_neurons=%s",
+                job_id, len(extracted_text or ""), vision_neurons_cost,
             )
         except Exception as exc:
-            logger.error("Gemini Vision OCR failed for job %s: %s", job_id, exc)
+            logger.error("Cloudflare Vision OCR failed for job %s: %s", job_id, exc)
             raise RuntimeError("image_ocr_failed") from exc
 
         if not extracted_text.strip():
@@ -946,6 +927,23 @@ async def _process_sow_image_job(
             await db.commit()
             await db.refresh(material)
             material_id = material.id
+            
+            # Log Cloudflare vision cost
+            vision_log = AiUsageLog(
+                user_id=user_id,
+                operation="vision_extract",
+                model="@cf/moondream/moondream3.1-9b-a2b",
+                input_tokens=len(contents),  # bytes as proxy for input size
+                cost_neurons=vision_neurons_cost,
+                metadata={
+                    'job_id': job_id,
+                    'material_id': material_id,
+                    'file_size': len(contents),
+                    'content_type': content_type,
+                }
+            )
+            db.add(vision_log)
+            await db.commit()
 
         # Extract figures from the image
         try:
@@ -1127,9 +1125,9 @@ async def _process_sow_multi_image_job(
     try:
         await _mark_job_status(job_id, "processing")
 
-        api_key = settings.gemini_api_key
-        if not api_key:
-            raise RuntimeError("gemini_not_configured")
+        # Check Cloudflare credentials
+        if not settings.cf_account_id or not settings.cf_ai_api_key:
+            raise RuntimeError("cloudflare_not_configured")
 
         # OCR each image in sequence
         ocr_results = []  # list of (safe_name, extracted_text)
@@ -1139,7 +1137,7 @@ async def _process_sow_multi_image_job(
                 idx + 1, len(file_data_list), safe_name,
             )
             try:
-                extracted_text = await _ocr_image_with_gemini(contents, content_type, api_key)
+                extracted_text = await _ocr_image(contents, content_type)
                 logger.info(
                     "[sow/upload-images worker] OCR done file %d text_len=%s",
                     idx + 1, len(extracted_text or ""),
@@ -2237,12 +2235,42 @@ async def chat_study(
                 context_parts.append(f"  - {st}")
         context = "\n".join(context_parts)
 
-    system_prompt = CHAT_TUTOR_SYSTEM.format(
+    # Select the correct prompt template based on education level
+    level = (education_level or "secondary").lower()
+    if level == "primary":
+        prompt_template = CHAT_TUTOR_SYSTEM_PRIMARY
+    elif level == "secondary":
+        prompt_template = CHAT_TUTOR_SYSTEM_SECONDARY
+    elif level == "tertiary":
+        prompt_template = CHAT_TUTOR_SYSTEM_TERTIARY
+    elif level == "research":
+        prompt_template = CHAT_TUTOR_SYSTEM_RESEARCH
+    else:
+        prompt_template = CHAT_TUTOR_SYSTEM_SECONDARY  # fallback
+    
+    system_prompt = prompt_template.format(
         context=context or "No structured context available.",
-        education_level=education_level or "secondary",
         difficulty=difficulty,
     )
     full_prompt = f"{system_prompt}\n\nStudent question: {payload.message}"
+
+    # Calculate and log cost upfront based on input size
+    input_size_chars = len(full_prompt)
+    cost_neurons = calculate_ai_cost_neurons("chat", input_size_chars)
+    
+    log_entry = AiUsageLog(
+        user_id=current_user.id,
+        operation="chat_tutor",
+        model="@cf/meta/llama-3.1-8b-instruct-fp8",
+        input_tokens=input_size_chars,
+        cost_neurons=cost_neurons,
+        metadata={
+            "education_level": education_level or "secondary",
+            "difficulty": difficulty,
+        }
+    )
+    db.add(log_entry)
+    await db.commit()
 
     async def generate():
         ai_result = await route_ai(full_prompt, task_type="chat", max_tokens=2000, db=db)
@@ -3344,14 +3372,17 @@ async def synthesize_study_tts(
     provider = payload.get("provider") or settings.tts_default_provider
 
     try:
-        audio, used_provider = await tts_hybrid.synthesize_study_audio(text, voice, provider=provider)
+        audio, used_provider, duration_seconds = await synthesize_study_audio(text, voice, provider=provider)
     except Exception as exc:
         logger.error("TTS synthesis failed for user=%s: %s", current_user.id, exc)
         raise HTTPException(status_code=502, detail=f"TTS synthesis failed: {exc}")
 
-    cache = tts_hybrid._cache_path(text, voice, used_provider)
+    # Cache is stored with Cloudflare provider
+    import hashlib
+    cache_key = hashlib.sha256(f"cloudflare:{voice}:{text}".encode()).hexdigest()[:16]
+    cache_name = f"{cache_key}.mp3"
     return TtsResponse(
-        url=f"/api/v1/study/tts/audio/{cache.name}",
+        url=f"/api/v1/study/tts/audio/{cache_name}",
         provider=used_provider,
         cached=True,
     )
@@ -3990,9 +4021,9 @@ async def generate_next_audio_episode(
     episode.status = 'generating'
     await db.commit()
     
-    # Call TTS
+    # Call TTS (Cloudflare Workers AI)
     try:
-        audio_bytes, used_provider = await synthesize_study_audio(episode_text, voice='default')
+        audio_bytes, used_provider, duration_seconds = await synthesize_study_audio(episode_text, voice='default')
         
         # Store audio
         episode.audio_data = audio_bytes
@@ -4014,6 +4045,7 @@ async def generate_next_audio_episode(
         )
         
         # Log cost deduction for persistent cost tracking
+        # Cost calculation: duration_seconds * 0.5 * education_level_multiplier (in PRIMARY = 1.0)
         log_entry = AiUsageLog(
             user_id=current_user.id,
             operation="audio_episode_generate",
@@ -4025,16 +4057,16 @@ async def generate_next_audio_episode(
                 'episode_id': episode.id,
                 'material_id': material_id,
                 'cost_sv': episode.cost_sv,
+                'duration_seconds': duration_seconds,
             }
         )
         db.add(log_entry)
         
         logger.info(
             "[AUDIO_COST] Episode generated: user_id=%s, episode_id=%s, batch_id=%s, "
-            "material_id=%s, cost_sv=%s, char_count=%s, provider=%s, duration=%s",
+            "material_id=%s, cost_sv=%s, char_count=%s, provider=%s, duration_seconds=%.2f",
             current_user.id, episode.id, episode.batch_id, material_id, 
-            episode.cost_sv, episode.char_count, used_provider, 
-            len(audio_bytes) if audio_bytes else 0
+            episode.cost_sv, episode.char_count, used_provider, duration_seconds
         )
         
         await db.commit()
