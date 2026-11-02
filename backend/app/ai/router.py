@@ -59,7 +59,7 @@ def calculate_ai_cost_neurons(operation: str, input_size: int) -> float:
         return 0.0
 
 
-async def call_cf_vision(image_bytes: bytes, prompt: str) -> tuple[str, int]:
+async def call_cf_vision(image_bytes: bytes, prompt: str) -> tuple[str, float]:
     """Call Cloudflare Workers AI vision model (Moondream).
     
     Args:
