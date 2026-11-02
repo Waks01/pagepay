@@ -1881,7 +1881,7 @@ class AiUsageLog(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     operation: Mapped[str] = mapped_column(String(50), index=True)  # e.g. "audio_batch_create", "audio_episode_generate", "audio_episode_retry", "vision_extract", "chat_response"
-    model: Mapped[str] = mapped_column(String(100))  # e.g. "@cf/deepgram/aura-2-en", "@cf/moondream/moondream3.1-9b-a2b"
+    model: Mapped[str] = mapped_column(String(100))  # e.g. "@cf/myshell-ai/melotts", "@cf/meta/llama-3.2-11b-vision-instruct", "@cf/zai-org/glm-4.7-flash", "@cf/ibm-granite/granite-4.0-h-micro"
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, server_default='0')  # character count for audio/vision, token count for chat
     cost_neurons: Mapped[float] = mapped_column(Float, nullable=False, server_default='0.0')  # neuron cost; 1000 Neurons ≈ $0.011
     metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # additional context (batch_id, episode_id, etc.)

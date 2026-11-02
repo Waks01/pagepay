@@ -1,6 +1,6 @@
 """TTS service for study audio using Cloudflare Workers AI.
 
-Single provider: @cf/deepgram/aura-2-en
+Single provider: @cf/myshell-ai/melotts
 Returns raw MP3 bytes and duration for cost calculation.
 Cache key = SHA256(text + voice), so the same request hits disk on repeat reads.
 """
@@ -11,7 +11,7 @@ import hashlib
 import logging
 from pathlib import Path
 
-from app.ai.providers.cloudflare import call_cf_tts
+from app.ai.router import call_cf_tts
 from app.config import settings
 
 logger = logging.getLogger("uvicorn.error")
@@ -51,7 +51,7 @@ async def synthesize_study_audio(
     # Ignore voice and provider params, always use Cloudflare
     # Keep the signature for backwards compatibility with calling code
 
-    cache = _cache_path(text, "aura-2-en")
+    cache = _cache_path(text, "melotts")
     if cache.exists():
         # Return cached audio with estimated duration
         audio_bytes = cache.read_bytes()
@@ -60,7 +60,7 @@ async def synthesize_study_audio(
         return audio_bytes, "cloudflare", duration
 
     try:
-        audio_bytes, duration_seconds = await call_cf_tts(text, voice="aura-2-en")
+        audio_bytes, duration_seconds = await call_cf_tts(text, voice="melotts")
         cache.write_bytes(audio_bytes)
         logger.info(
             "[TTS] Generated audio via Cloudflare: text_len=%d, duration=%.2f",

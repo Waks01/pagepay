@@ -42,7 +42,7 @@ from app.ai.prompts import (
     SOW_PARSER,
     VIDEO_SCRIPT_GENERATOR,
 )
-from app.ai.router import route_ai, call_cf_vision, calculate_ai_cost_neurons
+from app.ai.router import route_ai, call_cf_vision, calculate_ai_cost_neurons, should_use_premium_model
 from app.models import (
     AudioUnlock,
     SowUploadJob,
@@ -928,7 +928,7 @@ async def _process_sow_image_job(
             vision_log = AiUsageLog(
                 user_id=user_id,
                 operation="vision_extract",
-                model="@cf/moondream/moondream3.1-9b-a2b",
+                model="@cf/meta/llama-3.2-11b-vision-instruct",
                 input_tokens=len(contents),  # bytes as proxy for input size
                 cost_neurons=vision_neurons_cost,
                 metadata={
@@ -1218,7 +1218,7 @@ async def _process_sow_multi_image_job(
                 vision_log = AiUsageLog(
                     user_id=user_id,
                     operation="vision_extract_batch",
-                    model="@cf/moondream/moondream3.1-9b-a2b",
+                    model="@cf/meta/llama-3.2-11b-vision-instruct",
                     input_tokens=len(merged_text),
                     cost_neurons=total_vision_cost,
                     metadata={
@@ -2270,17 +2270,34 @@ async def chat_study(
 
     # Calculate and log cost upfront based on input size
     input_size_chars = len(full_prompt)
-    cost_neurons = calculate_ai_cost_neurons("chat", input_size_chars)
+    
+    # Determine which model will be used via tier routing
+    use_premium = should_use_premium_model(full_prompt)
+    
+    # Apply the same tier split as route_ai
+    import random
+    tier_roll = random.randint(0, 99)
+    if tier_roll < 70:
+        use_premium = False
+    elif tier_roll < 90:
+        use_premium = True
+    else:
+        use_premium = True
+    
+    from app.ai.router import CF_MODELS
+    model_used = CF_MODELS["chat"] if use_premium else CF_MODELS["chat_standard"]
+    cost_neurons = calculate_ai_cost_neurons("chat", input_size_chars, use_granite=not use_premium)
     
     log_entry = AiUsageLog(
         user_id=current_user.id,
         operation="chat_tutor",
-        model="@cf/meta/llama-3.1-8b-instruct-fp8",
+        model=model_used,
         input_tokens=input_size_chars,
         cost_neurons=cost_neurons,
         metadata={
             "education_level": education_level or "secondary",
             "difficulty": difficulty,
+            "tier": "standard" if not use_premium else "premium",
         }
     )
     db.add(log_entry)
@@ -3823,7 +3840,7 @@ async def create_audio_batches(
     log_entry = AiUsageLog(
         user_id=current_user.id,
         operation="audio_batch_create",
-        model="@cf/deepgram/aura-2-en",
+        model="@cf/myshell-ai/melotts",
         input_tokens=sum(ep['char_count'] for _, ep in all_episodes_data),
         cost_neurons=total_cost_sv * 1000.0 / 11.0,  # Convert SV to Neurons: 1000 neurons = $0.011 ≈ 1 SV
         metadata={
@@ -4063,7 +4080,7 @@ async def generate_next_audio_episode(
         log_entry = AiUsageLog(
             user_id=current_user.id,
             operation="audio_episode_generate",
-            model="@cf/deepgram/aura-2-en",
+            model="@cf/myshell-ai/melotts",
             input_tokens=episode.char_count,
             cost_neurons=episode.cost_sv * 1000.0 / 11.0,  # Convert SV to Neurons
             metadata={
@@ -4127,7 +4144,7 @@ async def generate_next_audio_episode(
         log_entry = AiUsageLog(
             user_id=current_user.id,
             operation="audio_episode_retry",
-            model="@cf/deepgram/aura-2-en",
+            model="@cf/myshell-ai/melotts",
             input_tokens=episode.char_count,
             cost_neurons=episode.cost_sv * 1000.0 / 11.0,  # Convert SV to Neurons
             metadata={

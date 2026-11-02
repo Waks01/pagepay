@@ -1,9 +1,10 @@
 """Cloudflare Workers AI provider.
 
 Single unified interface to Cloudflare's AI models:
-  - Chat: @cf/meta/llama-3.1-8b-instruct-fp8
-  - Vision: @cf/moondream/moondream3.1-9b-a2b
-  - TTS: @cf/deepgram/aura-2-en
+  - Chat Premium: @cf/zai-org/glm-4.7-flash
+  - Chat Standard: @cf/ibm-granite/granite-4.0-h-micro
+  - Vision: @cf/meta/llama-3.2-11b-vision-instruct
+  - TTS: @cf/myshell-ai/melotts
 
 All functions are async and return typed tuples for cost accounting.
 """
@@ -25,9 +26,10 @@ CF_AI_API_KEY = settings.cf_ai_api_key or os.environ.get("CF_AI_API_KEY")
 CF_BASE_URL = f"{settings.cf_ai_base_url}/{CF_ACCOUNT_ID}/ai/run"
 
 CF_MODELS = {
-    "chat": "@cf/meta/llama-3.1-8b-instruct-fp8",
-    "vision": "@cf/moondream/moondream3.1-9b-a2b",
-    "tts": "@cf/deepgram/aura-2-en",
+    "chat": "@cf/zai-org/glm-4.7-flash",
+    "chat_standard": "@cf/ibm-granite/granite-4.0-h-micro",
+    "vision": "@cf/meta/llama-3.2-11b-vision-instruct",
+    "tts": "@cf/myshell-ai/melotts",
 }
 
 
@@ -84,7 +86,7 @@ async def call_cf_chat(
 
 
 async def call_cf_vision(image_base64: str, prompt: str) -> Tuple[str, int]:
-    """Call Cloudflare Workers AI vision model (Moondream 3.1).
+    """Call Cloudflare Workers AI vision model (Llama 3.2 11B Vision).
 
     Args:
         image_base64: Base64-encoded image data (no data: prefix)
@@ -99,14 +101,24 @@ async def call_cf_vision(image_base64: str, prompt: str) -> Tuple[str, int]:
     if not CF_ACCOUNT_ID or not CF_AI_API_KEY:
         raise RuntimeError("Cloudflare Workers AI credentials not configured")
 
+    # Llama Vision uses messages format with image_url
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}},
+                    {"type": "text", "text": prompt},
+                ]
+            }
+        ]
+    }
+
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
             f"{CF_BASE_URL}/{CF_MODELS['vision']}",
             headers={"Authorization": f"Bearer {CF_AI_API_KEY}"},
-            json={
-                "prompt": prompt,
-                "image": image_base64,
-            },
+            json=payload,
         )
         if resp.status_code != 200:
             raise RuntimeError(
@@ -114,7 +126,7 @@ async def call_cf_vision(image_base64: str, prompt: str) -> Tuple[str, int]:
             )
 
         result = resp.json().get("result", {})
-        description = result.get("description") or result.get("response") or ""
+        description = result.get("response") or result.get("content") or ""
 
         # Estimate input tokens (vision uses tokens, not chars)
         estimated_input_tokens = len(prompt) // 4 + 100  # 100 base for image
@@ -122,12 +134,12 @@ async def call_cf_vision(image_base64: str, prompt: str) -> Tuple[str, int]:
         return description, estimated_input_tokens
 
 
-async def call_cf_tts(text: str, voice: str = "aura-2-en") -> Tuple[bytes, float]:
-    """Call Cloudflare Workers AI TTS model (Deepgram Aura 2 English).
+async def call_cf_tts(text: str, voice: str = "melotts") -> Tuple[bytes, float]:
+    """Call Cloudflare Workers AI TTS model (MeloTTS).
 
     Args:
         text: Text to convert to speech
-        voice: Voice identifier (default "aura-2-en")
+        voice: Voice identifier (kept for backwards compatibility, ignored for MeloTTS)
 
     Returns:
         Tuple of (audio_bytes, duration_seconds)
@@ -144,7 +156,6 @@ async def call_cf_tts(text: str, voice: str = "aura-2-en") -> Tuple[bytes, float
             headers={"Authorization": f"Bearer {CF_AI_API_KEY}"},
             json={
                 "text": text,
-                "voice": voice,
             },
         )
         if resp.status_code != 200:
@@ -154,9 +165,7 @@ async def call_cf_tts(text: str, voice: str = "aura-2-en") -> Tuple[bytes, float
 
         audio_bytes = resp.content
 
-        # Estimate duration: ~3 chars per second of audio
-        # (typical human speech rate is ~150 words/min = ~12.5 chars/sec,
-        # so 3 chars/sec is conservative for synthesis)
-        duration_seconds = max(0.5, len(text) / 3.0)
+        # Estimate duration: ~150 words/min, ~5 chars/word
+        duration_seconds = max(0.5, len(text) / (150 * 5 / 60))
 
         return audio_bytes, duration_seconds
