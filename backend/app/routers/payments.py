@@ -199,6 +199,7 @@ async def initiate_payment(
             "amount": amount_kobo,  # Paystack expects kobo
             "reference": tx_ref,
             "currency": "NGN",
+            "callback_url": f"{settings.public_base_url}/subscription/success",
             "metadata": {
                 "user_id": current_user.id,
                 "tier": tier.value,

@@ -2112,6 +2112,8 @@ class AudioTopicSchema(BaseModel):
     cost_sv: int
 
 
+EducationLevel = Literal["primary", "secondary", "tertiary", "research"]
+
 class AudioTopicsResponseSchema(BaseModel):
     """Response from GET /api/v1/study/audio/topics/{materialId}."""
     material_id: int
