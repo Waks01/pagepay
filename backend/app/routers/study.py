@@ -599,21 +599,20 @@ async def preview_sow_pdf(
         # for every page of a long doc is what made the request blow the
         # client's 120s XHR timeout. These settings keep each page small
         # while staying PNG (the frontend expects data:image/png;base64,).
+        #
+        # The width cap is applied as a render *zoom* (not a post-scale)
+        # because PyMuPDF 1.25.3 has no Pixmap(csRGB, src, irect) resize
+        # constructor — rendering at the smaller matrix is the supported
+        # way to get a downsized pixmap.
         preview_dpi = 96
         preview_max_width = 720
-        scale = preview_dpi / 72.0
+        base_scale = preview_dpi / 72.0
 
         for i in range(total_pages):
             page = doc.load_page(i)
-            pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale))
-            if pix.width > preview_max_width:
-                # Scale down proportionally so wide pages stay small.
-                down = preview_max_width / float(pix.width)
-                pix = fitz.Pixmap(
-                    fitz.csRGB,
-                    pix,
-                    fitz.IRect(0, 0, preview_max_width, int(pix.height * down)),
-                )
+            page_w = page.rect.width or 1
+            zoom = min(base_scale, preview_max_width / page_w)
+            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
             # Force RGB (no alpha) so the PNG is opaque and compact.
             if pix.alpha:
                 pix = fitz.Pixmap(fitz.csRGB, pix)
