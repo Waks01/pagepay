@@ -150,7 +150,6 @@ async def initiate_wallet_deposit(
             email=current_user.email,
             amount_kobo=total_amount,
             reference=reference,
-            callback_url=f"{settings.frontend_url}/wallet",
             metadata={
                 "user_id": current_user.id,
                 "type": "wallet_deposit",

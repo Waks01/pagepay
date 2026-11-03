@@ -1,7 +1,7 @@
 # All fastapi app settings
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import model_validator
+from pydantic import model_validator, field_validator
 
 
 class Settings(BaseSettings):
@@ -219,6 +219,13 @@ class Settings(BaseSettings):
     # env DAILY_REMINDER_HOUR / DAILY_REMINDER_MINUTE.
     daily_reminder_hour: int = 8
     daily_reminder_minute: int = 0
+
+    @field_validator("daily_reminder_hour", "daily_reminder_minute", mode="before")
+    @classmethod
+    def _coerce_empty_int(cls, v, info):
+        if v == "" or v is None:
+            return 8 if info.field_name == "daily_reminder_hour" else 0
+        return v
 
     # ── Referral program ─────────────────────────────────────────────
     # Points credited to the referrer when their referee completes the

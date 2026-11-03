@@ -931,7 +931,7 @@ async def _process_sow_image_job(
                 model="@cf/meta/llama-3.2-11b-vision-instruct",
                 input_tokens=len(contents),  # bytes as proxy for input size
                 cost_neurons=vision_neurons_cost,
-                metadata={
+                meta={
                     'job_id': job_id,
                     'material_id': material_id,
                     'file_size': len(contents),
@@ -1221,7 +1221,7 @@ async def _process_sow_multi_image_job(
                     model="@cf/meta/llama-3.2-11b-vision-instruct",
                     input_tokens=len(merged_text),
                     cost_neurons=total_vision_cost,
-                    metadata={
+                    meta={
                         "image_count": len(file_data_list),
                         "education_level": education_level,
                     }
@@ -2294,7 +2294,7 @@ async def chat_study(
         model=model_used,
         input_tokens=input_size_chars,
         cost_neurons=cost_neurons,
-        metadata={
+        meta={
             "education_level": education_level or "secondary",
             "difficulty": difficulty,
             "tier": "standard" if not use_premium else "premium",
@@ -3843,7 +3843,7 @@ async def create_audio_batches(
         model="@cf/myshell-ai/melotts",
         input_tokens=sum(ep['char_count'] for _, ep in all_episodes_data),
         cost_neurons=total_cost_sv * 1000.0 / 11.0,  # Convert SV to Neurons: 1000 neurons = $0.011 ≈ 1 SV
-        metadata={
+        meta={
             'batch_id': batch.id,
             'material_id': material_id,
             'total_episodes': len(episode_records),
@@ -4083,7 +4083,7 @@ async def generate_next_audio_episode(
             model="@cf/myshell-ai/melotts",
             input_tokens=episode.char_count,
             cost_neurons=episode.cost_sv * 1000.0 / 11.0,  # Convert SV to Neurons
-            metadata={
+            meta={
                 'batch_id': episode.batch_id,
                 'episode_id': episode.id,
                 'material_id': material_id,
@@ -4147,7 +4147,7 @@ async def generate_next_audio_episode(
             model="@cf/myshell-ai/melotts",
             input_tokens=episode.char_count,
             cost_neurons=episode.cost_sv * 1000.0 / 11.0,  # Convert SV to Neurons
-            metadata={
+            meta={
                 'batch_id': episode.batch_id,
                 'episode_id': episode.id,
                 'material_id': material_id,

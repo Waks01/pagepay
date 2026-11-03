@@ -2,15 +2,26 @@
   "verdict": "CHANGES_REQUESTED",
   "findings": [
     {
-      "id": 1,
-      "label": "Unpacking error in multi-image worker",
-      "description": "Line 1140 calls `await _ocr_image(contents, content_type)` and assigns to `extracted_text` without unpacking the cost tuple. The function returns `tuple[str, float]` but only one value is assigned. This will raise `ValueError: too many values to unpack (expected 1)` on the second and subsequent images in any multi-image batch."
+      "issue": "Cost calculation double-division bug in chat_study",
+      "description": "Line 2273 passes `input_size_chars // 4` to calculate_ai_cost_neurons, but the function internally divides by 4 again for chat operations. This results in costs 4× too low (example: 4000 char prompt yields 0.5 neurons instead of 2.0). This underestimates billing by 4× and will cause auditing discrepancies.",
+      "severity": "critical",
+      "location": "backend/app/routers/study.py:2273",
+      "fix": "Pass `input_size_chars` directly instead of pre-dividing by 4, or update calculate_ai_cost_neurons to accept tokens instead of characters for chat operations."
     },
     {
-      "id": 2,
-      "label": "Cost not logged per-image in multi-image worker",
-      "description": "The single-image worker logs each vision call to AiUsageLog, but the multi-image worker does not log per-image costs. The multi-image design merges multiple images into one StudyMaterial, but the neural cost tracking should still capture all vision API calls. At minimum, unpack the cost tuple to match the function signature; optionally accumulate and log total cost across the batch."
+      "issue": "Incomplete use of unified cost function",
+      "description": "Specification claims calculate_ai_cost_neurons is called in all three call_cf_* functions, but call_cf_vision returns hardcoded NEURONS_PER_IMAGE (150) and call_cf_tts returns inline calculation (len(text) / 10.0), neither using the unified function. Only call_cf_chat uses it (with a 4× multiplication workaround). This breaks the single-source-of-truth pattern and makes future cost adjustments error-prone.",
+      "severity": "high",
+      "location": "backend/app/ai/router.py:62-130",
+      "fix": "Update call_cf_vision and call_cf_tts to use calculate_ai_cost_neurons; fix the API design flaw so the same call pattern works across all three functions."
+    },
+    {
+      "issue": "TTS cost logging gap",
+      "description": "synthesize_study_audio in tts_hybrid.py calls call_cf_tts but does not log cost to AiUsageLog. Vision and chat costs are audited; TTS operations have no billing trail. This creates an asymmetry in cost tracking.",
+      "severity": "medium",
+      "location": "backend/app/services/tts_hybrid.py:63",
+      "fix": "Log TTS cost to AiUsageLog at call sites that use synthesize_study_audio (e.g., asset generation endpoints)."
     }
   ],
-  "reviewDoc": "c:\\Users\\kenik\\OneDrive\\Pictures\\pagepay\\.agents\\tasks\\phase-d-gaps-review.md"
+  "reviewDoc": ".agents/tasks/phase-d-gaps-review.md"
 }

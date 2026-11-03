@@ -142,7 +142,7 @@ export default function FundWalletScreen() {
 
             // Call backend to update payment status
             try {
-              const cancelUrl = `/api/v1/wallet/deposit/cancel`;
+              const cancelUrl = `/api/v1/payments/status/${data.reference}/cancel`;
               console.log(
                 "🔄 [DEPOSIT] Updating payment status to cancelled...",
               );
@@ -150,8 +150,6 @@ export default function FundWalletScreen() {
               console.log("📝 [DEPOSIT] Reference:", data.reference);
               const cancelRes = await apiFetch(cancelUrl, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reference: data.reference }),
               });
               console.log(
                 "📥 [DEPOSIT] Cancel response status:",
@@ -205,10 +203,8 @@ export default function FundWalletScreen() {
             // Call backend to update payment status
             try {
               console.log("🔄 [DEPOSIT] Updating payment status to failed...");
-              const failRes = await apiFetch(`/api/v1/wallet/deposit/fail`, {
+              const failRes = await apiFetch(`/api/v1/payments/status/${data.reference}/fail`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reference: data.reference }),
               });
               console.log("📥 [DEPOSIT] Fail response status:", failRes.status);
               if (failRes.ok) {

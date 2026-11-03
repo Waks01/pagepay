@@ -199,7 +199,6 @@ async def initiate_payment(
             "amount": amount_kobo,  # Paystack expects kobo
             "reference": tx_ref,
             "currency": "NGN",
-            "callback_url": f"{settings.frontend_url}/subscription/success",
             "metadata": {
                 "user_id": current_user.id,
                 "tier": tier.value,
@@ -399,17 +398,18 @@ async def cancel_payment_status(
         logger.info("✅ [CANCEL] Payment status updated successfully")
         
         # Send in-app notification: Payment cancelled (Phase 6)
-        try:
-            tier = UserTier(payment.tier)
-            from app.services.premium_notifications import notify_payment_cancelled
-            await notify_payment_cancelled(
-                db=db,
-                user_id=current_user.id,
-                tier=tier,
-                reference=reference,
-            )
-        except Exception as e:
-            logger.error("Failed to send cancelled notification: %s", e)
+        if payment.tier != "wallet_deposit":
+            try:
+                tier = UserTier(payment.tier)
+                from app.services.premium_notifications import notify_payment_cancelled
+                await notify_payment_cancelled(
+                    db=db,
+                    user_id=current_user.id,
+                    tier=tier,
+                    reference=reference,
+                )
+            except Exception as e:
+                logger.error("Failed to send cancelled notification: %s", e)
         
         return {
             "success": True,
@@ -464,18 +464,19 @@ async def fail_payment_status(
         logger.info("✅ [FAIL] Payment status updated successfully")
         
         # Send in-app notification: Payment failed (Phase 6)
-        try:
-            tier = UserTier(payment.tier)
-            from app.services.premium_notifications import notify_payment_failed
-            await notify_payment_failed(
-                db=db,
-                user_id=current_user.id,
-                tier=tier,
-                reference=reference,
-                reason="Payment was declined or could not be processed",
-            )
-        except Exception as e:
-            logger.error("Failed to send failed payment notification: %s", e)
+        if payment.tier != "wallet_deposit":
+            try:
+                tier = UserTier(payment.tier)
+                from app.services.premium_notifications import notify_payment_failed
+                await notify_payment_failed(
+                    db=db,
+                    user_id=current_user.id,
+                    tier=tier,
+                    reference=reference,
+                    reason="Payment was declined or could not be processed",
+                )
+            except Exception as e:
+                logger.error("Failed to send failed payment notification: %s", e)
         
         return {
             "success": True,

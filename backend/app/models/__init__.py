@@ -1884,7 +1884,7 @@ class AiUsageLog(Base):
     model: Mapped[str] = mapped_column(String(100))  # e.g. "@cf/myshell-ai/melotts", "@cf/meta/llama-3.2-11b-vision-instruct", "@cf/zai-org/glm-4.7-flash", "@cf/ibm-granite/granite-4.0-h-micro"
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, server_default='0')  # character count for audio/vision, token count for chat
     cost_neurons: Mapped[float] = mapped_column(Float, nullable=False, server_default='0.0')  # neuron cost; 1000 Neurons ≈ $0.011
-    metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # additional context (batch_id, episode_id, etc.)
+    meta: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)  # additional context (batch_id, episode_id, etc.)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     
     __table_args__ = (
