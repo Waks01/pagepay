@@ -11,7 +11,7 @@ import io
 import json
 import re
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import fitz
 import httpx
@@ -60,6 +60,7 @@ from app.models import (
     AudioBatch,
     AudioEpisode,
     AiUsageLog,
+    AdRequest,
 )
 from app.database import AsyncSessionLocal, get_db
 from app.routers.auth import get_current_user
@@ -592,13 +593,31 @@ async def preview_sow_pdf(
             total_pages,
         )
 
+        # Thumbnails only need to be legible enough to page through and
+        # tap-to-deselect, so render cheaply: 96 DPI, capped at 720 px
+        # wide. A 150-DPI PNG of a full A4 page is ~1.3 MB; doing that
+        # for every page of a long doc is what made the request blow the
+        # client's 120s XHR timeout. These settings keep each page small
+        # while staying PNG (the frontend expects data:image/png;base64,).
+        preview_dpi = 96
+        preview_max_width = 720
+        scale = preview_dpi / 72.0
+
         for i in range(total_pages):
             page = doc.load_page(i)
-            # Render at 150 DPI
-            mat = fitz.Matrix(150 / 72, 150 / 72)
-            pix = page.get_pixmap(matrix=mat)
-            png_bytes = pix.tobytes("png")
-            b64 = base64.b64encode(png_bytes).decode("utf-8")
+            pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale))
+            if pix.width > preview_max_width:
+                # Scale down proportionally so wide pages stay small.
+                down = preview_max_width / float(pix.width)
+                pix = fitz.Pixmap(
+                    fitz.csRGB,
+                    pix,
+                    fitz.IRect(0, 0, preview_max_width, int(pix.height * down)),
+                )
+            # Force RGB (no alpha) so the PNG is opaque and compact.
+            if pix.alpha:
+                pix = fitz.Pixmap(fitz.csRGB, pix)
+            b64 = base64.b64encode(pix.tobytes(output="png")).decode("utf-8")
             pages.append(
                 PdfPagePreview(
                     page=i + 1,
@@ -2458,6 +2477,7 @@ class AudioUnlockResponse(BaseModel):
     new_balance: int
     url: str | None = None
     provider: str | None = None
+    ad_custom_data: str | None = None
 
 
 @router.post("/materials/{material_id}/unlock-audio", response_model=AudioUnlockResponse)
@@ -2503,6 +2523,33 @@ async def unlock_material_audio(
         )
 
     cost_sv = _audio_unlock_cost_sv(material.content)
+
+    if method == "ad":
+        token = str(uuid.uuid4())
+        unlock_req = AdRequest(
+            token=token,
+            user_id=current_user.id,
+            ad_unit="rewarded",
+            status="pending",
+            created_at=datetime.utcnow(),
+            expires_at=datetime.utcnow() + timedelta(seconds=settings.ad_request_token_ttl_seconds),
+            use_case="audio_unlock",
+        )
+        db.add(unlock_req)
+        await db.commit()
+        new_balance = (
+            current_user.service_credit_balance
+            if settings.wallet_split_enabled
+            else current_user.points_balance
+        )
+        return AudioUnlockResponse(
+            unlocked=False,
+            material_id=material_id,
+            cost_sv=cost_sv,
+            method="ad",
+            new_balance=new_balance,
+            ad_custom_data=token,
+        )
 
     if method == "sv":
         if settings.wallet_split_enabled:

@@ -12,7 +12,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 
 import { useRewardedAd } from '@/src/shared/lib/ads';
-import { useCurrentUserStore } from '@/src/shared/lib/current-user';
+import { useCurrentUser, useCurrentUserStore } from '@/src/shared/lib/current-user';
 import { Fonts, PagePay } from '@/constants/theme';
 import { useEffectiveScheme } from '@/src/shared/hooks/use-effective-scheme';
 
@@ -53,8 +53,11 @@ export function RewardedAdButton({
   const [busy, setBusy] = useState(false);
   const [credited, setCredited] = useState(false);
 
+  const user = useCurrentUser();
+  const userId = user?.id != null ? String(user.id) : undefined;
+
   const { show, isLoaded, isShowing, error } = useRewardedAd(
-    undefined,
+    userId,
     () => {
       if (skipCreditWait) {
         setCredited(true);

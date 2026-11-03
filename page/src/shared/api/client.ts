@@ -211,6 +211,25 @@ export async function apiFetch(
       continue;
     }
 
+    // Render's free tier spins a service down after 15 min idle and
+    // serves the first request after spin-up with a 429 (this is the
+    // platform's spin-up gate, NOT the app's own rate limiter — see
+    // backend/app/limiter.py, which has no global default limit). Retry
+    // with backoff instead of surfacing it as a hard failure.
+    if (res.status === 429 && attempt < retries) {
+      if (__DEV__) {
+        console.warn(
+          `[apiFetch] 429 on ${path}, retrying (${attempt + 1}/${retries})`,
+        );
+      }
+      const retryAfter = res.headers.get("retry-after");
+      const delay = retryAfter
+        ? Number(retryAfter) * 1000
+        : 500 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, delay));
+      continue;
+    }
+
     if (res.status === 401 && path !== "/api/v1/auth/refresh") {
       const refreshed = await refreshAccessToken();
       if (refreshed) {

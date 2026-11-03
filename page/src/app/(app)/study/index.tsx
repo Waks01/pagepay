@@ -404,9 +404,16 @@ export default function StudyScreen() {
           } as any);
           // Set upload stage to show extraction is happening
           setUploadStage("extracting");
+          // The preview renders every page of the PDF, so a long
+          // document can take a while. The default 120s XHR timeout used
+          // to fire before the server finished and the user got a
+          // confusing "Network error" instead of the page strip. Give it
+          // a generous 20-minute ceiling; if the server errors before
+          // that, the error surfaces here instead of being swallowed.
           const uploadResult = await apiUpload(
             "/api/v1/study/sow/preview-pdf",
             form as any,
+            { timeoutMs: 1_200_000 },
           );
           if (!uploadResult.ok) {
             const err = await uploadResult
