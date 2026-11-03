@@ -24,6 +24,7 @@ from app.routers.community import router as community_router
 from app.routers.streak import router as streak_router
 from app.routers.daily_rewards import router as daily_rewards_router
 from app.routers.analytics import router as analytics_router
+from app.routers.ads import router as ads_router
 from app.routers.transactionHistory import router as transaction_history_router
 from app.routers.payouts import router as payouts_router
 from app.routers.payments import router as payments_router
@@ -437,6 +438,7 @@ app.include_router(community_router, prefix=API_PREFIX)
 app.include_router(streak_router, prefix=API_PREFIX)
 app.include_router(daily_rewards_router, prefix=API_PREFIX)
 app.include_router(analytics_router, prefix=API_PREFIX)
+app.include_router(ads_router, prefix=API_PREFIX)
 app.include_router(legal.router, prefix=API_PREFIX)
 
 # Phase 7: Social Tasks

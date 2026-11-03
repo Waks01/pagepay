@@ -899,7 +899,7 @@ export default function MaterialDetailScreen() {
                           removeClippedSubviews
                           renderItem={({ item: page }) => (
                             <Image
-                              source={{ uri: `data:image/jpeg;base64,${page.image_base64}` }}
+                              source={{ uri: `data:image/png;base64,${page.image_base64}` }}
                               style={styles.pdfPageImage}
                               resizeMode="contain"
                             />

@@ -142,7 +142,12 @@ VIDEO_UNLOCK_POINTS_COST = settings.study_video_unlock_points_cost
 class PdfPagePreview(BaseModel):
     page: int
     total: int
-    image: str  # data:image/png;base64,...
+    # Raw base64 PNG bytes (no data: prefix). The frontend reconstructs
+    # the data URI itself: `data:image/jpeg;base64,${page.image_base64}`.
+    # Field name + shape must match the frontend's PdfPagePreview type
+    # (page/src/app/(app)/study/index.tsx) — the old `image` field left
+    # every thumbnail blank because the client read `image_base64`.
+    image_base64: str
 
 
 class PdfPreviewResponse(BaseModel):
@@ -522,11 +527,16 @@ async def preview_sow_pdf(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Preview a PDF by rendering its first N pages as PNG images.
-    
-    Returns all pages up to MAX_PREVIEW_PAGES (20) with base64-encoded
-    PNG images. Response includes truncation flag if the PDF has more
-    pages than the limit.
+    """Preview a PDF by rendering **every** page as a PNG image.
+
+    Renders all pages (no cap) so the user can page through the whole
+    document and deselect the pages they don't want uploaded. The old
+    20-page cap silently dropped pages 21+ from the selection UI even
+    though `total` reported the real count — a user could not see or
+    exclude later pages, which is the whole point of the preview.
+
+    Each page is returned as raw base64 PNG bytes in `image_base64`
+    (no `data:` prefix); the frontend builds the data URI itself.
     """
     content_length = request.headers.get("content-length") if request else None
     logger.info(
@@ -567,7 +577,6 @@ async def preview_sow_pdf(
             detail=f"PDF too large (max {MAX_SOW_DOC_BYTES // (1024*1024)} MB)",
         )
 
-    MAX_PREVIEW_PAGES = 20
     pages: list[PdfPagePreview] = []
 
     try:
@@ -578,14 +587,12 @@ async def preview_sow_pdf(
             logger.warning("[sow/preview-pdf] PDF has no pages")
             raise HTTPException(status_code=400, detail="PDF has no pages")
 
-        pages_to_render = min(total_pages, MAX_PREVIEW_PAGES)
         logger.info(
-            "[sow/preview-pdf] rendering %s of %s pages",
-            pages_to_render,
+            "[sow/preview-pdf] rendering ALL %s pages (no cap)",
             total_pages,
         )
 
-        for i in range(pages_to_render):
+        for i in range(total_pages):
             page = doc.load_page(i)
             # Render at 150 DPI
             mat = fitz.Matrix(150 / 72, 150 / 72)
@@ -596,7 +603,7 @@ async def preview_sow_pdf(
                 PdfPagePreview(
                     page=i + 1,
                     total=total_pages,
-                    image=f"data:image/png;base64,{b64}",
+                    image_base64=b64,
                 )
             )
 
@@ -612,7 +619,7 @@ async def preview_sow_pdf(
         return PdfPreviewResponse(
             pages=pages,
             total=total_pages,
-            truncated=total_pages > MAX_PREVIEW_PAGES,
+            truncated=False,
         )
 
     except fitz.FileDataError as e:
@@ -4353,3 +4360,19 @@ async def serve_episode_audio(
         }
     )
 
+
+
+
+@router.post("/ads/revenue")
+async def report_ad_revenue(request: Request):
+    """Telemetry endpoint for ad impression monetary values.
+
+    The frontend reports ad revenue micros so we can verify that rewards
+    are funded by ad revenue. This endpoint intentionally does no DB writes;
+    it only acknowledges receipt.
+    """
+    try:
+        await request.json()
+    except Exception:
+        pass
+    return {"status": "ok"}

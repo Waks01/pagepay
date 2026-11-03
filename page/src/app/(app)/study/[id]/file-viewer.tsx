@@ -323,7 +323,7 @@ export default function FileViewerScreen() {
                 removeClippedSubviews
                 renderItem={({ item: page }) => (
                   <ZoomableImage
-                    uri={`data:image/jpeg;base64,${page.image_base64}`}
+                    uri={`data:image/png;base64,${page.image_base64}`}
                   />
                 )}
               />

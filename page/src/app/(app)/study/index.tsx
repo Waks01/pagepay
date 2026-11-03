@@ -418,10 +418,11 @@ export default function StudyScreen() {
           const pages = data.pages || [];
           setPdfPreviewPages(pages);
 
-          // CRITICAL: The backend preview endpoint caps at 20 pages for preview rendering,
-          // but reports the actual total page count in `data.total`. We ALWAYS want to
-          // upload all pages, so we set selectedPages to include every page from 1 to total.
-          // The preview only shows the first 20 as thumbnails, but ALL pages will be uploaded.
+          // The backend now renders EVERY page of the PDF (no cap), so
+          // `pages.length` equals the real page count. Select all of them
+          // by default — this is the list that gets sent to the upload
+          // endpoint. The user can deselect individual pages in the
+          // preview strip before confirming.
           const totalPages = Number(data.total ?? pages.length);
           console.log(
             "[study/index] PDF total pages:",
@@ -437,9 +438,7 @@ export default function StudyScreen() {
           );
           setSelectedPages(allPageNumbers);
 
-          // The server caps the preview at a page limit; surface it so
-          // the user knows the preview is truncated but ALL pages will still upload
-          setPdfTruncated(Boolean(data.truncated));
+          setPdfTruncated(false);
           setPdfTotalPages(totalPages);
         } catch (err) {
           console.error("[study/index] PDF preview failed:", err);
@@ -1059,9 +1058,9 @@ export default function StudyScreen() {
                           style={styles.pdfPageItem}
                         >
                           <Image
-                            source={{
-                              uri: `data:image/jpeg;base64,${page.image_base64}`,
-                            }}
+source={{
+                                uri: `data:image/png;base64,${page.image_base64}`,
+                              }}
                             style={styles.pdfPageImage}
                             resizeMode="contain"
                           />
@@ -1102,28 +1101,6 @@ export default function StudyScreen() {
                       ]}
                     >
                       PDF preview will be available after upload
-                    </Text>
-                  </View>
-                )}
-                {!pdfPreviewLoading && pdfTruncated && (
-                  <View style={styles.pdfTruncatedNote}>
-                    <Ionicons
-                      name="information-circle-outline"
-                      size={14}
-                      color={tokens.inkMuted}
-                    />
-                    <Text
-                      style={[
-                        styles.pdfTruncatedText,
-                        { color: tokens.inkMuted },
-                      ]}
-                    >
-                      {t("study.sow_upload.pdf_preview_truncated", {
-                        preview: 20,
-                        total: pdfTotalPages,
-                        defaultValue:
-                          "Preview shows first 20 pages of {{total}} total. All {{total}} pages will be uploaded. You can deselect specific pages if needed.",
-                      })}
                     </Text>
                   </View>
                 )}
@@ -1499,17 +1476,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     textAlign: "center",
-  },
-
-  pdfTruncatedNote: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingTop: 8,
-  },
-  pdfTruncatedText: {
-    fontSize: 11,
-    flex: 1,
   },
 
   previewActions: {

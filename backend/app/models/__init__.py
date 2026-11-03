@@ -1763,7 +1763,37 @@ class StudyFigure(Base):
     )
 
 
-# ── Phase D: Audio/Podcast Narration ──────────────────────────────────
+class AdRequest(Base):
+    __tablename__ = "ad_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    session_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    ad_unit: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(50), default="pending")
+    points_credited: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    credited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    admob_transaction_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    use_case: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
+class AdSsvLog(Base):
+    __tablename__ = "ad_ssv_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    transaction_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    ad_unit: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(50))
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_query_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    points_credited: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class AudioTopic(Base):
