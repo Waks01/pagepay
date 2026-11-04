@@ -5,6 +5,7 @@ ad-or-points gated unlock → streaming study chat.
 """
 
 import logging
+import os
 import uuid
 import asyncio
 import io
@@ -228,7 +229,7 @@ async def upload_sow_image(
         content_length,
     )
     logger.info("[sow/upload-image] cloudinary_in_scope=%s", __name__)
-    if not settings.cf_account_id or not settings.cf_ai_api_key:
+    if not os.environ.get("CLOUDFLARE_ACCOUNT_ID") or not os.environ.get("CLOUDFLARE_API_TOKEN"):
         logger.error("[sow/upload-image] Cloudflare Workers AI credentials not configured")
         raise HTTPException(status_code=503, detail="Cloudflare Workers AI not configured for image upload")
 
@@ -337,7 +338,7 @@ async def upload_sow_images(
             detail=f"Too many files (max 10)",
         )
 
-    if not settings.cf_account_id or not settings.cf_ai_api_key:
+    if not os.environ.get("CLOUDFLARE_ACCOUNT_ID") or not os.environ.get("CLOUDFLARE_API_TOKEN"):
         logger.error("[sow/upload-images] Cloudflare Workers AI credentials not configured")
         raise HTTPException(status_code=503, detail="Cloudflare Workers AI not configured for image upload")
 
@@ -904,7 +905,7 @@ async def _process_sow_image_job(
         await _mark_job_status(job_id, "processing")
 
         # Check Cloudflare credentials
-        if not settings.cf_account_id or not settings.cf_ai_api_key:
+        if not os.environ.get("CLOUDFLARE_ACCOUNT_ID") or not os.environ.get("CLOUDFLARE_API_TOKEN"):
             raise RuntimeError("cloudflare_not_configured")
 
         try:
@@ -1147,7 +1148,7 @@ async def _process_sow_multi_image_job(
         await _mark_job_status(job_id, "processing")
 
         # Check Cloudflare credentials
-        if not settings.cf_account_id or not settings.cf_ai_api_key:
+        if not os.environ.get("CLOUDFLARE_ACCOUNT_ID") or not os.environ.get("CLOUDFLARE_API_TOKEN"):
             raise RuntimeError("cloudflare_not_configured")
 
         # OCR each image in sequence

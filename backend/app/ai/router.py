@@ -21,9 +21,13 @@ from fastapi import HTTPException
 
 from app.config import settings
 
-# Cloudflare Workers AI configuration
-CF_ACCOUNT_ID = settings.cf_account_id or os.environ.get("CF_ACCOUNT_ID")
-CF_AI_API_KEY = settings.cf_ai_api_key or os.environ.get("CF_AI_API_KEY")
+# Cloudflare Workers AI configuration.
+#
+# The env var names must match what is set on the deployed host
+# (Render), which uses CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN.
+# Local dev sets the same names in backend/.env.
+CF_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+CF_AI_API_KEY = os.environ.get("CLOUDFLARE_API_TOKEN")
 CF_BASE_URL = f"{settings.cf_ai_base_url}/{CF_ACCOUNT_ID}/ai/run"
 
 # Tier routing keywords for classifying chat turns
