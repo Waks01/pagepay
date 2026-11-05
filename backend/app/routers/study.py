@@ -29,12 +29,13 @@ from app.ai.prompts import (
     CHAT_TUTOR_SYSTEM_SECONDARY,
     CHAT_TUTOR_SYSTEM_TERTIARY,
     CHAT_TUTOR_SYSTEM_RESEARCH,
-    DIAGRAM_GENERATOR,
-    ESSAY_ALL_TOPICS_GENERATOR,
-    ESSAY_GENERATOR,
-    ESSAY_TOPIC_GENERATOR,
-    EXAMPLE_GENERATOR,
-    FLASHCARD_ALL_TOPICS_GENERATOR,
+DIAGRAM_GENERATOR,
+     ESSAY_ALL_TOPICS_GENERATOR,
+     ESSAY_GENERATOR,
+     ESSAY_TOPIC_GENERATOR,
+     EXAMPLE_GENERATOR,
+     EXPLANATION_GENERATOR,
+     FLASHCARD_ALL_TOPICS_GENERATOR,
     FLASHCARD_GENERATOR,
     FLASHCARD_TOPIC_GENERATOR,
     MCQ_ALL_TOPICS_GENERATOR,
@@ -196,6 +197,18 @@ async def upload_sow(
     await db.commit()
     await db.refresh(material)
 
+    # Build the teaching layer the reader's "Explained" tab renders.
+    # Non-fatal: if it fails the reader falls back to parsed_structure.
+    try:
+        explanation = await _build_explanation_layer(
+            payload.text, parsed, payload.education_level, payload.exam_type,
+        )
+        if explanation is not None:
+            material.explanation_structure = _json.dumps(explanation)
+            await db.commit()
+    except Exception as exc:
+        logger.warning("Explanation layer failed for text upload: %s", exc)
+
     return SowUploadResponse(
         material_id=material.id,
         title=material.title,
@@ -208,6 +221,7 @@ async def upload_sow(
 async def upload_sow_image(
     file: UploadFile = File(...),
     exam_type: str | None = Form(default=None),
+    education_level: str | None = Form(default=None),
     request: Request = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -291,6 +305,7 @@ async def upload_sow_image(
             job_id=job.id,
             user_id=current_user.id,
             exam_type=exam_type,
+            education_level=education_level,
             contents=contents,
             safe_name=safe_name,
             content_type=file.content_type or "image/jpeg",
@@ -425,6 +440,7 @@ async def upload_sow_images(
 async def upload_sow_document(
     file: UploadFile = File(...),
     exam_type: str | None = Form(default=None),
+    education_level: str | None = Form(default=None),
     selected_pages: str | None = Form(default=None),
     request: Request = None,
     current_user: User = Depends(get_current_user),
@@ -512,6 +528,7 @@ async def upload_sow_document(
             job_id=job.id,
             user_id=current_user.id,
             exam_type=exam_type,
+            education_level=education_level,
             contents=contents,
             safe_name=safe_name,
             selected_pages=pages,
@@ -755,6 +772,196 @@ async def _run_sow_parser(extracted_text: str) -> tuple[dict | None, str | None,
     return parsed, ai_result.get("provider"), ai_result.get("response", "")
 
 
+# ---------------------------------------------------------------------------
+# Explanation layer: chunking, validation, and multi-step generation
+# ---------------------------------------------------------------------------
+#
+# Industry-standard pattern (Khan Academy, Didacta, Lumen, Lectio):
+#   1. Chunk the source text with stable IDs (grounding)
+#   2. Ask the AI to cite chunk IDs per block (source_refs)
+#   3. Validate every block against the frontend's ContentBlock schema
+#   4. Retry once with error feedback if validation fails
+#
+# The frontend reader (page/src/app/(app)/study/[id]/reader.tsx) reads
+# `explanation_structure.content_blocks` and renders typed blocks:
+# heading, body, list, numbered_list, tip, warning, calculation, code,
+# quote, formula, statement, definition, table, figure, recap.
+
+_CONTENT_BLOCK_TYPES = {
+    "heading", "body", "list", "numbered_list", "tip", "warning",
+    "calculation", "code", "quote", "formula", "statement", "definition",
+    "table", "figure", "recap",
+}
+
+# Required/optional fields per block type, matching
+# page/components/study/SpecialBlockCard.tsx:34-61 exactly.
+_BLOCK_SCHEMA: dict[str, dict[str, set[str]]] = {
+    "heading":       {"required": {"text"}, "optional": {"level", "style"}},
+    "body":          {"required": {"text"}, "optional": set()},
+    "list":          {"required": {"items"}, "optional": set()},
+    "numbered_list": {"required": {"items"}, "optional": set()},
+    "tip":           {"required": set(), "optional": {"text", "items", "label"}},
+    "warning":       {"required": set(), "optional": {"text", "items", "label"}},
+    "calculation":   {"required": set(), "optional": {"text", "steps", "description", "label"}},
+    "code":          {"required": {"text"}, "optional": {"language", "label"}},
+    "quote":         {"required": {"text"}, "optional": {"attribution", "label"}},
+    "formula":       {"required": {"text"}, "optional": {"description", "label"}},
+    "statement":     {"required": {"text"}, "optional": {"label"}},
+    "definition":    {"required": {"term", "text"}, "optional": {"label"}},
+    "table":         {"required": {"headers", "rows"}, "optional": {"label"}},
+    "figure":        {"required": {"figure_index"}, "optional": {"text", "page", "caption", "label"}},
+    "recap":         {"required": {"items"}, "optional": {"label"}},
+}
+
+
+def _chunk_source(text: str, max_chunk_chars: int = 1200) -> list[dict]:
+    """Split source text into stable, cited chunks.
+
+    Each chunk gets an ID (c1, c2, ...) so the AI can attach source_refs
+    to blocks. This is the grounding layer: blocks cite chunk IDs, and
+    the reader can trace claims back to the source material.
+    """
+    if not text:
+        return []
+    # Split on paragraph boundaries, then pack into chunks of ~max_chunk_chars.
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    chunks: list[dict] = []
+    buf = ""
+    for p in paragraphs:
+        if buf and len(buf) + len(p) + 2 > max_chunk_chars:
+            chunks.append({"id": f"c{len(chunks)+1}", "text": buf})
+            buf = p
+        else:
+            buf = f"{buf}\n\n{p}" if buf else p
+    if buf:
+        chunks.append({"id": f"c{len(chunks)+1}", "text": buf})
+    return chunks
+
+
+def _validate_content_blocks(blocks: list[dict]) -> tuple[list[dict], list[str]]:
+    """Validate and sanitize content blocks against the frontend schema.
+
+    Returns (valid_blocks, errors). Invalid blocks are dropped (not the
+    whole response) so a single malformed block doesn't kill the entire
+    explanation layer. The caller can retry with the error feedback if
+    the valid set is too small.
+    """
+    valid: list[dict] = []
+    errors: list[str] = []
+    for i, b in enumerate(blocks):
+        if not isinstance(b, dict):
+            errors.append(f"block[{i}]: not an object")
+            continue
+        btype = b.get("type")
+        if btype not in _CONTENT_BLOCK_TYPES:
+            errors.append(f"block[{i}]: unknown type '{btype}'")
+            continue
+        schema = _BLOCK_SCHEMA[btype]
+        missing = [f for f in schema["required"] if f not in b or b[f] is None]
+        if missing:
+            errors.append(f"block[{i}] ({btype}): missing {missing}")
+            continue
+        # Sanitize: keep only known fields + source_refs (grounding).
+        allowed = schema["required"] | schema["optional"] | {"source_refs"}
+        clean = {k: v for k, v in b.items() if k in allowed}
+        clean["type"] = btype
+        # Normalize source_refs to a list of chunk IDs.
+        refs = clean.get("source_refs")
+        if isinstance(refs, list):
+            clean["source_refs"] = [str(r) for r in refs if r]
+        elif refs is not None:
+            clean["source_refs"] = [str(refs)]
+        valid.append(clean)
+    return valid, errors
+
+
+async def _generate_explanation_step(
+    prompt: str,
+    *,
+    max_retries: int = 1,
+) -> dict | None:
+    """Run one explanation generation step with validation and retry.
+
+    On validation failure, retries once with the error feedback appended
+    to the prompt (the digital-lessons pattern: "automatic retries with
+    error feedback").
+    """
+    last_errors: list[str] = []
+    for attempt in range(max_retries + 1):
+        attempt_prompt = prompt
+        if attempt > 0 and last_errors:
+            attempt_prompt = (
+                prompt
+                + "\n\nYour previous response had these validation errors. Fix them and return corrected JSON only:\n"
+                + "\n".join(f"- {e}" for e in last_errors[:8])
+            )
+        ai_result = await route_ai(attempt_prompt, task_type="heavy")
+        raw = ai_result.get("response", "")
+        parsed = _parse_ai_response(raw)
+        if not isinstance(parsed, dict):
+            last_errors = ["response was not a JSON object"]
+            logger.warning("Explanation step attempt %s: not a JSON object", attempt)
+            continue
+        blocks = parsed.get("content_blocks")
+        if not isinstance(blocks, list):
+            last_errors = ["missing content_blocks array"]
+            logger.warning("Explanation step attempt %s: missing content_blocks", attempt)
+            continue
+        valid, errors = _validate_content_blocks(blocks)
+        if errors:
+            logger.warning("Explanation step attempt %s: %d validation errors", attempt, len(errors))
+            last_errors = errors
+        # Accept if we have a reasonable number of valid blocks.
+        if len(valid) >= 3:
+            return {"content_blocks": valid, "source_refs_present": any("source_refs" in b for b in valid)}
+        last_errors = last_errors or ["too few valid blocks"]
+    return None
+
+
+async def _build_explanation_layer(
+    extracted_text: str,
+    parsed: dict | None,
+    education_level: str | None,
+    exam_type: str | None,
+) -> dict | None:
+    """Generate the teaching layer the reader's "Explained" tab renders.
+
+    Production-grade pipeline:
+      1. Chunk the source text with stable IDs (grounding)
+      2. Call the AI with the grounded prompt, requesting source_refs per block
+      3. Validate every block against the frontend ContentBlock schema
+      4. Retry once with error feedback if validation fails
+
+    Returns {"content_blocks": [...], "source_refs_present": bool} or None.
+    Never raises — a failure here is non-fatal; the reader falls back to
+    parsed_structure.
+    """
+    try:
+        subject = exam_type or "General"
+        chunks = _chunk_source(extracted_text or "")
+        # Build a grounded source context the AI can cite.
+        if chunks:
+            source_context = "\n\n".join(
+                f"[{c['id']}] {c['text']}" for c in chunks[:20]
+            )
+        else:
+            source_context = (extracted_text or "")[:12000]
+
+        prompt = EXPLANATION_GENERATOR.format(
+            education_level=education_level or "secondary",
+            subject=subject,
+            raw_text=source_context,
+        )
+        result = await _generate_explanation_step(prompt, max_retries=1)
+        if result is None:
+            logger.warning("Explanation layer: no valid blocks after retries")
+            return None
+        return result
+    except Exception as exc:
+        logger.warning("Explanation layer generation failed: %s", exc)
+        return None
+
+
 async def _mark_job_status(
     job_id: str, status: str, *, material_id: int | None = None, error: str | None = None
 ) -> None:
@@ -888,6 +1095,7 @@ async def _process_sow_image_job(
     contents: bytes,
     safe_name: str,
     content_type: str,
+    education_level: str | None = None,
 ) -> None:
     """Background worker for the image SOW upload.
 
@@ -997,6 +1205,25 @@ async def _process_sow_image_job(
             logger.error("Figure extraction failed for job %s: %s", job_id, exc)
             # Don't fail the job; just skip figures
 
+        # Build the teaching layer the reader's "Explained" tab renders.
+        # Non-fatal: if it fails the reader falls back to parsed_structure.
+        try:
+            explanation = await _build_explanation_layer(
+                extracted_text, parsed, education_level, exam_type,
+            )
+            if explanation is not None:
+                async with AsyncSessionLocal() as db:
+                    material = await db.get(StudyMaterial, material_id)
+                    if material:
+                        material.explanation_structure = _json.dumps(explanation)
+                        await db.commit()
+                        logger.info(
+                            "[sow/upload-image worker] explanation_layer stored blocks=%s",
+                            len(explanation.get("content_blocks", [])),
+                        )
+        except Exception as exc:
+            logger.warning("Explanation layer failed for job %s: %s", job_id, exc)
+
         logger.info(
             "[sow/upload-image worker] DONE job=%s material_id=%s",
             job_id, material_id,
@@ -1014,6 +1241,7 @@ async def _process_sow_document_job(
     contents: bytes,
     safe_name: str,
     selected_pages: list[int] | None = None,
+    education_level: str | None = None,
 ) -> None:
     """Background worker for the document SOW upload. Same shape as
     the image worker — runs extraction + AI parse, writes the
@@ -1113,6 +1341,25 @@ async def _process_sow_document_job(
         except Exception as exc:
             logger.error("Figure extraction failed for job %s: %s", job_id, exc)
             # Don't fail the job; just skip figures
+
+        # Build the teaching layer the reader's "Explained" tab renders.
+        # Non-fatal: if it fails the reader falls back to parsed_structure.
+        try:
+            explanation = await _build_explanation_layer(
+                extracted_text, parsed, education_level, exam_type,
+            )
+            if explanation is not None:
+                async with AsyncSessionLocal() as db:
+                    material = await db.get(StudyMaterial, material_id)
+                    if material:
+                        material.explanation_structure = _json.dumps(explanation)
+                        await db.commit()
+                        logger.info(
+                            "[sow/upload-document worker] explanation_layer stored blocks=%s",
+                            len(explanation.get("content_blocks", [])),
+                        )
+        except Exception as exc:
+            logger.warning("Explanation layer failed for job %s: %s", job_id, exc)
 
         logger.info(
             "[sow/upload-document worker] DONE job=%s material_id=%s",
@@ -1308,6 +1555,25 @@ async def _process_sow_multi_image_job(
             logger.error("[sow/upload-images worker] figure batch storage failed: %s", exc)
             # Don't fail the job; just skip figures
 
+        # Build the teaching layer the reader's "Explained" tab renders.
+        # Non-fatal: if it fails the reader falls back to parsed_structure.
+        try:
+            explanation = await _build_explanation_layer(
+                merged_text, parsed, education_level, exam_type,
+            )
+            if explanation is not None:
+                async with AsyncSessionLocal() as db:
+                    material = await db.get(StudyMaterial, material_id)
+                    if material:
+                        material.explanation_structure = _json.dumps(explanation)
+                        await db.commit()
+                        logger.info(
+                            "[sow/upload-images worker] explanation_layer stored blocks=%s",
+                            len(explanation.get("content_blocks", [])),
+                        )
+        except Exception as exc:
+            logger.warning("[sow/upload-images worker] explanation layer failed: %s", exc)
+
         logger.info(
             "[sow/upload-images worker] DONE job=%s material_id=%s",
             job_id, material_id,
@@ -1414,12 +1680,15 @@ async def get_material(
             
         asset_list.append(asset_dict)
 
+    explanation = _json.loads(material.explanation_structure) if getattr(material, "explanation_structure", None) else None
     return MaterialDetail(
         id=material.id,
         title=material.title,
         exam_type=material.exam_type,
+        education_level=getattr(material, "education_level", None),
         content=material.raw_input or None,
         parsed_structure=parsed,
+        explanation_structure=explanation,
         assets=asset_list,
         file_mime_type=material.file_mime_type or None,
         has_original_file=material.original_file_data is not None,
@@ -1492,12 +1761,15 @@ async def update_material(
             asset_dict["unlocked"] = False
         asset_list.append(asset_dict)
 
+    explanation = _json.loads(material.explanation_structure) if getattr(material, "explanation_structure", None) else None
     return MaterialDetail(
         id=material.id,
         title=material.title,
         exam_type=material.exam_type,
+        education_level=getattr(material, "education_level", None),
         content=material.raw_input or None,
         parsed_structure=parsed,
+        explanation_structure=explanation,
         assets=asset_list,
         file_mime_type=material.file_mime_type or None,
         has_original_file=material.original_file_data is not None,
@@ -2310,8 +2582,8 @@ async def chat_study(
     else:
         use_premium = True
     
-    from app.ai.router import CF_MODELS
-    model_used = CF_MODELS["chat"] if use_premium else CF_MODELS["chat_standard"]
+    from app.ai.router import CLOUDFLARE_MODELS
+    model_used = CLOUDFLARE_MODELS["chat"] if use_premium else CLOUDFLARE_MODELS["chat_standard"]
     cost_neurons = calculate_ai_cost_neurons("chat", input_size_chars, use_granite=not use_premium)
     
     log_entry = AiUsageLog(

@@ -946,3 +946,111 @@ Output STRICT JSON ONLY.
   "scaffolding_steps": ["Step 1 to get started", "Step 2 of the solution", "Final step"],
   "why_this_difficulty": "Explanation of why this level is appropriate"
 }}"""
+
+
+EXPLANATION_GENERATOR = """You are an expert curriculum designer turning a student's study material into a teaching layer.
+
+Your job: rewrite the material into plain, student-friendly language, organized as a sequence of typed blocks. Every diagram, formula, worked example, definition, quote, table, and piece of code keeps its own shape — do not flatten them into prose.
+
+Education level: {education_level}
+Subject: {subject}
+
+Source material (chunked with stable IDs like [c1], [c2] — cite these IDs in source_refs):
+{raw_text}
+
+Output strict JSON only. No markdown. No backticks. No extra text before or after.
+{{
+  "content_blocks": [
+    {{
+      "type": "heading",
+      "text": "Section title",
+      "level": 1,
+      "source_refs": ["c1"]
+    }},
+    {{
+      "type": "body",
+      "text": "A paragraph of plain explanation.",
+      "source_refs": ["c1", "c2"]
+    }},
+    {{
+      "type": "list",
+      "items": ["First point", "Second point"],
+      "source_refs": ["c2"]
+    }},
+    {{
+      "type": "numbered_list",
+      "items": ["Step one", "Step two"]
+    }},
+    {{
+      "type": "tip",
+      "text": "A helpful hint."
+    }},
+    {{
+      "type": "warning",
+      "text": "A common mistake to avoid."
+    }},
+    {{
+      "type": "calculation",
+      "text": "The worked calculation shown step by step.",
+      "steps": ["Step 1", "Step 2"]
+    }},
+    {{
+      "type": "code",
+      "text": "the source code, with indentation intact",
+      "language": "python"
+    }},
+    {{
+      "type": "quote",
+      "text": "The quoted text.",
+      "attribution": "Who said it"
+    }},
+    {{
+      "type": "formula",
+      "text": "LaTeX-formatted formula, e.g. E = mc^2",
+      "description": "What the formula means"
+    }},
+    {{
+      "type": "statement",
+      "text": "A key fact or theorem to remember."
+    }},
+    {{
+      "type": "definition",
+      "term": "The term being defined",
+      "text": "The definition"
+    }},
+    {{
+      "type": "table",
+      "headers": ["Col 1", "Col 2"],
+      "rows": [["a", "b"], ["c", "d"]]
+    }},
+    {{
+      "type": "figure",
+      "text": "What the diagram shows and why it matters",
+      "figure_index": 1,
+      "page": 3,
+      "caption": "Short caption"
+    }},
+    {{
+      "type": "recap",
+      "items": ["Thing to remember", "Another thing"]
+    }}
+  ]
+}}
+
+Rules:
+- Output ONLY the JSON object above, with a "content_blocks" array.
+- Use the exact block types listed: heading, body, list, numbered_list, tip, warning, calculation, code, quote, formula, statement, definition, table, figure, recap.
+- "heading" requires "text" and "level" (1, 2, or 3).
+- "list" and "numbered_list" require "items" (array of strings).
+- "calculation" may include "steps" (array of strings).
+- "code" requires "text"; include "language" when known.
+- "quote" may include "attribution".
+- "formula" uses LaTeX in "text".
+- "definition" requires "term" and "text".
+- "table" requires "headers" and "rows" (array of string arrays).
+- "figure" requires "figure_index" (1-based) and "page" (1-based); "text" describes the diagram.
+- "recap" requires "items" — the most important things to remember.
+- Grounding: when chunk IDs like [c1] are present, include "source_refs" (array of chunk ID strings) on blocks that make factual claims. Only cite chunk IDs that appear in the source.
+- Keep language simple and student-friendly for the education level.
+- End the whole thing with a "recap" block summarizing the section.
+- If the input has no diagram to describe, omit "figure" blocks — do not invent one."""

@@ -25,11 +25,11 @@ logger = logging.getLogger("uvicorn.error")
 # The env var names must match what is set on the deployed host
 # (Render), which uses CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN.
 # Local dev sets the same names in backend/.env.
-CF_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
-CF_AI_API_KEY = os.environ.get("CLOUDFLARE_API_TOKEN")
-CF_BASE_URL = f"{settings.cf_ai_base_url}/{CF_ACCOUNT_ID}/ai/run"
+CLOUDFLARE_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+CLOUDFLARE_AI_API_KEY = os.environ.get("CLOUDFLARE_API_TOKEN")
+CLOUDFLARE_BASE_URL = f"{settings.cf_ai_base_url}/{CLOUDFLARE_ACCOUNT_ID}/ai/run"
 
-CF_MODELS = {
+CLOUDFLARE_MODELS = {
     "chat": "@cf/zai-org/glm-4.7-flash",
     "chat_standard": "@cf/ibm-granite/granite-4.0-h-micro",
     "vision": "@cf/meta/llama-3.2-11b-vision-instruct",
@@ -55,7 +55,7 @@ async def call_cf_chat(
     Raises:
         RuntimeError: if the API call fails
     """
-    if not CF_ACCOUNT_ID or not CF_AI_API_KEY:
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_AI_API_KEY:
         raise RuntimeError("Cloudflare Workers AI credentials not configured")
 
     payload = {
@@ -68,8 +68,8 @@ async def call_cf_chat(
 
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
-            f"{CF_BASE_URL}/{CF_MODELS['chat']}",
-            headers={"Authorization": f"Bearer {CF_AI_API_KEY}"},
+            f"{CLOUDFLARE_BASE_URL}/{CLOUDFLARE_MODELS['chat']}",
+            headers={"Authorization": f"Bearer {CLOUDFLARE_AI_API_KEY}"},
             json=payload,
         )
         if resp.status_code != 200:
@@ -102,7 +102,7 @@ async def call_cf_vision(image_base64: str, prompt: str) -> Tuple[str, int]:
     Raises:
         RuntimeError: if the API call fails
     """
-    if not CF_ACCOUNT_ID or not CF_AI_API_KEY:
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_AI_API_KEY:
         raise RuntimeError("Cloudflare Workers AI credentials not configured")
 
     # Llama Vision uses messages format with image_url
@@ -120,8 +120,8 @@ async def call_cf_vision(image_base64: str, prompt: str) -> Tuple[str, int]:
 
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
-            f"{CF_BASE_URL}/{CF_MODELS['vision']}",
-            headers={"Authorization": f"Bearer {CF_AI_API_KEY}"},
+            f"{CLOUDFLARE_BASE_URL}/{CLOUDFLARE_MODELS['vision']}",
+            headers={"Authorization": f"Bearer {CLOUDFLARE_AI_API_KEY}"},
             json=payload,
         )
         if resp.status_code != 200:
@@ -151,13 +151,13 @@ async def call_cf_tts(text: str, voice: str = "melotts") -> Tuple[bytes, float]:
     Raises:
         RuntimeError: if the API call fails
     """
-    if not CF_ACCOUNT_ID or not CF_AI_API_KEY:
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_AI_API_KEY:
         raise RuntimeError("Cloudflare Workers AI credentials not configured")
 
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
-            f"{CF_BASE_URL}/{CF_MODELS['tts']}",
-            headers={"Authorization": f"Bearer {CF_AI_API_KEY}"},
+            f"{CLOUDFLARE_BASE_URL}/{CLOUDFLARE_MODELS['tts']}",
+            headers={"Authorization": f"Bearer {CLOUDFLARE_AI_API_KEY}"},
             json={
                 "text": text,
             },

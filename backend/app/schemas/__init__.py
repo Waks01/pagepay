@@ -594,6 +594,7 @@ class SowUploadRequest(BaseModel):
     # enforce the domain limit too.
     text: str = Field(min_length=10, max_length=50_000, description="SOW or syllabus text to parse")
     exam_type: str | None = Field(default=None, max_length=32, description="Exam type: jamb|waec|neco|nabteb|custom")
+    education_level: Literal["primary", "secondary", "tertiary", "research"] | None = Field(default=None, description="Education level for adaptive explanations.")
 
 
 class SowUploadResponse(BaseModel):
@@ -650,6 +651,7 @@ class MaterialDetail(BaseModel):
     education_level: str | None = None
     content: str | None = None
     parsed_structure: dict | None
+    explanation_structure: dict | None = None
     assets: list[dict]
     file_mime_type: str | None = None
     has_original_file: bool = False

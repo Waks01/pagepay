@@ -26,9 +26,9 @@ from app.config import settings
 # The env var names must match what is set on the deployed host
 # (Render), which uses CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN.
 # Local dev sets the same names in backend/.env.
-CF_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
-CF_AI_API_KEY = os.environ.get("CLOUDFLARE_API_TOKEN")
-CF_BASE_URL = f"{settings.cf_ai_base_url}/{CF_ACCOUNT_ID}/ai/run"
+CLOUDFLARE_ACCOUNT_ID = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+CLOUDFLARE_AI_API_KEY = os.environ.get("CLOUDFLARE_API_TOKEN")
+CLOUDFLARE_BASE_URL = f"{settings.cf_ai_base_url}/{CLOUDFLARE_ACCOUNT_ID}/ai/run"
 
 # Tier routing keywords for classifying chat turns
 STANDARD_KEYWORDS = {
@@ -63,7 +63,7 @@ def should_use_premium_model(message: str, context: str = "") -> bool:
     # Default to standard
     return False
 
-CF_MODELS = {
+CLOUDFLARE_MODELS = {
     "chat": "@cf/zai-org/glm-4.7-flash",
     "chat_standard": "@cf/ibm-granite/granite-4.0-h-micro",
     "vision": "@cf/meta/llama-3.2-11b-vision-instruct",
@@ -114,6 +114,53 @@ def calculate_ai_cost_neurons(operation: str, input_size: int, use_granite: bool
         return 0.0
 
 
+def _coerce_text(value: object) -> str:
+    """Return value as a non-empty stripped string, else ''."""
+    if isinstance(value, str) and value.strip():
+        return value
+    return ""
+
+
+def extract_response_text(result: dict) -> str:
+    """Extract the assistant's text from a Cloudflare Workers AI response.
+
+    Cloudflare commonly returns OpenAI-style chat completions:
+      result.choices[0].message.content
+    but some models/providers may populate `reasoning` (or
+    `reasoning_content`) with `content` null/empty, or use a flat
+    `result.response` / `result.content` shape. Reading only
+    `content`/`response` caused empty parses and `ai_parser_failed`
+    in production.
+    """
+    if not isinstance(result, dict):
+        return ""
+
+    choices = result.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0] if isinstance(choices[0], dict) else {}
+        message = first.get("message") if isinstance(first.get("message"), dict) else {}
+        # Prefer final answer; fall back to reasoning/thinking fields.
+        for key in ("content", "text"):
+            text = _coerce_text(message.get(key))
+            if text:
+                return text
+        for key in ("reasoning", "reasoning_content", "thought", "thinking"):
+            text = _coerce_text(message.get(key))
+            if text:
+                return text
+        # Some providers put text at the choice level.
+        for key in ("text", "content", "reasoning"):
+            text = _coerce_text(first.get(key))
+            if text:
+                return text
+
+    for key in ("response", "content", "text", "result", "output"):
+        text = _coerce_text(result.get(key))
+        if text:
+            return text
+    return ""
+
+
 async def call_cf_vision(image_bytes: bytes, prompt: str) -> tuple[str, float]:
     """Call Cloudflare Workers AI vision model (Llama 3.2 11B Vision).
     
@@ -127,7 +174,7 @@ async def call_cf_vision(image_bytes: bytes, prompt: str) -> tuple[str, float]:
     Raises:
         RuntimeError: if the API call fails
     """
-    if not CF_ACCOUNT_ID or not CF_AI_API_KEY:
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_AI_API_KEY:
         raise RuntimeError("Cloudflare Workers AI credentials not configured")
     
     import base64
@@ -148,15 +195,15 @@ async def call_cf_vision(image_bytes: bytes, prompt: str) -> tuple[str, float]:
     
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
-            f"{CF_BASE_URL}/{CF_MODELS['vision']}",
-            headers={"Authorization": f"Bearer {CF_AI_API_KEY}"},
+            f"{CLOUDFLARE_BASE_URL}/{CLOUDFLARE_MODELS['vision']}",
+            headers={"Authorization": f"Bearer {CLOUDFLARE_AI_API_KEY}"},
             json=payload,
         )
         if resp.status_code != 200:
             raise RuntimeError(f"Cloudflare vision API failed: {resp.status_code} {resp.text[:200]}")
         
         result = resp.json().get("result", {})
-        description = result.get("response") or result.get("content") or ""
+        description = extract_response_text(result)
         
         # Calculate cost based on image size
         cost_neurons = NEURONS_PER_IMAGE
@@ -176,7 +223,7 @@ async def call_cf_tts(text: str, voice: str = "melotts") -> tuple[bytes, float]:
     Raises:
         RuntimeError: if the API call fails
     """
-    if not CF_ACCOUNT_ID or not CF_AI_API_KEY:
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_AI_API_KEY:
         raise RuntimeError("Cloudflare Workers AI credentials not configured")
     
     # MeloTTS does not take a voice parameter
@@ -184,8 +231,8 @@ async def call_cf_tts(text: str, voice: str = "melotts") -> tuple[bytes, float]:
     
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
-            f"{CF_BASE_URL}/{CF_MODELS['tts']}",
-            headers={"Authorization": f"Bearer {CF_AI_API_KEY}"},
+            f"{CLOUDFLARE_BASE_URL}/{CLOUDFLARE_MODELS['tts']}",
+            headers={"Authorization": f"Bearer {CLOUDFLARE_AI_API_KEY}"},
             json=payload,
         )
         if resp.status_code != 200:
@@ -216,7 +263,7 @@ async def call_cf_chat(
     Raises:
         RuntimeError: if the API call fails
     """
-    if not CF_ACCOUNT_ID or not CF_AI_API_KEY:
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_AI_API_KEY:
         raise RuntimeError("Cloudflare Workers AI credentials not configured")
     
     payload = {
@@ -229,15 +276,15 @@ async def call_cf_chat(
     
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
-            f"{CF_BASE_URL}/{CF_MODELS['chat']}",
-            headers={"Authorization": f"Bearer {CF_AI_API_KEY}"},
+            f"{CLOUDFLARE_BASE_URL}/{CLOUDFLARE_MODELS['chat']}",
+            headers={"Authorization": f"Bearer {CLOUDFLARE_AI_API_KEY}"},
             json=payload,
         )
         if resp.status_code != 200:
             raise RuntimeError(f"Cloudflare chat API failed: {resp.status_code} {resp.text[:200]}")
         
         result = resp.json().get("result", {})
-        response_text = result.get("response") or result.get("content") or ""
+        response_text = extract_response_text(result)
         
         # Calculate cost based on input tokens using the unified cost function
         # Estimate input tokens: ~4 chars per token
@@ -265,7 +312,7 @@ async def call_cf_chat_granite(
     Raises:
         RuntimeError: if the API call fails
     """
-    if not CF_ACCOUNT_ID or not CF_AI_API_KEY:
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_AI_API_KEY:
         raise RuntimeError("Cloudflare Workers AI credentials not configured")
     
     payload = {
@@ -278,15 +325,15 @@ async def call_cf_chat_granite(
     
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
-            f"{CF_BASE_URL}/{CF_MODELS['chat_standard']}",
-            headers={"Authorization": f"Bearer {CF_AI_API_KEY}"},
+            f"{CLOUDFLARE_BASE_URL}/{CLOUDFLARE_MODELS['chat_standard']}",
+            headers={"Authorization": f"Bearer {CLOUDFLARE_AI_API_KEY}"},
             json=payload,
         )
         if resp.status_code != 200:
             raise RuntimeError(f"Cloudflare chat API failed: {resp.status_code} {resp.text[:200]}")
         
         result = resp.json().get("result", {})
-        response_text = result.get("response") or result.get("content") or ""
+        response_text = extract_response_text(result)
         
         # Calculate cost based on input tokens using Granite pricing
         # Estimate input tokens: ~4 chars per token
@@ -320,8 +367,8 @@ async def route_ai(
     import random
     logger = logging.getLogger("uvicorn.error")
     
-    if not CF_ACCOUNT_ID or not CF_AI_API_KEY:
-        logger.error("Cloudflare Workers AI not configured (CF_ACCOUNT_ID or CF_AI_API_KEY missing)")
+    if not CLOUDFLARE_ACCOUNT_ID or not CLOUDFLARE_AI_API_KEY:
+        logger.error("Cloudflare Workers AI not configured (CLOUDFLARE_ACCOUNT_ID or CLOUDFLARE_AI_API_KEY missing)")
         raise HTTPException(
             status_code=503,
             detail="AI service not configured",
@@ -348,13 +395,13 @@ async def route_ai(
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=max_tokens,
             )
-            model = CF_MODELS["chat"]
+            model = CLOUDFLARE_MODELS["chat"]
         else:
             response_text, cost = await call_cf_chat_granite(
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=max_tokens,
             )
-            model = CF_MODELS["chat_standard"]
+            model = CLOUDFLARE_MODELS["chat_standard"]
         
         logger.debug(
             "AI tier routing: use_premium=%s, model=%s, prompt_len=%d",
